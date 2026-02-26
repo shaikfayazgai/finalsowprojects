@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Enterprise uploads SOW -> APG decomposes into tasks -> verified contributors deliver evidence -> enterprise reviews and releases payment -- all without manual recruitment or PM overhead.
-**Current focus:** Phase 4 - Mentor Portal (plan 01 complete, 3 remaining)
+**Current focus:** Phase 4 - Mentor Portal (plan 02 complete, 2 remaining)
 
 ## Current Position
 
 Phase: 4 of 6 (Mentor Portal)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-26 -- Completed 04-01-PLAN.md
+Last activity: 2026-02-26 -- Completed 04-02-PLAN.md
 
-Progress: [███████████████████░░░░░] 20/24 plans (83%)
+Progress: [████████████████████░░░░] 21/24 plans (88%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
-- Average duration: 6.3 min
-- Total execution time: 107 min
+- Total plans completed: 16
+- Average duration: 6.2 min
+- Total execution time: 112 min
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [███████████████████░░░░
 | 01-monorepo-infrastructure-ds-foundation | 4/4 | 29 min | 7.3 min |
 | 02-design-system-completion | 4/4 | 25 min | 6.3 min |
 | 03-womens-portal-university-portal | 5/5 | 52 min | 10.4 min |
-| 04-mentor-portal | 1/4 | 9 min | 9.0 min |
+| 04-mentor-portal | 2/4 | 14 min | 7.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-04 (10 min), 03-03 (6 min), 03-05 (5 min), gap-fixes (7 min), 04-01 (9 min)
-- Trend: stable around 5-10 min for portal plans
+- Last 5 plans: 03-03 (6 min), 03-05 (5 min), gap-fixes (7 min), 04-01 (9 min), 04-02 (5 min)
+- Trend: stable around 5-9 min for portal plans
 
 *Updated after each plan completion*
 
@@ -102,6 +102,10 @@ Recent decisions affecting current work:
 - [04-01]: react-resizable-panels v4 uses plain functions (not forwardRef) -- Group/Panel/Separator use elementRef prop
 - [04-01]: Mentor auth store has 3 roles: applicant, pending_onboarding, mentor (zustand persist)
 - [04-01]: Application status polling via TanStack Query refetchInterval: 5000 (stops on approved/rejected)
+- [04-02]: Button variant="secondary" for dialog cancel (DS has no "outline" variant)
+- [04-02]: Dialogs embedded directly in ReviewQueueItemCard (SkipDialog/SLAExtensionDialog with DialogTrigger)
+- [04-02]: SLA timer: 60-second interval, mounted-state guard prevents hydration mismatch
+- [04-02]: 3rd GradientCard uses inline style={{ background: 'linear-gradient(135deg, #4A6741 0%, #3A8FA0 100%)' }}
 
 ### Pending Todos
 
@@ -117,6 +121,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-26T15:13:45Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-02-26T15:23:29Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
