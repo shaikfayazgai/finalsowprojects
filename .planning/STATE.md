@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Enterprise uploads SOW -> APG decomposes into tasks -> verified contributors deliver evidence -> enterprise reviews and releases payment -- all without manual recruitment or PM overhead.
-**Current focus:** Phase 4 - Mentor Portal (plan 02 complete, 2 remaining)
+**Current focus:** Phase 4 - Mentor Portal (plan 03 complete, 1 remaining)
 
 ## Current Position
 
 Phase: 4 of 6 (Mentor Portal)
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-26 -- Completed 04-02-PLAN.md
+Last activity: 2026-02-26 -- Completed 04-03-PLAN.md
 
-Progress: [████████████████████░░░░] 21/24 plans (88%)
+Progress: [█████████████████████░░░] 22/24 plans (92%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
-- Average duration: 6.2 min
-- Total execution time: 112 min
+- Total plans completed: 17
+- Average duration: 6.4 min
+- Total execution time: 124 min
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [████████████████████░░░
 | 01-monorepo-infrastructure-ds-foundation | 4/4 | 29 min | 7.3 min |
 | 02-design-system-completion | 4/4 | 25 min | 6.3 min |
 | 03-womens-portal-university-portal | 5/5 | 52 min | 10.4 min |
-| 04-mentor-portal | 2/4 | 14 min | 7.0 min |
+| 04-mentor-portal | 3/4 | 26 min | 8.7 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-03 (6 min), 03-05 (5 min), gap-fixes (7 min), 04-01 (9 min), 04-02 (5 min)
-- Trend: stable around 5-9 min for portal plans
+- Last 5 plans: 03-05 (5 min), gap-fixes (7 min), 04-01 (9 min), 04-02 (5 min), 04-03 (12 min)
+- Trend: stable around 5-12 min for portal plans
 
 *Updated after each plan completion*
 
@@ -106,6 +106,10 @@ Recent decisions affecting current work:
 - [04-02]: Dialogs embedded directly in ReviewQueueItemCard (SkipDialog/SLAExtensionDialog with DialogTrigger)
 - [04-02]: SLA timer: 60-second interval, mounted-state guard prevents hydration mismatch
 - [04-02]: 3rd GradientCard uses inline style={{ background: 'linear-gradient(135deg, #4A6741 0%, #3A8FA0 100%)' }}
+- [04-03]: autoSaveId prop on ResizablePanelGroup abstracts useDefaultLayout hook from v4 (react-resizable-panels v4 removed autoSaveId prop; wrapper added it back)
+- [04-03]: ReviewEvidence type (mentor-facing) has NO contributor identity fields -- blind review enforced at TypeScript type level
+- [04-03]: ReviewEvidence -> ViewerEvidence mapping in evidence-center-panel.tsx is explicit privacy boundary
+- [04-03]: Auto-save pattern: useEffect+setTimeout(1500ms)+Zustand persist keyed by reviewId, cleared in useMutation.onSuccess
 
 ### Pending Todos
 
@@ -113,7 +117,7 @@ None.
 
 ### Blockers/Concerns
 
-- Phase 4: 3-panel resizable layout ready (react-resizable-panels v4 wrapper installed and exported)
+- Phase 4: 3-panel resizable review detail page complete (04-03 done); only 04-04 remains in phase
 - Phase 5: SOW Blueprint Editor (4-panel synchronized scroll) has no library equivalent -- needs spike
 - Pre-existing: `pnpm turbo build` now passes cleanly across all 5 portals (was previously failing with webpack-runtime TypeError)
 - [03-01]: next-intl INSTALLED in both portals (resolved from planning blocker)
@@ -121,6 +125,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-26T15:23:29Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-02-26T15:52:51Z
+Stopped at: Completed 04-03-PLAN.md
 Resume file: None
