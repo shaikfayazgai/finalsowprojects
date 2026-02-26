@@ -13,34 +13,34 @@
 
 ### INFRA — Monorepo Infrastructure
 
-- [ ] **INFRA-01**: Turborepo monorepo initialized with pnpm workspaces containing `/apps` and `/packages` directories
-- [ ] **INFRA-02**: `@glimmora/config` package exports shared Tailwind v4 theme (CSS-first `@theme` config with all brand tokens), shared ESLint config, shared TypeScript base config
-- [ ] **INFRA-03**: `@glimmora/types` package exports all shared TypeScript interfaces — UserRole, Task, Project, SOW, Evidence, PoDL, SkillGenome, APIResponse wrapper — serving as backend API contracts
-- [ ] **INFRA-04**: `@glimmora/ui` package exports all design system components (built on Radix UI primitives + Tailwind), with each Radix-based component file marked `"use client"` individually (not the barrel export)
-- [ ] **INFRA-05**: Storybook 10.x configured in `@glimmora/ui` with correct Tailwind v4 PostCSS integration — all components documented with stories
-- [ ] **INFRA-06**: MSW v2 configured with dual-runtime support — browser service worker in each portal's `/public`, plus `instrumentation.ts` for server-side interception in each Next.js app
-- [ ] **INFRA-07**: All 5 Next.js 15.5.x apps scaffolded in `/apps` — each consuming `@glimmora/config`, `@glimmora/types`, `@glimmora/ui`
-- [ ] **INFRA-08**: Custom fonts configured — Miller Display and Avenir LT Std via `next/font/local` in Next.js apps, `@font-face` CSS in Storybook
-- [ ] **INFRA-09**: TanStack Query v5 provider configured per app — all data fetching goes through TanStack Query hooks backed by MSW handlers
-- [ ] **INFRA-10**: Zustand v5 store configured per app for client-side state (mock auth, UI state, locale)
-- [ ] **INFRA-11**: Turborepo build pipeline configured — `build`, `dev`, `storybook`, `lint`, `type-check` tasks with correct dependencies
-- [ ] **INFRA-12**: Canary validation — one complete component (Button) verified working in Storybook + Next.js page + MSW mock before proceeding to full build
+- [x] **INFRA-01**: Turborepo monorepo initialized with pnpm workspaces containing `/apps` and `/packages` directories
+- [x] **INFRA-02**: `@glimmora/config` package exports shared Tailwind v4 theme (CSS-first `@theme` config with all brand tokens), shared ESLint config, shared TypeScript base config
+- [x] **INFRA-03**: `@glimmora/types` package exports all shared TypeScript interfaces — UserRole, Task, Project, SOW, Evidence, PoDL, SkillGenome, APIResponse wrapper — serving as backend API contracts
+- [x] **INFRA-04**: `@glimmora/ui` package exports all design system components (built on Radix UI primitives + Tailwind), with each Radix-based component file marked `"use client"` individually (not the barrel export)
+- [x] **INFRA-05**: Storybook 10.x configured in `@glimmora/ui` with correct Tailwind v4 PostCSS integration — all components documented with stories
+- [x] **INFRA-06**: MSW v2 configured with dual-runtime support — browser service worker in each portal's `/public`, plus `instrumentation.ts` for server-side interception in each Next.js app
+- [x] **INFRA-07**: All 5 Next.js 15.5.x apps scaffolded in `/apps` — each consuming `@glimmora/config`, `@glimmora/types`, `@glimmora/ui`
+- [x] **INFRA-08**: Custom fonts configured — Miller Display and Avenir LT Std via `next/font/local` in Next.js apps, `@font-face` CSS in Storybook
+- [x] **INFRA-09**: TanStack Query v5 provider configured per app — all data fetching goes through TanStack Query hooks backed by MSW handlers
+- [x] **INFRA-10**: Zustand v5 store configured per app for client-side state (mock auth, UI state, locale)
+- [x] **INFRA-11**: Turborepo build pipeline configured — `build`, `dev`, `storybook`, `lint`, `type-check` tasks with correct dependencies
+- [x] **INFRA-12**: Canary validation — one complete component (Button) verified working in Storybook + Next.js page + MSW mock before proceeding to full build
 
 ### DS — Design System (`@glimmora/ui`)
 
 **Foundation**
-- [ ] **DS-01**: Design tokens implemented in Tailwind v4 `@theme` — all brand colors, typography scale, spacing, border radius, shadow, gradient definitions
-- [ ] **DS-02**: Typography components — `Heading` (Miller Display), `Body` (Avenir LT Std), `Label`, `Caption` with correct weight and size variants
-- [ ] **DS-03**: Color palette accessible as Tailwind utility classes — `bg-brand-primary`, `text-espresso`, `border-sand`, etc.
+- [x] **DS-01**: Design tokens implemented in Tailwind v4 `@theme` — all brand colors, typography scale, spacing, border radius, shadow, gradient definitions
+- [x] **DS-02**: Typography components — `Heading` (Miller Display), `Body` (Avenir LT Std), `Label`, `Caption` with correct weight and size variants
+- [x] **DS-03**: Color palette accessible as Tailwind utility classes — `bg-brand-primary`, `text-espresso`, `border-sand`, etc.
 
 **Interactive Components**
-- [ ] **DS-04**: Button — Primary (terracotta fill), Secondary (sand bg), Ghost, Destructive, Loading state, Icon variant; all sizes; Radix `Slot` for polymorphic rendering
-- [ ] **DS-05**: Input — Text, Textarea, Password (toggle show/hide), all with label, helper text, error state
-- [ ] **DS-06**: Select — Radix Select primitive, styled with warm design system
-- [ ] **DS-07**: Checkbox + Radio — Radix primitives, styled
-- [ ] **DS-08**: Switch/Toggle — Radix Switch primitive
-- [ ] **DS-09**: Dialog/Modal — Radix Dialog, slide-in animation via Framer Motion, overlay, focus trap
-- [ ] **DS-10**: Tooltip — Radix Tooltip, warm styling
+- [x] **DS-04**: Button — Primary (terracotta fill), Secondary (sand bg), Ghost, Destructive, Loading state, Icon variant; all sizes; Radix `Slot` for polymorphic rendering
+- [x] **DS-05**: Input — Text, Textarea, Password (toggle show/hide), all with label, helper text, error state
+- [x] **DS-06**: Select — Radix Select primitive, styled with warm design system
+- [x] **DS-07**: Checkbox + Radio — Radix primitives, styled
+- [x] **DS-08**: Switch/Toggle — Radix Switch primitive
+- [x] **DS-09**: Dialog/Modal — Radix Dialog, slide-in animation via Framer Motion, overlay, focus trap
+- [x] **DS-10**: Tooltip — Radix Tooltip, warm styling
 - [ ] **DS-11**: Dropdown Menu — Radix DropdownMenu, warm styling
 - [ ] **DS-12**: Context Menu — Radix ContextMenu
 - [ ] **DS-13**: Popover — Radix Popover
@@ -301,28 +301,28 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 1 | Pending |
-| INFRA-02 | Phase 1 | Pending |
-| INFRA-03 | Phase 1 | Pending |
-| INFRA-04 | Phase 1 | Pending |
-| INFRA-05 | Phase 1 | Pending |
-| INFRA-06 | Phase 1 | Pending |
-| INFRA-07 | Phase 1 | Pending |
-| INFRA-08 | Phase 1 | Pending |
-| INFRA-09 | Phase 1 | Pending |
-| INFRA-10 | Phase 1 | Pending |
-| INFRA-11 | Phase 1 | Pending |
-| INFRA-12 | Phase 1 | Pending |
-| DS-01 | Phase 1 | Pending |
-| DS-02 | Phase 1 | Pending |
-| DS-03 | Phase 1 | Pending |
-| DS-04 | Phase 1 | Pending |
-| DS-05 | Phase 1 | Pending |
-| DS-06 | Phase 1 | Pending |
-| DS-07 | Phase 1 | Pending |
-| DS-08 | Phase 1 | Pending |
-| DS-09 | Phase 1 | Pending |
-| DS-10 | Phase 1 | Pending |
+| INFRA-01 | Phase 1 | Complete |
+| INFRA-02 | Phase 1 | Complete |
+| INFRA-03 | Phase 1 | Complete |
+| INFRA-04 | Phase 1 | Complete |
+| INFRA-05 | Phase 1 | Complete |
+| INFRA-06 | Phase 1 | Complete |
+| INFRA-07 | Phase 1 | Complete |
+| INFRA-08 | Phase 1 | Complete |
+| INFRA-09 | Phase 1 | Complete |
+| INFRA-10 | Phase 1 | Complete |
+| INFRA-11 | Phase 1 | Complete |
+| INFRA-12 | Phase 1 | Complete |
+| DS-01 | Phase 1 | Complete |
+| DS-02 | Phase 1 | Complete |
+| DS-03 | Phase 1 | Complete |
+| DS-04 | Phase 1 | Complete |
+| DS-05 | Phase 1 | Complete |
+| DS-06 | Phase 1 | Complete |
+| DS-07 | Phase 1 | Complete |
+| DS-08 | Phase 1 | Complete |
+| DS-09 | Phase 1 | Complete |
+| DS-10 | Phase 1 | Complete |
 | DS-11 | Phase 2 | Pending |
 | DS-12 | Phase 2 | Pending |
 | DS-13 | Phase 2 | Pending |
