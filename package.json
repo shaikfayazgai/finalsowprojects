@@ -10,8 +10,22 @@
     "storybook": "turbo storybook",
     "clean": "turbo clean"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "msw"
+    ]
+  },
   "devDependencies": {
     "turbo": "^2.8.11",
     "prettier": "^3.8.1"
+  },
+  "msw": {
+    "workerDirectory": [
+      "apps/women-portal/public",
+      "apps/university-portal/public",
+      "apps/enterprise-portal/public",
+      "apps/mentor-portal/public",
+      "apps/admin-panel/public"
+    ]
   }
 }

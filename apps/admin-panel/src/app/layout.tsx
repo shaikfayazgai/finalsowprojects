@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Providers } from '@/components/providers/Providers'
 import './globals.css'
 
 // Font loading -- uncomment when WOFF2 files are placed in packages/config/fonts/
@@ -31,7 +32,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // When fonts are ready, add className={`${millerDisplay.variable} ${avenirLTStd.variable}`} to html
   return (
     <html lang="en">
-      <body className="font-body bg-bg-app text-text-body">{children}</body>
+      <body className="font-body bg-bg-app text-text-body">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   )
 }
