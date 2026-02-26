@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #A0614A;
+  --color-brand-sand: #C9A882;
+  --color-brand-forest: #4A6741;
+  --color-brand-teal: #3A8FA0;
+  --color-brand-gold: #C4A23A;
+
+  --color-bg-app: #FAF7F4;
+  --color-bg-dashboard: #F5EDE6;
+  --color-bg-card: #FFFFFF;
+  --color-bg-sidebar: #FBF8F5;
+  --color-border: #EAD9CC;
+  --color-hover: #F0E4DA;
+
+  --color-text-heading: #2C1F1A;
+  --color-text-body: #6B4C3B;
+  --color-text-caption: #9C8578;
+  --color-text-disabled: #C4AFA6;
+
+  --color-status-success: #4A7C5E;
+  --color-status-warning: #C4A23A;
+  --color-status-urgent: #C05C3A;
+  --color-status-inprogress: #3A8FA0;
+  --color-status-neutral: #9C8578;
+
+  --font-display: var(--font-miller-display), Georgia, serif;
+  --font-body: var(--font-avenir), system-ui, sans-serif;
+
+  --spacing-18: 4.5rem;
+  --spacing-22: 5.5rem;
+
+  --radius-card: 12px;
+  --radius-inner: 8px;
+  --radius-badge: 6px;
+  --radius-button: 10px;
+
+  --shadow-card: 0 2px 8px rgba(44, 31, 26, 0.08);
+  --shadow-card-hover: 0 4px 16px rgba(44, 31, 26, 0.12);
+  --shadow-task-card: 0 2px 6px rgba(44, 31, 26, 0.07);
+}
