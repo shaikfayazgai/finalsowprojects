@@ -4,6 +4,9 @@ import { canaryHandlers } from './canary'
 import { taskHandlers } from './tasks'
 import { evidenceHandlers } from './evidence'
 import { apgHandlers } from './apg'
+import { skillsHandlers } from './skills'
+import { earningsHandlers } from './earnings'
+import { podlHandlers } from './podl'
 
 export const handlers = [
   ...canaryHandlers,
@@ -12,4 +15,7 @@ export const handlers = [
   ...taskHandlers,
   ...evidenceHandlers,
   ...apgHandlers,
+  ...skillsHandlers,
+  ...earningsHandlers,
+  ...podlHandlers,
 ]

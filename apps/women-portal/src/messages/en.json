@@ -126,5 +126,57 @@
     "feedback": "Mentor Feedback",
     "items": "Items to Address",
     "resubmit": "Resubmit Evidence"
+  },
+  "skills": {
+    "title": "Skill Genome",
+    "totalPodls": "Total PoDLs",
+    "overallGrowth": "Overall Growth",
+    "howTasksBuild": "How Tasks Build Your Skills"
+  },
+  "earnings": {
+    "title": "Earnings",
+    "pending": "Pending",
+    "released": "Released",
+    "totalEarned": "Total Earned",
+    "paymentHistory": "Payment History"
+  },
+  "credentials": {
+    "title": "PoDL Credentials",
+    "empty": "No credentials yet. Complete tasks to earn your first PoDL."
+  },
+  "messages": {
+    "title": "Messages",
+    "newMessage": "New Message",
+    "placeholder": "Type your message...",
+    "send": "Send",
+    "empty": "No messages yet",
+    "you": "You",
+    "supportLead": "Support Lead"
+  },
+  "settings": {
+    "title": "Settings",
+    "profile": "Profile",
+    "privacy": "Privacy",
+    "notifications": "Notifications",
+    "devices": "Devices & Connectivity",
+    "save": "Save Changes",
+    "displayName": "Display Name",
+    "city": "City",
+    "timezone": "Timezone",
+    "profileVisibleToTeam": "Profile visible to team members",
+    "skillsVisibleToMentor": "Skills visible to mentor",
+    "earningsVisible": "Earnings visible",
+    "privacyDescription": "Control what information is shared. All defaults are set to maximum privacy.",
+    "taskUpdates": "Task Updates",
+    "payments": "Payments",
+    "messagesNotif": "Messages",
+    "platform": "Platform",
+    "inApp": "In-App",
+    "email": "Email",
+    "primaryDevice": "Primary Device",
+    "operatingSystem": "Operating System",
+    "internetStability": "Internet Stability",
+    "hasBackupDevice": "I have a backup device available",
+    "deviceDescription": "Help us optimize your experience based on your setup."
   }
 }
