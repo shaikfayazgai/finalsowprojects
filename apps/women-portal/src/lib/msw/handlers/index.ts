@@ -7,6 +7,8 @@ import { apgHandlers } from './apg'
 import { skillsHandlers } from './skills'
 import { earningsHandlers } from './earnings'
 import { podlHandlers } from './podl'
+import { messageHandlers } from './messages'
+import { profileHandlers } from './profile'
 
 export const handlers = [
   ...canaryHandlers,
@@ -18,4 +20,6 @@ export const handlers = [
   ...skillsHandlers,
   ...earningsHandlers,
   ...podlHandlers,
+  ...messageHandlers,
+  ...profileHandlers,
 ]
