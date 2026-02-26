@@ -1,5 +1,6 @@
+import type { MentorTier } from './user'
+
 export type MentorApplicationStatus = 'pending' | 'under_review' | 'approved' | 'rejected'
-export type MentorTier = 'bronze' | 'silver' | 'gold' | 'elite'
 export type ReviewDecisionType = 'approve' | 'rework_required' | 'reject'
 export type SLAStatus = 'normal' | 'warning' | 'urgent' | 'overdue'
 
@@ -14,7 +15,7 @@ export interface MentorApplication {
   rejectionReason?: string
 }
 
-export interface MentorProfile {
+export interface MentorOnboardingProfile {
   id: string
   mentorId: string
   displayName: string
