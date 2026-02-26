@@ -61,14 +61,14 @@ Plans:
   3. A person can view their private Skill Genome (no peer comparison visible anywhere), see how completed tasks contributed to skill growth, view earnings with pending/released/withdrawal history, and access PoDL credentials
   4. A university student can complete onboarding with university email verification, discover and accept tasks, view anonymous team collaboration context, and export PoDL credentials as PDF -- and an alumni user can reactivate with preserved PoDL history
   5. A University Strategic Governor (faculty) can view aggregated institutional metrics and anonymized cohort trends with zero individual student identifiers visible, and configure which task categories their institution participates in
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 03-01: Women's Portal pre-auth and onboarding flow
-- [ ] 03-02: Women's Portal dashboard, task flow, and evidence submission
-- [ ] 03-03: Women's Portal Skill Genome, earnings, PoDL, communication, and settings
-- [ ] 03-04: University Portal student flows (onboarding, dashboard, tasks, PoDL, team, Skill Genome)
-- [ ] 03-05: University Portal alumni reactivation and Strategic Governor views
+- [ ] 03-01-PLAN.md -- Foundation: @glimmora/types extensions + next-intl i18n + Women's Portal pre-auth/onboarding (Wave 1)
+- [ ] 03-02-PLAN.md -- Women's Portal AppShell + dashboard + task flow + evidence submission (Wave 2)
+- [ ] 03-03-PLAN.md -- Women's Portal Skill Genome, earnings, PoDL, messages, settings (Wave 3)
+- [ ] 03-04-PLAN.md -- University Portal pre-auth + all student authenticated pages (Wave 2)
+- [ ] 03-05-PLAN.md -- University Portal alumni reactivation + Strategic Governor views (Wave 3)
 
 ### Phase 4: Mentor Portal
 **Goal**: Mentors can manage their review queue, conduct blind evidence reviews in the 3-panel layout, deliver structured approve/rework/reject decisions, verify contributor skill tags, and track their own tier progression and impact metrics.
@@ -149,7 +149,7 @@ All 162 v1 requirements mapped. No orphans. No duplicates.
 |-------|---------------|--------|-----------|
 | 1. Monorepo Infrastructure + DS Foundation | 4/4 | Complete ✓ | 2026-02-26 |
 | 2. Design System Completion | 4/4 | Complete ✓ | 2026-02-26 |
-| 3. Women's Portal + University Portal | 0/5 | Not started | - |
+| 3. Women's Portal + University Portal | 0/5 | Planned (5 plans ready) | - |
 | 4. Mentor Portal | 0/4 | Not started | - |
 | 5. Enterprise Portal | 0/6 | Not started | - |
 | 6. Admin Panel | 0/5 | Not started | - |
