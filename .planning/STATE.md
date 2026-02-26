@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 3 of 6 (Women's Portal + University Portal) -- IN PROGRESS
-Plan: 1 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-26 -- Completed 03-01-PLAN.md (Foundation: Types + i18n + Pre-Auth/Onboarding)
+Last activity: 2026-02-26 -- Completed 03-02-PLAN.md (Dashboard, Tasks, Evidence Submission)
 
-Progress: [█████████░░░░░░░░░░░░░░░] 9/24 plans (37%)
+Progress: [██████████░░░░░░░░░░░░░░] 10/24 plans (42%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 6.0 min
-- Total execution time: 62 min
+- Total plans completed: 10
+- Average duration: 5.7 min
+- Total execution time: 67 min
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [█████████░░░░░░░░░░░░░░
 |-------|-------|-------|----------|
 | 01-monorepo-infrastructure-ds-foundation | 4/4 | 29 min | 7.3 min |
 | 02-design-system-completion | 4/4 | 25 min | 6.3 min |
-| 03-womens-portal-university-portal | 1/5 | 8 min | 8.0 min |
+| 03-womens-portal-university-portal | 2/5 | 13 min | 6.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (9 min), 02-02 (8 min), 02-03 (5 min), 02-04 (3 min), 03-01 (8 min)
+- Last 5 plans: 02-02 (8 min), 02-03 (5 min), 02-04 (3 min), 03-01 (8 min), 03-02 (5 min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -78,6 +78,10 @@ Recent decisions affecting current work:
 - [03-01]: MSW handlers migrated from flat file to handlers/ directory (auth, onboarding, canary)
 - [03-01]: lucide-react added as direct dependency to women-portal for Shield/CheckCircle icons
 - [03-01]: Pre-auth route group pattern: app/(pre-auth)/ for all unauthenticated pages
+- [03-02]: APGActivity type mapping: hyphens in types -> underscores for APGFeed component via TYPE_MAP
+- [03-02]: Evidence rework pack pre-seeded in MSW handlers for task-005 so rework view has data
+- [03-02]: Common MSW factory helper (randomId, isoNow) in factories/common.ts for reuse
+- [03-02]: Pipeline visualization in submission tracker uses simple div bars (not TimelineBar component)
 
 ### Pending Todos
 
@@ -94,5 +98,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 03-01-PLAN.md (Foundation: Types + i18n + Pre-Auth/Onboarding)
+Stopped at: Completed 03-02-PLAN.md (Dashboard, Tasks, Evidence Submission)
 Resume file: None
