@@ -80,13 +80,13 @@ Plans:
   3. A mentor can open a review in the 3-panel layout -- task context on the left, evidence viewer (tabbed by type with contributor identity hidden) in the center, review form on the right -- and submit an Approve, Rework Required (with specific items to address), or Reject (with required rejection reason and non-compliance evidence) decision
   4. A mentor can view their tier status (Bronze/Silver/Gold/Elite), impact metrics (total reviews, average time, rework rate, appeals overturned), and manage their expertise skill tags and capacity settings
   5. A mentor can process skill tag verification requests from the verification queue, verifying or disputing contributor skill claims with evidence assessment
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 04-01: Mentor onboarding and application flow
-- [ ] 04-02: Review queue management (3 tabs, SLA timers, skip/extend)
-- [ ] 04-03: 3-panel review detail layout with evidence viewer and decision forms
-- [ ] 04-04: Mentor profile, skill tag verification, communication, and settings
+- [ ] 04-01-PLAN.md -- Mentor types + react-resizable-panels + pre-auth application + 4-step onboarding (Wave 1)
+- [ ] 04-02-PLAN.md -- AppShell layout + review queue with 3 tabs, SLA timers, skip/extend (Wave 2)
+- [ ] 04-03-PLAN.md -- 3-panel review detail layout with evidence viewer and decision forms (Wave 3)
+- [ ] 04-04-PLAN.md -- Mentor profile, skill tag verification, messaging, and settings (Wave 3)
 
 ### Phase 5: Enterprise Portal
 **Goal**: Enterprise requesters can upload SOWs and see APG decomposition, edit project blueprints in the 4-panel editor, monitor projects via Gantt timeline and KPI dashboards, review evidence packs, manage payment release flows, and export PoDL/ESG compliance reports.
