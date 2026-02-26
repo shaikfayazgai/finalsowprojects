@@ -142,3 +142,6 @@ export { AnonymizedTeamCard } from './components/anonymized-team-card'
 
 // DS-43: Timeline Bar
 export { TimelineBar } from './components/timeline-bar'
+
+// Resizable Panels (react-resizable-panels v4 wrapper)
+export { ResizablePanelGroup, ResizablePanel, ResizableHandle } from './components/resizable-panels'
