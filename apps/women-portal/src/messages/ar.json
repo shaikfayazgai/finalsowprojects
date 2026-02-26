@@ -1,0 +1,76 @@
+{
+  "common": {
+    "continue": "متابعة",
+    "back": "رجوع",
+    "submit": "إرسال",
+    "loading": "جاري التحميل...",
+    "privacyGuarantee": "خصوصيتك مضمونة. لا ملفات شخصية عامة. لا قوائم متصدرين. لا مقارنة. أبداً."
+  },
+  "languageSelector": {
+    "heading": "اختر لغتك",
+    "subheading": "حدد اللغة التي تريد استخدامها",
+    "english": "English",
+    "urdu": "اردو",
+    "arabic": "العربية",
+    "continueButton": "متابعة"
+  },
+  "welcome": {
+    "greeting": "مرحباً بك في GlimmoraTeam",
+    "message1": "لديك مهارات. مهارات حقيقية.",
+    "message2": "نربطك بعمل مشاريع مجدي — من المنزل، وفق جدولك.",
+    "message3": "هويتك تبقى خاصة. أرباحك لك.",
+    "cta": "ابدأ الآن"
+  },
+  "register": {
+    "heading": "أنشئ حسابك",
+    "emailLabel": "البريد الإلكتروني",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "كلمة المرور",
+    "passwordPlaceholder": "8 أحرف على الأقل",
+    "submitButton": "إنشاء حساب",
+    "alreadyHaveAccount": "لديك حساب بالفعل؟",
+    "signIn": "تسجيل الدخول"
+  },
+  "onboarding": {
+    "stepOf": "الخطوة {current} من {total}",
+    "profile": {
+      "title": "ملفك الشخصي",
+      "displayNameLabel": "الاسم المعروض",
+      "displayNamePlaceholder": "كيف تريد أن نناديك؟",
+      "nameLabel": "الاسم الكامل (اختياري)",
+      "namePlaceholder": "اختياري — لن يظهر علنياً",
+      "bioLabel": "نبذة مختصرة (اختياري)",
+      "bioPlaceholder": "أخبرنا قليلاً عن نفسك"
+    },
+    "devices": {
+      "title": "جهازك والاتصال",
+      "deviceTypeLabel": "الجهاز الأساسي",
+      "smartphone": "هاتف ذكي",
+      "laptop": "حاسوب محمول",
+      "desktop": "حاسوب مكتبي",
+      "tablet": "جهاز لوحي",
+      "internetLabel": "استقرار الإنترنت",
+      "stable": "مستقر (اتصال موثوق)",
+      "intermittent": "متقطع أحياناً",
+      "limited": "محدود (بيانات الجوال غالباً)"
+    },
+    "skills": {
+      "title": "مهاراتك",
+      "instruction": "اختر المهارات التي لديك خبرة بها. كن صادقاً — يتم مطابقة المهام مع مستوى مهاراتك الفعلي.",
+      "addSkill": "أضف مهارة"
+    },
+    "activation": {
+      "title": "أنت جاهز!",
+      "message": "حسابك جاهز. سيطابقك APG مع المهام المناسبة قريباً.",
+      "nextSteps": "ما الذي سيحدث بعد ذلك:",
+      "step1": "يراجع APG مهاراتك ويطابق المهام",
+      "step2": "ستشاهد المهام المتاحة في لوحة التحكم",
+      "step3": "أكمل المهام وابنِ Skill Genome الخاص بك",
+      "goToDashboard": "اذهب إلى لوحة التحكم"
+    },
+    "privacyBanner": {
+      "title": "خصوصيتك محمية",
+      "body": "لا ملفات شخصية عامة. لا قوائم متصدرين. لا مقارنة. بياناتك خاصة بالتصميم."
+    }
+  }
+}

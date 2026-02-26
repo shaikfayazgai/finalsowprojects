@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { getLocale, getMessages } from 'next-intl/server'
+import { NextIntlClientProvider } from 'next-intl'
 import { Providers } from '@/components/providers/Providers'
 import './globals.css'
 
@@ -28,12 +30,19 @@ export const metadata: Metadata = {
   description: 'GlimmoraTeam contributor portal for women',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // When fonts are ready, add className={`${millerDisplay.variable} ${avenirLTStd.variable}`} to html
+const RTL_LOCALES = ['ur', 'ar']
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale()
+  const messages = await getMessages()
+  const dir = RTL_LOCALES.includes(locale) ? 'rtl' : 'ltr'
+
   return (
-    <html lang="en">
+    <html lang={locale} dir={dir}>
       <body className="font-body bg-bg-app text-text-body">
-        <Providers>{children}</Providers>
+        <NextIntlClientProvider messages={messages}>
+          <Providers>{children}</Providers>
+        </NextIntlClientProvider>
       </body>
     </html>
   )

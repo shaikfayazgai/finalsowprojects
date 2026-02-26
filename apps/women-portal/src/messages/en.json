@@ -1,0 +1,76 @@
+{
+  "common": {
+    "continue": "Continue",
+    "back": "Back",
+    "submit": "Submit",
+    "loading": "Loading...",
+    "privacyGuarantee": "Your privacy is guaranteed. No public profiles. No leaderboards. No peer comparison. Ever."
+  },
+  "languageSelector": {
+    "heading": "Choose Your Language",
+    "subheading": "Select the language you'd like to use",
+    "english": "English",
+    "urdu": "اردو",
+    "arabic": "العربية",
+    "continueButton": "Continue"
+  },
+  "welcome": {
+    "greeting": "Welcome to GlimmoraTeam",
+    "message1": "You have skills. Real skills.",
+    "message2": "We connect you with meaningful project work — from home, on your schedule.",
+    "message3": "Your identity stays private. Your earnings are yours.",
+    "cta": "Get Started"
+  },
+  "register": {
+    "heading": "Create Your Account",
+    "emailLabel": "Email Address",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "At least 8 characters",
+    "submitButton": "Create Account",
+    "alreadyHaveAccount": "Already have an account?",
+    "signIn": "Sign in"
+  },
+  "onboarding": {
+    "stepOf": "Step {current} of {total}",
+    "profile": {
+      "title": "Your Profile",
+      "displayNameLabel": "Display Name",
+      "displayNamePlaceholder": "How should we address you?",
+      "nameLabel": "Full Name (optional)",
+      "namePlaceholder": "Optional — not shown publicly",
+      "bioLabel": "Brief Bio (optional)",
+      "bioPlaceholder": "Tell us a little about yourself"
+    },
+    "devices": {
+      "title": "Your Device & Connectivity",
+      "deviceTypeLabel": "Primary Device",
+      "smartphone": "Smartphone",
+      "laptop": "Laptop",
+      "desktop": "Desktop",
+      "tablet": "Tablet",
+      "internetLabel": "Internet Stability",
+      "stable": "Stable (reliable connection)",
+      "intermittent": "Sometimes slow or drops",
+      "limited": "Limited (mobile data mainly)"
+    },
+    "skills": {
+      "title": "Your Skills",
+      "instruction": "Select the skills you have experience with. Be honest — tasks are matched to your actual skill level.",
+      "addSkill": "Add a skill"
+    },
+    "activation": {
+      "title": "You're Ready!",
+      "message": "Your account is set up. The APG will match you with suitable tasks shortly.",
+      "nextSteps": "What happens next:",
+      "step1": "APG reviews your skills and matches tasks",
+      "step2": "You'll see available tasks in your dashboard",
+      "step3": "Complete tasks and build your Skill Genome",
+      "goToDashboard": "Go to Dashboard"
+    },
+    "privacyBanner": {
+      "title": "Your Privacy is Protected",
+      "body": "No public profiles. No leaderboards. No peer comparison. Your data is private by design, not just policy."
+    }
+  }
+}

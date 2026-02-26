@@ -1,0 +1,34 @@
+{
+  "common": {
+    "continue": "Continue",
+    "back": "Back",
+    "submit": "Submit",
+    "loading": "Loading...",
+    "privacyGuarantee": "Your privacy is guaranteed. No public profiles. No leaderboards. No peer comparison. Ever."
+  },
+  "languageSelector": {
+    "heading": "Choose Your Language",
+    "subheading": "Select the language you'd like to use",
+    "english": "English",
+    "urdu": "اردو",
+    "arabic": "العربية",
+    "continueButton": "Continue"
+  },
+  "welcome": {
+    "greeting": "Welcome to GlimmoraTeam",
+    "message1": "Build real-world skills while earning.",
+    "message2": "Work on meaningful projects alongside your studies — verified by your university.",
+    "message3": "Earn PoDL credentials that prove what you can actually do.",
+    "cta": "Get Started"
+  },
+  "register": {
+    "heading": "Create Your Account",
+    "emailLabel": "University Email",
+    "emailPlaceholder": "you@university.edu",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "At least 8 characters",
+    "submitButton": "Create Account",
+    "alreadyHaveAccount": "Already have an account?",
+    "signIn": "Sign in"
+  }
+}
