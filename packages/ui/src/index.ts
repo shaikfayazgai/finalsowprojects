@@ -29,3 +29,15 @@ export { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 
 // DS-10: Tooltip
 export { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from './components/tooltip'
+
+// DS-44: Bar Chart
+export { BarChart } from './components/bar-chart'
+
+// DS-45: Progress Ring
+export { ProgressRing } from './components/progress-ring'
+
+// DS-46: Sparkline
+export { Sparkline } from './components/sparkline'
+
+// DS-47: Activity Heatmap
+export { ActivityHeatmap } from './components/activity-heatmap'
