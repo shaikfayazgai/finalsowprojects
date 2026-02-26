@@ -123,3 +123,22 @@ export { DataTable } from './components/data-table'
 
 // DS-37: KPI Stat Card
 export { KPIStatCard } from './components/kpi-stat-card'
+
+// DS-38: Evidence Viewer
+export { EvidenceViewer } from './components/evidence-viewer'
+export type { Evidence, CodeEvidence, DocumentEvidence, LinkEvidence, VideoEvidence, TextEvidence } from './components/evidence-viewer'
+
+// DS-39: PoDL Credential Card
+export { PoDLCard } from './components/podl-card'
+
+// DS-40: APG Activity Feed
+export { APGFeed } from './components/apg-feed'
+
+// DS-41: Skill Genome Panel
+export { SkillGenomePanel } from './components/skill-genome-panel'
+
+// DS-42: Anonymized Team Card
+export { AnonymizedTeamCard } from './components/anonymized-team-card'
+
+// DS-43: Timeline Bar
+export { TimelineBar } from './components/timeline-bar'
