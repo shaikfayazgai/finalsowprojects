@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 3 of 6 (Women's Portal + University Portal) -- IN PROGRESS
-Plan: 4 of 5 in current phase
+Plan: 5 of 5 in current phase (03-03 + 03-04 complete, 03-05 remaining)
 Status: In progress
-Last activity: 2026-02-26 -- Completed 03-04-PLAN.md (University Portal Student Experience)
+Last activity: 2026-02-26 -- Completed 03-03-PLAN.md (Women's Portal Remaining Pages)
 
-Progress: [████████████░░░░░░░░░░░░] 12/24 plans (50%)
+Progress: [█████████████░░░░░░░░░░░] 13/24 plans (54%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
-- Average duration: 6.1 min
-- Total execution time: 87 min
+- Total plans completed: 13
+- Average duration: 6.2 min
+- Total execution time: 93 min
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [████████████░░░░░░░░░░░
 |-------|-------|-------|----------|
 | 01-monorepo-infrastructure-ds-foundation | 4/4 | 29 min | 7.3 min |
 | 02-design-system-completion | 4/4 | 25 min | 6.3 min |
-| 03-womens-portal-university-portal | 4/5 | 33 min | 8.3 min |
+| 03-womens-portal-university-portal | 5/5 | 39 min | 7.8 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-04 (3 min), 03-01 (8 min), 03-02 (5 min), 03-03 (10 min), 03-04 (10 min)
-- Trend: slightly increasing (portal plans larger than DS plans)
+- Last 5 plans: 03-01 (8 min), 03-02 (5 min), 03-03-old (10 min), 03-04 (10 min), 03-03 (6 min)
+- Trend: stable around 6-10 min for portal plans
 
 *Updated after each plan completion*
 
@@ -86,6 +86,11 @@ Recent decisions affecting current work:
 - [03-04]: PDF export uses dynamic import (await import('@react-pdf/renderer')) to avoid SSR crashes
 - [03-04]: University Portal auth store uses zustand persist with localStorage for session continuity
 - [03-04]: lucide-react added as direct dependency to university-portal for sidebar icons
+- [03-03]: SkillNode level mapped to SkillGenomePanel tier enum (beginner->emerging, intermediate->developing, advanced->proficient, expert->expert)
+- [03-03]: Messages use senderRole display ('You'/'Support Lead') not names -- privacy-preserving async messaging
+- [03-03]: Privacy defaults set to maximum restriction (profileVisibleToTeam=false, earningsVisible=false)
+- [03-03]: Settings root page uses sidebar navigation linking to sub-routes (/privacy, /notifications, /devices)
+- [03-03]: Notification prefs grid uses actual @glimmora/types channels (in_app/email) and categories (task_updates/payments/messages/platform)
 
 ### Pending Todos
 
@@ -102,5 +107,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 03-04-PLAN.md (University Portal Student Experience)
+Stopped at: Completed 03-03-PLAN.md (Women's Portal Remaining Pages)
 Resume file: None
