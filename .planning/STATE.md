@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Enterprise uploads SOW -> APG decomposes into tasks -> verified contributors deliver evidence -> enterprise reviews and releases payment -- all without manual recruitment or PM overhead.
-**Current focus:** Phase 4 complete -- Phase 5 (Enterprise Portal) is next
+**Current focus:** Phase 5 (Enterprise Portal) -- Plan 01 complete, 5 remaining
 
 ## Current Position
 
-Phase: 4 of 6 (Mentor Portal) -- COMPLETE
-Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-02-26 -- Completed 04-04-PLAN.md
+Phase: 5 of 6 (Enterprise Portal)
+Plan: 1 of 6 in current phase
+Status: In progress
+Last activity: 2026-02-27 -- Completed 05-01-PLAN.md
 
-Progress: [████████████████████████] 24/24 phase 4 plans (100%), 18/24 overall (75%)
+Progress: [███████████████████░░░░░] 6/6 phase 5 plans (17%), 19/24 overall (79%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18
-- Average duration: 6.4 min
-- Total execution time: 145 min
+- Total plans completed: 19
+- Average duration: 6.5 min
+- Total execution time: 152 min
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [███████████████████████
 | 02-design-system-completion | 4/4 | 25 min | 6.3 min |
 | 03-womens-portal-university-portal | 5/5 | 52 min | 10.4 min |
 | 04-mentor-portal | 4/4 | 47 min | 11.8 min |
+| 05-enterprise-portal | 1/6 | 7 min | 7.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-01 (9 min), 04-02 (5 min), 04-03 (12 min), 04-04 (21 min)
-- Trend: slightly higher for complex portal pages with multiple sub-components
+- Last 5 plans: 04-02 (5 min), 04-03 (12 min), 04-04 (21 min), 05-01 (7 min)
+- Trend: 05-01 fast due to established portal patterns; expect heavier plans for blueprint editor
 
 *Updated after each plan completion*
 
@@ -114,6 +115,10 @@ Recent decisions affecting current work:
 - [04-04]: Badge status values: 'done'=Verified, 'normal'=Pending, 'atrisk'=Disputed (no 'complete'/'pending' Badge variants)
 - [04-04]: Mentor messages use senderRole 'mentor'/'platform' mapped to 'You'/'Platform' -- no contributor names ever shown
 - [04-04]: autoSaveId prop removed from ResizablePanelGroup in review-layout.tsx (v4 does not support this prop)
+- [05-01]: @tanstack/react-table added as direct dependency to enterprise-portal for ColumnDef type import (pnpm strict mode)
+- [05-01]: SOW upload form checks existingSOWId from URL search params -- if present shows version banner and passes in FormData
+- [05-01]: MSW handlers migrated from flat canary file to handlers/ directory (auth, onboarding, sow)
+- [05-01]: Pre-auth login at (pre-auth)/login/page.tsx, root page.tsx redirects to /login
 
 ### Pending Todos
 
@@ -125,9 +130,10 @@ None.
 - Pre-existing: `pnpm turbo build` now passes cleanly across all portals
 - [03-01]: next-intl INSTALLED in both portals (resolved from planning blocker)
 - [03-04]: @react-pdf/renderer INSTALLED in university-portal (resolved from blocker)
+- [05-01]: @react-pdf/renderer INSTALLED in enterprise-portal (resolved)
 
 ## Session Continuity
 
-Last session: 2026-02-26T16:30:00Z
-Stopped at: Phase 4 Mentor Portal COMPLETE + VERIFIED (5/5 must-haves)
+Last session: 2026-02-27T04:55:00Z
+Stopped at: Completed 05-01-PLAN.md (Enterprise Portal Foundation)
 Resume file: None
