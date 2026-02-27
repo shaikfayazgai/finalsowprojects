@@ -6,6 +6,7 @@ import { dashboardHandlers } from './dashboard'
 import { projectHandlers } from './projects'
 import { evidenceHandlers } from './evidence'
 import { paymentHandlers } from './payments'
+import { complianceHandlers } from './compliance'
 
 export const handlers = [
   ...authHandlers,
@@ -16,4 +17,5 @@ export const handlers = [
   ...projectHandlers,
   ...evidenceHandlers,
   ...paymentHandlers,
+  ...complianceHandlers,
 ]
