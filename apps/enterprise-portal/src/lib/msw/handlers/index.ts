@@ -7,6 +7,7 @@ import { projectHandlers } from './projects'
 import { evidenceHandlers } from './evidence'
 import { paymentHandlers } from './payments'
 import { complianceHandlers } from './compliance'
+import { settingsHandlers } from './settings'
 
 export const handlers = [
   ...authHandlers,
@@ -18,4 +19,5 @@ export const handlers = [
   ...evidenceHandlers,
   ...paymentHandlers,
   ...complianceHandlers,
+  ...settingsHandlers,
 ]
