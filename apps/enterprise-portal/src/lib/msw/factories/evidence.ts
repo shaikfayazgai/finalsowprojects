@@ -9,7 +9,6 @@ function createMockEvidence(
   const base: Evidence = {
     id: randomId('ev'),
     taskId,
-    contributorId: `contributor-${randomId('c')}`,
     type,
     title: '',
     description: '',

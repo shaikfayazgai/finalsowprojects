@@ -10,7 +10,7 @@ export type EvidenceStatus =
 export interface Evidence {
   id: string
   taskId: string
-  contributorId: string
+  contributorId?: string
   type: EvidenceType
   title: string
   description: string
