@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Enterprise uploads SOW -> APG decomposes into tasks -> verified contributors deliver evidence -> enterprise reviews and releases payment -- all without manual recruitment or PM overhead.
-**Current focus:** Phase 5 (Enterprise Portal) -- Plan 03 complete, 3 remaining
+**Current focus:** Phase 5 (Enterprise Portal) -- Plan 04 complete, 2 remaining
 
 ## Current Position
 
 Phase: 5 of 6 (Enterprise Portal)
-Plan: 3 of 6 in current phase
+Plan: 4 of 6 in current phase
 Status: In progress
-Last activity: 2026-02-27 -- Completed 05-03-PLAN.md
+Last activity: 2026-02-27 -- Completed 05-04-PLAN.md
 
-Progress: [████████████████████░░░░] 6/6 phase 5 plans (50%), 21/24 overall (88%)
+Progress: [█████████████████████░░░] 6/6 phase 5 plans (67%), 22/24 overall (92%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
-- Average duration: 6.5 min
-- Total execution time: 159 min
+- Total plans completed: 22
+- Average duration: 6.4 min
+- Total execution time: 162 min
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [████████████████████░░░
 | 02-design-system-completion | 4/4 | 25 min | 6.3 min |
 | 03-womens-portal-university-portal | 5/5 | 52 min | 10.4 min |
 | 04-mentor-portal | 4/4 | 47 min | 11.8 min |
-| 05-enterprise-portal | 3/6 | 14 min | 4.7 min |
+| 05-enterprise-portal | 4/6 | 17 min | 4.3 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-03 (12 min), 04-04 (21 min), 05-01 (7 min), 05-03 (7 min)
-- Trend: Enterprise portal plans running fast due to established patterns and component reuse
+- Last 5 plans: 04-04 (21 min), 05-01 (7 min), 05-03 (7 min), 05-04 (3 min)
+- Trend: Enterprise portal plans accelerating with established patterns and component reuse
 
 *Updated after each plan completion*
 
@@ -127,6 +127,10 @@ Recent decisions affecting current work:
 - [05-03]: URL hash-based tab state for bookmarkable 7-tab project detail (window.location.hash + hashchange listener)
 - [05-03]: AnonymizedTeamCard with tier Badge overlay -- no real contributor names shown
 - [05-03]: MSW /projects/completed route defined BEFORE /projects/:id to prevent path shadowing
+- [05-04]: recharts added as direct dependency to enterprise-portal (pnpm strict mode requires explicit dep, not transitive via @glimmora/ui)
+- [05-04]: Gantt uses stacked Bar trick: invisible offset bar + visible duration bar, both with stackId='gantt'
+- [05-04]: Health status colors use CSS variables: completed=status-success, in-progress=brand-primary, pending=border, overdue=status-urgent
+- [05-04]: Milestone health in list view derived from status: completed/in-progress='On Track', pending='Pending', overdue='Delayed'
 
 ### Pending Todos
 
@@ -142,6 +146,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-27T05:08:00Z
-Stopped at: Completed 05-03-PLAN.md (Enterprise Dashboard & Project Detail)
+Last session: 2026-02-27T05:16:30Z
+Stopped at: Completed 05-04-PLAN.md (Timeline Gantt Chart & List View)
 Resume file: None
