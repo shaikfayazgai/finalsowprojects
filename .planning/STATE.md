@@ -2,26 +2,26 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-26)
+See: .planning/PROJECT.md (updated 2026-02-27)
 
 **Core value:** Enterprise uploads SOW -> APG decomposes into tasks -> verified contributors deliver evidence -> enterprise reviews and releases payment -- all without manual recruitment or PM overhead.
-**Current focus:** PROJECT COMPLETE -- All 6 phases delivered.
+**Current focus:** v1.0 COMPLETE -- Planning next milestone (v1.1 backend integration prep)
 
 ## Current Position
 
-Phase: 6 of 6 (Admin Panel)
-Plan: 5 of 5 in current phase
-Status: COMPLETE
-Last activity: 2026-02-27 -- Completed 06-05-PLAN.md (FINAL PLAN)
+Phase: N/A -- Between milestones
+Plan: N/A
+Status: MILESTONE COMPLETE
+Last activity: 2026-02-27 -- v1.0 Frontend MVP milestone completed and archived
 
-Progress: [████████████████████████████████████████████████████████████] 5/5 phase 6 plans (100%), 29/29 overall (100%)
+Progress: [████████████████████████████████████████████████████████████] 29/29 overall (100%) — v1.0 SHIPPED
 
-## Performance Metrics
+## Performance Metrics (v1.0)
 
 **Velocity:**
 - Total plans completed: 29
-- Average duration: 7.1 min
-- Total execution time: 221 min
+- Average duration: 7.1 min/plan
+- Total execution time: 221 min (~3.7 hours)
 
 **By Phase:**
 
@@ -34,149 +34,30 @@ Progress: [███████████████████████
 | 05-enterprise-portal | 6/6 | 30 min | 5.0 min |
 | 06-admin-panel | 5/5 | 46 min | 9.2 min |
 
-**Recent Trend:**
-- Last 5 plans: 06-01 (6 min), 06-02 (12 min), 06-03 (11 min), 06-04 (8 min), 06-05 (9 min)
-- Trend: Final plan aggregated 9 remaining screens efficiently. All admin capabilities AP-01 through AP-23 delivered.
-
-*Updated after each plan completion*
-
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [Roadmap]: Tailwind v4 chosen over v3 (CSS-first @theme for simpler monorepo token sharing; validated empirically)
-- [Roadmap]: MSW hybrid approach (types in @glimmora/types, handlers per-portal, shared factory functions extracted only if needed)
-- [Roadmap]: DS-01 through DS-10 in Phase 1 (not Phase 2) to enable canary validation with real styled components
-- [01-01]: tailwindcss added as @glimmora/config devDep for pnpm strict mode CSS resolution
-- [01-01]: type:module added to all packages for clean ESM support under Node 25
-- [01-01]: Port assignments: women=3001, university=3002, enterprise=3003, mentor=3004, admin=3005
-- [01-02]: MSW build scripts approved via pnpm.onlyBuiltDependencies in root package.json (pnpm v10 strict mode)
-- [01-02]: Provider nesting: MSWProvider (outer) -> QueryProvider (inner) ensures mock intercepts before queries
-- [01-02]: MSW workerDirectory configured as array of all 5 portal public dirs in root package.json
-- [01-03]: Radix UI unified package exports namespaces -- use SlotPrimitive.Slot not bare Slot for asChild pattern
-- [01-03]: Storybook 10 ESM-only config: no addon-essentials, only @storybook/addon-a11y
-- [01-03]: Component pattern established: 'use client' per file, CVA variants, cn() utility, Radix primitives, forwardRef
-- [01-04]: Home pages are Server Components -- @glimmora/ui components have 'use client' per-file so they compose safely
-- [01-04]: Canary pages identical across all 5 portals -- proves toolchain uniformity, not portal differentiation
-- [01-04]: Tailwind v4 + Storybook 10 + full toolchain VALIDATED -- pnpm turbo build zero errors, browser verified
-- [02-04]: react-is override ^19.1.0 in root pnpm.overrides for recharts React 19 compatibility
-- [02-04]: Custom SVG for simple shapes (ProgressRing/Sparkline/ActivityHeatmap), Recharts only for complex charts (BarChart)
-- [02-04]: Data viz CSS variable pattern: all chart colors via var(--color-*), never hardcoded hex
-- [02-01]: react-day-picker v9 classNames API for full Tailwind control (no separate CSS theming needed)
-- [02-01]: cmdk v1.1.1 for Combobox -- no duplicate @radix-ui/react-dialog created
-- [02-01]: Avatar anonymous mode uses deterministic SVG shapes from seed hash (6 shapes x 6 colors)
-- [02-01]: Skeleton shimmer uses bg-hover (#F0E4DA warm earth) not grey
-- [02-02]: AppShell uses React context (createContext + useAppShell hook) for sidebar state sharing between Sidebar/TopBar
-- [02-02]: DataTable<T> generic type parameter with TanStack ColumnDef for type-safe columns
-- [02-02]: KPIStatCard value is string|number to support formatted values like '92%' or '3.2d'
-- [02-02]: Sidebar active indicator uses border-l-2 border-brand-primary (terracotta left accent)
-- [02-03]: Evidence types have no contributor field -- blind review enforced at TypeScript interface level
-- [02-03]: Skill Genome Panel sorted by tier then evidence count -- private progress only, no comparison/ranking
-- [02-03]: Anonymized Team Card max 4 visible skills with +N overflow
-- [02-03]: APG Feed uses inline expandable details rather than nested Accordion
-- [03-01]: Cookie-based locale (NEXT_LOCALE) for next-intl instead of URL-prefix routing
-- [03-01]: MSW handlers migrated from flat file to handlers/ directory (auth, onboarding, canary)
-- [03-01]: lucide-react added as direct dependency to women-portal for Shield/CheckCircle icons
-- [03-01]: Pre-auth route group pattern: app/(pre-auth)/ for all unauthenticated pages
-- [03-02]: APGActivity type mapping: hyphens in types -> underscores for APGFeed component via TYPE_MAP
-- [03-02]: Evidence rework pack pre-seeded in MSW handlers for task-005 so rework view has data
-- [03-02]: Common MSW factory helper (randomId, isoNow) in factories/common.ts for reuse
-- [03-02]: Pipeline visualization in submission tracker uses simple div bars (not TimelineBar component)
-- [03-04]: Task discovery uses Available/My Tasks/Completed tabs (students choose tasks, not assigned)
-- [03-04]: PDF export uses dynamic import (await import('@react-pdf/renderer')) to avoid SSR crashes
-- [03-04]: University Portal auth store uses zustand persist with localStorage for session continuity
-- [03-04]: lucide-react added as direct dependency to university-portal for sidebar icons
-- [03-03]: SkillNode level mapped to SkillGenomePanel tier enum (beginner->emerging, intermediate->developing, advanced->proficient, expert->expert)
-- [03-03]: Messages use senderRole display ('You'/'Support Lead') not names -- privacy-preserving async messaging
-- [03-03]: Privacy defaults set to maximum restriction (profileVisibleToTeam=false, earningsVisible=false)
-- [03-03]: Settings root page uses sidebar navigation linking to sub-routes (/privacy, /notifications, /devices)
-- [03-03]: Notification prefs grid uses actual @glimmora/types channels (in_app/email) and categories (task_updates/payments/messages/platform)
-- [03-05]: Governor views use type-level privacy enforcement -- GovernorMetrics/CohortTrend structurally cannot contain individual identifiers
-- [03-05]: Governor sub-navigation uses Link + usePathname active state pattern (same-layout tabs)
-- [03-05]: TaskCategory uses isEnabled (actual type field) not isActive; factory data adapted to match actual types throughout
-- [03-gap]: @glimmora/ui Label is a <p> element NOT a <label> -- does NOT accept htmlFor; use native <label> HTML element for form associations
-- [03-gap]: GradientCard gap: all 3 KPI cards must use GradientCard (not KPIStatCard); 3rd card uses inline style gradient
-- [03-gap]: PoDLPDFDocument must NOT be barrel-exported; use await import('./podl-pdf-document') inside event handlers only
-- [04-01]: MentorProfile renamed to MentorOnboardingProfile in mentor.ts (avoids conflict with MentorProfile from user.ts which extends User)
-- [04-01]: react-resizable-panels v4 uses plain functions (not forwardRef) -- Group/Panel/Separator use elementRef prop
-- [04-01]: Mentor auth store has 3 roles: applicant, pending_onboarding, mentor (zustand persist)
-- [04-01]: Application status polling via TanStack Query refetchInterval: 5000 (stops on approved/rejected)
-- [04-02]: Button variant="secondary" for dialog cancel (DS has no "outline" variant)
-- [04-02]: Dialogs embedded directly in ReviewQueueItemCard (SkipDialog/SLAExtensionDialog with DialogTrigger)
-- [04-02]: SLA timer: 60-second interval, mounted-state guard prevents hydration mismatch
-- [04-02]: 3rd GradientCard uses inline style={{ background: 'linear-gradient(135deg, #4A6741 0%, #3A8FA0 100%)' }}
-- [04-03]: autoSaveId prop on ResizablePanelGroup abstracts useDefaultLayout hook from v4 (react-resizable-panels v4 removed autoSaveId prop; wrapper added it back)
-- [04-03]: ReviewEvidence type (mentor-facing) has NO contributor identity fields -- blind review enforced at TypeScript type level
-- [04-03]: ReviewEvidence -> ViewerEvidence mapping in evidence-center-panel.tsx is explicit privacy boundary
-- [04-03]: Auto-save pattern: useEffect+setTimeout(1500ms)+Zustand persist keyed by reviewId, cleared in useMutation.onSuccess
-- [04-04]: Mentor notification categories are portal-specific (review_assignments/sla_reminders/decision_outcomes/platform_updates) -- not from @glimmora/types
-- [04-04]: Badge status values: 'done'=Verified, 'normal'=Pending, 'atrisk'=Disputed (no 'complete'/'pending' Badge variants)
-- [04-04]: Mentor messages use senderRole 'mentor'/'platform' mapped to 'You'/'Platform' -- no contributor names ever shown
-- [04-04]: autoSaveId prop removed from ResizablePanelGroup in review-layout.tsx (v4 does not support this prop)
-- [05-01]: @tanstack/react-table added as direct dependency to enterprise-portal for ColumnDef type import (pnpm strict mode)
-- [05-01]: SOW upload form checks existingSOWId from URL search params -- if present shows version banner and passes in FormData
-- [05-01]: MSW handlers migrated from flat canary file to handlers/ directory (auth, onboarding, sow)
-- [05-01]: Pre-auth login at (pre-auth)/login/page.tsx, root page.tsx redirects to /login
-- [05-02]: Blueprint factory uses deterministic clause IDs (clause-001..006) matching task clauseIds for cross-panel synchronization
-- [05-02]: All 4 editor panels use Zustand selectors (useEditorStore((s) => s.field)) -- never full store subscription
-- [05-02]: OTPConfirmationDialog in components/shared/ is reusable for blueprint approval and payment release
-- [05-02]: MilestoneSettingsCard is private sub-component within ProjectSettingsPanel for per-milestone editing
-- [05-03]: 3rd GradientCard uses inline style={{ background: 'linear-gradient(135deg, #4A6741 0%, #3A8FA0 100%)' }} per prior decision
-- [05-03]: URL hash-based tab state for bookmarkable 7-tab project detail (window.location.hash + hashchange listener)
-- [05-03]: AnonymizedTeamCard with tier Badge overlay -- no real contributor names shown
-- [05-03]: MSW /projects/completed route defined BEFORE /projects/:id to prevent path shadowing
-- [05-04]: recharts added as direct dependency to enterprise-portal (pnpm strict mode requires explicit dep, not transitive via @glimmora/ui)
-- [05-04]: Gantt uses stacked Bar trick: invisible offset bar + visible duration bar, both with stackId='gantt'
-- [05-04]: Health status colors use CSS variables: completed=status-success, in-progress=brand-primary, pending=border, overdue=status-urgent
-- [05-04]: Milestone health in list view derived from status: completed/in-progress='On Track', pending='Pending', overdue='Delayed'
-- [05-05]: Evidence contributorId stripped in toViewerEvidence mapping function -- blind review enforced at runtime (Evidence from @glimmora/types includes contributorId)
-- [05-05]: BulkPaymentRelease uses TanStack useReactTable directly with external rowSelection state (DataTable from @glimmora/ui encapsulates rowSelection internally)
-- [05-05]: OTPConfirmationDialog reused from 05-02 for both single and bulk payment release
-- [05-05]: enableRowSelection conditionally enables only pending payments for checkbox selection
-- [05-05]: Auto-payment settings support 3 modes: manual (OTP required), auto-on-approval, apg-silent (with configurable threshold)
-- [05-06]: PoDL report PDF includes SHA-256 verification hashes and cryptographic signature indicator for audit trail
-- [05-06]: ESG report references specific GRI standards (GRI 405 Diversity, GRI 404 Training)
-- [05-06]: PDF documents NOT barrel-exported -- only dynamically imported inside event handlers
-- [05-06]: Enterprise notification categories are portal-specific (6 categories: sow_updates, project_updates, evidence_reviews, payment_updates, team_activity, platform_announcements)
-- [05-06]: Organization Tax ID is read-only after verification (enforced in UI)
-- [06-01]: Login page at (pre-auth)/login/page.tsx (not (pre-auth)/page.tsx) to avoid route conflict with root page.tsx redirect
-- [06-01]: MSW handlers migrated from flat canary file to handlers/ directory (auth, dashboard)
-- [06-01]: Admin auth store uses zustand persist with adminRole field for DevTools role-switcher
-- [06-01]: 5 direct dependencies installed: @tanstack/react-table, lucide-react, date-fns, recharts, @react-pdf/renderer
-- [06-02]: useMemo for all client-side filtering (search, type, status) -- DataTable does NOT have built-in filter model
-- [06-02]: Hash-based tab state for bookmarkable 6-tab user detail (window.location.hash + hashchange listener)
-- [06-02]: UserActionDialog reusable for ALL state-changing actions (suspend, reactivate, approve, reject) with mandatory reason
-- [06-02]: SkillGenomePanel from @glimmora/ui used for admin view with privacy label override
-- [06-02]: Profile tab includes ID/credential verification with approve/reject for pending documents
-- [06-03]: 10-tab admin project detail extends enterprise 7-tab with APG Activity, Interventions, Freeze
-- [06-03]: Intervention DataTable is read-only with no actions column (immutable audit records)
-- [06-03]: FreezeDialog requires mandatory reason; freeze/unfreeze also creates intervention record
-- [06-03]: Admin sees contributor seeds only in Team tab (AnonymizedTeamCard, never real names)
-- [06-04]: orientation='horizontal' on ResizablePanelGroup (not direction) matching mentor-portal pattern
-- [06-04]: Safety case decision form removes 'dismissed' via isSafetyCase prop filtering ALL_DECISION_OPTIONS
-- [06-04]: Safety case audit trail always visible below 3-panel layout (not behind tab)
-- [06-04]: CaseContextPanel handles both regular disputes and safety cases via optional privacy/access restriction props
-- [06-04]: MSW safety routes defined BEFORE parameterized :id routes to prevent path shadowing
-- [06-05]: CSV export uses Blob + URL.createObjectURL with proper quote escaping (no external library)
-- [06-05]: ReportPDF NOT barrel-exported -- only dynamically imported inside async event handlers
-- [06-05]: SuperAdminGate uses visible-but-locked pattern (Shield icon + message, not hidden/null)
-- [06-05]: APG Config organized into 3 domains with inline-editable ConfigCard components
-- [06-05]: Audit log DataTable is entirely read-only -- no action column, no edit/delete buttons
-- [06-05]: Settings nav item added to sidebar layout for admin role management access
+All decisions documented in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-None. PROJECT COMPLETE.
+None.
 
 ### Blockers/Concerns
 
-All blockers resolved. No outstanding concerns.
+None. v1.0 shipped clean.
+
+**Known tech debt for v1.1:**
+- Enterprise evidence factory populates contributorId in mock data (resolves at backend integration)
+- Admin Panel missing podl_audit report type (add to v1.1 requirements)
+- Font files not active in portal runtime (need license files)
+- OTPConfirmationDialog import path inconsistency in enterprise-portal
 
 ## Session Continuity
 
-Last session: 2026-02-27T08:19:48Z
-Stopped at: PROJECT COMPLETE -- All 29 plans across 6 phases executed successfully
+Last session: 2026-02-27
+Stopped at: v1.0 milestone archived and tagged
 Resume file: None
+
+**Next action:** /gsd:new-milestone to define v1.1 requirements and roadmap

@@ -66,22 +66,22 @@ Supporting roles: Community Support Lead, Mentor/Reviewer, University Strategic 
 
 ### Frontend (this project)
 - **Monorepo:** Turborepo
-  - `/apps/women-portal` — Next.js 14+ App Router + TypeScript
-  - `/apps/university-portal` — Next.js 14+ App Router + TypeScript
-  - `/apps/enterprise-portal` — Next.js 14+ App Router + TypeScript
-  - `/apps/mentor-portal` — Next.js 14+ App Router + TypeScript
-  - `/apps/admin-panel` — Next.js 14+ App Router + TypeScript
-  - `/packages/ui` — Shared design system (Radix UI primitives + Tailwind)
-  - `/packages/types` — Shared TypeScript types (become API contracts)
-  - `/packages/config` — Shared Tailwind config, ESLint, TSConfig
-- **Styling:** Tailwind CSS (warm earthy design tokens)
+  - `/apps/women-portal` — Next.js 15.5.x App Router + TypeScript
+  - `/apps/university-portal` — Next.js 15.5.x App Router + TypeScript
+  - `/apps/enterprise-portal` — Next.js 15.5.x App Router + TypeScript
+  - `/apps/mentor-portal` — Next.js 15.5.x App Router + TypeScript
+  - `/apps/admin-panel` — Next.js 15.5.x App Router + TypeScript
+  - `/packages/ui` — Shared design system (47 components, Radix UI primitives + Tailwind v4)
+  - `/packages/types` — Shared TypeScript types (API contracts for backend)
+  - `/packages/config` — Shared Tailwind v4 config, ESLint, TSConfig
+- **Styling:** Tailwind CSS v4 (CSS-first @theme, warm earthy design tokens)
 - **Components:** Radix UI primitives (unstyled, accessibility foundation) — NOT shadcn
-- **State:** Zustand (client state) + TanStack Query (server state / mock data)
+- **State:** Zustand v5 (client state) + TanStack Query v5 (server state / mock data)
 - **Forms:** React Hook Form + Zod validation
 - **Animation:** Framer Motion (subtle, no heavy animations)
-- **Mocking:** MSW (Mock Service Worker) — all API calls mocked
-- **Component docs:** Storybook
-- **Testing:** Vitest + Testing Library (component tests)
+- **Mocking:** MSW v2 (Mock Service Worker) — dual-runtime (browser + server-side)
+- **Component docs:** Storybook 10 with @storybook/addon-a11y
+- **Resizable panels:** react-resizable-panels v4 (Mentor review, Enterprise blueprint editor, Admin disputes)
 
 ### Backend (handoff — not this project)
 NestJS + PostgreSQL + BullMQ/Redis + FastAPI (APG) + Keycloak/OIDC + S3 + Prometheus+Grafana
@@ -112,6 +112,7 @@ Body text:                 #6B4C3B
 - Warm neutrals only — no cold greys
 - Miller Display must appear on all key headings
 - No public profiles, no leaderboards, no peer comparison in UI — ever
+- 3rd gradient KPI card on all dashboards uses inline `style={{ background: 'linear-gradient(135deg, #4A6741 0%, #3A8FA0 100%)' }}`
 
 ## UX Research (Complete)
 
@@ -121,8 +122,6 @@ All portal flows fully documented in `/ux-research/portal-flows/`:
 - `P4-mentor-portal.md` — Full Mentor Portal (review queue, 3-panel review detail)
 - `P5-admin-panel.md` — Full Admin Panel (dispute resolution, APG config)
 - `/ux-research/flows/` — All 7 role-specific flow documents
-
-**13 priority screens identified** (from `/ux-research/04-information-architecture.md`).
 
 ## Critical Non-Negotiables
 
@@ -137,93 +136,78 @@ All portal flows fully documented in `/ux-research/portal-flows/`:
 9. Evidence review by mentors is blind to contributor identity
 10. Payment release only on accepted outcomes — never automatic without evidence
 
+## Current State (v1.0)
+
+**Shipped:** 2026-02-27
+**Version:** v1.0 Frontend MVP
+
+- 5 portals fully implemented: Women's, University, Enterprise, Mentor, Admin
+- 47 design system components (DS-01..DS-47) in @glimmora/ui
+- 162/162 v1 requirements delivered
+- 38,565 lines of TypeScript across 162 files
+- All 6 phases verified (gsd-verifier, all passed)
+- MSW mocks + @glimmora/types = API contract for backend developer
+- Storybook = component documentation and handoff artifact
+- `pnpm turbo build` passes cleanly across all 5 portals + packages
+
+**Known tech debt entering v1.1:**
+- Enterprise evidence factory populates `contributorId` in mock data (medium — resolves at backend integration)
+- Admin Panel missing `podl_audit` report type (medium — add to v1.1 requirements)
+- Font files not active in portal runtime — need font license files (low)
+- OTPConfirmationDialog import path inconsistency in enterprise-portal (low)
+
 ## Requirements
 
-### Validated
+### Validated (v1.0)
 
-(None yet — no code shipped)
+- ✓ Turborepo monorepo with 5 Next.js apps + 3 shared packages — v1.0
+- ✓ Tailwind v4 design tokens (colors, typography, spacing) — v1.0
+- ✓ @glimmora/ui — 47 components (DS-01..DS-47), Radix UI + Tailwind — v1.0
+- ✓ @glimmora/types — TypeScript interfaces serving as API contracts — v1.0
+- ✓ MSW v2 dual-runtime — all portals, all mock data — v1.0
+- ✓ Storybook 10 with a11y addon — component documentation — v1.0
+- ✓ Women's Portal — full journey (language select → onboarding → tasks → evidence → earnings → PoDL) — v1.0
+- ✓ University Portal — student + alumni + governor flows — v1.0
+- ✓ Enterprise Portal — SOW upload → blueprint → oversight → evidence review → payment → compliance — v1.0
+- ✓ Mentor Portal — application → onboarding → blind review → skill verification — v1.0
+- ✓ Admin Panel — oversight → user mgmt → disputes → reports → APG config — v1.0
+- ✓ All 162 INFRA/DS/WP/UP/EP/MP/AP requirements — v1.0 (archived in milestones/v1.0-REQUIREMENTS.md)
 
-### Active
+### Active (v1.1 — to be defined)
 
-**Infrastructure**
-- [ ] Turborepo monorepo configured with 5 Next.js apps + 3 shared packages
-- [ ] Tailwind design tokens (colors, typography, spacing) matching confirmed design system
-- [ ] Shared `@glimmora/ui` package with Radix UI primitive components
-- [ ] Shared `@glimmora/types` package with TypeScript interfaces
-- [ ] MSW configured for all portals — handlers for all mock data
-- [ ] Storybook configured in `/packages/ui` — documents all components
+*(Fresh requirements defined via /gsd:new-milestone)*
 
-**Women's Portal**
-- [ ] Pre-auth flow (language select → WhatsApp-style welcome → register/login)
-- [ ] 4-step onboarding (profile, devices/connectivity, skill assessment, activation)
-- [ ] Dashboard (active tasks, earnings meter, APG activity feed)
-- [ ] Task detail page (brief, evidence submission, APG guidance)
-- [ ] Evidence submission (multi-type: file, link, code, video, text)
-- [ ] My Skill Genome page (private capability profile, progress)
-- [ ] Earnings & Payments page (withdrawal history, pending, PoDL)
-- [ ] Conversation with Community Support Lead (async, not live chat)
-- [ ] Settings (5 sections: profile, privacy, language, devices, notifications)
-
-**University Portal**
-- [ ] Student dashboard (active tasks, PoDL count, earnings)
-- [ ] Task delivery flow (same evidence patterns as Women's Portal)
-- [ ] PoDL Credentials page (view, share, export)
-- [ ] Team collaboration view (anonymous peer awareness, not direct comms)
-- [ ] University Strategic Governor view (aggregated metrics, no individual identifiers)
-- [ ] Alumni reactivation flow
-
-**Enterprise Portal**
-- [ ] SOW upload + APG intelligence display (decomposition preview)
-- [ ] Blueprint editor (4-panel: SOW context, task tree, team pool preview, settings)
-- [ ] Project dashboard (KPI cards with gradients, progress, APG activity)
-- [ ] Project detail 7 tabs (Overview, Timeline Gantt, Evidence Packs, Rework Requests, Escalation Centre, Payment Release, Team Summary anonymized)
-- [ ] Evidence Pack review (evidence viewer, approve/request rework/escalate)
-- [ ] Payment release flows (manual, auto, APG-silent)
-- [ ] Completed projects + PoDL/ESG export
-- [ ] Settings (5 sections)
-
-**Mentor Portal**
-- [ ] Review queue (Pending / In Progress / Completed tabs with SLA timers)
-- [ ] 3-panel review detail (task context + evidence viewer + review form)
-- [ ] Approve / Rework / Reject flows with structured feedback forms
-- [ ] Mentor profile (tier: Bronze/Silver/Gold/Elite, impact metrics)
-- [ ] Skill Tag Verification queue
-- [ ] Settings (5 sections)
-
-**Admin Panel**
-- [ ] Platform overview dashboard (live stats + system health)
-- [ ] User management (all 6 user types, verification flows)
-- [ ] Project management (10-tab admin view, freeze/intervene)
-- [ ] Dispute resolution (5 types, Safety Case protocol)
-- [ ] Onboarding approvals queue
-- [ ] Reports & Analytics (5 report types + custom builder)
-- [ ] Platform settings (APG config — Super Admin only)
-
-### Out of Scope (v1)
+### Out of Scope
 
 - Real backend implementation — handoff artifact is MSW mocks + Storybook
-- Real authentication — mock auth with Zustand
+- Real authentication — mock auth with Zustand (Keycloak integration is backend scope)
 - WhatsApp Business API — design the UX, not the integration
-- Payment processor integration — UI only, no real transactions
-- Real-time features (WebSockets) — mock with polling simulation
-- Mobile apps — responsive web only (mobile-first breakpoints)
-- Internationalization implementation — design for it (RTL-aware), don't implement
-- E2E testing — unit + component tests only
-- Deployment pipeline — local dev only for this phase
+- Payment processor integration — UI only
+- Real-time features (WebSockets) — simulated with TanStack Query polling
+- Mobile apps — responsive web only
+- Internationalization string implementation — design for it (RTL-aware), i18n strings v2
+- E2E testing (Playwright/Cypress) — post-backend-integration
+- Deployment pipeline — local dev only
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Turborepo monorepo | 5 portals share design system, types, config — monorepo prevents drift | Confirmed |
-| Radix UI primitives (not shadcn) | Unstyled accessibility foundation — we apply our own design system on top, not someone else's defaults | Confirmed |
-| MSW for mocking | Mock shapes become API contracts — backend developer gets typed interfaces from our types package | Confirmed |
-| No wireframes — go direct to code | Full portal flows + confirmed design system = all wireframe info already captured in docs | Confirmed |
-| Design + frontend scope only | Backend handoff to separate developer — Storybook + MSW mocks are the handoff artifacts | Confirmed |
-| Miller Display + Avenir LT Std | Confirmed from mood board — editorial serif + geometric sans = warm premium feel | Confirmed |
-| Gradients on dashboards | Client expectation — KPI cards, milestone bars, CTAs all use brand gradients | Confirmed |
-| Private-by-default architecture | Non-negotiable — no public profiles, no leaderboards, anonymization built in from first component | Confirmed |
-| Language select as first element | Women's Portal trust requirement — not an afterthought | Confirmed |
+| Turborepo monorepo | 5 portals share design system, types, config — monorepo prevents drift | ✓ Validated — worked cleanly |
+| Radix UI primitives (not shadcn) | Unstyled accessibility foundation — our design system on top | ✓ Validated — warm earthy theme applied consistently |
+| MSW v2 for mocking | Mock shapes become API contracts — backend developer gets typed interfaces | ✓ Validated — dual-runtime (browser + server) works |
+| No wireframes — direct to code | Full portal flows + confirmed design system already captured in docs | ✓ Validated — 162 requirements shipped without wireframe phase |
+| Design + frontend scope only | Backend handoff to separate developer | ✓ Confirmed — Storybook + MSW are the handoff artifacts |
+| Miller Display + Avenir LT Std | Editorial serif + geometric sans = warm premium feel | ✓ Validated in code, font files pending license |
+| Gradients on dashboards | Client expectation — KPI cards, milestone bars, CTAs all brand gradients | ✓ Validated — consistent across all 5 portals |
+| Private-by-default architecture | Non-negotiable — no public profiles, no leaderboards, anonymization from day 1 | ✓ Validated — 9/9 privacy checks passed in audit |
+| Language select as first element | Women's Portal trust requirement | ✓ Validated — FIRST interactive element implemented |
+| Tailwind v4 CSS-first @theme | Simpler monorepo token sharing than v3 approach | ✓ Validated — all portals consume tokens consistently |
+| EvidenceViewer blind review at type level | Contributor identity absent from ReviewEvidence type structurally | ✓ Validated — zero identity leakage in UI |
+| ResizablePanels v4 | react-resizable-panels v4 API — elementRef not forwardRef | ✓ Validated — used across Mentor, Enterprise, Admin |
+| PDF exports via dynamic import | Prevents SSR crashes from @react-pdf/renderer | ✓ Validated — pattern used in all 4 PDF export sites |
+| SuperAdminGate visible-but-locked | Shows blocked screen rather than hiding pages (better UX + security messaging) | ✓ Validated |
+| 3rd GradientCard inline style | GradientCard component has only 2 gradient variants; 3rd uses inline override | ✓ Validated — consistent across all 5 portal dashboards |
 
 ---
-*Last updated: 2026-02-26 after initialization*
+*Last updated: 2026-02-27 after v1.0 milestone completion*
