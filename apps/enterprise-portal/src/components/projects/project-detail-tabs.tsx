@@ -8,6 +8,7 @@ import { TimelineView } from './timeline-view'
 import { EvidencePackReview } from './evidence-pack-review'
 import { ReworkRequestsList } from './rework-requests-list'
 import { EscalationsList } from './escalations-list'
+import { BulkPaymentRelease } from './bulk-payment-release'
 
 const TAB_CONFIG = [
   { value: 'overview', label: 'Overview' },
@@ -89,11 +90,7 @@ export function ProjectDetailTabs({ project, projectId }: ProjectDetailTabsProps
       </TabsContent>
 
       <TabsContent value="payments">
-        <div className="py-8 text-center">
-          <p className="text-sm font-body text-text-caption">
-            Payment release view will be added in a subsequent update.
-          </p>
-        </div>
+        <BulkPaymentRelease projectId={projectId} />
       </TabsContent>
 
       <TabsContent value="team">
