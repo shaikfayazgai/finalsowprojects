@@ -3,6 +3,7 @@ import { dashboardHandlers } from './dashboard'
 import { userHandlers } from './users'
 import { projectHandlers } from './projects'
 import { disputeHandlers } from './disputes'
+import { reportHandlers } from './reports'
 
 export const handlers = [
   ...authHandlers,
@@ -10,4 +11,5 @@ export const handlers = [
   ...userHandlers,
   ...projectHandlers,
   ...disputeHandlers,
+  ...reportHandlers,
 ]
