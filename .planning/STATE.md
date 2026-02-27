@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Enterprise uploads SOW -> APG decomposes into tasks -> verified contributors deliver evidence -> enterprise reviews and releases payment -- all without manual recruitment or PM overhead.
-**Current focus:** Phase 5 (Enterprise Portal) -- Plan 04 complete, 2 remaining
+**Current focus:** Phase 5 (Enterprise Portal) -- Plan 05 complete, 1 remaining
 
 ## Current Position
 
 Phase: 5 of 6 (Enterprise Portal)
-Plan: 4 of 6 in current phase
+Plan: 5 of 6 in current phase
 Status: In progress
-Last activity: 2026-02-27 -- Completed 05-04-PLAN.md
+Last activity: 2026-02-27 -- Completed 05-05-PLAN.md
 
-Progress: [█████████████████████░░░] 6/6 phase 5 plans (67%), 22/24 overall (92%)
+Progress: [██████████████████████░░] 6/6 phase 5 plans (83%), 23/24 overall (96%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 22
-- Average duration: 6.4 min
-- Total execution time: 162 min
+- Total plans completed: 23
+- Average duration: 6.3 min
+- Total execution time: 168 min
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [█████████████████████░░
 | 02-design-system-completion | 4/4 | 25 min | 6.3 min |
 | 03-womens-portal-university-portal | 5/5 | 52 min | 10.4 min |
 | 04-mentor-portal | 4/4 | 47 min | 11.8 min |
-| 05-enterprise-portal | 4/6 | 17 min | 4.3 min |
+| 05-enterprise-portal | 5/6 | 23 min | 4.6 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-04 (21 min), 05-01 (7 min), 05-03 (7 min), 05-04 (3 min)
-- Trend: Enterprise portal plans accelerating with established patterns and component reuse
+- Last 5 plans: 05-01 (7 min), 05-03 (7 min), 05-04 (3 min), 05-05 (6 min)
+- Trend: Enterprise portal plans consistently fast with established patterns and component reuse
 
 *Updated after each plan completion*
 
@@ -131,6 +131,11 @@ Recent decisions affecting current work:
 - [05-04]: Gantt uses stacked Bar trick: invisible offset bar + visible duration bar, both with stackId='gantt'
 - [05-04]: Health status colors use CSS variables: completed=status-success, in-progress=brand-primary, pending=border, overdue=status-urgent
 - [05-04]: Milestone health in list view derived from status: completed/in-progress='On Track', pending='Pending', overdue='Delayed'
+- [05-05]: Evidence contributorId stripped in toViewerEvidence mapping function -- blind review enforced at runtime (Evidence from @glimmora/types includes contributorId)
+- [05-05]: BulkPaymentRelease uses TanStack useReactTable directly with external rowSelection state (DataTable from @glimmora/ui encapsulates rowSelection internally)
+- [05-05]: OTPConfirmationDialog reused from 05-02 for both single and bulk payment release
+- [05-05]: enableRowSelection conditionally enables only pending payments for checkbox selection
+- [05-05]: Auto-payment settings support 3 modes: manual (OTP required), auto-on-approval, apg-silent (with configurable threshold)
 
 ### Pending Todos
 
@@ -146,6 +151,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-27T05:16:30Z
-Stopped at: Completed 05-04-PLAN.md (Timeline Gantt Chart & List View)
+Last session: 2026-02-27T05:27:10Z
+Stopped at: Completed 05-05-PLAN.md (Evidence Pack Review & Payment Release)
 Resume file: None
