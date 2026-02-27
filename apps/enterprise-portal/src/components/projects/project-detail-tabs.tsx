@@ -4,6 +4,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@glimmora/ui'
 import type { Project } from '@glimmora/types'
 import { ProjectOverview } from './project-overview'
 import { TeamSummaryGrid } from './team-summary-grid'
+import { TimelineView } from './timeline-view'
 
 const TAB_CONFIG = [
   { value: 'overview', label: 'Overview' },
@@ -65,11 +66,11 @@ export function ProjectDetailTabs({ project, projectId }: ProjectDetailTabsProps
       </TabsContent>
 
       <TabsContent value="timeline">
-        <div className="py-8 text-center">
-          <p className="text-sm font-body text-text-caption">
-            Timeline view will be added in a subsequent update.
-          </p>
-        </div>
+        <TimelineView
+          projectId={projectId}
+          projectStartDate={project.startDate}
+          projectEndDate={project.targetEndDate}
+        />
       </TabsContent>
 
       <TabsContent value="evidence">

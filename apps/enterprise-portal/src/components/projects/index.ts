@@ -1,4 +1,7 @@
+export { GanttTimeline } from './gantt-timeline'
+export { MilestoneListView } from './milestone-list-view'
 export { ProjectCard } from './project-card'
 export { ProjectDetailTabs } from './project-detail-tabs'
 export { ProjectOverview } from './project-overview'
 export { TeamSummaryGrid } from './team-summary-grid'
+export { TimelineView } from './timeline-view'
