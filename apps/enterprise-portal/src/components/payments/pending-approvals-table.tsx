@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { DataTable, Button } from '@glimmora/ui'
 import type { ColumnDef } from '@tanstack/react-table'
 import type { PaymentRecord } from '@glimmora/types'
-import { OTPConfirmationDialog } from '../shared/otp-confirmation-dialog'
+import { OTPConfirmationDialog } from '@/components/shared'
 
 function formatCurrency(amount: number, currency: string): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount)

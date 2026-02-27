@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, Badge, Button } from '@glimmora/ui'
 import type { PaymentRecord } from '@glimmora/types'
-import { OTPConfirmationDialog } from '../shared/otp-confirmation-dialog'
+import { OTPConfirmationDialog } from '@/components/shared'
 
 function statusToBadge(status: PaymentRecord['status']): { label: string; variant: 'done' | 'normal' | 'atrisk' | 'inprogress' } {
   switch (status) {

@@ -25,7 +25,7 @@ import {
 } from '@glimmora/ui'
 import type { PaymentRecord, PaymentPreferences, PaymentReleaseMode } from '@glimmora/types'
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
-import { OTPConfirmationDialog } from '../shared/otp-confirmation-dialog'
+import { OTPConfirmationDialog } from '@/components/shared'
 import type { MockSilentApproval } from '../../lib/msw/factories/payment'
 
 function formatCurrency(amount: number, currency: string = 'USD'): string {
