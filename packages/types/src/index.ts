@@ -21,3 +21,17 @@ export type {
   BlueprintTask, BlueprintMilestone, BlueprintPhase, Blueprint,
   SOWClause, SOWIntelligence, ESGReportData,
 } from './enterprise'
+export type {
+  AdminRole, AdminUser,
+  PlatformStats, SystemAlertSeverity, SystemAlertEntityType, SystemAlert,
+  AdminUserType, UserAccountStatus, AdminUserListItem, VerificationQueueItem,
+  AdminActionType, AdminAction,
+  DisputeType, DisputeSeverity, DisputeStatus, DisputeDecisionType,
+  Dispute, DisputeEvidence, DisputeMessage, DisputeDecision, SafetyCase,
+  InterventionType, AdminIntervention,
+  ReportType, ReportConfig, PlatformReportData,
+  SkillTaxonomyTag, APGConfigDomain, APGConfigEntry,
+  AuditActionCategory, PlatformAuditEntry,
+  AnnouncementAudience, AnnouncementStatus, PlatformAnnouncement,
+  ResourceItemType, ResourceItem,
+} from './admin'

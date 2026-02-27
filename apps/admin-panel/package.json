@@ -15,12 +15,17 @@
     "@glimmora/config": "workspace:*",
     "@glimmora/types": "workspace:*",
     "@glimmora/ui": "workspace:*",
+    "@react-pdf/renderer": "^4.3.2",
     "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-query-devtools": "^5.91.3",
+    "@tanstack/react-table": "^8.21.3",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.575.0",
     "msw": "^2.12.10",
     "next": "^15.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "recharts": "^2.15.4",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
