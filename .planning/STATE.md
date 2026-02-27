@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-27)
 
 **Core value:** Enterprise uploads SOW -> APG decomposes into tasks -> verified contributors deliver evidence -> enterprise reviews and releases payment -- all without manual recruitment or PM overhead.
-**Current focus:** v1.1 Frontend Polish — Phase 7: Tech Debt Cleanup
+**Current focus:** v1.1 Frontend Polish -- Phase 7: Tech Debt Cleanup
 
 ## Current Position
 
 Phase: 7 of 13 (Tech Debt Cleanup)
-Plan: 0 of ? in current phase (not yet planned)
-Status: Ready to plan
-Last activity: 2026-02-27 — Roadmap created for v1.1 (7 phases, 29 requirements mapped)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-27 -- Completed 07-01-PLAN.md (Fix PoDL and Evidence Type Contracts)
 
-Progress: [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0% (v1.1)
+Progress: [███░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 3% (v1.1 -- 1/29)
 
 ## Performance Metrics
 
@@ -34,12 +34,22 @@ Progress: [░░░░░░░░░░░░░░░░░░░░░░░
 | 05-enterprise-portal | 6/6 | 30 min | 5.0 min |
 | 06-admin-panel | 5/5 | 46 min | 9.2 min |
 
+**v1.1 Progress:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 07-tech-debt-cleanup | 1/3 | 2 min | 2.0 min |
+
 ## Accumulated Context
 
 ### Decisions
 
 All v1.0 decisions documented in PROJECT.md Key Decisions table.
-No v1.1 decisions yet.
+
+| ID | Decision | Rationale |
+|----|----------|-----------|
+| 07-01-D1 | PoDL verifiedByMentorId removed entirely | Not part of API contract; mentor verification tracked separately |
+| 07-01-D2 | Evidence.contributorId made optional (not removed) | Contributor portals need it; enterprise must not see it (privacy) |
 
 ### Pending Todos
 
@@ -47,12 +57,12 @@ None.
 
 ### Blockers/Concerns
 
-None. Phase 7 ready to plan.
+None. Plans 07-02 and 07-03 ready to execute.
 
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: v1.1 roadmap created (7 phases: 7-13, 29 requirements mapped)
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None
 
-**Next action:** `/gsd:plan-phase 7` (Tech Debt Cleanup)
+**Next action:** `/gsd:execute-phase` 07-02 (Wave 1 continued)
