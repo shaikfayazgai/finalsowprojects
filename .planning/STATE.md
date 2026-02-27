@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Enterprise uploads SOW -> APG decomposes into tasks -> verified contributors deliver evidence -> enterprise reviews and releases payment -- all without manual recruitment or PM overhead.
-**Current focus:** Phase 5 (Enterprise Portal) -- COMPLETE. Ready for Phase 6 (Admin Portal).
+**Current focus:** Phase 6 (Admin Panel) -- In progress.
 
 ## Current Position
 
-Phase: 5 of 6 (Enterprise Portal)
-Plan: 6 of 6 in current phase
-Status: Phase complete
-Last activity: 2026-02-27 -- Completed 05-06-PLAN.md
+Phase: 6 of 6 (Admin Panel)
+Plan: 1 of 5 in current phase
+Status: In progress
+Last activity: 2026-02-27 -- Completed 06-01-PLAN.md
 
-Progress: [████████████████████████] 6/6 phase 5 plans (100%), 24/24 overall (100% of phases 1-5)
+Progress: [█████████████████████████████████████████████████░░░░░░░░░░] 1/5 phase 6 plans (20%), 25/29 overall (86%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 24
+- Total plans completed: 25
 - Average duration: 6.3 min
-- Total execution time: 175 min
+- Total execution time: 181 min
 
 **By Phase:**
 
@@ -32,10 +32,11 @@ Progress: [███████████████████████
 | 03-womens-portal-university-portal | 5/5 | 52 min | 10.4 min |
 | 04-mentor-portal | 4/4 | 47 min | 11.8 min |
 | 05-enterprise-portal | 6/6 | 30 min | 5.0 min |
+| 06-admin-panel | 1/5 | 6 min | 6.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-03 (7 min), 05-04 (3 min), 05-05 (6 min), 05-06 (7 min)
-- Trend: Phase 5 complete. Enterprise portal averaging 5 min/plan with mature patterns and component reuse
+- Last 5 plans: 05-04 (3 min), 05-05 (6 min), 05-06 (7 min), 06-01 (6 min)
+- Trend: Phase 6 started. Admin panel following same patterns as enterprise portal, component reuse accelerating execution
 
 *Updated after each plan completion*
 
@@ -141,6 +142,10 @@ Recent decisions affecting current work:
 - [05-06]: PDF documents NOT barrel-exported -- only dynamically imported inside event handlers
 - [05-06]: Enterprise notification categories are portal-specific (6 categories: sow_updates, project_updates, evidence_reviews, payment_updates, team_activity, platform_announcements)
 - [05-06]: Organization Tax ID is read-only after verification (enforced in UI)
+- [06-01]: Login page at (pre-auth)/login/page.tsx (not (pre-auth)/page.tsx) to avoid route conflict with root page.tsx redirect
+- [06-01]: MSW handlers migrated from flat canary file to handlers/ directory (auth, dashboard)
+- [06-01]: Admin auth store uses zustand persist with adminRole field for DevTools role-switcher
+- [06-01]: 5 direct dependencies installed: @tanstack/react-table, lucide-react, date-fns, recharts, @react-pdf/renderer
 
 ### Pending Todos
 
@@ -153,9 +158,10 @@ None.
 - [03-01]: next-intl INSTALLED in both portals (resolved from planning blocker)
 - [03-04]: @react-pdf/renderer INSTALLED in university-portal (resolved from blocker)
 - [05-01]: @react-pdf/renderer INSTALLED in enterprise-portal (resolved)
+- [06-01]: @react-pdf/renderer INSTALLED in admin-panel (resolved)
 
 ## Session Continuity
 
-Last session: 2026-02-27T05:38:19Z
-Stopped at: Completed 05-06-PLAN.md (Compliance Reports, Payments Hub, Settings) -- Phase 5 COMPLETE
+Last session: 2026-02-27T07:42:40Z
+Stopped at: Completed 06-01-PLAN.md (Admin Types, Auth Store, Dashboard, MSW Foundation)
 Resume file: None
