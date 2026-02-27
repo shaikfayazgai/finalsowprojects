@@ -20,6 +20,7 @@
     "@tanstack/react-query-devtools": "^5.91.3",
     "@tanstack/react-table": "^8.21.3",
     "date-fns": "^4.1.0",
+    "recharts": "^2.15.4",
     "lucide-react": "^0.575.0",
     "msw": "^2.12.10",
     "next": "^15.3.3",
