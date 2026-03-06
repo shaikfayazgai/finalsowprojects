@@ -1,42 +1,43 @@
-# Dependencies
-node_modules/
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# Next.js
-.next/
+# testing
+/coverage
 
-# Build outputs
-dist/
-storybook-static/
+# next.js
+/.next/
+/out/
 
-# Turborepo
-.turbo/
+# production
+/build
 
-# TypeScript
-*.tsbuildinfo
-
-# Environment
-.env
-.env.*
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# OS
+# misc
 .DS_Store
-Thumbs.db
+*.pem
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Coverage
-coverage/
-
-# Debug
+# debug
 npm-debug.log*
-pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env*.local
+.env
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+.playwright-mcp/
+*.png
+src/app/.next/

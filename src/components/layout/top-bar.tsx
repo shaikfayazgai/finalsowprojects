@@ -10,13 +10,8 @@ import {
   LogOut,
   User,
   Settings,
-  Sparkles,
   ChevronRight,
-  Plus,
-  Share2,
-  SlidersHorizontal,
   Command,
-  Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useSidebarStore } from "@/lib/stores/sidebar-store";
@@ -30,7 +25,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Badge,
 } from "@/components/ui";
 import type { ModuleConfig } from "@/lib/config/navigation";
 
@@ -126,45 +120,10 @@ export function TopBar({ config }: TopBarProps) {
             {/* Divider */}
             <div className="w-px h-5 bg-beige-200/50 mx-1.5 hidden md:block" />
 
-            {/* APG quick access */}
-            <button className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all group hover:shadow-sm">
-              <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-forest-500/10 to-teal-500/10 flex items-center justify-center group-hover:from-forest-500/20 group-hover:to-teal-500/20 transition-all">
-                <Sparkles className="w-3 h-3 text-teal-600" />
-              </div>
-              <span className="text-teal-700">APG</span>
-            </button>
-
-            {/* Date indicator */}
-            <button className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-beige-500 hover:text-brown-600 hover:bg-beige-50/60 transition-all">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-            </button>
-
-            {/* Manage */}
-            <button className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-beige-500 hover:text-brown-600 hover:bg-beige-50/60 transition-all">
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              Manage
-            </button>
-
-            {/* Share */}
-            <button className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-beige-500 hover:text-brown-600 hover:bg-beige-50/60 transition-all">
-              <Share2 className="w-3.5 h-3.5" />
-              Share
-            </button>
-
-            {/* Divider */}
-            <div className="w-px h-5 bg-beige-200/50 mx-1 hidden sm:block" />
-
             {/* Notifications */}
             <button className="relative p-2 rounded-xl text-beige-500 hover:text-brown-600 hover:bg-beige-50/60 transition-all">
               <Bell className="w-4 h-4" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brown-500 ring-2 ring-white" />
-            </button>
-
-            {/* Create task CTA */}
-            <button className="hidden sm:flex items-center gap-1.5 ml-1 px-3.5 py-[7px] rounded-xl bg-gradient-to-r from-brown-600 to-brown-700 hover:from-brown-700 hover:to-brown-800 text-white text-[12px] font-semibold transition-all shadow-sm shadow-brown-500/15 hover:shadow-md hover:shadow-brown-500/20">
-              <Plus className="w-3.5 h-3.5" />
-              Create task
             </button>
 
             {/* User avatar dropdown */}
@@ -206,30 +165,6 @@ export function TopBar({ config }: TopBarProps) {
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Settings className="w-4 h-4" /> <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-beige-400">
-                  Switch Module
-                </DropdownMenuLabel>
-                <DropdownMenuItem asChild>
-                  <Link href="/enterprise/dashboard">
-                    <Badge variant="brown" size="sm">Enterprise</Badge>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/contributor/dashboard">
-                    <Badge variant="teal" size="sm">Contributor</Badge>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/mentor/dashboard">
-                    <Badge variant="forest" size="sm">Mentor</Badge>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/analytics/overview">
-                    <Badge variant="gold" size="sm">Analytics</Badge>
-                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-[var(--danger)] focus:text-[var(--danger-hover)] focus:bg-[var(--danger-light)]">

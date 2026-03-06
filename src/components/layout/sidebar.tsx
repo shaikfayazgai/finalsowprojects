@@ -10,8 +10,6 @@ import {
   Sparkles,
   X,
   ChevronDown,
-  HelpCircle,
-  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useSidebarStore } from "@/lib/stores/sidebar-store";
@@ -22,7 +20,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Avatar, AvatarFallback } from "@/components/ui";
+/* ── NOTE: Sidebar is enterprise-scoped.
+   Only items from UX spec Section A2 navigation tree appear here.
+   No invented features (Ask APG, Help, global search, etc.) ── */
 
 interface SidebarProps {
   config: ModuleConfig;
@@ -50,12 +50,24 @@ export function Sidebar({ config }: SidebarProps) {
     setExpandedSections((prev) => ({ ...prev, [idx]: !prev[idx] }));
   }
 
+  /* Collect all hrefs to detect parent/child overlap */
+  const allHrefs = React.useMemo(
+    () => config.sections.flatMap((s) => s.items.map((i) => i.href)),
+    [config.sections]
+  );
+
   function isActive(href: string) {
+    if (pathname === href) return true;
     if (
       href === config.basePath + "/dashboard" ||
       href === config.basePath + "/overview"
     )
-      return pathname === href;
+      return false;
+    /* Only use startsWith if no OTHER item is a more specific match */
+    const hasMoreSpecific = allHrefs.some(
+      (h) => h !== href && h.startsWith(href + "/") && pathname.startsWith(h)
+    );
+    if (hasMoreSpecific) return false;
     return pathname.startsWith(href);
   }
 
@@ -89,19 +101,6 @@ export function Sidebar({ config }: SidebarProps) {
           </AnimatePresence>
         </Link>
       </div>
-
-      {/* ── Quick search ── */}
-      {!isCollapsed && (
-        <div className="px-4 py-3">
-          <button className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl bg-beige-100/60 border border-beige-200/40 text-[12px] text-beige-500 hover:bg-beige-100 hover:border-beige-200/60 transition-all">
-            <Search className="w-3.5 h-3.5" />
-            <span>Quick search...</span>
-            <span className="ml-auto text-[9px] font-mono font-bold bg-white/70 px-1.5 py-0.5 rounded text-beige-400 border border-beige-200/40">
-              /
-            </span>
-          </button>
-        </div>
-      )}
 
       {/* ── Navigation ── */}
       <nav className="flex-1 overflow-y-auto px-3 pb-4 scrollbar-none">
@@ -237,81 +236,23 @@ export function Sidebar({ config }: SidebarProps) {
         </TooltipProvider>
       </nav>
 
-      {/* ── Bottom section ── */}
-      <div className="px-3 pb-3 space-y-2">
-        {/* Ask APG — standout gradient button */}
-        <div className="px-1">
-          <button
-            className={cn(
-              "relative w-full overflow-hidden rounded-xl py-2.5 text-[13px] font-bold transition-all duration-300",
-              "flex items-center justify-center gap-2 group/apg"
-            )}
-          >
-            <div
-              className="absolute inset-0 rounded-xl opacity-90 group-hover/apg:opacity-100 transition-opacity"
-              style={{
-                background: "linear-gradient(135deg, #4D5741 0%, #5B9BA2 50%, #D0B060 100%)",
-                backgroundSize: "200% 200%",
-                animation: "gradient-shift 6s ease infinite",
-              }}
-            />
-            <div className="absolute inset-[1px] rounded-[10px] bg-white/90 group-hover/apg:bg-white/80 transition-colors" />
-            <Sparkles className="w-4 h-4 text-teal-600 relative z-10" />
-            {!isCollapsed && (
-              <span className="relative z-10 bg-gradient-to-r from-forest-600 via-teal-600 to-gold-600 bg-clip-text text-transparent">
-                Ask APG
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Help + Collapse */}
-        {!isCollapsed && (
-          <div className="flex items-center gap-1 px-1">
-            <button className="flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-[11px] text-beige-500 hover:text-brown-600 hover:bg-beige-100/50 transition-colors">
-              <HelpCircle className="w-3.5 h-3.5" />
-              Help
-            </button>
-            <button
-              onClick={toggle}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-[11px] text-beige-500 hover:text-brown-600 hover:bg-beige-100/50 transition-colors"
-            >
-              <PanelLeftClose className="w-3.5 h-3.5" />
-              Collapse
-            </button>
-          </div>
-        )}
-
-        {isCollapsed && (
+      {/* ── Bottom: collapse toggle only ── */}
+      <div className="px-3 pb-4">
+        {!isCollapsed ? (
           <button
             onClick={toggle}
-            className="flex items-center justify-center w-full rounded-lg py-2 text-beige-400 hover:text-brown-600 hover:bg-beige-100/50 transition-colors"
+            className="flex items-center justify-center gap-2 w-full rounded-xl py-2.5 text-[11px] text-beige-500 hover:text-brown-600 hover:bg-beige-100/50 transition-colors"
+          >
+            <PanelLeftClose className="w-3.5 h-3.5" />
+            Collapse
+          </button>
+        ) : (
+          <button
+            onClick={toggle}
+            className="flex items-center justify-center w-full rounded-xl py-2.5 text-beige-400 hover:text-brown-600 hover:bg-beige-100/50 transition-colors"
           >
             <PanelLeftOpen className="w-4 h-4" />
           </button>
-        )}
-
-        {/* User profile card */}
-        {!isCollapsed && (
-          <div className="mx-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-gradient-to-r from-beige-50 to-brown-50/50 border border-beige-200/40">
-            <div className="relative">
-              <Avatar size="sm">
-                <AvatarFallback className="bg-gradient-to-br from-brown-400 to-brown-600 text-white text-[10px] font-bold">
-                  PN
-                </AvatarFallback>
-              </Avatar>
-              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-forest-400 border-2 border-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold text-brown-800 truncate">
-                Priya Nair
-              </p>
-              <p className="text-[10px] text-beige-500 truncate">
-                priya@enterprise.com
-              </p>
-            </div>
-            <ChevronDown className="w-3 h-3 text-beige-400 shrink-0" />
-          </div>
         )}
       </div>
     </div>

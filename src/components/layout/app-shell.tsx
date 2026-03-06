@@ -31,10 +31,10 @@ export function AppShell({ config, children }: AppShellProps) {
       <motion.div
         animate={{ marginLeft: isCollapsed ? 72 : 264 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="relative z-10 flex flex-col min-h-screen lg:ml-[264px] ml-0"
+        className="relative z-10 flex flex-col h-screen lg:ml-[264px] ml-0"
       >
         <TopBar config={config} />
-        <main className="flex-1 px-6 py-5 pb-10">
+        <main className="flex-1 overflow-y-auto px-6 py-5 pb-10">
           {children}
         </main>
       </motion.div>
