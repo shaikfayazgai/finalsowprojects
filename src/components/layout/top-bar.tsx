@@ -68,12 +68,25 @@ export function TopBar({ config }: TopBarProps) {
   const [searchFocused, setSearchFocused] = React.useState(false);
 
   const breadcrumbs = React.useMemo(() => {
-    const segments = pathname.split("/").filter(Boolean);
-    return segments.map((seg, i) => ({
-      label: getFriendlyLabel(seg, segments.slice(0, i)) ?? seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-      href: "/" + segments.slice(0, i + 1).join("/"),
-      isLast: i === segments.length - 1,
-    }));
+    const allSegments = pathname.split("/").filter(Boolean);
+    const hiddenPrefixes = ["enterprise"];
+    const crumbs = allSegments
+      .map((seg, i) => ({
+        seg,
+        label: getFriendlyLabel(seg, allSegments.slice(0, i)) ?? seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        href: "/" + allSegments.slice(0, i + 1).join("/"),
+        hidden: hiddenPrefixes.includes(seg),
+      }))
+      .filter((crumb) => !crumb.hidden);
+
+    /* Always prepend Dashboard as root crumb (unless already on dashboard) */
+    const dashboardHref = "/" + allSegments.slice(0, allSegments.indexOf("enterprise") + 1).join("/") + "/dashboard";
+    const isOnDashboard = crumbs.length === 1 && crumbs[0].seg === "dashboard";
+    if (!isOnDashboard) {
+      crumbs.unshift({ seg: "dashboard", label: "Dashboard", href: dashboardHref, hidden: false });
+    }
+
+    return crumbs.map((c, i) => ({ ...c, isLast: i === crumbs.length - 1 }));
   }, [pathname]);
 
   const pageTitle = breadcrumbs[breadcrumbs.length - 1]?.label || "Dashboard";

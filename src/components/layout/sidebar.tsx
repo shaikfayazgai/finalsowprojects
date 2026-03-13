@@ -68,8 +68,8 @@ export function Sidebar({ config }: SidebarProps) {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* ── Brand + Collapse toggle ── */}
-      <div className={cn("px-[18px] pt-[22px] pb-[18px]", isCollapsed && "px-2.5 pt-4 pb-3")}
-           style={{ borderBottom: '1px solid var(--border-hair)' }}>
+      <div className={cn("flex items-center px-[18px]", isCollapsed && "px-2.5")}
+           style={{ borderBottom: '1px solid var(--border-hair)', height: 58 }}>
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 group min-w-0">
             <div
@@ -292,64 +292,6 @@ export function Sidebar({ config }: SidebarProps) {
         </TooltipProvider>
       </nav>
 
-      {/* ── Bottom: User profile ── */}
-      {!isCollapsed && (
-        <div className="px-4 pb-[14px]" style={{ borderTop: '1px solid transparent', backgroundImage: 'linear-gradient(var(--sidebar-bg), var(--sidebar-bg)), linear-gradient(90deg, transparent, rgba(208,176,96,0.25), transparent)', backgroundOrigin: 'padding-box, border-box', backgroundClip: 'padding-box, border-box' }}>
-          <div className="flex items-center gap-3 pt-[14px]">
-            <div
-              className="w-[34px] h-[34px] rounded-full flex items-center justify-center shrink-0"
-              style={{
-                background: 'linear-gradient(145deg, #4D5741, #A67763)',
-                border: '2px solid rgba(208,176,96,0.40)',
-                boxShadow: '0 2px 10px rgba(77,55,46,0.20), 0 0 0 3px rgba(208,176,96,0.06)',
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#F4EFEB',
-              }}
-            >
-              PN
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-medium truncate leading-tight"
-                 style={{ color: 'var(--ink-mid)' }}>
-                Priya Nair
-              </p>
-              <p className="text-[10px] truncate leading-tight"
-                 style={{ color: 'var(--ink-faint)' }}>
-                priya@enterprise.com
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isCollapsed && (
-        <div className="px-2 pb-4">
-          <div className="mx-1 mb-2" style={{ height: 1, background: 'var(--border-hair)' }} />
-          <TooltipProvider delayDuration={0}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex justify-center py-1">
-                  <div
-                    className="w-[34px] h-[34px] rounded-full flex items-center justify-center"
-                    style={{
-                      background: 'linear-gradient(145deg, #4D5741, #A67763)',
-                      border: '2px solid rgba(208,176,96,0.35)',
-                      boxShadow: '0 2px 8px rgba(77,55,46,0.18)',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#F4EFEB',
-                    }}
-                  >
-                    PN
-                  </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right">Priya Nair</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      )}
     </div>
   );
 

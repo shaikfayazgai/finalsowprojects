@@ -348,11 +348,11 @@ const typeIcon: Record<string, React.ElementType> = {
 };
 
 const typeIconStyle: Record<string, { bg: string; border: string; color: string }> = {
-  overdue:    { bg: "rgba(160,50,50,0.07)", border: "rgba(160,50,50,0.14)", color: "#8B2C2C" },
-  escalation: { bg: "rgba(208,176,96,0.09)", border: "rgba(208,176,96,0.20)", color: "#86713D" },
-  rework:     { bg: "rgba(91,155,162,0.08)", border: "rgba(91,155,162,0.18)", color: "#2A6068" },
-  approval:   { bg: "rgba(166,119,99,0.08)", border: "rgba(166,119,99,0.18)", color: "#6A4C3F" },
-  sow:        { bg: "rgba(77,87,65,0.08)", border: "rgba(77,87,65,0.18)", color: "#3F4735" },
+  overdue:    { bg: "linear-gradient(135deg, rgba(160,50,50,0.10), rgba(190,120,50,0.04))", border: "rgba(160,50,50,0.14)", color: "#8B2C2C" },
+  escalation: { bg: "linear-gradient(135deg, rgba(208,176,96,0.12), rgba(166,119,99,0.05))", border: "rgba(208,176,96,0.20)", color: "#86713D" },
+  rework:     { bg: "linear-gradient(135deg, rgba(91,155,162,0.12), rgba(77,87,65,0.04))", border: "rgba(91,155,162,0.18)", color: "#2A6068" },
+  approval:   { bg: "linear-gradient(135deg, rgba(166,119,99,0.12), rgba(208,176,96,0.05))", border: "rgba(166,119,99,0.18)", color: "#6A4C3F" },
+  sow:        { bg: "linear-gradient(135deg, rgba(77,87,65,0.12), rgba(91,155,162,0.04))", border: "rgba(77,87,65,0.18)", color: "#3F4735" },
 };
 
 /* Attention badge style per time label */
@@ -376,7 +376,7 @@ const activityEvents = [
     action: "submitted evidence for",
     target: mockDeliverables[0].title,
     time: "2h ago",
-    iconBg: "rgba(91,155,162,0.09)",
+    iconBg: "linear-gradient(135deg, rgba(91,155,162,0.13), rgba(77,87,65,0.04))",
     iconBorder: "rgba(91,155,162,0.18)",
     iconColor: "#3A6368",
     icon: Upload,
@@ -387,7 +387,7 @@ const activityEvents = [
     action: "submitted deliverable",
     target: mockDeliverables[1].title,
     time: "5h ago",
-    iconBg: "rgba(77,87,65,0.09)",
+    iconBg: "linear-gradient(135deg, rgba(77,87,65,0.13), rgba(91,155,162,0.04))",
     iconBorder: "rgba(77,87,65,0.18)",
     iconColor: "#3F4735",
     icon: FileText,
@@ -398,7 +398,7 @@ const activityEvents = [
     action: "submitted for review",
     target: mockDeliverables[5].title,
     time: "1d ago",
-    iconBg: "rgba(166,119,99,0.08)",
+    iconBg: "linear-gradient(135deg, rgba(166,119,99,0.12), rgba(208,176,96,0.05))",
     iconBorder: "rgba(166,119,99,0.18)",
     iconColor: "#6A4C3F",
     icon: FileSearch,
@@ -409,7 +409,7 @@ const activityEvents = [
     action: "flagged escalation on",
     target: "Mobile Banking App",
     time: "1d ago",
-    iconBg: "rgba(208,176,96,0.09)",
+    iconBg: "linear-gradient(135deg, rgba(208,176,96,0.13), rgba(166,119,99,0.05))",
     iconBorder: "rgba(208,176,96,0.20)",
     iconColor: "#86713D",
     icon: AlertTriangle,
@@ -420,7 +420,7 @@ const activityEvents = [
     action: "completed milestone",
     target: "Infrastructure & Auth",
     time: "2d ago",
-    iconBg: "rgba(91,155,162,0.08)",
+    iconBg: "linear-gradient(135deg, rgba(91,155,162,0.12), rgba(77,87,65,0.04))",
     iconBorder: "rgba(91,155,162,0.18)",
     iconColor: "#2A6068",
     icon: CheckCircle2,
@@ -434,7 +434,7 @@ const activityEvents = [
 const kpiConfig = {
   sows: {
     label: "SOWs Active",
-    iconBg: "rgba(166,119,99,0.10)",
+    iconBg: "linear-gradient(135deg, rgba(166,119,99,0.14), rgba(208,176,96,0.06))",
     iconBorder: "rgba(166,119,99,0.20)",
     iconColor: "#6A4C3F",
     cornerColor: "rgba(166,119,99,0.12)",
@@ -443,7 +443,7 @@ const kpiConfig = {
   },
   active: {
     label: "Active Projects",
-    iconBg: "rgba(208,176,96,0.12)",
+    iconBg: "linear-gradient(135deg, rgba(208,176,96,0.16), rgba(166,119,99,0.06))",
     iconBorder: "rgba(208,176,96,0.22)",
     iconColor: "#86713D",
     cornerColor: "rgba(208,176,96,0.15)",
@@ -452,7 +452,7 @@ const kpiConfig = {
   },
   escalations: {
     label: "APG Escalations",
-    iconBg: "rgba(190,120,50,0.1)",
+    iconBg: "linear-gradient(135deg, rgba(190,120,50,0.14), rgba(208,176,96,0.06))",
     iconBorder: "rgba(190,120,50,0.2)",
     iconColor: "#7A5020",
     cornerColor: "rgba(190,120,50,0.12)",
@@ -461,7 +461,7 @@ const kpiConfig = {
   },
   approvals: {
     label: "Pending Reviews",
-    iconBg: "rgba(91,155,162,0.10)",
+    iconBg: "linear-gradient(135deg, rgba(91,155,162,0.14), rgba(77,87,65,0.05))",
     iconBorder: "rgba(91,155,162,0.22)",
     iconColor: "#2A6068",
     cornerColor: "rgba(91,155,162,0.10)",
@@ -470,7 +470,7 @@ const kpiConfig = {
   },
   budget: {
     label: "Budget Used",
-    iconBg: "rgba(77,87,65,0.10)",
+    iconBg: "linear-gradient(135deg, rgba(77,87,65,0.14), rgba(91,155,162,0.05))",
     iconBorder: "rgba(77,87,65,0.20)",
     iconColor: "#3F4735",
     cornerColor: "rgba(77,87,65,0.10)",
@@ -504,12 +504,12 @@ function getTimeAgo(timestamp: string): string {
    ══════════════════════════════════════════ */
 
 const sowStatusConfig: Record<string, { iconBg: string; iconBorder: string; iconColor: string; badgeBg: string; badgeColor: string; badgeBorder: string; badgeLabel: string; icon: React.ElementType }> = {
-  draft:    { iconBg: "rgba(166,119,99,0.08)", iconBorder: "rgba(166,119,99,0.18)", iconColor: "#6A4C3F", badgeBg: "rgba(77,87,65,0.09)", badgeColor: "#3F4735", badgeBorder: "rgba(77,87,65,0.20)", badgeLabel: "Draft", icon: FileText },
-  parsing:  { iconBg: "rgba(91,155,162,0.10)", iconBorder: "rgba(91,155,162,0.22)", iconColor: "#3A6368", badgeBg: "rgba(91,155,162,0.10)", badgeColor: "#2A6068", badgeBorder: "rgba(91,155,162,0.25)", badgeLabel: "Parsing", icon: Bot },
-  review:   { iconBg: "rgba(208,176,96,0.10)", iconBorder: "rgba(208,176,96,0.22)", iconColor: "#86713D", badgeBg: "rgba(208,176,96,0.14)", badgeColor: "#7A6030", badgeBorder: "rgba(208,176,96,0.28)", badgeLabel: "Review", icon: Eye },
-  approval: { iconBg: "rgba(208,176,96,0.10)", iconBorder: "rgba(208,176,96,0.22)", iconColor: "#86713D", badgeBg: "rgba(166,119,99,0.10)", badgeColor: "#6A4C3F", badgeBorder: "rgba(166,119,99,0.22)", badgeLabel: "Approval", icon: ClipboardCheck },
-  approved: { iconBg: "rgba(91,155,162,0.10)", iconBorder: "rgba(91,155,162,0.22)", iconColor: "#3A6368", badgeBg: "rgba(77,87,65,0.10)", badgeColor: "#344028", badgeBorder: "rgba(77,87,65,0.22)", badgeLabel: "Approved", icon: CheckCircle2 },
-  archived: { iconBg: "rgba(166,119,99,0.06)", iconBorder: "rgba(166,119,99,0.14)", iconColor: "#706B66", badgeBg: "rgba(166,119,99,0.08)", badgeColor: "#706B66", badgeBorder: "rgba(166,119,99,0.18)", badgeLabel: "Archived", icon: FileText },
+  draft:    { iconBg: "linear-gradient(135deg, rgba(166,119,99,0.12), rgba(208,176,96,0.05))", iconBorder: "rgba(166,119,99,0.18)", iconColor: "#6A4C3F", badgeBg: "rgba(77,87,65,0.09)", badgeColor: "#3F4735", badgeBorder: "rgba(77,87,65,0.20)", badgeLabel: "Draft", icon: FileText },
+  parsing:  { iconBg: "linear-gradient(135deg, rgba(91,155,162,0.14), rgba(77,87,65,0.05))", iconBorder: "rgba(91,155,162,0.22)", iconColor: "#3A6368", badgeBg: "rgba(91,155,162,0.10)", badgeColor: "#2A6068", badgeBorder: "rgba(91,155,162,0.25)", badgeLabel: "Parsing", icon: Bot },
+  review:   { iconBg: "linear-gradient(135deg, rgba(208,176,96,0.14), rgba(166,119,99,0.05))", iconBorder: "rgba(208,176,96,0.22)", iconColor: "#86713D", badgeBg: "rgba(208,176,96,0.14)", badgeColor: "#7A6030", badgeBorder: "rgba(208,176,96,0.28)", badgeLabel: "Review", icon: Eye },
+  approval: { iconBg: "linear-gradient(135deg, rgba(208,176,96,0.14), rgba(166,119,99,0.05))", iconBorder: "rgba(208,176,96,0.22)", iconColor: "#86713D", badgeBg: "rgba(166,119,99,0.10)", badgeColor: "#6A4C3F", badgeBorder: "rgba(166,119,99,0.22)", badgeLabel: "Approval", icon: ClipboardCheck },
+  approved: { iconBg: "linear-gradient(135deg, rgba(91,155,162,0.14), rgba(77,87,65,0.05))", iconBorder: "rgba(91,155,162,0.22)", iconColor: "#3A6368", badgeBg: "rgba(77,87,65,0.10)", badgeColor: "#344028", badgeBorder: "rgba(77,87,65,0.22)", badgeLabel: "Approved", icon: CheckCircle2 },
+  archived: { iconBg: "linear-gradient(135deg, rgba(166,119,99,0.08), rgba(166,119,99,0.03))", iconBorder: "rgba(166,119,99,0.14)", iconColor: "#706B66", badgeBg: "rgba(166,119,99,0.08)", badgeColor: "#706B66", badgeBorder: "rgba(166,119,99,0.18)", badgeLabel: "Archived", icon: FileText },
 };
 
 /* ══════════════════════════════════════════
@@ -662,9 +662,9 @@ export default function EnterpriseDashboardPage() {
             {/* Pipeline stages visualization */}
             <div className="flex items-center gap-0 mb-6">
               {([
-                { key: 'draft', label: 'Draft', icon: FileText, color: '#A67763', bg: 'rgba(166,119,99,0.08)', border: 'rgba(166,119,99,0.18)' },
-                { key: 'approval', label: 'In Approval', icon: ClipboardCheck, color: '#D0B060', bg: 'rgba(208,176,96,0.10)', border: 'rgba(208,176,96,0.22)' },
-                { key: 'approved', label: 'Approved', icon: CheckCircle2, color: '#4D5741', bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)' },
+                { key: 'draft', label: 'Draft', icon: FileText, color: '#A67763', bg: 'rgba(166,119,99,0.08)', border: 'rgba(166,119,99,0.18)', iconBg: 'linear-gradient(135deg, rgba(166,119,99,0.14), rgba(208,176,96,0.05))' },
+                { key: 'approval', label: 'In Approval', icon: ClipboardCheck, color: '#D0B060', bg: 'rgba(208,176,96,0.10)', border: 'rgba(208,176,96,0.22)', iconBg: 'linear-gradient(135deg, rgba(208,176,96,0.16), rgba(166,119,99,0.05))' },
+                { key: 'approved', label: 'Approved', icon: CheckCircle2, color: '#4D5741', bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)', iconBg: 'linear-gradient(135deg, rgba(77,87,65,0.14), rgba(91,155,162,0.05))' },
               ] as const).map((stage, i, arr) => {
                 const count = sowsByStage[stage.key];
                 const StageIcon = stage.icon;
@@ -683,7 +683,7 @@ export default function EnterpriseDashboardPage() {
                           className="flex items-center justify-center shrink-0"
                           style={{
                             width: 36, height: 36, borderRadius: 10,
-                            background: count > 0 ? stage.bg : 'rgba(166,119,99,0.05)',
+                            background: count > 0 ? stage.iconBg : 'rgba(166,119,99,0.05)',
                             border: `1px solid ${count > 0 ? stage.border : 'rgba(166,119,99,0.10)'}`,
                           }}
                         >
@@ -1017,12 +1017,12 @@ export default function EnterpriseDashboardPage() {
 
             {/* Plan list */}
             {mockPlans.slice(0, 4).map((plan, i) => {
-              const statusColors: Record<string, { color: string; bg: string; border: string; label: string }> = {
-                draft: { color: '#6A4C3F', bg: 'rgba(166,119,99,0.08)', border: 'rgba(166,119,99,0.18)', label: 'Draft' },
-                in_progress: { color: '#86713D', bg: 'rgba(208,176,96,0.10)', border: 'rgba(208,176,96,0.22)', label: 'In Progress' },
-                pending_review: { color: '#2A6068', bg: 'rgba(91,155,162,0.10)', border: 'rgba(91,155,162,0.22)', label: 'Review' },
-                approved: { color: '#344028', bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)', label: 'Approved' },
-                completed: { color: '#3A6368', bg: 'rgba(91,155,162,0.08)', border: 'rgba(91,155,162,0.18)', label: 'Completed' },
+              const statusColors: Record<string, { color: string; bg: string; iconBg: string; border: string; label: string }> = {
+                draft: { color: '#6A4C3F', bg: 'rgba(166,119,99,0.08)', iconBg: 'linear-gradient(135deg, rgba(166,119,99,0.14), rgba(208,176,96,0.05))', border: 'rgba(166,119,99,0.18)', label: 'Draft' },
+                in_progress: { color: '#86713D', bg: 'rgba(208,176,96,0.10)', iconBg: 'linear-gradient(135deg, rgba(208,176,96,0.16), rgba(166,119,99,0.05))', border: 'rgba(208,176,96,0.22)', label: 'In Progress' },
+                pending_review: { color: '#2A6068', bg: 'rgba(91,155,162,0.10)', iconBg: 'linear-gradient(135deg, rgba(91,155,162,0.14), rgba(77,87,65,0.05))', border: 'rgba(91,155,162,0.22)', label: 'Review' },
+                approved: { color: '#344028', bg: 'rgba(77,87,65,0.08)', iconBg: 'linear-gradient(135deg, rgba(77,87,65,0.14), rgba(91,155,162,0.05))', border: 'rgba(77,87,65,0.18)', label: 'Approved' },
+                completed: { color: '#3A6368', bg: 'rgba(91,155,162,0.08)', iconBg: 'linear-gradient(135deg, rgba(91,155,162,0.12), rgba(77,87,65,0.04))', border: 'rgba(91,155,162,0.18)', label: 'Completed' },
               };
               const ps = statusColors[plan.status] || statusColors.draft;
 
@@ -1045,7 +1045,7 @@ export default function EnterpriseDashboardPage() {
                         className="flex items-center justify-center shrink-0"
                         style={{
                           width: 34, height: 34, borderRadius: 9,
-                          background: ps.bg,
+                          background: ps.iconBg,
                           border: `1px solid ${ps.border}`,
                         }}
                       >
@@ -1110,11 +1110,11 @@ export default function EnterpriseDashboardPage() {
 
             {/* Team list */}
             {mockTeams.map((team, i) => {
-              const statusStyle: Record<string, { color: string; bg: string; border: string; icon: React.ElementType }> = {
-                forming: { color: '#86713D', bg: 'rgba(208,176,96,0.10)', border: 'rgba(208,176,96,0.22)', icon: Loader2 },
-                ready: { color: '#3A6368', bg: 'rgba(91,155,162,0.10)', border: 'rgba(91,155,162,0.22)', icon: CircleCheck },
-                active: { color: '#344028', bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)', icon: CircleDot },
-                disbanded: { color: '#706B66', bg: 'rgba(166,119,99,0.06)', border: 'rgba(166,119,99,0.14)', icon: XCircle },
+              const statusStyle: Record<string, { color: string; bg: string; iconBg: string; border: string; icon: React.ElementType }> = {
+                forming: { color: '#86713D', bg: 'rgba(208,176,96,0.10)', iconBg: 'linear-gradient(135deg, rgba(208,176,96,0.16), rgba(166,119,99,0.05))', border: 'rgba(208,176,96,0.22)', icon: Loader2 },
+                ready: { color: '#3A6368', bg: 'rgba(91,155,162,0.10)', iconBg: 'linear-gradient(135deg, rgba(91,155,162,0.14), rgba(77,87,65,0.05))', border: 'rgba(91,155,162,0.22)', icon: CircleCheck },
+                active: { color: '#344028', bg: 'rgba(77,87,65,0.08)', iconBg: 'linear-gradient(135deg, rgba(77,87,65,0.14), rgba(91,155,162,0.05))', border: 'rgba(77,87,65,0.18)', icon: CircleDot },
+                disbanded: { color: '#706B66', bg: 'rgba(166,119,99,0.06)', iconBg: 'linear-gradient(135deg, rgba(166,119,99,0.08), rgba(166,119,99,0.03))', border: 'rgba(166,119,99,0.14)', icon: XCircle },
               };
               const ts = statusStyle[team.status] || statusStyle.active;
               const TeamStatusIcon = ts.icon;
@@ -1137,7 +1137,7 @@ export default function EnterpriseDashboardPage() {
                       className="flex items-center justify-center shrink-0"
                       style={{
                         width: 34, height: 34, borderRadius: 9,
-                        background: ts.bg,
+                        background: ts.iconBg,
                         border: `1px solid ${ts.border}`,
                       }}
                     >
@@ -1305,12 +1305,12 @@ export default function EnterpriseDashboardPage() {
             {mockActivityFeed.slice(0, 6).map((event) => {
               const isAI = event.actor === 'APG System' || event.actor === 'Finance Team';
               const typeColors: Record<string, { bg: string; border: string; color: string; icon: React.ElementType }> = {
-                milestone: { bg: 'rgba(166,119,99,0.08)', border: 'rgba(166,119,99,0.18)', color: '#6A4C3F', icon: CheckCircle2 },
-                task: { bg: 'rgba(91,155,162,0.08)', border: 'rgba(91,155,162,0.18)', color: '#3A6368', icon: FileText },
-                escalation: { bg: 'rgba(208,176,96,0.10)', border: 'rgba(208,176,96,0.22)', color: '#86713D', icon: AlertTriangle },
-                payment: { bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)', color: '#344028', icon: Banknote },
-                review: { bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)', color: '#3F4735', icon: Eye },
-                sow: { bg: 'rgba(166,119,99,0.08)', border: 'rgba(166,119,99,0.18)', color: '#6A4C3F', icon: Upload },
+                milestone: { bg: 'linear-gradient(135deg, rgba(166,119,99,0.12), rgba(208,176,96,0.05))', border: 'rgba(166,119,99,0.18)', color: '#6A4C3F', icon: CheckCircle2 },
+                task: { bg: 'linear-gradient(135deg, rgba(91,155,162,0.12), rgba(77,87,65,0.04))', border: 'rgba(91,155,162,0.18)', color: '#3A6368', icon: FileText },
+                escalation: { bg: 'linear-gradient(135deg, rgba(208,176,96,0.14), rgba(166,119,99,0.05))', border: 'rgba(208,176,96,0.22)', color: '#86713D', icon: AlertTriangle },
+                payment: { bg: 'linear-gradient(135deg, rgba(77,87,65,0.12), rgba(91,155,162,0.04))', border: 'rgba(77,87,65,0.18)', color: '#344028', icon: Banknote },
+                review: { bg: 'linear-gradient(135deg, rgba(77,87,65,0.12), rgba(91,155,162,0.04))', border: 'rgba(77,87,65,0.18)', color: '#3F4735', icon: Eye },
+                sow: { bg: 'linear-gradient(135deg, rgba(166,119,99,0.12), rgba(208,176,96,0.05))', border: 'rgba(166,119,99,0.18)', color: '#6A4C3F', icon: Upload },
               };
               const tc = typeColors[event.type] || typeColors.task;
               const EventIcon = tc.icon;
