@@ -1,4 +1,41 @@
 # Flow Document: Contributor Portal
+### Gaps & Risks Identified
+
+#### 1. "AGI" terminology
+Inaccurately refers to the technology as "Artificial General Intelligence" when it should be referred to as "Multi-AI" or "AI-driven"
+
+#### 2. Missing lifecycle stages
+Sorting/Assortment and Polishing are missing as distinct lifecycle stages from Cutting
+
+#### 3. Cold-start data problem
+No data acquisition strategy defined
+
+#### 4. Missing personas
+End consumers and Insurance companies are missing personas
+
+#### 5. No phasing/prioritization
+All 25 sections presented as equal priority; need MVP definition
+
+#### 6. No NFRs
+No non-functional requirements (performance, scalability, availability, security SLAs) defined
+
+#### 7. Hardware integration undefined
+Which scanners, spectroscopes, and cutting machines to support?
+
+#### 8. Regulatory complexity
+Investment/tokenization modules face securities regulation hurdles
+
+#### 9. Mining module scope risk
+Geological/satellite capabilities are an entirely different domain
+
+#### 10. Architecture gaps
+Auth, multi-tenancy, API gateway, and encryption not specified
+
+#### 11. No mention of mobile
+Diamond traders work heavily on mobile (WhatsApp-based trading is common)
+
+#### 12. No timeline or team sizing
+SOW has scope but no schedule or resource estimates
 
 **Version:** 1.0
 **Date:** 2026-03-06

@@ -17,24 +17,22 @@ export function AppShell({ config, children }: AppShellProps) {
   const { isCollapsed } = useSidebarStore();
 
   return (
-    <div className="min-h-screen relative overflow-x-clip bg-beige-50">
-      {/* Warm atmospheric mesh — soft orbs bleeding warmth into the light canvas */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute w-[800px] h-[800px] rounded-full opacity-[0.25] blur-[120px] -top-[200px] right-[10%] bg-brown-300" />
-        <div className="absolute w-[600px] h-[600px] rounded-full opacity-[0.15] blur-[100px] top-[40%] left-[-5%] bg-teal-300" />
-        <div className="absolute w-[500px] h-[500px] rounded-full opacity-[0.18] blur-[100px] bottom-[-5%] right-[20%] bg-gold-300" />
-        <div className="absolute w-[400px] h-[400px] rounded-full opacity-[0.10] blur-[80px] top-[20%] left-[40%] bg-forest-300" />
-      </div>
+    <div className="min-h-screen relative overflow-x-clip" style={{ background: 'var(--page-bg)' }}>
+      {/* Ambient gradient glow in top-right of content area */}
+      <div className="fixed pointer-events-none z-0" style={{
+        top: 0, right: 0, width: '50vw', height: '40vh',
+        background: 'radial-gradient(ellipse at 80% 10%, rgba(208,176,96,0.04) 0%, transparent 60%), radial-gradient(ellipse at 60% 30%, rgba(91,155,162,0.03) 0%, transparent 50%)',
+      }} />
 
       <Sidebar config={config} />
 
       <motion.div
-        animate={{ marginLeft: isCollapsed ? 68 : 240 }}
+        animate={{ marginLeft: isCollapsed ? 68 : 228 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="relative z-10 min-h-screen lg:ml-[240px] ml-0"
+        className="relative z-10 min-h-screen lg:ml-[228px] ml-0"
       >
         <TopBar config={config} />
-        <main className="px-6 py-5 pb-10">
+        <main className="px-11 py-11 pb-20" style={{ maxWidth: 1400 }}>
           {children}
         </main>
       </motion.div>

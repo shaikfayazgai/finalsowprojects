@@ -7,14 +7,10 @@ import {
   FolderKanban,
   AlertTriangle,
   ClipboardCheck,
-  ShieldCheck,
   FileSearch,
   ArrowRight,
-  ArrowUpRight,
   Users,
   CircleDollarSign,
-  Activity,
-  ChevronRight,
   Clock,
   TrendingUp,
   TrendingDown,
@@ -28,15 +24,13 @@ import {
   CheckCircle2,
   XCircle,
   RotateCcw,
+  Activity,
 } from "lucide-react";
-import { cn } from "@/lib/utils/cn";
-import { Badge, Progress } from "@/components/ui";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import {
   mockProjects,
   mockDeliverables,
   mockPlans,
-  mockMilestones,
 } from "@/mocks/data/enterprise-projects";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import {
@@ -44,7 +38,7 @@ import {
   mockEscrowAccounts,
   billingStats,
 } from "@/mocks/data/enterprise-billing";
-import type { Project, ProjectHealth } from "@/types/enterprise";
+import type { ProjectHealth } from "@/types/enterprise";
 
 /* ══════════════════════════════════════════
    Derived data from mocks
@@ -71,7 +65,7 @@ const totalBudget = mockProjects.reduce((sum, p) => sum + p.budget, 0);
 const totalSpent = mockProjects.reduce((sum, p) => sum + p.spent, 0);
 const budgetUtilization = Math.round((totalSpent / totalBudget) * 100);
 const overdueInvoices = mockInvoices.filter((i) => i.status === "overdue");
-const pendingInvoices = mockInvoices.filter((i) => i.status === "pending");
+const pendingInvoicesList = mockInvoices.filter((i) => i.status === "pending");
 const sowsInApproval = mockSOWs.filter((s) => s.status === "approval");
 const avgApgScore = Math.round(
   mockProjects.reduce((sum, p) => sum + p.apgScore, 0) / mockProjects.length
@@ -87,42 +81,52 @@ const healthConfig: Record<
     label: string;
     dot: string;
     fill: string;
-    text: string;
-    badge: "forest" | "gold" | "danger" | "teal";
-    bar: "forest" | "gold" | "brown" | "teal";
+    badgeBg: string;
+    badgeColor: string;
+    badgeBorder: string;
+    progressGradient: string;
+    progressColor: string;
   }
 > = {
   on_track: {
     label: "On Track",
-    dot: "bg-forest-500",
+    dot: "#4D5741",
     fill: "#4D5741",
-    text: "text-forest-700",
-    badge: "forest",
-    bar: "forest",
+    badgeBg: "rgba(77,87,65,0.10)",
+    badgeColor: "#344028",
+    badgeBorder: "rgba(77,87,65,0.22)",
+    progressGradient: "linear-gradient(90deg, #313829, #4D5741, #707867)",
+    progressColor: "#344028",
   },
   at_risk: {
     label: "At Risk",
-    dot: "bg-gold-500",
+    dot: "#D0B060",
     fill: "#D0B060",
-    text: "text-gold-800",
-    badge: "gold",
-    bar: "gold",
+    badgeBg: "rgba(190,120,50,0.10)",
+    badgeColor: "#7A5020",
+    badgeBorder: "rgba(190,120,50,0.22)",
+    progressGradient: "linear-gradient(90deg, #61522C, #D0B060)",
+    progressColor: "#7A5020",
   },
   behind: {
     label: "Behind",
-    dot: "bg-[var(--danger)]",
+    dot: "#A67763",
     fill: "#C4574A",
-    text: "text-[var(--danger)]",
-    badge: "danger",
-    bar: "brown",
+    badgeBg: "rgba(160,50,50,0.08)",
+    badgeColor: "#7A2020",
+    badgeBorder: "rgba(160,50,50,0.18)",
+    progressGradient: "linear-gradient(90deg, #6A1818, #A63C3C)",
+    progressColor: "#7A2020",
   },
   completed: {
     label: "Completed",
-    dot: "bg-teal-500",
+    dot: "#5B9BA2",
     fill: "#5B9BA2",
-    text: "text-teal-700",
-    badge: "teal",
-    bar: "teal",
+    badgeBg: "rgba(91,155,162,0.12)",
+    badgeColor: "#2A5860",
+    badgeBorder: "rgba(91,155,162,0.28)",
+    progressGradient: "linear-gradient(90deg, #3A6368, #5B9BA2, #7BAFB4)",
+    progressColor: "#2A5860",
   },
 };
 
@@ -158,25 +162,23 @@ function PortfolioDonut() {
   });
 
   return (
-    <div className="relative flex items-center justify-center">
+    <div className="relative flex items-center justify-center" style={{ width: 108, height: 108, flexShrink: 0 }}>
+      {/* Outer glow ring */}
+      <div className="absolute inset-0 rounded-full" style={{
+        background: 'radial-gradient(circle, transparent 38%, rgba(208,176,96,0.06) 48%, rgba(166,119,99,0.04) 55%, transparent 65%)',
+      }} />
       <svg width="108" height="108" viewBox="0 0 108 108" aria-hidden>
         <circle
-          cx="54"
-          cy="54"
-          r={r}
-          fill="none"
-          stroke="#F0EBE5"
-          strokeWidth="10"
+          cx="54" cy="54" r={r}
+          fill="none" stroke="rgba(166,119,99,0.10)" strokeWidth="9"
         />
         {arcs.map((arc) => (
           <circle
             key={arc.health}
-            cx="54"
-            cy="54"
-            r={r}
+            cx="54" cy="54" r={r}
             fill="none"
             stroke={healthConfig[arc.health].fill}
-            strokeWidth="10"
+            strokeWidth="9"
             strokeDasharray={arc.dasharray}
             strokeDashoffset={-arc.offset}
             strokeLinecap="round"
@@ -186,10 +188,11 @@ function PortfolioDonut() {
         ))}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[22px] font-heading font-bold text-brown-950 leading-none">
+        <span className="font-heading text-[1.8rem] font-medium leading-none"
+              style={{ color: 'var(--ink)' }}>
           {total}
         </span>
-        <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">
+        <span className="label-caps" style={{ fontSize: '7.5px', marginTop: 2 }}>
           Projects
         </span>
       </div>
@@ -204,8 +207,8 @@ function PortfolioDonut() {
 function SpendSparkline() {
   const data = billingStats.monthlySpend;
   const max = Math.max(...data.map((d) => d.amount));
-  const h = 48;
-  const w = 180;
+  const h = 72;
+  const w = 420;
   const stepX = w / (data.length - 1);
 
   const points = data.map((d, i) => ({
@@ -213,147 +216,50 @@ function SpendSparkline() {
     y: h - (d.amount / max) * (h - 8) - 4,
   }));
 
+  /* Build smooth curve path */
   const d = points
-    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`)
+    .map((p, i) => {
+      if (i === 0) return `M${p.x},${p.y}`;
+      const prev = points[i - 1];
+      const cx = (prev.x + p.x) / 2;
+      return `C${cx},${prev.y} ${cx},${p.y} ${p.x},${p.y}`;
+    })
     .join(" ");
   const areaD = `${d} L${w},${h} L0,${h} Z`;
 
   return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      className="w-full h-12"
-      preserveAspectRatio="none"
-      aria-hidden
-    >
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 65, overflow: 'visible' }} aria-hidden>
       <defs>
-        <linearGradient id="spend-gradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#A67763" stopOpacity="0.2" />
+        <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#A67763" stopOpacity="0.15" />
           <stop offset="100%" stopColor="#A67763" stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={areaD} fill="url(#spend-gradient)" />
-      <path
-        d={d}
-        fill="none"
-        stroke="#A67763"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Current month dot */}
-      <circle
-        cx={points[points.length - 1].x}
-        cy={points[points.length - 1].y}
-        r="3.5"
-        fill="#A67763"
-        stroke="white"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
-
-/* ══════════════════════════════════════════
-   Budget Utilization Ring
-   ══════════════════════════════════════════ */
-
-function BudgetRing({
-  value,
-  size = 52,
-  strokeWidth = 5,
-}: {
-  value: number;
-  size?: number;
-  strokeWidth?: number;
-}) {
-  const r = (size - strokeWidth) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (value / 100) * circ;
-  const center = size / 2;
-  const color =
-    value <= 50 ? "#4D5741" : value <= 75 ? "#D0B060" : "#C4574A";
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
-      <circle
-        cx={center}
-        cy={center}
-        r={r}
-        fill="none"
-        stroke="#F0EBE5"
-        strokeWidth={strokeWidth}
-      />
-      <circle
-        cx={center}
-        cy={center}
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${center} ${center})`}
-        className="transition-all duration-700"
-      />
-      <text
-        x={center}
-        y={center + 1}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        className="text-[11px] font-bold"
-        fill="#6B5A4E"
-      >
-        {value}%
-      </text>
-    </svg>
-  );
-}
-
-/* ══════════════════════════════════════════
-   SLA Gauge
-   ══════════════════════════════════════════ */
-
-function SlaGauge({ value }: { value: number }) {
-  const r = 20;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (value / 100) * circ;
-  const color =
-    value >= 90 ? "#4D5741" : value >= 80 ? "#D0B060" : "#C4574A";
-
-  return (
-    <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden>
-      <circle
-        cx="26"
-        cy="26"
-        r={r}
-        fill="none"
-        stroke="#F0EBE5"
-        strokeWidth="4.5"
-      />
-      <circle
-        cx="26"
-        cy="26"
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth="4.5"
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform="rotate(-90 26 26)"
-        className="transition-all duration-700"
-      />
-      <text
-        x="26"
-        y="27"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        className="text-[11px] font-bold"
-        fill="#6B5A4E"
-      >
-        {value}%
-      </text>
+      <path d={areaD} fill="url(#sg)" />
+      <path d={d} fill="none" stroke="#C9ADA1" strokeWidth="1.5" strokeLinecap="round" />
+      {points.map((p, i) => (
+        <circle
+          key={i}
+          cx={p.x} cy={p.y}
+          r={i === points.length - 1 ? 3.5 : 2.5}
+          fill={i === points.length - 1 ? "#D0B060" : "#C9ADA1"}
+          stroke={i === points.length - 1 ? "var(--page-bg)" : undefined}
+          strokeWidth={i === points.length - 1 ? 1.5 : undefined}
+        />
+      ))}
+      {data.map((m, i) => (
+        <text
+          key={m.month}
+          x={i * stepX}
+          y={h}
+          fill={i === data.length - 1 ? "#A67763" : "#C9ADA1"}
+          fontSize="8"
+          fontFamily="var(--font-mono)"
+          fontWeight={i === data.length - 1 ? "500" : undefined}
+        >
+          {m.month}
+        </text>
+      ))}
     </svg>
   );
 }
@@ -408,7 +314,7 @@ const attentionItems: AttentionItem[] = [
           urgency: "high" as const,
           type: "rework" as const,
           href: "/enterprise/review",
-          time: "In progress",
+          time: "In Progress",
         },
       ]
     : []),
@@ -437,7 +343,7 @@ const attentionItems: AttentionItem[] = [
           urgency: "medium" as const,
           type: "sow" as const,
           href: `/enterprise/sow/${sowsInApproval[0].id}/approve`,
-          time: "In review",
+          time: "In Review",
         },
       ]
     : []),
@@ -456,36 +362,31 @@ const attentionItems: AttentionItem[] = [
     : []),
 ];
 
-const urgencyConfig = {
-  critical: {
-    bg: "bg-red-50/80",
-    border: "border-red-200/50",
-    dot: "bg-[var(--danger)]",
-    text: "text-[var(--danger)]",
-    label: "Critical",
-  },
-  high: {
-    bg: "bg-gold-50/50",
-    border: "border-gold-200/50",
-    dot: "bg-gold-500",
-    text: "text-gold-700",
-    label: "High",
-  },
-  medium: {
-    bg: "bg-white/50",
-    border: "border-beige-200/50",
-    dot: "bg-teal-500",
-    text: "text-teal-600",
-    label: "Medium",
-  },
-};
-
-const typeIcon = {
+/* Attention icon + color config per type */
+const typeIcon: Record<string, React.ElementType> = {
   approval: ClipboardCheck,
   escalation: AlertTriangle,
-  overdue: CircleDollarSign,
+  overdue: XCircle,
   rework: RotateCcw,
-  sow: FileText,
+  sow: Clock,
+};
+
+const typeIconStyle: Record<string, { bg: string; border: string; color: string }> = {
+  overdue:    { bg: "rgba(160,50,50,0.07)", border: "rgba(160,50,50,0.14)", color: "#8B2C2C" },
+  escalation: { bg: "rgba(208,176,96,0.09)", border: "rgba(208,176,96,0.20)", color: "#86713D" },
+  rework:     { bg: "rgba(91,155,162,0.08)", border: "rgba(91,155,162,0.18)", color: "#2A6068" },
+  approval:   { bg: "rgba(166,119,99,0.08)", border: "rgba(166,119,99,0.18)", color: "#6A4C3F" },
+  sow:        { bg: "rgba(77,87,65,0.08)", border: "rgba(77,87,65,0.18)", color: "#3F4735" },
+};
+
+/* Attention badge style per time label */
+const attentionBadgeStyle: Record<string, { bg: string; color: string; border: string }> = {
+  "Overdue":     { bg: "rgba(180,60,60,0.08)", color: "#8B2C2C", border: "rgba(180,60,60,0.18)" },
+  "Active":      { bg: "rgba(208,176,96,0.14)", color: "#7A6030", border: "rgba(208,176,96,0.28)" },
+  "In Progress": { bg: "rgba(91,155,162,0.10)", color: "#2A6068", border: "rgba(91,155,162,0.25)" },
+  "Awaiting":    { bg: "rgba(166,119,99,0.10)", color: "#6A4C3F", border: "rgba(166,119,99,0.22)" },
+  "In Review":   { bg: "rgba(166,119,99,0.10)", color: "#6A4C3F", border: "rgba(166,119,99,0.22)" },
+  "Draft":       { bg: "rgba(77,87,65,0.09)", color: "#3F4735", border: "rgba(77,87,65,0.20)" },
 };
 
 /* ══════════════════════════════════════════
@@ -496,54 +397,102 @@ const activityEvents = [
   {
     id: "ev-1",
     contributor: "Contributor D-2M",
-    initials: "D2",
     action: "submitted evidence for",
     target: mockDeliverables[0].title,
     time: "2h ago",
-    gradient: "from-teal-400 to-teal-600",
+    iconBg: "rgba(91,155,162,0.09)",
+    iconBorder: "rgba(91,155,162,0.18)",
+    iconColor: "#3A6368",
     icon: Upload,
   },
   {
     id: "ev-2",
     contributor: "Contributor A-7X",
-    initials: "A7",
     action: "submitted deliverable",
     target: mockDeliverables[1].title,
     time: "5h ago",
-    gradient: "from-forest-400 to-forest-600",
-    icon: CheckCircle2,
+    iconBg: "rgba(77,87,65,0.09)",
+    iconBorder: "rgba(77,87,65,0.18)",
+    iconColor: "#3F4735",
+    icon: FileText,
   },
   {
     id: "ev-3",
     contributor: "Contributor B-3K",
-    initials: "B3",
     action: "submitted for review",
     target: mockDeliverables[5].title,
     time: "1d ago",
-    gradient: "from-brown-400 to-brown-600",
+    iconBg: "rgba(166,119,99,0.08)",
+    iconBorder: "rgba(166,119,99,0.18)",
+    iconColor: "#6A4C3F",
     icon: FileSearch,
   },
   {
     id: "ev-4",
     contributor: "APG System",
-    initials: "AG",
     action: "flagged escalation on",
     target: "Mobile Banking App",
     time: "1d ago",
-    gradient: "from-gold-400 to-gold-600",
-    icon: Zap,
+    iconBg: "rgba(208,176,96,0.09)",
+    iconBorder: "rgba(208,176,96,0.20)",
+    iconColor: "#86713D",
+    icon: AlertTriangle,
   },
   {
     id: "ev-5",
     contributor: "Contributor C-9R",
-    initials: "C9",
     action: "completed milestone",
     target: "Infrastructure & Auth",
     time: "2d ago",
-    gradient: "from-teal-500 to-forest-500",
+    iconBg: "rgba(91,155,162,0.08)",
+    iconBorder: "rgba(91,155,162,0.18)",
+    iconColor: "#2A6068",
     icon: CheckCircle2,
   },
 ];
+
+/* ══════════════════════════════════════════
+   KPI card icon/accent config
+   ══════════════════════════════════════════ */
+
+const kpiConfig = {
+  active: {
+    label: "Active",
+    iconBg: "rgba(208,176,96,0.12)",
+    iconBorder: "rgba(208,176,96,0.22)",
+    iconColor: "#86713D",
+    cornerColor: "rgba(208,176,96,0.15)",
+    accentGradient: "linear-gradient(90deg, transparent, #D0B060, transparent)",
+    icon: FolderKanban,
+  },
+  exceptions: {
+    label: "Exceptions",
+    iconBg: "rgba(190,120,50,0.1)",
+    iconBorder: "rgba(190,120,50,0.2)",
+    iconColor: "#7A5020",
+    cornerColor: "rgba(190,120,50,0.12)",
+    accentGradient: "linear-gradient(90deg, transparent, #BE7832, transparent)",
+    icon: AlertTriangle,
+  },
+  approvals: {
+    label: "Approvals",
+    iconBg: "rgba(91,155,162,0.10)",
+    iconBorder: "rgba(91,155,162,0.22)",
+    iconColor: "#2A6068",
+    cornerColor: "rgba(91,155,162,0.10)",
+    accentGradient: "linear-gradient(90deg, transparent, #5B9BA2, transparent)",
+    icon: ClipboardCheck,
+  },
+  budget: {
+    label: "Budget Used",
+    iconBg: "rgba(77,87,65,0.10)",
+    iconBorder: "rgba(77,87,65,0.20)",
+    iconColor: "#3F4735",
+    cornerColor: "rgba(77,87,65,0.10)",
+    accentGradient: "linear-gradient(90deg, transparent, #4D5741, transparent)",
+    icon: Wallet,
+  },
+};
 
 /* ══════════════════════════════════════════
    Greeting
@@ -557,6 +506,19 @@ function getGreeting(): string {
 }
 
 /* ══════════════════════════════════════════
+   SOW status config
+   ══════════════════════════════════════════ */
+
+const sowStatusConfig: Record<string, { iconBg: string; iconBorder: string; iconColor: string; badgeBg: string; badgeColor: string; badgeBorder: string; badgeLabel: string; icon: React.ElementType }> = {
+  draft:    { iconBg: "rgba(166,119,99,0.08)", iconBorder: "rgba(166,119,99,0.18)", iconColor: "#6A4C3F", badgeBg: "rgba(77,87,65,0.09)", badgeColor: "#3F4735", badgeBorder: "rgba(77,87,65,0.20)", badgeLabel: "Draft", icon: FileText },
+  parsing:  { iconBg: "rgba(91,155,162,0.10)", iconBorder: "rgba(91,155,162,0.22)", iconColor: "#3A6368", badgeBg: "rgba(91,155,162,0.10)", badgeColor: "#2A6068", badgeBorder: "rgba(91,155,162,0.25)", badgeLabel: "Parsing", icon: Bot },
+  review:   { iconBg: "rgba(208,176,96,0.10)", iconBorder: "rgba(208,176,96,0.22)", iconColor: "#86713D", badgeBg: "rgba(208,176,96,0.14)", badgeColor: "#7A6030", badgeBorder: "rgba(208,176,96,0.28)", badgeLabel: "Review", icon: Eye },
+  approval: { iconBg: "rgba(208,176,96,0.10)", iconBorder: "rgba(208,176,96,0.22)", iconColor: "#86713D", badgeBg: "rgba(166,119,99,0.10)", badgeColor: "#6A4C3F", badgeBorder: "rgba(166,119,99,0.22)", badgeLabel: "Approval", icon: ClipboardCheck },
+  approved: { iconBg: "rgba(91,155,162,0.10)", iconBorder: "rgba(91,155,162,0.22)", iconColor: "#3A6368", badgeBg: "rgba(77,87,65,0.10)", badgeColor: "#344028", badgeBorder: "rgba(77,87,65,0.22)", badgeLabel: "Approved", icon: CheckCircle2 },
+  archived: { iconBg: "rgba(166,119,99,0.06)", iconBorder: "rgba(166,119,99,0.14)", iconColor: "#817165", badgeBg: "rgba(166,119,99,0.08)", badgeColor: "#817165", badgeBorder: "rgba(166,119,99,0.18)", badgeLabel: "Archived", icon: FileText },
+};
+
+/* ══════════════════════════════════════════
    DASHBOARD PAGE
    ══════════════════════════════════════════ */
 
@@ -568,118 +530,127 @@ export default function EnterpriseDashboardPage() {
       variants={stagger}
       initial="hidden"
       animate="show"
-      className="max-w-[1360px] mx-auto space-y-6"
     >
       {/* ═══════════════════════════════════
-          HERO: Greeting + Portfolio Health
+          HERO HEADER
           ═══════════════════════════════════ */}
-      <motion.div
-        variants={fadeUp}
-        className="relative rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden"
-      >
-        {/* Ambient decoration */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute w-[300px] h-[300px] rounded-full bg-brown-100/20 blur-[80px] -top-[80px] right-[10%]" />
-          <div className="absolute w-[200px] h-[200px] rounded-full bg-teal-100/15 blur-[60px] bottom-[-40px] left-[5%]" />
+      <motion.div variants={fadeUp} className="relative flex flex-col lg:flex-row lg:items-start lg:justify-between mb-10">
+        {/* Decorative gradient mesh aurora behind hero */}
+        <div className="absolute pointer-events-none" style={{
+          top: -60, left: -80, width: 500, height: 300,
+          background: 'radial-gradient(ellipse at 20% 40%, rgba(208,176,96,0.08) 0%, transparent 50%), radial-gradient(ellipse at 70% 20%, rgba(91,155,162,0.06) 0%, transparent 45%), radial-gradient(ellipse at 50% 80%, rgba(166,119,99,0.05) 0%, transparent 50%)',
+          filter: 'blur(40px)',
+        }} />
+
+        <div className="relative">
+          <div className="mono-label mb-3" style={{ color: 'var(--ink-faint)' }}>
+            Enterprise Console
+          </div>
+
+          <h1
+            className="font-heading leading-[1.1]"
+            style={{ fontSize: '2.75rem', fontWeight: 400, color: 'var(--ink)', letterSpacing: '-0.025em' }}
+          >
+            {greeting}, <em className="italic" style={{
+              background: 'linear-gradient(135deg, #A67763, #886151)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>Priya.</em>
+          </h1>
+
+          <p style={{ marginTop: 11, fontSize: 14, color: 'var(--ink-muted)', fontWeight: 300, lineHeight: 1.65, maxWidth: 460 }}>
+            {attentionItems.length > 0 ? (
+              <>
+                You have{" "}
+                <span style={{ color: 'var(--ink-mid)', fontWeight: 500 }}>
+                  {attentionItems.length} item{attentionItems.length > 1 ? "s" : ""}
+                </span>{" "}
+                requiring attention across your portfolio today.
+              </>
+            ) : (
+              "All systems operational. Your portfolio is in good shape."
+            )}
+          </p>
+
+          {/* Status markers */}
+          <div className="flex items-center gap-5 mt-5">
+            {(["on_track", "at_risk", "behind", "completed"] as ProjectHealth[]).map((health) => {
+              const count = mockProjects.filter((p) => p.health === health).length;
+              if (count === 0) return null;
+              const cfg = healthConfig[health];
+              return (
+                <div key={health} className="flex items-center gap-2">
+                  <div className="rounded-full" style={{ width: 8, height: 8, background: cfg.dot, boxShadow: `0 0 6px ${cfg.dot}40` }} />
+                  <span style={{ fontSize: '11.5px', color: 'var(--ink-muted)' }}>
+                    {count} {cfg.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="relative z-10 px-7 py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            {/* Left: Greeting + summary */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">
-                  Enterprise Console
-                </span>
-                <span className="text-gray-300">·</span>
-                <span className="text-[11px] text-gray-400">
-                  {new Date().toLocaleDateString("en-US", {
-                    weekday: "long",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </span>
-              </div>
-              <h1 className="text-[28px] font-heading font-bold text-brown-950 tracking-[-0.02em] leading-tight">
-                {greeting}, Priya
-              </h1>
-              <p className="text-[14px] text-gray-500 mt-1.5 leading-relaxed max-w-lg">
-                {attentionItems.length > 0 ? (
-                  <>
-                    You have{" "}
-                    <span className="font-semibold text-brown-700">
-                      {attentionItems.length} item
-                      {attentionItems.length > 1 ? "s" : ""}
-                    </span>{" "}
-                    requiring attention across your portfolio.
-                  </>
-                ) : (
-                  "All systems operational. Your portfolio is in good shape."
-                )}
-              </p>
+        {/* Portfolio ring + KPI pair */}
+        <div className="flex items-center gap-5 mt-6 lg:mt-0">
+          <PortfolioDonut />
 
-              {/* Quick health legend */}
-              <div className="flex flex-wrap items-center gap-4 mt-4">
-                {(
-                  [
-                    "on_track",
-                    "at_risk",
-                    "behind",
-                    "completed",
-                  ] as ProjectHealth[]
-                ).map((health) => {
-                  const count = mockProjects.filter(
-                    (p) => p.health === health
-                  ).length;
-                  if (count === 0) return null;
-                  const cfg = healthConfig[health];
-                  return (
-                    <div key={health} className="flex items-center gap-1.5">
-                      <div
-                        className={cn("w-2 h-2 rounded-full", cfg.dot)}
-                      />
-                      <span className="text-[12px] text-gray-500">
-                        <span className={cn("font-semibold", cfg.text)}>
-                          {count}
-                        </span>{" "}
-                        {cfg.label}
-                      </span>
-                    </div>
-                  );
-                })}
+          <div className="flex flex-col gap-3">
+            {/* Avg SLA mini card */}
+            <div
+              className="relative overflow-hidden transition-all duration-300"
+              style={{
+                padding: '16px 22px',
+                background: 'linear-gradient(145deg, rgba(255,255,255,0.7), rgba(253,250,247,0.5))',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid rgba(208,176,96,0.16)',
+                borderRadius: 16,
+                boxShadow: '0 2px 8px rgba(77,55,46,0.04), 0 4px 20px rgba(208,176,96,0.04), inset 0 1px 0 rgba(255,255,255,0.6)',
+                minWidth: 140,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(208,176,96,0.30)';
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(208,176,96,0.10), 0 8px 32px rgba(77,55,46,0.06), inset 0 1px 0 rgba(255,255,255,0.7)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(208,176,96,0.16)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(77,55,46,0.04), 0 4px 20px rgba(208,176,96,0.04), inset 0 1px 0 rgba(255,255,255,0.6)';
+              }}
+            >
+              <div className="absolute top-0 left-0 right-0" style={{ height: 2, background: 'linear-gradient(90deg, transparent 10%, #D0B060 50%, transparent 90%)', opacity: 0.6 }} />
+              <div className="label-caps mb-2">Avg SLA</div>
+              <div className="num-display" style={{ fontSize: '2rem', color: 'var(--ink)' }}>
+                {avgSla}<span style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--ink-muted)' }}>%</span>
               </div>
             </div>
 
-            {/* Right: Donut + key metrics */}
-            <div className="flex items-center gap-6 lg:gap-8">
-              <PortfolioDonut />
-              <div className="hidden sm:grid grid-cols-1 gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-brown-50 flex items-center justify-center">
-                    <ShieldCheck className="w-4 h-4 text-brown-500" />
-                  </div>
-                  <div>
-                    <p className="text-[18px] font-heading font-bold text-brown-950 leading-none">
-                      {avgSla}%
-                    </p>
-                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-                      Avg SLA
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-forest-50 flex items-center justify-center">
-                    <Bot className="w-4 h-4 text-forest-600" />
-                  </div>
-                  <div>
-                    <p className="text-[18px] font-heading font-bold text-brown-950 leading-none">
-                      {avgApgScore}
-                    </p>
-                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-                      APG Score
-                    </p>
-                  </div>
-                </div>
+            {/* APG Score mini card */}
+            <div
+              className="relative overflow-hidden transition-all duration-300"
+              style={{
+                padding: '16px 22px',
+                background: 'linear-gradient(145deg, rgba(255,255,255,0.7), rgba(238,245,245,0.4))',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid rgba(91,155,162,0.16)',
+                borderRadius: 16,
+                boxShadow: '0 2px 8px rgba(77,55,46,0.04), 0 4px 20px rgba(91,155,162,0.04), inset 0 1px 0 rgba(255,255,255,0.6)',
+                minWidth: 140,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(91,155,162,0.30)';
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(91,155,162,0.10), 0 8px 32px rgba(77,55,46,0.06), inset 0 1px 0 rgba(255,255,255,0.7)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(91,155,162,0.16)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(77,55,46,0.04), 0 4px 20px rgba(91,155,162,0.04), inset 0 1px 0 rgba(255,255,255,0.6)';
+              }}
+            >
+              <div className="absolute top-0 left-0 right-0" style={{ height: 2, background: 'linear-gradient(90deg, transparent 10%, #5B9BA2 50%, transparent 90%)', opacity: 0.5 }} />
+              <div className="label-caps mb-2" style={{ color: '#5B9BA2' }}>APG Score</div>
+              <div className="num-display" style={{ fontSize: '2rem', color: '#3A6368' }}>
+                {avgApgScore}
               </div>
             </div>
           </div>
@@ -687,642 +658,570 @@ export default function EnterpriseDashboardPage() {
       </motion.div>
 
       {/* ═══════════════════════════════════
-          KPI BENTO: 4 metric cards
+          KPI ROW — 4 stat cards
           ═══════════════════════════════════ */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Active Projects */}
-        <motion.div
-          variants={scaleIn}
-          className="group rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 hover:shadow-lg hover:shadow-forest-100/20 transition-all"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-forest-50 flex items-center justify-center">
-              <FolderKanban className="w-3.5 h-3.5 text-forest-600" />
-            </div>
-            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-              Active
-            </span>
-          </div>
-          <p className="text-[28px] font-heading font-bold text-brown-950 tracking-tight leading-none">
+      <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
+        {/* Active */}
+        <KpiCard config={kpiConfig.active}>
+          <div className="num-display" style={{ fontSize: '3rem', color: 'var(--ink)' }}>
             {activeProjects.length}
-          </p>
-          <div className="flex items-center gap-1.5 mt-2">
-            <TrendingUp className="w-3 h-3 text-forest-500" />
-            <span className="text-[11px] text-forest-600 font-medium">
-              +1 this month
-            </span>
           </div>
-        </motion.div>
+          <div className="flex items-center gap-1 mt-2.5" style={{ fontSize: '11.5px', color: '#5B9BA2' }}>
+            <TrendingUp className="w-2.5 h-2.5" />
+            +1 this month
+          </div>
+        </KpiCard>
 
-        {/* Escalations */}
-        <motion.div
-          variants={scaleIn}
-          className="group rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 hover:shadow-lg hover:shadow-gold-100/20 transition-all"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-gold-50 flex items-center justify-center">
-              <AlertTriangle className="w-3.5 h-3.5 text-gold-600" />
-            </div>
-            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-              Exceptions
-            </span>
-          </div>
-          <p className="text-[28px] font-heading font-bold text-brown-950 tracking-tight leading-none">
+        {/* Exceptions */}
+        <KpiCard config={kpiConfig.exceptions}>
+          <div className="num-display" style={{ fontSize: '3rem', color: '#86713D' }}>
             {totalEscalations}
-          </p>
-          <div className="flex items-center gap-1.5 mt-2">
-            <span className="text-[11px] text-gold-600 font-medium">
-              Across{" "}
-              {activeProjects.filter((p) => p.escalations > 0).length} projects
-            </span>
           </div>
-        </motion.div>
+          <div className="mt-2.5" style={{ fontSize: '11.5px', color: 'var(--ink-muted)' }}>
+            Across {activeProjects.filter((p) => p.escalations > 0).length} projects
+          </div>
+        </KpiCard>
 
-        {/* Pending Approvals */}
-        <motion.div
-          variants={scaleIn}
-          className="group rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 hover:shadow-lg hover:shadow-teal-100/20 transition-all"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center">
-              <ClipboardCheck className="w-3.5 h-3.5 text-teal-600" />
-            </div>
-            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-              Approvals
-            </span>
-          </div>
-          <p className="text-[28px] font-heading font-bold text-brown-950 tracking-tight leading-none">
+        {/* Approvals */}
+        <KpiCard config={kpiConfig.approvals}>
+          <div className="num-display" style={{ fontSize: '3rem', color: '#3A6368' }}>
             {pendingApprovals}
-          </p>
+          </div>
           <Link
             href="/enterprise/review"
-            className="flex items-center gap-1 mt-2 text-[11px] font-semibold text-teal-600 hover:text-teal-700 transition-colors"
+            className="flex items-center gap-1 mt-2.5"
+            style={{ fontSize: '11.5px', color: '#4A7F85', fontWeight: 500, textDecoration: 'none' }}
           >
             Review now
-            <ArrowRight className="w-3 h-3" />
+            <ArrowRight className="w-2.5 h-2.5" />
           </Link>
-        </motion.div>
+        </KpiCard>
 
         {/* Budget */}
-        <motion.div
-          variants={scaleIn}
-          className="group rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 hover:shadow-lg hover:shadow-brown-100/20 transition-all"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-brown-50 flex items-center justify-center">
-              <Wallet className="w-3.5 h-3.5 text-brown-500" />
+        <KpiCard config={kpiConfig.budget}>
+          <div className="num-display" style={{ fontSize: '2.2rem', color: 'var(--ink)' }}>
+            ${Math.round(totalSpent / 1000)}k
+          </div>
+          <div className="mt-2.5">
+            <div className="flex items-center justify-between mb-2">
+              <span style={{ fontSize: '10.5px', color: 'var(--ink-faint)' }}>
+                of ${Math.round(totalBudget / 1000)}k total
+              </span>
+              <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#4D5741' }}>
+                {budgetUtilization}%
+              </span>
             </div>
-            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-              Budget Used
-            </span>
+            <div className="prog-track">
+              <div
+                className="prog-fill"
+                style={{ width: `${budgetUtilization}%`, background: 'linear-gradient(90deg, #4D5741, #949A8D)' }}
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <p className="text-[28px] font-heading font-bold text-brown-950 tracking-tight leading-none">
-              ${Math.round(totalSpent / 1000)}k
-            </p>
-            <BudgetRing value={budgetUtilization} size={44} strokeWidth={4} />
-          </div>
-          <p className="text-[11px] text-gray-400 mt-1.5">
-            of ${Math.round(totalBudget / 1000)}k total
-          </p>
-        </motion.div>
-      </div>
+        </KpiCard>
+      </motion.div>
 
       {/* ═══════════════════════════════════
-          MAIN GRID: Attention + Projects
+          MID ROW: Attention + Project Pipeline
           ═══════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* ── Needs Your Attention ── */}
-        <motion.div variants={fadeUp} className="lg:col-span-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-brown-400" />
-              <h2 className="text-[15px] font-heading font-semibold text-brown-900">
-                Needs Your Attention
-              </h2>
+      <motion.div variants={fadeUp} className="grid gap-5 mb-7" style={{ gridTemplateColumns: '1fr 1.15fr' }}>
+        {/* Needs Attention */}
+        <div className="card-parchment">
+          <div className="section-header-parchment">
+            <div className="flex items-center gap-[9px]" style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
+              <Zap className="w-3.5 h-3.5" style={{ color: '#D0B060' }} />
+              Needs Your Attention
             </div>
-            <Badge variant="beige" size="sm">
-              {attentionItems.length}
-            </Badge>
-          </div>
-
-          <div className="space-y-2.5">
-            {attentionItems.map((item, i) => {
-              const urg = urgencyConfig[item.urgency];
-              const TypeIcon = typeIcon[item.type];
-              return (
-                <motion.div key={item.id} variants={fadeUp}>
-                  <Link href={item.href}>
-                    <div
-                      className={cn(
-                        "group relative rounded-xl border p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer",
-                        urg.bg,
-                        urg.border
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
-                            item.urgency === "critical"
-                              ? "bg-red-100"
-                              : item.urgency === "high"
-                                ? "bg-gold-100"
-                                : "bg-gray-100"
-                          )}
-                        >
-                          <TypeIcon
-                            className={cn(
-                              "w-4 h-4",
-                              item.urgency === "critical"
-                                ? "text-[var(--danger)]"
-                                : item.urgency === "high"
-                                  ? "text-gold-600"
-                                  : "text-gray-500"
-                            )}
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-[13px] font-semibold text-brown-900 truncate">
-                              {item.title}
-                            </h3>
-                          </div>
-                          <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">
-                            {item.description}
-                          </p>
-                        </div>
-                        <div className="flex flex-col items-end gap-1.5 shrink-0">
-                          <span
-                            className={cn(
-                              "text-[9px] font-bold uppercase tracking-wider",
-                              urg.text
-                            )}
-                          >
-                            {item.time}
-                          </span>
-                          <ArrowUpRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-brown-500 transition-colors" />
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              );
-            })}
-
-            {attentionItems.length === 0 && (
-              <div className="rounded-xl border border-forest-200/50 bg-forest-50/30 p-6 text-center">
-                <CheckCircle2 className="w-8 h-8 text-forest-400 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-forest-700">
-                  All clear
-                </p>
-                <p className="text-[11px] text-forest-500 mt-0.5">
-                  No items require your immediate attention
-                </p>
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* ── Active Projects ── */}
-        <motion.div variants={fadeUp} className="lg:col-span-7">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <FolderKanban className="w-4 h-4 text-brown-400" />
-              <h2 className="text-[15px] font-heading font-semibold text-brown-900">
-                Project Pipeline
-              </h2>
-            </div>
-            <Link
-              href="/enterprise/projects"
-              className="text-[12px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors"
+            <div
+              className="flex items-center justify-center rounded-full"
+              style={{
+                width: 24, height: 24,
+                background: 'linear-gradient(135deg, rgba(208,176,96,0.18), rgba(208,176,96,0.10))',
+                border: '1px solid rgba(208,176,96,0.30)',
+                fontSize: 10, fontWeight: 600, color: '#7A6030',
+                boxShadow: '0 1px 4px rgba(208,176,96,0.10)',
+              }}
             >
-              View all
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+              {attentionItems.length}
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden">
-            {mockProjects.map((project, i) => {
-              const h = healthConfig[project.health];
-              const budgetPct = Math.round(
-                (project.spent / project.budget) * 100
-              );
+          <div style={{ padding: '8px 10px 10px' }}>
+            {attentionItems.map((item) => {
+              const TypeIcon = typeIcon[item.type] || ClipboardCheck;
+              const iconStyle = typeIconStyle[item.type] || typeIconStyle.approval;
+              const badgeStyle = attentionBadgeStyle[item.time] || attentionBadgeStyle["Draft"];
+
               return (
-                <Link
-                  key={project.id}
-                  href={`/enterprise/projects/${project.id}`}
-                >
+                <Link key={item.id} href={item.href}>
                   <div
-                    className={cn(
-                      "group flex items-center gap-4 px-5 py-4 hover:bg-beige-50/40 transition-colors cursor-pointer",
-                      i < mockProjects.length - 1 &&
-                        "border-b border-beige-100/60"
-                    )}
+                    className="flex items-center gap-[14px] rounded-xl cursor-pointer transition-all"
+                    style={{ padding: '13px 18px', border: '1px solid transparent' }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(166,119,99,0.04)';
+                      e.currentTarget.style.borderColor = 'var(--border-hair)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '';
+                      e.currentTarget.style.borderColor = 'transparent';
+                    }}
                   >
-                    {/* Health indicator bar */}
                     <div
-                      className={cn(
-                        "w-1 h-10 rounded-full shrink-0",
-                        h.dot
-                      )}
-                    />
-
-                    {/* Project info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-[13px] font-semibold text-brown-900 truncate group-hover:text-brown-950 transition-colors">
-                          {project.title}
-                        </h3>
-                        <Badge variant={h.badge} size="sm">
-                          {h.label}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1.5">
-                        <span className="text-[11px] text-gray-400">
-                          {project.client}
-                        </span>
-                        <span className="text-gray-200">·</span>
-                        <div className="flex items-center gap-1">
-                          <Users className="w-3 h-3 text-gray-300" />
-                          <span className="text-[11px] text-gray-400">
-                            {project.teamSize}
-                          </span>
-                        </div>
-                        {project.escalations > 0 && (
-                          <>
-                            <span className="text-gray-200">·</span>
-                            <div className="flex items-center gap-1">
-                              <AlertTriangle className="w-3 h-3 text-gold-500" />
-                              <span className="text-[11px] text-gold-600 font-medium">
-                                {project.escalations}
-                              </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      className="flex items-center justify-center shrink-0"
+                      style={{
+                        width: 38, height: 38, borderRadius: 11,
+                        background: iconStyle.bg,
+                        border: `1px solid ${iconStyle.border}`,
+                      }}
+                    >
+                      <TypeIcon className="w-3.5 h-3.5" style={{ color: iconStyle.color }} />
                     </div>
-
-                    {/* Progress section */}
-                    <div className="hidden sm:flex items-center gap-4 shrink-0">
-                      <div className="w-28">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] text-gray-400">
-                            Progress
-                          </span>
-                          <span className="text-[11px] font-bold text-brown-800 font-mono">
-                            {project.progress}%
-                          </span>
-                        </div>
-                        <Progress
-                          value={project.progress}
-                          size="sm"
-                          variant={h.bar}
-                        />
-                      </div>
-
-                      <div className="text-right">
-                        <p className="text-[11px] font-semibold text-brown-800">
-                          ${Math.round(project.spent / 1000)}k
-                        </p>
-                        <p className="text-[10px] text-gray-400">
-                          of ${Math.round(project.budget / 1000)}k
-                        </p>
-                      </div>
-
-                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-brown-400 transition-colors" />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-mid)' }}>{item.title}</div>
+                      <div style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 2 }}>{item.description}</div>
                     </div>
+                    <span
+                      className="badge-parchment"
+                      style={{
+                        background: badgeStyle.bg,
+                        color: badgeStyle.color,
+                        border: `1px solid ${badgeStyle.border}`,
+                      }}
+                    >
+                      {item.time}
+                    </span>
                   </div>
                 </Link>
               );
             })}
+
+            {attentionItems.length === 0 && (
+              <div className="text-center" style={{ padding: '40px 20px' }}>
+                <CheckCircle2 className="w-8 h-8 mx-auto mb-2" style={{ color: '#4D5741' }} />
+                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-mid)' }}>All clear</p>
+                <p style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 4 }}>No items require your immediate attention</p>
+              </div>
+            )}
           </div>
-        </motion.div>
-      </div>
+        </div>
+
+        {/* Project Pipeline */}
+        <div className="card-parchment">
+          <div className="section-header-parchment">
+            <div className="flex items-center gap-[9px]" style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
+              <Activity className="w-3.5 h-3.5" style={{ color: '#5B9BA2' }} />
+              Project Pipeline
+            </div>
+            <Link href="/enterprise/projects" className="link-gold">
+              View all <ArrowRight className="w-2.5 h-2.5" />
+            </Link>
+          </div>
+
+          <div style={{ padding: '10px 14px 12px' }}>
+            {mockProjects.map((project, i) => {
+              const h = healthConfig[project.health];
+              return (
+                <React.Fragment key={project.id}>
+                  <Link href={`/enterprise/projects/${project.id}`}>
+                    <div
+                      className="rounded-xl cursor-pointer transition-all"
+                      style={{ padding: '16px 18px', border: '1px solid transparent' }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(166,119,99,0.04)';
+                        e.currentTarget.style.borderColor = 'var(--border-hair)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '';
+                        e.currentTarget.style.borderColor = 'transparent';
+                      }}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-mid)', lineHeight: 1.3 }}>
+                            {project.title}
+                          </div>
+                          <div style={{ fontSize: '10.5px', color: 'var(--ink-faint)', marginTop: 2 }}>
+                            {project.client}
+                          </div>
+                        </div>
+                        <span
+                          className="badge-parchment ml-3"
+                          style={{
+                            background: h.badgeBg,
+                            color: h.badgeColor,
+                            border: `1px solid ${h.badgeBorder}`,
+                          }}
+                        >
+                          {h.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-5">
+                        <div style={{ flex: 1 }}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}>Progress</span>
+                            <span style={{ fontSize: '10.5px', fontWeight: 600, color: h.progressColor }}>
+                              {project.progress}%
+                            </span>
+                          </div>
+                          <div className="prog-track">
+                            <div
+                              className="prog-fill"
+                              style={{ width: `${project.progress}%`, background: h.progressGradient }}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', minWidth: 72 }}>
+                          <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--ink-mid)' }}>
+                            ${Math.round(project.spent / 1000)}k
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--ink-faint)' }}>
+                            of ${Math.round(project.budget / 1000)}k
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 mt-2">
+                        <span className="flex items-center gap-1" style={{ fontSize: 10, color: 'var(--ink-faint)' }}>
+                          <Users className="w-[9px] h-[9px]" />{project.teamSize}
+                        </span>
+                        {project.escalations > 0 && (
+                          <span className="flex items-center gap-1" style={{ fontSize: 10, color: '#86713D' }}>
+                            <AlertTriangle className="w-[9px] h-[9px]" />{project.escalations}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                  {i < mockProjects.length - 1 && (
+                    <div style={{ height: 1, background: 'var(--border-hair)', margin: '2px 8px' }} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      </motion.div>
 
       {/* ═══════════════════════════════════
           BOTTOM ROW: Financial + Activity
           ═══════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* ── Financial Snapshot ── */}
-        <motion.div
-          variants={fadeUp}
-          className="lg:col-span-5 rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6"
-        >
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-brown-400" />
-              <h2 className="text-[15px] font-heading font-semibold text-brown-900">
-                Financial Snapshot
-              </h2>
+      <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7">
+        {/* Financial Snapshot */}
+        <div className="card-parchment">
+          <div className="section-header-parchment">
+            <div className="flex items-center gap-[9px]" style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
+              <BarChart3 className="w-3.5 h-3.5" style={{ color: '#D0B060' }} />
+              Financial Snapshot
             </div>
-            <Link
-              href="/enterprise/billing"
-              className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors"
-            >
-              Details
-              <ArrowRight className="w-3 h-3" />
+            <Link href="/enterprise/billing" className="link-gold">
+              Details <ArrowRight className="w-2.5 h-2.5" />
             </Link>
           </div>
 
-          {/* Spend trend */}
-          <div className="mb-5">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] text-gray-400 font-medium">
-                Monthly Spend Trend
-              </span>
-              <div className="flex items-center gap-1">
-                <TrendingDown className="w-3 h-3 text-forest-500" />
-                <span className="text-[11px] text-forest-600 font-semibold">
-                  -48% this month
-                </span>
+          <div style={{ padding: '24px 26px' }}>
+            <div className="flex items-center justify-between mb-5">
+              <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Monthly Spend Trend</span>
+              <div className="flex items-center gap-1" style={{ fontSize: 11, color: '#A67763', fontWeight: 500 }}>
+                <TrendingDown className="w-2.5 h-2.5" />
+                −48% this month
               </div>
             </div>
+
             <SpendSparkline />
-            <div className="flex justify-between mt-1">
-              {billingStats.monthlySpend.map((m) => (
-                <span
-                  key={m.month}
-                  className="text-[9px] text-gray-300 font-medium"
-                >
-                  {m.month}
-                </span>
-              ))}
+
+            {/* Financial metrics 2×2 */}
+            <div className="grid grid-cols-2 gap-3 mt-5">
+              <div style={{ padding: 16, background: 'linear-gradient(135deg, rgba(166,119,99,0.05), rgba(208,176,96,0.03))', border: '1px solid var(--border-hair)', borderRadius: 14 }}>
+                <div className="label-caps mb-2">Escrow Held</div>
+                <div className="num-display" style={{ fontSize: '1.5rem', color: 'var(--ink)' }}>
+                  ${Math.round(mockEscrowAccounts.reduce((s, e) => s + e.totalHeld, 0) / 1000)}k
+                </div>
+              </div>
+              <div style={{ padding: 16, background: 'linear-gradient(135deg, rgba(91,155,162,0.04), rgba(91,155,162,0.02))', border: '1px solid var(--border-hair)', borderRadius: 14 }}>
+                <div className="label-caps mb-2">Pending Pay</div>
+                <div className="num-display" style={{ fontSize: '1.5rem', color: 'var(--ink)' }}>
+                  ${Math.round(pendingInvoicesList.reduce((s, i) => s + i.amount, 0) / 1000)}k
+                </div>
+              </div>
+              <div style={{ padding: 16, background: 'linear-gradient(135deg, rgba(77,87,65,0.05), rgba(77,87,65,0.02))', border: '1px solid var(--border-hair)', borderRadius: 14 }}>
+                <div className="label-caps mb-2">Total Paid</div>
+                <div className="num-display" style={{ fontSize: '1.5rem', color: 'var(--ink)' }}>
+                  ${Math.round(billingStats.totalSpent / 1000)}k
+                </div>
+              </div>
+              <div style={{
+                padding: 16,
+                background: overdueInvoices.length > 0 ? 'linear-gradient(135deg, rgba(160,50,50,0.05), rgba(160,50,50,0.02))' : 'rgba(77,87,65,0.04)',
+                border: overdueInvoices.length > 0 ? '1px solid rgba(160,50,50,0.14)' : '1px solid var(--border-hair)',
+                borderRadius: 14,
+              }}>
+                <div className="label-caps mb-2" style={{ color: overdueInvoices.length > 0 ? '#8B2C2C' : '#3F4735' }}>Overdue</div>
+                <div className="num-display" style={{ fontSize: '1.5rem', color: overdueInvoices.length > 0 ? '#8B2C2C' : '#3F4735' }}>
+                  {overdueInvoices.length > 0
+                    ? `$${Math.round(overdueInvoices.reduce((s, i) => s + i.amount, 0) / 1000)}k`
+                    : "$0"
+                  }
+                </div>
+              </div>
             </div>
           </div>
+        </div>
 
-          {/* Key financial metrics */}
-          <div className="grid grid-cols-2 gap-3 pt-4 border-t border-beige-100/60">
-            <div className="rounded-xl bg-beige-50/60 p-3">
-              <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">
-                Escrow Held
-              </p>
-              <p className="text-[16px] font-heading font-bold text-brown-950">
-                $
-                {Math.round(
-                  mockEscrowAccounts.reduce((s, e) => s + e.totalHeld, 0) /
-                    1000
-                )}
-                k
-              </p>
+        {/* Recent Activity */}
+        <div className="card-parchment">
+          <div className="section-header-parchment">
+            <div className="flex items-center gap-[9px]" style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
+              <TrendingUp className="w-3.5 h-3.5" style={{ color: '#5B9BA2' }} />
+              Recent Activity
             </div>
-            <div className="rounded-xl bg-beige-50/60 p-3">
-              <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">
-                Pending Pay
-              </p>
-              <p className="text-[16px] font-heading font-bold text-brown-950">
-                $
-                {Math.round(
-                  pendingInvoices.reduce((s, i) => s + i.amount, 0) / 1000
-                )}
-                k
-              </p>
-            </div>
-            <div className="rounded-xl bg-beige-50/60 p-3">
-              <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">
-                Total Paid
-              </p>
-              <p className="text-[16px] font-heading font-bold text-brown-950">
-                ${Math.round(billingStats.totalSpent / 1000)}k
-              </p>
-            </div>
-            {overdueInvoices.length > 0 ? (
-              <div className="rounded-xl bg-red-50/40 border border-red-200/30 p-3">
-                <p className="text-[10px] text-[var(--danger)] font-medium uppercase tracking-wider mb-1">
-                  Overdue
-                </p>
-                <p className="text-[16px] font-heading font-bold text-[var(--danger)]">
-                  $
-                  {Math.round(
-                    overdueInvoices.reduce((s, i) => s + i.amount, 0) / 1000
-                  )}
-                  k
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-xl bg-forest-50/40 p-3">
-                <p className="text-[10px] text-forest-600 font-medium uppercase tracking-wider mb-1">
-                  Overdue
-                </p>
-                <p className="text-[16px] font-heading font-bold text-forest-700">
-                  $0
-                </p>
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* ── Activity Feed ── */}
-        <motion.div
-          variants={fadeUp}
-          className="lg:col-span-7 rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6"
-        >
-          <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-brown-400" />
-              <h2 className="text-[15px] font-heading font-semibold text-brown-900">
-                Recent Activity
-              </h2>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-forest-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-forest-500" />
-              </span>
-              <span className="text-[11px] text-gray-400 font-medium">
-                Live
-              </span>
+              <div
+                className="rounded-full"
+                style={{ width: 6, height: 6, background: '#5B9BA2', animation: 'blink 2.2s ease-in-out infinite', boxShadow: '0 0 8px rgba(91,155,162,0.5)' }}
+              />
+              <span style={{ fontSize: '10.5px', color: 'var(--ink-faint)' }}>Live</span>
             </div>
           </div>
 
-          <div className="space-y-1">
-            {activityEvents.map((event, i) => {
+          <div style={{ padding: '8px 16px' }}>
+            {activityEvents.map((event) => {
               const EventIcon = event.icon;
               return (
-                <motion.div
+                <div
                   key={event.id}
-                  variants={fadeUp}
-                  className="flex items-start gap-3 py-3 group"
+                  className="flex items-start gap-3 rounded-xl cursor-pointer transition-colors"
+                  style={{ padding: '13px 10px' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(166,119,99,0.04)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
                 >
-                  {/* Timeline */}
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={cn(
-                        "w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center shrink-0",
-                        event.gradient
-                      )}
-                    >
-                      <EventIcon className="w-4 h-4 text-white" />
-                    </div>
-                    {i < activityEvents.length - 1 && (
-                      <div className="w-px h-full min-h-[12px] bg-beige-200/50 mt-1.5" />
-                    )}
+                  <div
+                    className="flex items-center justify-center shrink-0"
+                    style={{
+                      width: 34, height: 34, borderRadius: 10,
+                      background: event.iconBg,
+                      border: `1px solid ${event.iconBorder}`,
+                    }}
+                  >
+                    <EventIcon className="w-[13px] h-[13px]" style={{ color: event.iconColor }} />
                   </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] text-gray-600 leading-relaxed">
-                      <span className="font-semibold text-brown-800">
-                        {event.contributor}
-                      </span>{" "}
-                      {event.action}{" "}
-                      <span className="font-semibold text-brown-800">
-                        {event.target}
-                      </span>
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <Clock className="w-3 h-3 text-gray-300" />
-                      <span className="text-[11px] text-gray-400">
-                        {event.time}
-                      </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '12.5px', color: 'var(--ink-muted)', lineHeight: 1.5 }}>
+                      <span style={{ color: 'var(--ink-mid)', fontWeight: 500 }}>{event.contributor}</span>
+                      {" "}{event.action}{" "}
+                      <span style={{ color: 'var(--ink)', fontWeight: 500 }}>{event.target}</span>
+                    </div>
+                    <div className="flex items-center gap-1" style={{ fontSize: 10, color: 'var(--ink-faint)', marginTop: 3 }}>
+                      <Clock className="w-[9px] h-[9px]" />
+                      {event.time}
                     </div>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>
 
-          <div className="mt-4 pt-4 border-t border-beige-100/60">
-            <Link
-              href="/enterprise/audit"
-              className="text-[12px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors"
-            >
-              View full audit log
-              <ArrowRight className="w-3.5 h-3.5" />
+          <div style={{ padding: '12px 26px 20px', borderTop: '1px solid var(--border-hair)', marginTop: 6 }}>
+            <Link href="/enterprise/audit" className="link-gold">
+              View full audit log <ArrowRight className="w-2.5 h-2.5" />
             </Link>
           </div>
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
 
       {/* ═══════════════════════════════════
-          SOW PIPELINE — quick status strip
+          SOW PIPELINE — horizontal scroll
           ═══════════════════════════════════ */}
       <motion.div variants={fadeUp}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-brown-400" />
-            <h2 className="text-[15px] font-heading font-semibold text-brown-900">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <FileText className="w-3.5 h-3.5" style={{ color: '#D0B060' }} />
+            <span className="font-heading" style={{ fontSize: '1.1rem', fontWeight: 500, color: 'var(--ink)' }}>
               SOW Pipeline
-            </h2>
+            </span>
           </div>
-          <Link
-            href="/enterprise/sow"
-            className="text-[12px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors"
-          >
-            Manage SOWs
-            <ArrowRight className="w-3.5 h-3.5" />
+          <Link href="/enterprise/sow" className="link-gold">
+            Manage SOWs <ArrowRight className="w-2.5 h-2.5" />
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="flex gap-3.5 overflow-x-auto pb-1.5" style={{ scrollbarWidth: 'none' }}>
           {mockSOWs.slice(0, 5).map((sow) => {
-            const statusConfig: Record<
-              string,
-              { bg: string; text: string; icon: React.ElementType }
-            > = {
-              draft: {
-                bg: "bg-gray-100",
-                text: "text-gray-600",
-                icon: FileText,
-              },
-              parsing: {
-                bg: "bg-teal-100",
-                text: "text-teal-700",
-                icon: Bot,
-              },
-              review: {
-                bg: "bg-gold-100",
-                text: "text-gold-700",
-                icon: Eye,
-              },
-              approval: {
-                bg: "bg-brown-100",
-                text: "text-brown-700",
-                icon: ClipboardCheck,
-              },
-              approved: {
-                bg: "bg-forest-100",
-                text: "text-forest-700",
-                icon: CheckCircle2,
-              },
-              archived: {
-                bg: "bg-beige-200",
-                text: "text-beige-600",
-                icon: FileText,
-              },
-            };
-            const sc = statusConfig[sow.status] || statusConfig.draft;
+            const sc = sowStatusConfig[sow.status] || sowStatusConfig.draft;
             const StatusIcon = sc.icon;
+            const riskScore = sow.riskScore.overall;
+
+            /* Risk bar color */
+            let riskGradient = "linear-gradient(90deg, #C9ADA1, #C9ADA1)";
+            let riskColor = "var(--ink-faint)";
+            if (riskScore > 0 && riskScore <= 30) {
+              riskGradient = "linear-gradient(90deg, #2A484B, #5B9BA2)";
+              riskColor = "var(--ink-faint)";
+            } else if (riskScore > 30 && riskScore <= 60) {
+              riskGradient = "linear-gradient(90deg, #61522C, #D0B060)";
+              riskColor = "#86713D";
+            } else if (riskScore > 60) {
+              riskGradient = "linear-gradient(90deg, #6A1818, #A63C3C)";
+              riskColor = "#8B2C2C";
+            }
 
             return (
               <Link key={sow.id} href={`/enterprise/sow/${sow.id}`}>
-                <motion.div
-                  variants={scaleIn}
-                  className="group rounded-xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-4 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+                <div
+                  className="relative overflow-hidden shrink-0 cursor-pointer transition-all duration-300"
+                  style={{
+                    background: 'linear-gradient(155deg, rgba(253,250,247,0.95), rgba(255,255,255,0.7) 50%, rgba(249,245,241,0.6))',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    border: '1px solid var(--border-soft)',
+                    borderRadius: 16,
+                    padding: '22px 20px',
+                    minWidth: 210,
+                    boxShadow: '0 1px 3px rgba(77,55,46,0.05), 0 4px 16px rgba(77,55,46,0.04), inset 0 1px 0 rgba(255,255,255,0.7)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(77,55,46,0.08), 0 12px 40px rgba(77,55,46,0.08), inset 0 1px 0 rgba(255,255,255,0.8)';
+                    e.currentTarget.style.borderColor = 'rgba(208,176,96,0.30)';
+                    e.currentTarget.style.transform = 'translateY(-3px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(77,55,46,0.05), 0 4px 16px rgba(77,55,46,0.04), inset 0 1px 0 rgba(255,255,255,0.7)';
+                    e.currentTarget.style.borderColor = 'var(--border-soft)';
+                    e.currentTarget.style.transform = '';
+                  }}
                 >
-                  <div className="flex items-center justify-between mb-2">
+                  {/* Top white highlight */}
+                  <div className="absolute top-0 left-0 right-0 h-px"
+                    style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.98) 40%, rgba(255,255,255,0.98) 60%, transparent)' }}
+                  />
+
+                  <div className="flex items-center justify-between mb-4">
                     <div
-                      className={cn(
-                        "w-6 h-6 rounded-md flex items-center justify-center",
-                        sc.bg
-                      )}
+                      className="flex items-center justify-center"
+                      style={{
+                        width: 30, height: 30, borderRadius: 9,
+                        background: sc.iconBg,
+                        border: `1px solid ${sc.iconBorder}`,
+                      }}
                     >
-                      <StatusIcon className={cn("w-3 h-3", sc.text)} />
+                      <StatusIcon className="w-[13px] h-[13px]" style={{ color: sc.iconColor }} />
                     </div>
                     <span
-                      className={cn(
-                        "text-[9px] font-bold uppercase tracking-wider",
-                        sc.text
-                      )}
+                      className="badge-parchment"
+                      style={{
+                        background: sc.badgeBg,
+                        color: sc.badgeColor,
+                        border: `1px solid ${sc.badgeBorder}`,
+                      }}
                     >
-                      {sow.status}
+                      {sc.badgeLabel}
                     </span>
                   </div>
-                  <h3 className="text-[12px] font-semibold text-brown-900 truncate group-hover:text-brown-950 transition-colors">
-                    {sow.title}
-                  </h3>
-                  <p className="text-[10px] text-gray-400 mt-0.5 truncate">
-                    {sow.client}
-                  </p>
 
-                  {sow.riskScore.overall > 0 && (
-                    <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-beige-100/60">
-                      <span className="text-[10px] text-gray-400">Risk</span>
-                      <div className="flex-1 h-1 rounded-full bg-beige-100 overflow-hidden">
-                        <div
-                          className={cn(
-                            "h-full rounded-full transition-all",
-                            sow.riskScore.overall <= 30
-                              ? "bg-forest-500"
-                              : sow.riskScore.overall <= 60
-                                ? "bg-gold-500"
-                                : "bg-[var(--danger)]"
-                          )}
-                          style={{
-                            width: `${Math.min(sow.riskScore.overall, 100)}%`,
-                          }}
-                        />
-                      </div>
-                      <span
-                        className={cn(
-                          "text-[10px] font-bold font-mono",
-                          sow.riskScore.overall <= 30
-                            ? "text-forest-600"
-                            : sow.riskScore.overall <= 60
-                              ? "text-gold-600"
-                              : "text-[var(--danger)]"
-                        )}
-                      >
-                        {sow.riskScore.overall}
+                  <div style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--ink-mid)', lineHeight: 1.4, marginBottom: 3 }}>
+                    {sow.title.length > 30 ? sow.title.substring(0, 30) + "…" : sow.title}
+                  </div>
+                  <div style={{ fontSize: '10.5px', color: 'var(--ink-faint)', marginBottom: 16 }}>
+                    {sow.client}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="label-caps">Risk</span>
+                      <span className="mono-label" style={{
+                        color: riskColor,
+                        fontWeight: riskScore > 30 ? 600 : undefined,
+                      }}>
+                        {riskScore > 0 ? riskScore : "—"}
                       </span>
                     </div>
-                  )}
-                </motion.div>
+                    <div style={{ height: 2, background: 'rgba(166,119,99,0.12)', borderRadius: 100, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 100,
+                        width: `${Math.max(riskScore, 4)}%`,
+                        background: riskGradient,
+                      }} />
+                    </div>
+                  </div>
+                </div>
               </Link>
             );
           })}
         </div>
       </motion.div>
+    </motion.div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   KPI Card Component
+   ══════════════════════════════════════════ */
+
+function KpiCard({ config, children }: {
+  config: { label: string; iconBg: string; iconBorder: string; iconColor: string; cornerColor: string; accentGradient: string; icon: React.ElementType };
+  children: React.ReactNode;
+}) {
+  const Icon = config.icon;
+
+  return (
+    <motion.div
+      variants={scaleIn}
+      className="relative overflow-hidden transition-all duration-300"
+      style={{
+        background: 'linear-gradient(155deg, rgba(253,250,247,0.95), rgba(255,255,255,0.7) 40%, rgba(249,245,241,0.6))',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid var(--border-soft)',
+        borderRadius: 18,
+        padding: '28px 28px 24px',
+        boxShadow: '0 1px 3px rgba(77,55,46,0.05), 0 4px 16px rgba(77,55,46,0.04), inset 0 1px 0 rgba(255,255,255,0.7)',
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(77,55,46,0.08), 0 12px 40px rgba(77,55,46,0.08), inset 0 1px 0 rgba(255,255,255,0.8)';
+        (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-mid)';
+        (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(77,55,46,0.05), 0 4px 16px rgba(77,55,46,0.04), inset 0 1px 0 rgba(255,255,255,0.7)';
+        (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-soft)';
+        (e.currentTarget as HTMLElement).style.transform = '';
+      }}
+    >
+      {/* Top white highlight */}
+      <div className="absolute top-0 left-0 right-0 h-px"
+        style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.98) 40%, rgba(255,255,255,0.98) 60%, transparent)' }}
+      />
+
+      {/* Corner ornament — enhanced radial */}
+      <div
+        className="absolute -top-px -right-px"
+        style={{
+          width: 80, height: 80,
+          borderRadius: '0 18px 0 80px',
+          background: `radial-gradient(circle at top right, ${config.cornerColor}, transparent 70%)`,
+          opacity: 0.6,
+        }}
+      />
+
+      {/* Gold accent line — bolder */}
+      <div className="absolute top-0 left-0 right-0" style={{ height: 2, background: config.accentGradient, opacity: 0.6 }} />
+      {/* Secondary glow under accent */}
+      <div className="absolute top-0 left-[15%] right-[15%]" style={{ height: 6, background: config.accentGradient, opacity: 0.08, filter: 'blur(4px)' }} />
+
+      <div className="flex items-center justify-between mb-5">
+        <div className="label-caps">{config.label}</div>
+        <div
+          className="flex items-center justify-center transition-shadow duration-200"
+          style={{
+            width: 30, height: 30, borderRadius: 9,
+            background: config.iconBg,
+            border: `1px solid ${config.iconBorder}`,
+            boxShadow: `0 2px 8px ${config.iconBg}`,
+          }}
+        >
+          <Icon className="w-3 h-3" style={{ color: config.iconColor }} />
+        </div>
+      </div>
+
+      {children}
     </motion.div>
   );
 }
