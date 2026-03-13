@@ -70,7 +70,7 @@ export function Sidebar({ config }: SidebarProps) {
       {/* ── Brand + Collapse toggle ── */}
       <div className={cn("flex items-center px-[18px]", isCollapsed && "px-2.5")}
            style={{ borderBottom: '1px solid var(--border-hair)', height: 58 }}>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between w-full">
           <Link href="/" className="flex items-center gap-3 group min-w-0">
             <div
               className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0"
@@ -125,8 +125,8 @@ export function Sidebar({ config }: SidebarProps) {
 
       {/* ── Navigation ── */}
       <nav className={cn(
-        "flex-1 overflow-y-auto pb-3",
-        isCollapsed ? "px-2 pt-2" : "px-[10px] pt-[14px]"
+        "flex-1 overflow-y-auto pb-6",
+        isCollapsed ? "px-2 pt-3" : "px-3 pt-4"
       )} style={{ scrollbarWidth: 'none' }}>
         <TooltipProvider delayDuration={0}>
           {config.sections.map((section, sIdx) => {
@@ -139,8 +139,8 @@ export function Sidebar({ config }: SidebarProps) {
                 {hasSectionTitle && !isCollapsed && (
                   <button
                     onClick={() => toggleSection(sIdx)}
-                    className="flex items-center justify-between w-full px-[14px] py-1 mb-1 rounded group transition-colors"
-                    style={{ marginTop: sIdx > 0 ? 22 : 8 }}
+                    className="flex items-center justify-between w-full px-3 py-1 mb-1 rounded group transition-colors"
+                    style={{ marginTop: sIdx > 0 ? 16 : 4 }}
                   >
                     <span
                       className="font-semibold uppercase"
@@ -175,7 +175,7 @@ export function Sidebar({ config }: SidebarProps) {
                       transition={{ duration: 0.2, ease: "easeInOut" }}
                       className="overflow-hidden"
                     >
-                      <div className="space-y-0.5">
+                      <div className="space-y-1">
                         {section.items.map((item) => {
                           const active = isActive(item.href);
                           const Icon = item.icon;
@@ -187,7 +187,7 @@ export function Sidebar({ config }: SidebarProps) {
                               onClick={() => closeMobile()}
                               className={cn(
                                 "group/item relative flex items-center gap-[10px] rounded-[10px] transition-all duration-250",
-                                isCollapsed ? "justify-center px-2 py-2" : "px-[14px] py-[8px]"
+                                isCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-[9px]"
                               )}
                               style={{
                                 fontSize: '12.5px',
