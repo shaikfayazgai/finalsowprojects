@@ -84,6 +84,10 @@
   --color-gold-900: #3C321B;
   --color-gold-950: #292313;
 
+  /* ── BLACK & WHITE ── */
+  --color-black: #000000;
+  --color-white: #FFFFFF;
+
   /* ── FONT FAMILIES ── */
   --font-heading: var(--font-sans), "Inter", system-ui, sans-serif;
   --font-body: var(--font-sans), "Inter", system-ui, sans-serif;
@@ -122,11 +126,11 @@
   --border-mid:    rgba(166,119,99,0.24);
   --border-strong: rgba(106,76,63,0.30);
 
-  /* Warm ink color system */
+  /* Ink color system — neutral warm grays for text hierarchy */
   --ink:           #211713;
-  --ink-mid:       #4D372E;
-  --ink-muted:     #817165;
-  --ink-faint:     #C9ADA1;
+  --ink-mid:       #3D3A38;
+  --ink-muted:     #706B66;
+  --ink-faint:     #B0ABA7;
 
   /* Gold accent */
   --gold-line:     #D0B060;
@@ -147,8 +151,8 @@
 
   /* Text */
   --text: #211713;
-  --text-secondary: #4D372E;
-  --text-muted: #817165;
+  --text-secondary: #3D3A38;
+  --text-muted: #706B66;
   --text-on-primary: #FFFFFF;
   --text-on-dark: #F4EFEB;
 
@@ -346,8 +350,8 @@ body::after {
 
 .num-display {
   font-family: var(--font-heading);
-  font-weight: 400;
-  letter-spacing: -0.02em;
+  font-weight: 650;
+  letter-spacing: -0.03em;
   line-height: 1;
 }
 

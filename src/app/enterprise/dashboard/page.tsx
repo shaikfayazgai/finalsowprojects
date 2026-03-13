@@ -10,27 +10,33 @@ import {
   FileSearch,
   ArrowRight,
   Users,
-  CircleDollarSign,
   Clock,
   TrendingUp,
   TrendingDown,
   Wallet,
   FileText,
-  Zap,
-  BarChart3,
   Eye,
   Bot,
   Upload,
   CheckCircle2,
   XCircle,
   RotateCcw,
-  Activity,
+  ShieldCheck,
+  Banknote,
+  Target,
+  GitBranch,
+  Timer,
+  CircleCheck,
+  CircleDot,
+  Loader2,
 } from "lucide-react";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import {
   mockProjects,
   mockDeliverables,
   mockPlans,
+  mockTeams,
+  mockAssignments,
 } from "@/mocks/data/enterprise-projects";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import {
@@ -38,6 +44,11 @@ import {
   mockEscrowAccounts,
   billingStats,
 } from "@/mocks/data/enterprise-billing";
+import {
+  mockActivityFeed,
+  mockAPGRules,
+  mockAnalytics,
+} from "@/mocks/data/enterprise-analytics";
 import type { ProjectHealth } from "@/types/enterprise";
 
 /* ══════════════════════════════════════════
@@ -57,10 +68,6 @@ const reworkDeliverables = mockDeliverables.filter(
 );
 const draftPlans = mockPlans.filter((p) => p.status === "draft");
 const pendingApprovals = pendingDeliverables.length + draftPlans.length;
-const avgSla = Math.round(
-  mockProjects.reduce((sum, p) => sum + p.slaCompliance, 0) /
-    mockProjects.length
-);
 const totalBudget = mockProjects.reduce((sum, p) => sum + p.budget, 0);
 const totalSpent = mockProjects.reduce((sum, p) => sum + p.spent, 0);
 const budgetUtilization = Math.round((totalSpent / totalBudget) * 100);
@@ -70,6 +77,45 @@ const sowsInApproval = mockSOWs.filter((s) => s.status === "approval");
 const avgApgScore = Math.round(
   mockProjects.reduce((sum, p) => sum + p.apgScore, 0) / mockProjects.length
 );
+
+/* SOW approval pipeline stage counts */
+const sowsByStage = {
+  draft: mockSOWs.filter((s) => s.status === "draft").length,
+  approval: mockSOWs.filter((s) => s.status === "approval").length,
+  approved: mockSOWs.filter((s) => s.status === "approved").length,
+};
+
+/* Decomposition plan status counts */
+const plansByStatus = {
+  draft: mockPlans.filter((p) => p.status === "draft").length,
+  in_progress: mockPlans.filter((p) => p.status === "in_progress").length,
+  pending_review: mockPlans.filter((p) => p.status === "pending_review").length,
+  approved: mockPlans.filter((p) => p.status === "approved").length,
+  completed: mockPlans.filter((p) => p.status === "completed").length,
+};
+
+/* Team formation stats */
+const teamsByStatus = {
+  forming: mockTeams.filter((t) => t.status === "forming").length,
+  ready: mockTeams.filter((t) => t.status === "ready").length,
+  active: mockTeams.filter((t) => t.status === "active").length,
+};
+const totalContributors = mockTeams.reduce((s, t) => s + t.totalMembers, 0);
+
+/* Assignment response stats */
+const assignmentsByStatus = {
+  pending: mockAssignments.filter((a) => a.status === "pending_response").length,
+  accepted: mockAssignments.filter((a) => a.status === "accepted").length,
+  declined: mockAssignments.filter((a) => a.status === "declined").length,
+};
+
+/* APG rules */
+const apgRulesEnabled = mockAPGRules.filter((r) => r.enabled).length;
+
+/* Key analytics */
+const deliveryPerf = mockAnalytics.find((a) => a.id === "delivery-performance");
+const onTimeDelivery = deliveryPerf?.metrics[0]?.value ?? 0;
+const firstPassRate = deliveryPerf?.metrics[2]?.value ?? 0;
 
 /* ══════════════════════════════════════════
    Health config
@@ -129,76 +175,6 @@ const healthConfig: Record<
     progressColor: "#2A5860",
   },
 };
-
-/* ══════════════════════════════════════════
-   Portfolio Health Donut
-   ══════════════════════════════════════════ */
-
-function PortfolioDonut() {
-  const counts: Record<ProjectHealth, number> = {
-    on_track: 0,
-    at_risk: 0,
-    behind: 0,
-    completed: 0,
-  };
-  mockProjects.forEach((p) => counts[p.health]++);
-  const total = mockProjects.length;
-  const r = 42;
-  const circ = 2 * Math.PI * r;
-  const allSegments = [
-    { health: "on_track" as ProjectHealth, count: counts.on_track },
-    { health: "at_risk" as ProjectHealth, count: counts.at_risk },
-    { health: "behind" as ProjectHealth, count: counts.behind },
-    { health: "completed" as ProjectHealth, count: counts.completed },
-  ];
-  const segments = allSegments.filter((s) => s.count > 0);
-
-  let offset = 0;
-  const arcs = segments.map((seg) => {
-    const len = (seg.count / total) * circ;
-    const arc = { ...seg, dasharray: `${len} ${circ - len}`, offset };
-    offset += len;
-    return arc;
-  });
-
-  return (
-    <div className="relative flex items-center justify-center" style={{ width: 108, height: 108, flexShrink: 0 }}>
-      {/* Outer glow ring */}
-      <div className="absolute inset-0 rounded-full" style={{
-        background: 'radial-gradient(circle, transparent 38%, rgba(208,176,96,0.06) 48%, rgba(166,119,99,0.04) 55%, transparent 65%)',
-      }} />
-      <svg width="108" height="108" viewBox="0 0 108 108" aria-hidden>
-        <circle
-          cx="54" cy="54" r={r}
-          fill="none" stroke="rgba(166,119,99,0.10)" strokeWidth="9"
-        />
-        {arcs.map((arc) => (
-          <circle
-            key={arc.health}
-            cx="54" cy="54" r={r}
-            fill="none"
-            stroke={healthConfig[arc.health].fill}
-            strokeWidth="9"
-            strokeDasharray={arc.dasharray}
-            strokeDashoffset={-arc.offset}
-            strokeLinecap="round"
-            transform="rotate(-90 54 54)"
-            className="transition-all duration-700"
-          />
-        ))}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-heading text-[1.8rem] font-medium leading-none"
-              style={{ color: 'var(--ink)' }}>
-          {total}
-        </span>
-        <span className="label-caps" style={{ fontSize: '7.5px', marginTop: 2 }}>
-          Projects
-        </span>
-      </div>
-    </div>
-  );
-}
 
 /* ══════════════════════════════════════════
    Mini Sparkline Area Chart
@@ -456,8 +432,17 @@ const activityEvents = [
    ══════════════════════════════════════════ */
 
 const kpiConfig = {
+  sows: {
+    label: "SOWs Active",
+    iconBg: "rgba(166,119,99,0.10)",
+    iconBorder: "rgba(166,119,99,0.20)",
+    iconColor: "#6A4C3F",
+    cornerColor: "rgba(166,119,99,0.12)",
+    accentGradient: "linear-gradient(90deg, transparent, #A67763, transparent)",
+    icon: FileText,
+  },
   active: {
-    label: "Active",
+    label: "Active Projects",
     iconBg: "rgba(208,176,96,0.12)",
     iconBorder: "rgba(208,176,96,0.22)",
     iconColor: "#86713D",
@@ -465,8 +450,8 @@ const kpiConfig = {
     accentGradient: "linear-gradient(90deg, transparent, #D0B060, transparent)",
     icon: FolderKanban,
   },
-  exceptions: {
-    label: "Exceptions",
+  escalations: {
+    label: "APG Escalations",
     iconBg: "rgba(190,120,50,0.1)",
     iconBorder: "rgba(190,120,50,0.2)",
     iconColor: "#7A5020",
@@ -475,7 +460,7 @@ const kpiConfig = {
     icon: AlertTriangle,
   },
   approvals: {
-    label: "Approvals",
+    label: "Pending Reviews",
     iconBg: "rgba(91,155,162,0.10)",
     iconBorder: "rgba(91,155,162,0.22)",
     iconColor: "#2A6068",
@@ -505,6 +490,15 @@ function getGreeting(): string {
   return "Good evening";
 }
 
+function getTimeAgo(timestamp: string): string {
+  const diff = Date.now() - new Date(timestamp).getTime();
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  if (hours < 1) return "Just now";
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 /* ══════════════════════════════════════════
    SOW status config
    ══════════════════════════════════════════ */
@@ -515,7 +509,7 @@ const sowStatusConfig: Record<string, { iconBg: string; iconBorder: string; icon
   review:   { iconBg: "rgba(208,176,96,0.10)", iconBorder: "rgba(208,176,96,0.22)", iconColor: "#86713D", badgeBg: "rgba(208,176,96,0.14)", badgeColor: "#7A6030", badgeBorder: "rgba(208,176,96,0.28)", badgeLabel: "Review", icon: Eye },
   approval: { iconBg: "rgba(208,176,96,0.10)", iconBorder: "rgba(208,176,96,0.22)", iconColor: "#86713D", badgeBg: "rgba(166,119,99,0.10)", badgeColor: "#6A4C3F", badgeBorder: "rgba(166,119,99,0.22)", badgeLabel: "Approval", icon: ClipboardCheck },
   approved: { iconBg: "rgba(91,155,162,0.10)", iconBorder: "rgba(91,155,162,0.22)", iconColor: "#3A6368", badgeBg: "rgba(77,87,65,0.10)", badgeColor: "#344028", badgeBorder: "rgba(77,87,65,0.22)", badgeLabel: "Approved", icon: CheckCircle2 },
-  archived: { iconBg: "rgba(166,119,99,0.06)", iconBorder: "rgba(166,119,99,0.14)", iconColor: "#817165", badgeBg: "rgba(166,119,99,0.08)", badgeColor: "#817165", badgeBorder: "rgba(166,119,99,0.18)", badgeLabel: "Archived", icon: FileText },
+  archived: { iconBg: "rgba(166,119,99,0.06)", iconBorder: "rgba(166,119,99,0.14)", iconColor: "#706B66", badgeBg: "rgba(166,119,99,0.08)", badgeColor: "#706B66", badgeBorder: "rgba(166,119,99,0.18)", badgeLabel: "Archived", icon: FileText },
 };
 
 /* ══════════════════════════════════════════
@@ -534,7 +528,7 @@ export default function EnterpriseDashboardPage() {
       {/* ═══════════════════════════════════
           HERO HEADER
           ═══════════════════════════════════ */}
-      <motion.div variants={fadeUp} className="relative flex flex-col lg:flex-row lg:items-start lg:justify-between mb-10">
+      <motion.div variants={fadeUp} className="relative mb-10">
         {/* Decorative gradient mesh aurora behind hero */}
         <div className="absolute pointer-events-none" style={{
           top: -60, left: -80, width: 500, height: 300,
@@ -549,10 +543,11 @@ export default function EnterpriseDashboardPage() {
 
           <h1
             className="font-heading leading-[1.1]"
-            style={{ fontSize: '2.75rem', fontWeight: 400, color: 'var(--ink)', letterSpacing: '-0.025em' }}
+            style={{ fontSize: '2.75rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.03em' }}
           >
             {greeting}, <em className="italic" style={{
-              background: 'linear-gradient(135deg, #A67763, #886151)',
+              fontWeight: 600,
+              background: 'linear-gradient(135deg, #A67763 0%, #D0B060 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
@@ -572,98 +567,26 @@ export default function EnterpriseDashboardPage() {
               "All systems operational. Your portfolio is in good shape."
             )}
           </p>
-
-          {/* Status markers */}
-          <div className="flex items-center gap-5 mt-5">
-            {(["on_track", "at_risk", "behind", "completed"] as ProjectHealth[]).map((health) => {
-              const count = mockProjects.filter((p) => p.health === health).length;
-              if (count === 0) return null;
-              const cfg = healthConfig[health];
-              return (
-                <div key={health} className="flex items-center gap-2">
-                  <div className="rounded-full" style={{ width: 8, height: 8, background: cfg.dot, boxShadow: `0 0 6px ${cfg.dot}40` }} />
-                  <span style={{ fontSize: '11.5px', color: 'var(--ink-muted)' }}>
-                    {count} {cfg.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Portfolio ring + KPI pair */}
-        <div className="flex items-center gap-5 mt-6 lg:mt-0">
-          <PortfolioDonut />
-
-          <div className="flex flex-col gap-3">
-            {/* Avg SLA mini card */}
-            <div
-              className="relative overflow-hidden transition-all duration-300"
-              style={{
-                padding: '16px 22px',
-                background: 'linear-gradient(145deg, rgba(255,255,255,0.7), rgba(253,250,247,0.5))',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                border: '1px solid rgba(208,176,96,0.16)',
-                borderRadius: 16,
-                boxShadow: '0 2px 8px rgba(77,55,46,0.04), 0 4px 20px rgba(208,176,96,0.04), inset 0 1px 0 rgba(255,255,255,0.6)',
-                minWidth: 140,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(208,176,96,0.30)';
-                e.currentTarget.style.boxShadow = '0 4px 16px rgba(208,176,96,0.10), 0 8px 32px rgba(77,55,46,0.06), inset 0 1px 0 rgba(255,255,255,0.7)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(208,176,96,0.16)';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(77,55,46,0.04), 0 4px 20px rgba(208,176,96,0.04), inset 0 1px 0 rgba(255,255,255,0.6)';
-              }}
-            >
-              <div className="absolute top-0 left-0 right-0" style={{ height: 2, background: 'linear-gradient(90deg, transparent 10%, #D0B060 50%, transparent 90%)', opacity: 0.6 }} />
-              <div className="label-caps mb-2">Avg SLA</div>
-              <div className="num-display" style={{ fontSize: '2rem', color: 'var(--ink)' }}>
-                {avgSla}<span style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--ink-muted)' }}>%</span>
-              </div>
-            </div>
-
-            {/* APG Score mini card */}
-            <div
-              className="relative overflow-hidden transition-all duration-300"
-              style={{
-                padding: '16px 22px',
-                background: 'linear-gradient(145deg, rgba(255,255,255,0.7), rgba(238,245,245,0.4))',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                border: '1px solid rgba(91,155,162,0.16)',
-                borderRadius: 16,
-                boxShadow: '0 2px 8px rgba(77,55,46,0.04), 0 4px 20px rgba(91,155,162,0.04), inset 0 1px 0 rgba(255,255,255,0.6)',
-                minWidth: 140,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(91,155,162,0.30)';
-                e.currentTarget.style.boxShadow = '0 4px 16px rgba(91,155,162,0.10), 0 8px 32px rgba(77,55,46,0.06), inset 0 1px 0 rgba(255,255,255,0.7)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(91,155,162,0.16)';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(77,55,46,0.04), 0 4px 20px rgba(91,155,162,0.04), inset 0 1px 0 rgba(255,255,255,0.6)';
-              }}
-            >
-              <div className="absolute top-0 left-0 right-0" style={{ height: 2, background: 'linear-gradient(90deg, transparent 10%, #5B9BA2 50%, transparent 90%)', opacity: 0.5 }} />
-              <div className="label-caps mb-2" style={{ color: '#5B9BA2' }}>APG Score</div>
-              <div className="num-display" style={{ fontSize: '2rem', color: '#3A6368' }}>
-                {avgApgScore}
-              </div>
-            </div>
-          </div>
         </div>
       </motion.div>
 
       {/* ═══════════════════════════════════
-          KPI ROW — 4 stat cards
+          KPI ROW — 5 stat cards
           ═══════════════════════════════════ */}
-      <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
-        {/* Active */}
+      <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-7">
+        {/* SOWs Active */}
+        <KpiCard config={kpiConfig.sows}>
+          <div className="num-display" style={{ fontSize: '3rem', color: '#000000' }}>
+            {mockSOWs.length}
+          </div>
+          <div className="mt-2.5" style={{ fontSize: '11.5px', color: 'var(--ink-muted)' }}>
+            {sowsByStage.approval} in approval
+          </div>
+        </KpiCard>
+
+        {/* Active Projects */}
         <KpiCard config={kpiConfig.active}>
-          <div className="num-display" style={{ fontSize: '3rem', color: 'var(--ink)' }}>
+          <div className="num-display" style={{ fontSize: '3rem', color: '#000000' }}>
             {activeProjects.length}
           </div>
           <div className="flex items-center gap-1 mt-2.5" style={{ fontSize: '11.5px', color: '#5B9BA2' }}>
@@ -672,9 +595,9 @@ export default function EnterpriseDashboardPage() {
           </div>
         </KpiCard>
 
-        {/* Exceptions */}
-        <KpiCard config={kpiConfig.exceptions}>
-          <div className="num-display" style={{ fontSize: '3rem', color: '#86713D' }}>
+        {/* APG Escalations */}
+        <KpiCard config={kpiConfig.escalations}>
+          <div className="num-display" style={{ fontSize: '3rem', color: '#000000' }}>
             {totalEscalations}
           </div>
           <div className="mt-2.5" style={{ fontSize: '11.5px', color: 'var(--ink-muted)' }}>
@@ -682,9 +605,9 @@ export default function EnterpriseDashboardPage() {
           </div>
         </KpiCard>
 
-        {/* Approvals */}
+        {/* Pending Reviews */}
         <KpiCard config={kpiConfig.approvals}>
-          <div className="num-display" style={{ fontSize: '3rem', color: '#3A6368' }}>
+          <div className="num-display" style={{ fontSize: '3rem', color: '#000000' }}>
             {pendingApprovals}
           </div>
           <Link
@@ -697,9 +620,9 @@ export default function EnterpriseDashboardPage() {
           </Link>
         </KpiCard>
 
-        {/* Budget */}
+        {/* Budget Used */}
         <KpiCard config={kpiConfig.budget}>
-          <div className="num-display" style={{ fontSize: '2.2rem', color: 'var(--ink)' }}>
+          <div className="num-display" style={{ fontSize: '2.4rem', color: '#000000' }}>
             ${Math.round(totalSpent / 1000)}k
           </div>
           <div className="mt-2.5">
@@ -707,7 +630,7 @@ export default function EnterpriseDashboardPage() {
               <span style={{ fontSize: '10.5px', color: 'var(--ink-faint)' }}>
                 of ${Math.round(totalBudget / 1000)}k total
               </span>
-              <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#4D5741' }}>
+              <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#000000' }}>
                 {budgetUtilization}%
               </span>
             </div>
@@ -722,14 +645,174 @@ export default function EnterpriseDashboardPage() {
       </motion.div>
 
       {/* ═══════════════════════════════════
+          SOW APPROVAL PIPELINE
+          ═══════════════════════════════════ */}
+      <motion.div variants={fadeUp} className="mb-7">
+        <div className="card-parchment">
+          <div className="section-header-parchment">
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
+              SOW Approval Pipeline
+            </div>
+            <Link href="/enterprise/sow" className="link-gold">
+              Manage SOWs <ArrowRight className="w-2.5 h-2.5" />
+            </Link>
+          </div>
+
+          <div style={{ padding: '24px 26px 20px' }}>
+            {/* Pipeline stages visualization */}
+            <div className="flex items-center gap-0 mb-6">
+              {([
+                { key: 'draft', label: 'Draft', icon: FileText, color: '#A67763', bg: 'rgba(166,119,99,0.08)', border: 'rgba(166,119,99,0.18)' },
+                { key: 'approval', label: 'In Approval', icon: ClipboardCheck, color: '#D0B060', bg: 'rgba(208,176,96,0.10)', border: 'rgba(208,176,96,0.22)' },
+                { key: 'approved', label: 'Approved', icon: CheckCircle2, color: '#4D5741', bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)' },
+              ] as const).map((stage, i, arr) => {
+                const count = sowsByStage[stage.key];
+                const StageIcon = stage.icon;
+                return (
+                  <React.Fragment key={stage.key}>
+                    <div className="flex-1 relative">
+                      <div
+                        className="flex items-center gap-4 rounded-xl transition-all"
+                        style={{
+                          padding: '16px 20px',
+                          background: count > 0 ? stage.bg : 'rgba(166,119,99,0.03)',
+                          border: `1px solid ${count > 0 ? stage.border : 'var(--border-hair)'}`,
+                        }}
+                      >
+                        <div
+                          className="flex items-center justify-center shrink-0"
+                          style={{
+                            width: 36, height: 36, borderRadius: 10,
+                            background: count > 0 ? stage.bg : 'rgba(166,119,99,0.05)',
+                            border: `1px solid ${count > 0 ? stage.border : 'rgba(166,119,99,0.10)'}`,
+                          }}
+                        >
+                          <StageIcon className="w-4 h-4" style={{ color: count > 0 ? stage.color : 'var(--ink-faint)' }} />
+                        </div>
+                        <div>
+                          <div className="num-display" style={{ fontSize: '1.6rem', color: count > 0 ? '#000000' : 'var(--ink-faint)' }}>
+                            {count}
+                          </div>
+                          <div style={{ fontSize: '10.5px', color: 'var(--ink-faint)', marginTop: 1, fontWeight: 500 }}>
+                            {stage.label}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {i < arr.length - 1 && (
+                      <div className="flex items-center shrink-0 px-2">
+                        <ArrowRight className="w-3.5 h-3.5" style={{ color: 'var(--ink-faint)', opacity: 0.4 }} />
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {/* SOW cards horizontal scroll */}
+            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              {mockSOWs.slice(0, 5).map((sow) => {
+                const sc = sowStatusConfig[sow.status] || sowStatusConfig.draft;
+                const StatusIcon = sc.icon;
+                /* Current approval stage */
+                const currentStage = sow.approvalStages?.find((s) => s.status === 'in_review');
+                const completedStages = sow.approvalStages?.filter((s) => s.status === 'approved').length ?? 0;
+                const totalStages = sow.approvalStages?.length ?? 4;
+
+                return (
+                  <Link key={sow.id} href={`/enterprise/sow/${sow.id}`}>
+                    <div
+                      className="relative overflow-hidden shrink-0 cursor-pointer transition-all duration-300 flex flex-col"
+                      style={{
+                        background: 'linear-gradient(155deg, rgba(253,250,247,0.95), rgba(255,255,255,0.7) 50%, rgba(249,245,241,0.6))',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        border: '1px solid var(--border-soft)',
+                        borderRadius: 16,
+                        padding: '18px 20px',
+                        minWidth: 220,
+                        height: 148,
+                        boxShadow: '0 1px 3px rgba(77,55,46,0.05), inset 0 1px 0 rgba(255,255,255,0.7)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = 'rgba(208,176,96,0.30)';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 4px 16px rgba(77,55,46,0.08), inset 0 1px 0 rgba(255,255,255,0.8)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--border-soft)';
+                        e.currentTarget.style.transform = '';
+                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(77,55,46,0.05), inset 0 1px 0 rgba(255,255,255,0.7)';
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div
+                          className="flex items-center justify-center"
+                          style={{
+                            width: 28, height: 28, borderRadius: 8,
+                            background: sc.iconBg,
+                            border: `1px solid ${sc.iconBorder}`,
+                          }}
+                        >
+                          <StatusIcon className="w-3 h-3" style={{ color: sc.iconColor }} />
+                        </div>
+                        <span
+                          className="badge-parchment"
+                          style={{
+                            background: sc.badgeBg,
+                            color: sc.badgeColor,
+                            border: `1px solid ${sc.badgeBorder}`,
+                          }}
+                        >
+                          {sc.badgeLabel}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--ink-mid)', lineHeight: 1.4, marginBottom: 2 }}>
+                        {sow.title.length > 32 ? sow.title.substring(0, 32) + "…" : sow.title}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--ink-faint)' }}>
+                        {sow.client}
+                      </div>
+                      {/* Approval stage progress dots */}
+                      <div className="flex items-center gap-1.5 mt-auto">
+                        {Array.from({ length: totalStages }).map((_, si) => (
+                          <div
+                            key={si}
+                            className="rounded-full"
+                            style={{
+                              width: si < completedStages ? 14 : 8,
+                              height: 4,
+                              borderRadius: 100,
+                              background: si < completedStages
+                                ? '#4D5741'
+                                : si === completedStages && currentStage
+                                  ? '#D0B060'
+                                  : 'rgba(166,119,99,0.15)',
+                              transition: 'all 0.3s',
+                            }}
+                          />
+                        ))}
+                        <span style={{ fontSize: 9, color: 'var(--ink-faint)', marginLeft: 4 }}>
+                          {completedStages}/{totalStages}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ═══════════════════════════════════
           MID ROW: Attention + Project Pipeline
           ═══════════════════════════════════ */}
       <motion.div variants={fadeUp} className="grid gap-5 mb-7" style={{ gridTemplateColumns: '1fr 1.15fr' }}>
         {/* Needs Attention */}
         <div className="card-parchment">
           <div className="section-header-parchment">
-            <div className="flex items-center gap-[9px]" style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
-              <Zap className="w-3.5 h-3.5" style={{ color: '#D0B060' }} />
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
               Needs Your Attention
             </div>
             <div
@@ -808,8 +891,7 @@ export default function EnterpriseDashboardPage() {
         {/* Project Pipeline */}
         <div className="card-parchment">
           <div className="section-header-parchment">
-            <div className="flex items-center gap-[9px]" style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
-              <Activity className="w-3.5 h-3.5" style={{ color: '#5B9BA2' }} />
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
               Project Pipeline
             </div>
             <Link href="/enterprise/projects" className="link-gold">
@@ -871,7 +953,7 @@ export default function EnterpriseDashboardPage() {
                           </div>
                         </div>
                         <div style={{ textAlign: 'right', minWidth: 72 }}>
-                          <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--ink-mid)' }}>
+                          <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#000000' }}>
                             ${Math.round(project.spent / 1000)}k
                           </div>
                           <div style={{ fontSize: 10, color: 'var(--ink-faint)' }}>
@@ -902,14 +984,203 @@ export default function EnterpriseDashboardPage() {
       </motion.div>
 
       {/* ═══════════════════════════════════
+          DELIVERY STATUS: Decomposition + Teams
+          ═══════════════════════════════════ */}
+      <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7">
+        {/* Decomposition Plans */}
+        <div className="card-parchment">
+          <div className="section-header-parchment">
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
+              Decomposition Plans
+            </div>
+            <Link href="/enterprise/decomposition" className="link-gold">
+              View all <ArrowRight className="w-2.5 h-2.5" />
+            </Link>
+          </div>
+
+          <div style={{ padding: '16px 20px 20px' }}>
+            {/* Status summary row */}
+            <div className="flex items-center gap-3 mb-5">
+              {([
+                { label: 'Draft', count: plansByStatus.draft, color: '#A67763', bg: 'rgba(166,119,99,0.08)' },
+                { label: 'In Progress', count: plansByStatus.in_progress, color: '#D0B060', bg: 'rgba(208,176,96,0.10)' },
+                { label: 'Review', count: plansByStatus.pending_review, color: '#5B9BA2', bg: 'rgba(91,155,162,0.10)' },
+                { label: 'Approved', count: plansByStatus.approved, color: '#4D5741', bg: 'rgba(77,87,65,0.08)' },
+              ]).map((s) => (
+                <div key={s.label} className="flex items-center gap-2 rounded-lg" style={{ padding: '6px 12px', background: s.bg }}>
+                  <div className="rounded-full" style={{ width: 6, height: 6, background: s.color }} />
+                  <span style={{ fontSize: 11, fontWeight: 500, color: s.color }}>{s.count}</span>
+                  <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}>{s.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Plan list */}
+            {mockPlans.slice(0, 4).map((plan, i) => {
+              const statusColors: Record<string, { color: string; bg: string; border: string; label: string }> = {
+                draft: { color: '#6A4C3F', bg: 'rgba(166,119,99,0.08)', border: 'rgba(166,119,99,0.18)', label: 'Draft' },
+                in_progress: { color: '#86713D', bg: 'rgba(208,176,96,0.10)', border: 'rgba(208,176,96,0.22)', label: 'In Progress' },
+                pending_review: { color: '#2A6068', bg: 'rgba(91,155,162,0.10)', border: 'rgba(91,155,162,0.22)', label: 'Review' },
+                approved: { color: '#344028', bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)', label: 'Approved' },
+                completed: { color: '#3A6368', bg: 'rgba(91,155,162,0.08)', border: 'rgba(91,155,162,0.18)', label: 'Completed' },
+              };
+              const ps = statusColors[plan.status] || statusColors.draft;
+
+              return (
+                <React.Fragment key={plan.id}>
+                  <Link href={`/enterprise/decomposition/${plan.id}`}>
+                    <div
+                      className="flex items-center gap-3 rounded-xl cursor-pointer transition-all"
+                      style={{ padding: '12px 14px', border: '1px solid transparent' }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(166,119,99,0.04)';
+                        e.currentTarget.style.borderColor = 'var(--border-hair)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '';
+                        e.currentTarget.style.borderColor = 'transparent';
+                      }}
+                    >
+                      <div
+                        className="flex items-center justify-center shrink-0"
+                        style={{
+                          width: 34, height: 34, borderRadius: 9,
+                          background: ps.bg,
+                          border: `1px solid ${ps.border}`,
+                        }}
+                      >
+                        <GitBranch className="w-3 h-3" style={{ color: ps.color }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink-mid)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {plan.title}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}>{plan.totalTasks} tasks</span>
+                          <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}>{plan.totalMilestones} milestones</span>
+                          <span className="font-mono" style={{ fontSize: 9, color: ps.color, fontWeight: 500 }}>
+                            {plan.aiConfidence}% AI conf.
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        className="badge-parchment shrink-0"
+                        style={{ background: ps.bg, color: ps.color, border: `1px solid ${ps.border}` }}
+                      >
+                        {ps.label}
+                      </span>
+                    </div>
+                  </Link>
+                  {i < Math.min(mockPlans.length, 4) - 1 && (
+                    <div style={{ height: 1, background: 'var(--border-hair)', margin: '1px 8px' }} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Team Formation */}
+        <div className="card-parchment">
+          <div className="section-header-parchment">
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
+              Team Formation
+            </div>
+            <Link href="/enterprise/teams" className="link-gold">
+              View all <ArrowRight className="w-2.5 h-2.5" />
+            </Link>
+          </div>
+
+          <div style={{ padding: '16px 20px 20px' }}>
+            {/* Summary metrics */}
+            <div className="grid grid-cols-3 gap-3 mb-5">
+              <div className="text-center rounded-xl" style={{ padding: '14px 8px', background: 'rgba(77,87,65,0.05)', border: '1px solid rgba(77,87,65,0.12)' }}>
+                <div className="num-display" style={{ fontSize: '1.4rem', color: '#000000' }}>{totalContributors}</div>
+                <div style={{ fontSize: 9, color: 'var(--ink-faint)', marginTop: 2, fontWeight: 500 }}>Contributors</div>
+              </div>
+              <div className="text-center rounded-xl" style={{ padding: '14px 8px', background: 'rgba(91,155,162,0.05)', border: '1px solid rgba(91,155,162,0.12)' }}>
+                <div className="num-display" style={{ fontSize: '1.4rem', color: '#000000' }}>{mockTeams.length}</div>
+                <div style={{ fontSize: 9, color: 'var(--ink-faint)', marginTop: 2, fontWeight: 500 }}>Teams</div>
+              </div>
+              <div className="text-center rounded-xl" style={{ padding: '14px 8px', background: 'rgba(208,176,96,0.06)', border: '1px solid rgba(208,176,96,0.14)' }}>
+                <div className="num-display" style={{ fontSize: '1.4rem', color: '#000000' }}>{assignmentsByStatus.pending}</div>
+                <div style={{ fontSize: 9, color: 'var(--ink-faint)', marginTop: 2, fontWeight: 500 }}>Pending</div>
+              </div>
+            </div>
+
+            {/* Team list */}
+            {mockTeams.map((team, i) => {
+              const statusStyle: Record<string, { color: string; bg: string; border: string; icon: React.ElementType }> = {
+                forming: { color: '#86713D', bg: 'rgba(208,176,96,0.10)', border: 'rgba(208,176,96,0.22)', icon: Loader2 },
+                ready: { color: '#3A6368', bg: 'rgba(91,155,162,0.10)', border: 'rgba(91,155,162,0.22)', icon: CircleCheck },
+                active: { color: '#344028', bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)', icon: CircleDot },
+                disbanded: { color: '#706B66', bg: 'rgba(166,119,99,0.06)', border: 'rgba(166,119,99,0.14)', icon: XCircle },
+              };
+              const ts = statusStyle[team.status] || statusStyle.active;
+              const TeamStatusIcon = ts.icon;
+
+              return (
+                <React.Fragment key={team.id}>
+                  <div
+                    className="flex items-center gap-3 rounded-xl cursor-pointer transition-all"
+                    style={{ padding: '12px 14px', border: '1px solid transparent' }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(166,119,99,0.04)';
+                      e.currentTarget.style.borderColor = 'var(--border-hair)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '';
+                      e.currentTarget.style.borderColor = 'transparent';
+                    }}
+                  >
+                    <div
+                      className="flex items-center justify-center shrink-0"
+                      style={{
+                        width: 34, height: 34, borderRadius: 9,
+                        background: ts.bg,
+                        border: `1px solid ${ts.border}`,
+                      }}
+                    >
+                      <TeamStatusIcon className="w-3 h-3" style={{ color: ts.color }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink-mid)' }}>
+                        {team.name}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="flex items-center gap-1" style={{ fontSize: 10, color: 'var(--ink-faint)' }}>
+                          <Users className="w-[9px] h-[9px]" />{team.totalMembers} members
+                        </span>
+                        <span className="font-mono" style={{ fontSize: 9, color: '#5B9BA2', fontWeight: 500 }}>
+                          {team.matchScore}% match
+                        </span>
+                      </div>
+                    </div>
+                    <span
+                      className="badge-parchment shrink-0 capitalize"
+                      style={{ background: ts.bg, color: ts.color, border: `1px solid ${ts.border}` }}
+                    >
+                      {team.status}
+                    </span>
+                  </div>
+                  {i < mockTeams.length - 1 && (
+                    <div style={{ height: 1, background: 'var(--border-hair)', margin: '1px 8px' }} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ═══════════════════════════════════
           BOTTOM ROW: Financial + Activity
           ═══════════════════════════════════ */}
       <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7">
         {/* Financial Snapshot */}
         <div className="card-parchment">
           <div className="section-header-parchment">
-            <div className="flex items-center gap-[9px]" style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
-              <BarChart3 className="w-3.5 h-3.5" style={{ color: '#D0B060' }} />
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
               Financial Snapshot
             </div>
             <Link href="/enterprise/billing" className="link-gold">
@@ -931,20 +1202,29 @@ export default function EnterpriseDashboardPage() {
             {/* Financial metrics 2×2 */}
             <div className="grid grid-cols-2 gap-3 mt-5">
               <div style={{ padding: 16, background: 'linear-gradient(135deg, rgba(166,119,99,0.05), rgba(208,176,96,0.03))', border: '1px solid var(--border-hair)', borderRadius: 14 }}>
-                <div className="label-caps mb-2">Escrow Held</div>
-                <div className="num-display" style={{ fontSize: '1.5rem', color: 'var(--ink)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="label-caps">Escrow Held</div>
+                  <ShieldCheck className="w-3 h-3" style={{ color: '#D0B060', opacity: 0.6 }} />
+                </div>
+                <div className="num-display" style={{ fontSize: '1.5rem', color: '#000000' }}>
                   ${Math.round(mockEscrowAccounts.reduce((s, e) => s + e.totalHeld, 0) / 1000)}k
                 </div>
               </div>
               <div style={{ padding: 16, background: 'linear-gradient(135deg, rgba(91,155,162,0.04), rgba(91,155,162,0.02))', border: '1px solid var(--border-hair)', borderRadius: 14 }}>
-                <div className="label-caps mb-2">Pending Pay</div>
-                <div className="num-display" style={{ fontSize: '1.5rem', color: 'var(--ink)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="label-caps">Pending Pay</div>
+                  <Clock className="w-3 h-3" style={{ color: '#5B9BA2', opacity: 0.6 }} />
+                </div>
+                <div className="num-display" style={{ fontSize: '1.5rem', color: '#000000' }}>
                   ${Math.round(pendingInvoicesList.reduce((s, i) => s + i.amount, 0) / 1000)}k
                 </div>
               </div>
               <div style={{ padding: 16, background: 'linear-gradient(135deg, rgba(77,87,65,0.05), rgba(77,87,65,0.02))', border: '1px solid var(--border-hair)', borderRadius: 14 }}>
-                <div className="label-caps mb-2">Total Paid</div>
-                <div className="num-display" style={{ fontSize: '1.5rem', color: 'var(--ink)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="label-caps">Total Paid</div>
+                  <Banknote className="w-3 h-3" style={{ color: '#4D5741', opacity: 0.6 }} />
+                </div>
+                <div className="num-display" style={{ fontSize: '1.5rem', color: '#000000' }}>
                   ${Math.round(billingStats.totalSpent / 1000)}k
                 </div>
               </div>
@@ -954,8 +1234,11 @@ export default function EnterpriseDashboardPage() {
                 border: overdueInvoices.length > 0 ? '1px solid rgba(160,50,50,0.14)' : '1px solid var(--border-hair)',
                 borderRadius: 14,
               }}>
-                <div className="label-caps mb-2" style={{ color: overdueInvoices.length > 0 ? '#8B2C2C' : '#3F4735' }}>Overdue</div>
-                <div className="num-display" style={{ fontSize: '1.5rem', color: overdueInvoices.length > 0 ? '#8B2C2C' : '#3F4735' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="label-caps" style={{ color: overdueInvoices.length > 0 ? '#8B2C2C' : 'var(--ink-faint)' }}>Overdue</div>
+                  <XCircle className="w-3 h-3" style={{ color: overdueInvoices.length > 0 ? '#8B2C2C' : 'var(--ink-faint)', opacity: 0.6 }} />
+                </div>
+                <div className="num-display" style={{ fontSize: '1.5rem', color: overdueInvoices.length > 0 ? '#8B2C2C' : '#000000' }}>
                   {overdueInvoices.length > 0
                     ? `$${Math.round(overdueInvoices.reduce((s, i) => s + i.amount, 0) / 1000)}k`
                     : "$0"
@@ -966,52 +1249,106 @@ export default function EnterpriseDashboardPage() {
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* AI & Governance Activity */}
         <div className="card-parchment">
           <div className="section-header-parchment">
-            <div className="flex items-center gap-[9px]" style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
-              <TrendingUp className="w-3.5 h-3.5" style={{ color: '#5B9BA2' }} />
-              Recent Activity
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
+              AI & Governance
             </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 rounded-full" style={{
+                padding: '3px 10px',
+                background: 'rgba(77,87,65,0.06)',
+                border: '1px solid rgba(77,87,65,0.14)',
+              }}>
+                <ShieldCheck className="w-2.5 h-2.5" style={{ color: '#4D5741' }} />
+                <span style={{ fontSize: 10, fontWeight: 500, color: '#4D5741' }}>
+                  {apgRulesEnabled}/{mockAPGRules.length} rules
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div
+                  className="rounded-full"
+                  style={{ width: 6, height: 6, background: '#5B9BA2', animation: 'blink 2.2s ease-in-out infinite', boxShadow: '0 0 8px rgba(91,155,162,0.5)' }}
+                />
+                <span style={{ fontSize: '10.5px', color: 'var(--ink-faint)' }}>Live</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Key metrics strip */}
+          <div className="flex items-center gap-4 mx-6 mb-2 mt-1 rounded-xl" style={{
+            padding: '10px 16px',
+            background: 'rgba(91,155,162,0.04)',
+            border: '1px solid rgba(91,155,162,0.10)',
+          }}>
             <div className="flex items-center gap-2">
-              <div
-                className="rounded-full"
-                style={{ width: 6, height: 6, background: '#5B9BA2', animation: 'blink 2.2s ease-in-out infinite', boxShadow: '0 0 8px rgba(91,155,162,0.5)' }}
-              />
-              <span style={{ fontSize: '10.5px', color: 'var(--ink-faint)' }}>Live</span>
+              <Timer className="w-3 h-3" style={{ color: '#5B9BA2' }} />
+              <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}>On-Time</span>
+              <span className="font-mono" style={{ fontSize: 11, fontWeight: 600, color: '#3A6368' }}>{onTimeDelivery}%</span>
+            </div>
+            <div style={{ width: 1, height: 14, background: 'rgba(91,155,162,0.15)' }} />
+            <div className="flex items-center gap-2">
+              <CircleCheck className="w-3 h-3" style={{ color: '#4D5741' }} />
+              <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}>First-Pass</span>
+              <span className="font-mono" style={{ fontSize: 11, fontWeight: 600, color: '#344028' }}>{firstPassRate}%</span>
+            </div>
+            <div style={{ width: 1, height: 14, background: 'rgba(91,155,162,0.15)' }} />
+            <div className="flex items-center gap-2">
+              <Target className="w-3 h-3" style={{ color: '#D0B060' }} />
+              <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}>APG</span>
+              <span className="font-mono" style={{ fontSize: 11, fontWeight: 600, color: '#86713D' }}>{avgApgScore}</span>
             </div>
           </div>
 
           <div style={{ padding: '8px 16px' }}>
-            {activityEvents.map((event) => {
-              const EventIcon = event.icon;
+            {mockActivityFeed.slice(0, 6).map((event) => {
+              const isAI = event.actor === 'APG System' || event.actor === 'Finance Team';
+              const typeColors: Record<string, { bg: string; border: string; color: string; icon: React.ElementType }> = {
+                milestone: { bg: 'rgba(166,119,99,0.08)', border: 'rgba(166,119,99,0.18)', color: '#6A4C3F', icon: CheckCircle2 },
+                task: { bg: 'rgba(91,155,162,0.08)', border: 'rgba(91,155,162,0.18)', color: '#3A6368', icon: FileText },
+                escalation: { bg: 'rgba(208,176,96,0.10)', border: 'rgba(208,176,96,0.22)', color: '#86713D', icon: AlertTriangle },
+                payment: { bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)', color: '#344028', icon: Banknote },
+                review: { bg: 'rgba(77,87,65,0.08)', border: 'rgba(77,87,65,0.18)', color: '#3F4735', icon: Eye },
+                sow: { bg: 'rgba(166,119,99,0.08)', border: 'rgba(166,119,99,0.18)', color: '#6A4C3F', icon: Upload },
+              };
+              const tc = typeColors[event.type] || typeColors.task;
+              const EventIcon = tc.icon;
+              const timeAgo = getTimeAgo(event.timestamp);
+
               return (
                 <div
                   key={event.id}
                   className="flex items-start gap-3 rounded-xl cursor-pointer transition-colors"
-                  style={{ padding: '13px 10px' }}
+                  style={{ padding: '11px 10px' }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(166,119,99,0.04)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
                 >
                   <div
                     className="flex items-center justify-center shrink-0"
                     style={{
-                      width: 34, height: 34, borderRadius: 10,
-                      background: event.iconBg,
-                      border: `1px solid ${event.iconBorder}`,
+                      width: 32, height: 32, borderRadius: 9,
+                      background: tc.bg,
+                      border: `1px solid ${tc.border}`,
                     }}
                   >
-                    <EventIcon className="w-[13px] h-[13px]" style={{ color: event.iconColor }} />
+                    <EventIcon className="w-[12px] h-[12px]" style={{ color: tc.color }} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '12.5px', color: 'var(--ink-muted)', lineHeight: 1.5 }}>
-                      <span style={{ color: 'var(--ink-mid)', fontWeight: 500 }}>{event.contributor}</span>
+                    <div style={{ fontSize: '12px', color: 'var(--ink-muted)', lineHeight: 1.5 }}>
+                      <span style={{
+                        color: isAI ? '#5B9BA2' : 'var(--ink-mid)',
+                        fontWeight: 500,
+                      }}>
+                        {isAI && <Bot className="w-2.5 h-2.5 inline mr-1" style={{ verticalAlign: '-1px' }} />}
+                        {event.actor}
+                      </span>
                       {" "}{event.action}{" "}
                       <span style={{ color: 'var(--ink)', fontWeight: 500 }}>{event.target}</span>
                     </div>
-                    <div className="flex items-center gap-1" style={{ fontSize: 10, color: 'var(--ink-faint)', marginTop: 3 }}>
+                    <div className="flex items-center gap-1" style={{ fontSize: 10, color: 'var(--ink-faint)', marginTop: 2 }}>
                       <Clock className="w-[9px] h-[9px]" />
-                      {event.time}
+                      {timeAgo}
                     </div>
                   </div>
                 </div>
@@ -1019,7 +1356,7 @@ export default function EnterpriseDashboardPage() {
             })}
           </div>
 
-          <div style={{ padding: '12px 26px 20px', borderTop: '1px solid var(--border-hair)', marginTop: 6 }}>
+          <div style={{ padding: '12px 26px 20px', borderTop: '1px solid var(--border-hair)', marginTop: 4 }}>
             <Link href="/enterprise/audit" className="link-gold">
               View full audit log <ArrowRight className="w-2.5 h-2.5" />
             </Link>
@@ -1027,126 +1364,6 @@ export default function EnterpriseDashboardPage() {
         </div>
       </motion.div>
 
-      {/* ═══════════════════════════════════
-          SOW PIPELINE — horizontal scroll
-          ═══════════════════════════════════ */}
-      <motion.div variants={fadeUp}>
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2.5">
-            <FileText className="w-3.5 h-3.5" style={{ color: '#D0B060' }} />
-            <span className="font-heading" style={{ fontSize: '1.1rem', fontWeight: 500, color: 'var(--ink)' }}>
-              SOW Pipeline
-            </span>
-          </div>
-          <Link href="/enterprise/sow" className="link-gold">
-            Manage SOWs <ArrowRight className="w-2.5 h-2.5" />
-          </Link>
-        </div>
-
-        <div className="flex gap-3.5 overflow-x-auto pb-1.5" style={{ scrollbarWidth: 'none' }}>
-          {mockSOWs.slice(0, 5).map((sow) => {
-            const sc = sowStatusConfig[sow.status] || sowStatusConfig.draft;
-            const StatusIcon = sc.icon;
-            const riskScore = sow.riskScore.overall;
-
-            /* Risk bar color */
-            let riskGradient = "linear-gradient(90deg, #C9ADA1, #C9ADA1)";
-            let riskColor = "var(--ink-faint)";
-            if (riskScore > 0 && riskScore <= 30) {
-              riskGradient = "linear-gradient(90deg, #2A484B, #5B9BA2)";
-              riskColor = "var(--ink-faint)";
-            } else if (riskScore > 30 && riskScore <= 60) {
-              riskGradient = "linear-gradient(90deg, #61522C, #D0B060)";
-              riskColor = "#86713D";
-            } else if (riskScore > 60) {
-              riskGradient = "linear-gradient(90deg, #6A1818, #A63C3C)";
-              riskColor = "#8B2C2C";
-            }
-
-            return (
-              <Link key={sow.id} href={`/enterprise/sow/${sow.id}`}>
-                <div
-                  className="relative overflow-hidden shrink-0 cursor-pointer transition-all duration-300"
-                  style={{
-                    background: 'linear-gradient(155deg, rgba(253,250,247,0.95), rgba(255,255,255,0.7) 50%, rgba(249,245,241,0.6))',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    border: '1px solid var(--border-soft)',
-                    borderRadius: 16,
-                    padding: '22px 20px',
-                    minWidth: 210,
-                    boxShadow: '0 1px 3px rgba(77,55,46,0.05), 0 4px 16px rgba(77,55,46,0.04), inset 0 1px 0 rgba(255,255,255,0.7)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(77,55,46,0.08), 0 12px 40px rgba(77,55,46,0.08), inset 0 1px 0 rgba(255,255,255,0.8)';
-                    e.currentTarget.style.borderColor = 'rgba(208,176,96,0.30)';
-                    e.currentTarget.style.transform = 'translateY(-3px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(77,55,46,0.05), 0 4px 16px rgba(77,55,46,0.04), inset 0 1px 0 rgba(255,255,255,0.7)';
-                    e.currentTarget.style.borderColor = 'var(--border-soft)';
-                    e.currentTarget.style.transform = '';
-                  }}
-                >
-                  {/* Top white highlight */}
-                  <div className="absolute top-0 left-0 right-0 h-px"
-                    style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.98) 40%, rgba(255,255,255,0.98) 60%, transparent)' }}
-                  />
-
-                  <div className="flex items-center justify-between mb-4">
-                    <div
-                      className="flex items-center justify-center"
-                      style={{
-                        width: 30, height: 30, borderRadius: 9,
-                        background: sc.iconBg,
-                        border: `1px solid ${sc.iconBorder}`,
-                      }}
-                    >
-                      <StatusIcon className="w-[13px] h-[13px]" style={{ color: sc.iconColor }} />
-                    </div>
-                    <span
-                      className="badge-parchment"
-                      style={{
-                        background: sc.badgeBg,
-                        color: sc.badgeColor,
-                        border: `1px solid ${sc.badgeBorder}`,
-                      }}
-                    >
-                      {sc.badgeLabel}
-                    </span>
-                  </div>
-
-                  <div style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--ink-mid)', lineHeight: 1.4, marginBottom: 3 }}>
-                    {sow.title.length > 30 ? sow.title.substring(0, 30) + "…" : sow.title}
-                  </div>
-                  <div style={{ fontSize: '10.5px', color: 'var(--ink-faint)', marginBottom: 16 }}>
-                    {sow.client}
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="label-caps">Risk</span>
-                      <span className="mono-label" style={{
-                        color: riskColor,
-                        fontWeight: riskScore > 30 ? 600 : undefined,
-                      }}>
-                        {riskScore > 0 ? riskScore : "—"}
-                      </span>
-                    </div>
-                    <div style={{ height: 2, background: 'rgba(166,119,99,0.12)', borderRadius: 100, overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%', borderRadius: 100,
-                        width: `${Math.max(riskScore, 4)}%`,
-                        background: riskGradient,
-                      }} />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </motion.div>
     </motion.div>
   );
 }
