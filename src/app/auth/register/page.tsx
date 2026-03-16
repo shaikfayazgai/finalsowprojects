@@ -6,15 +6,14 @@ import { Sparkles, Briefcase, Shield, ArrowLeft, CheckCircle, Mail } from "lucid
 import { GlassCard, GlassCardContent } from "@/components/ui";
 
 import { useRegistration } from "./hooks/useRegistration";
-import { StepProgress }        from "./components/StepProgress";
-import { Step1Identity }        from "./components/Step1Identity";
-import { Step2Verification }    from "./components/Step2Verification";
-import { Step3Profile }         from "./components/Step3Profile";
-import { Step4Consent }         from "./components/Step4Consent";
-import { ReviewPreviewModal }   from "./components/ReviewPreviewModal";
+import { StepProgress } from "./components/StepProgress";
+import { Step1Identity } from "./components/Step1Identity";
+import { Step2Verification } from "./components/Step2Verification";
+import { Step3Profile } from "./components/Step3Profile";
+import { Step4Consent } from "./components/Step4Consent";
+import { ReviewPreviewModal } from "./components/ReviewPreviewModal";
 import type { RegistrationRole } from "./types";
 
-/* ── Role header bar shown above each flow ── */
 function RoleBar({
   role,
   onChange,
@@ -24,8 +23,8 @@ function RoleBar({
 }) {
   const config = {
     contributor: { label: "Contributor Account", Icon: Sparkles, color: "bg-teal-500" },
-    enterprise:  { label: "Enterprise Account",  Icon: Briefcase, color: "bg-brown-500" },
-    reviewer:    { label: "Reviewer Account",    Icon: Shield,    color: "bg-forest-500" },
+    enterprise:  { label: "Enterprise Account", Icon: Briefcase, color: "bg-brown-500" },
+    reviewer:    { label: "Reviewer Account", Icon: Shield, color: "bg-forest-500" },
   } as const;
   const { label, Icon, color } = config[role];
 
@@ -49,20 +48,19 @@ function RoleBar({
   );
 }
 
-/* ── Invite-only placeholder for Enterprise / Reviewer ── */
 function InviteOnlyCard({ role }: { role: "enterprise" | "reviewer" }) {
   const config = {
     enterprise: {
       Icon: Mail,
       gradient: "from-brown-500 to-brown-700",
       shadow: "shadow-brown-200",
-      body: "Enterprise accounts are provisioned by a GlimmoraTeam Admin and activated via a secure email invitation. Please check your inbox for an activation link.",
+      body: "Enterprise accounts are provisioned by a GlimmoraTeam Admin and created via a secure email invitation. Please check your inbox for your account creation link.",
     },
     reviewer: {
       Icon: Shield,
       gradient: "from-forest-500 to-forest-700",
       shadow: "shadow-forest-200",
-      body: "Reviewer accounts are assigned by a GlimmoraTeam Admin and activated via a secure email invitation. Please check your inbox for an activation link.",
+      body: "Reviewer accounts are assigned by a GlimmoraTeam Admin and created via a secure email invitation. Please check your inbox for your account creation link.",
     },
   };
   const { Icon, gradient, shadow, body } = config[role];
@@ -90,13 +88,9 @@ function InviteOnlyCard({ role }: { role: "enterprise" | "reviewer" }) {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   Page — thin orchestrator: just state (via hook) + routing logic
-══════════════════════════════════════════════════════════════════ */
-
 export default function ContributorRegisterPage() {
   const router = useRouter();
-  const reg    = useRegistration();
+  const reg = useRegistration();
 
   const resetToRolePicker = () => {
     reg.setRegistrationRole("");
@@ -106,22 +100,19 @@ export default function ContributorRegisterPage() {
 
   return (
     <div className="w-full max-w-xl py-8">
-
-      {/* Branding header */}
       <div className="text-center mb-7">
         <Link href="/" className="inline-flex items-center gap-2 mb-5 group">
           <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brown-500 to-brown-700 flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <span className="font-heading font-semibold text-brown-950 group-hover:text-brown-700 transition-colors">
-            GlimmoraTeam™
+            GlimmoraTeam
           </span>
         </Link>
         <h1 className="font-heading text-2xl font-bold text-brown-950">Create Your Account</h1>
         <p className="text-sm text-beige-500 mt-1">Join the Global Workforce Intelligence Platform</p>
       </div>
 
-      {/* ── Role picker ── */}
       {!reg.registrationRole && (
         <>
           <GlassCard variant="heavy" padding="lg" className="mb-4">
@@ -131,9 +122,9 @@ export default function ContributorRegisterPage() {
               </p>
               <div className="grid grid-cols-3 gap-2.5">
                 {([
-                  { label: "Contributor", sub: "Find tasks & earn",   Icon: Sparkles, hover: "hover:border-teal-300",   action: () => { reg.setRegistrationRole("contributor"); reg.setStep(1); reg.setError(""); } },
-                  { label: "Enterprise",  sub: "Hire & manage teams", Icon: Briefcase, hover: "hover:border-brown-300",  action: () => router.push("/auth/register/enterprise") },
-                  { label: "Reviewer",    sub: "Review & earn",       Icon: Shield,   hover: "hover:border-forest-300", action: () => { reg.setRegistrationRole("reviewer"); reg.setError(""); } },
+                  { label: "Contributor", sub: "Find tasks & earn", Icon: Sparkles, hover: "hover:border-teal-300", action: () => { reg.setRegistrationRole("contributor"); reg.setStep(1); reg.setError(""); } },
+                  { label: "Enterprise", sub: "Hire & manage teams", Icon: Briefcase, hover: "hover:border-brown-300", action: () => router.push("/auth/register/enterprise") },
+                  { label: "Reviewer", sub: "Review & earn", Icon: Shield, hover: "hover:border-forest-300", action: () => { reg.setRegistrationRole("reviewer"); reg.setError(""); } },
                 ] as const).map(({ label, sub, Icon, hover, action }) => (
                   <button
                     key={label}
@@ -160,7 +151,6 @@ export default function ContributorRegisterPage() {
         </>
       )}
 
-      {/* ── Invite-only flows ── */}
       {(reg.registrationRole === "enterprise" || reg.registrationRole === "reviewer") && (
         <>
           <RoleBar role={reg.registrationRole} onChange={resetToRolePicker} />
@@ -170,57 +160,82 @@ export default function ContributorRegisterPage() {
         </>
       )}
 
-      {/* ── Contributor multi-step flow ── */}
       {reg.registrationRole === "contributor" && (
         <div className="space-y-4 pb-2">
           <RoleBar role="contributor" onChange={resetToRolePicker} />
 
-          {/* Welcome banner */}
           <div className="p-4 rounded-2xl bg-teal-50 border border-teal-200 flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-teal-500 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-teal-800">Welcome to GlimmoraTeam™</p>
+              <p className="text-sm font-semibold text-teal-800">Welcome to GlimmoraTeam</p>
               <p className="text-xs text-teal-700 mt-0.5 leading-relaxed">
-                AI-matched tasks · global earnings · verified portfolio — set up in 4 quick steps.
+                AI-matched tasks - global earnings - verified portfolio - set up in 4 quick steps.
               </p>
             </div>
           </div>
 
-          {/* Progress indicator */}
           <StepProgress step={reg.step} />
 
-          {/* Step 1 */}
           {reg.step === 1 && (
             <Step1Identity
-              firstName={reg.firstName}         setFirstName={reg.setFirstName}
-              lastName={reg.lastName}           setLastName={reg.setLastName}
-              email={reg.email}                 setEmail={reg.setEmail}
-              password={reg.password}           setPassword={reg.setPassword}
-              confirm={reg.confirm}             setConfirm={reg.setConfirm}
-              showPw={reg.showPw}               setShowPw={reg.setShowPw}
-              showCon={reg.showCon}             setShowCon={reg.setShowCon}
-              contribType={reg.contribType}     setContribType={reg.setContribType}
-              dob={reg.dob}                     setDob={reg.setDob}
-              country={reg.country}             setCountry={reg.setCountry}
+              firstName={reg.firstName} setFirstName={reg.setFirstName}
+              lastName={reg.lastName} setLastName={reg.setLastName}
+              email={reg.email} setEmail={reg.setEmail}
+              password={reg.password} setPassword={reg.setPassword}
+              confirm={reg.confirm} setConfirm={reg.setConfirm}
+              showPw={reg.showPw} setShowPw={reg.setShowPw}
+              showCon={reg.showCon} setShowCon={reg.setShowCon}
+              contribType={reg.contribType} setContribType={reg.setContribType}
+              country={reg.country} setCountry={reg.setCountry}
               passwordStrength={reg.passwordStrength}
               error={reg.error}
               onContinue={reg.goToStep2}
             />
           )}
 
-          {/* Step 2 */}
           {reg.step === 2 && (
+            <Step3Profile
+              contribType={reg.contribType}
+              dob={reg.dob} setDob={reg.setDob}
+              timezone={reg.timezone} setTimezone={reg.setTimezone}
+              departmentCategory={reg.departmentCategory} setDepartmentCategory={reg.setDepartmentCategory}
+              departmentOther={reg.departmentOther} setDepartmentOther={reg.setDepartmentOther}
+              availability={reg.availability} setAvailability={reg.setAvailability}
+              degree={reg.degree} setDegree={reg.setDegree}
+              branch={reg.branch} setBranch={reg.setBranch}
+              linkedin={reg.linkedin} setLinkedin={reg.setLinkedin}
+              mentorAck={reg.mentorAck} setMentorAck={reg.setMentorAck}
+              primarySkills={reg.primarySkills}
+              skillInput={reg.skillInput} setSkillInput={reg.setSkillInput}
+              addPrimarySkill={reg.addPrimarySkill} removePrimarySkill={reg.removePrimarySkill}
+              secondarySkills={reg.secondarySkills}
+              secondarySkillInput={reg.secondarySkillInput} setSecondarySkillInput={reg.setSecondarySkillInput}
+              addSecondarySkill={reg.addSecondarySkill} removeSecondarySkill={reg.removeSecondarySkill}
+              otherSkills={reg.otherSkills}
+              otherSkillInput={reg.otherSkillInput} setOtherSkillInput={reg.setOtherSkillInput}
+              addOtherSkill={reg.addOtherSkill} removeOtherSkill={reg.removeOtherSkill}
+              workStart={reg.workStart} setWorkStart={reg.setWorkStart}
+              workEnd={reg.workEnd} setWorkEnd={reg.setWorkEnd}
+              careerStage={reg.careerStage} setCareerStage={reg.setCareerStage}
+              yearsExperience={reg.yearsExperience} setYearsExperience={reg.setYearsExperience}
+              error={reg.error}
+              onContinue={reg.goToStep3}
+              onBack={() => { reg.setStep(1); reg.setError(""); }}
+            />
+          )}
+
+          {reg.step === 3 && (
             <Step2Verification
-              phoneCountry={reg.phoneCountry}           setPhoneCountry={reg.setPhoneCountry}
-              phone={reg.phone}                         setPhone={reg.setPhone}
+              phoneCountry={reg.phoneCountry} setPhoneCountry={reg.setPhoneCountry}
+              phone={reg.phone} setPhone={reg.setPhone}
               otpSent={reg.otpSent}
-              otp={reg.otp}                             setOtp={reg.setOtp}
+              otp={reg.otp} setOtp={reg.setOtp}
               cooldown={reg.cooldown}
               phoneVerified={reg.phoneVerified}
               phoneOtpLoading={reg.phoneOtpLoading}
               verificationEmail={reg.verificationEmail} setVerificationEmail={reg.setVerificationEmail}
               emailOtpSent={reg.emailOtpSent}
-              emailOtp={reg.emailOtp}                   setEmailOtp={reg.setEmailOtp}
+              emailOtp={reg.emailOtp} setEmailOtp={reg.setEmailOtp}
               emailCooldown={reg.emailCooldown}
               emailVerified={reg.emailVerified}
               emailOtpLoading={reg.emailOtpLoading}
@@ -229,52 +244,20 @@ export default function ContributorRegisterPage() {
               onVerifyOTP={reg.verifyOTP}
               onSendEmailOTP={reg.sendEmailOTP}
               onVerifyEmailOTP={reg.verifyEmailOTP}
-              onContinue={reg.goToStep3}
-              onBack={() => { reg.setStep(1); reg.setError(""); }}
-            />
-          )}
-
-          {/* Step 3 */}
-          {reg.step === 3 && (
-            <Step3Profile
-              contribType={reg.contribType}
-              timezone={reg.timezone}                       setTimezone={reg.setTimezone}
-              departmentCategory={reg.departmentCategory}   setDepartmentCategory={reg.setDepartmentCategory}
-              departmentOther={reg.departmentOther}         setDepartmentOther={reg.setDepartmentOther}
-              availability={reg.availability}               setAvailability={reg.setAvailability}
-              degree={reg.degree}                           setDegree={reg.setDegree}
-              branch={reg.branch}                           setBranch={reg.setBranch}
-              linkedin={reg.linkedin}                       setLinkedin={reg.setLinkedin}
-              mentorAck={reg.mentorAck}                     setMentorAck={reg.setMentorAck}
-              primarySkills={reg.primarySkills}
-              skillInput={reg.skillInput}                   setSkillInput={reg.setSkillInput}
-              addPrimarySkill={reg.addPrimarySkill}         removePrimarySkill={reg.removePrimarySkill}
-              secondarySkills={reg.secondarySkills}
-              secondarySkillInput={reg.secondarySkillInput} setSecondarySkillInput={reg.setSecondarySkillInput}
-              addSecondarySkill={reg.addSecondarySkill}     removeSecondarySkill={reg.removeSecondarySkill}
-              otherSkills={reg.otherSkills}
-              otherSkillInput={reg.otherSkillInput}         setOtherSkillInput={reg.setOtherSkillInput}
-              addOtherSkill={reg.addOtherSkill}             removeOtherSkill={reg.removeOtherSkill}
-              workStart={reg.workStart}                     setWorkStart={reg.setWorkStart}
-              workEnd={reg.workEnd}                         setWorkEnd={reg.setWorkEnd}
-              careerStage={reg.careerStage}                 setCareerStage={reg.setCareerStage}
-              yearsExperience={reg.yearsExperience}         setYearsExperience={reg.setYearsExperience}
-              error={reg.error}
               onContinue={reg.goToStep4}
               onBack={() => { reg.setStep(2); reg.setError(""); }}
             />
           )}
 
-          {/* Step 4 */}
           {reg.step === 4 && (
             <Step4Consent
-              resumeFile={reg.resumeFile}         setResumeFile={reg.setResumeFile}
-              resumeDrag={reg.resumeDrag}         setResumeDrag={reg.setResumeDrag}
-              acceptTos={reg.acceptTos}           setAcceptTos={reg.setAcceptTos}
-              acceptCoc={reg.acceptCoc}           setAcceptCoc={reg.setAcceptCoc}
-              acceptDpa={reg.acceptDpa}           setAcceptDpa={reg.setAcceptDpa}
-              acceptFee={reg.acceptFee}           setAcceptFee={reg.setAcceptFee}
-              acceptAhp={reg.acceptAhp}           setAcceptAhp={reg.setAcceptAhp}
+              resumeFile={reg.resumeFile} setResumeFile={reg.setResumeFile}
+              resumeDrag={reg.resumeDrag} setResumeDrag={reg.setResumeDrag}
+              acceptTos={reg.acceptTos} setAcceptTos={reg.setAcceptTos}
+              acceptCoc={reg.acceptCoc} setAcceptCoc={reg.setAcceptCoc}
+              acceptPrivacy={reg.acceptPrivacy} setAcceptPrivacy={reg.setAcceptPrivacy}
+              acceptFee={reg.acceptFee} setAcceptFee={reg.setAcceptFee}
+              acceptAhp={reg.acceptAhp} setAcceptAhp={reg.setAcceptAhp}
               marketingOptIn={reg.marketingOptIn} setMarketingOptIn={reg.setMarketingOptIn}
               isLoading={reg.isLoading}
               error={reg.error}
@@ -286,7 +269,6 @@ export default function ContributorRegisterPage() {
         </div>
       )}
 
-      {/* Registration preview modal */}
       {reg.previewOpen && (
         <ReviewPreviewModal
           onClose={() => reg.setPreviewOpen(false)}

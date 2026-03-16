@@ -66,7 +66,7 @@ export function Step2Verification({
     <GlassCard variant="heavy" padding="lg">
       <GlassCardContent>
         <div className="mb-5">
-          <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 2 of 4</p>
+          <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 3 of 4</p>
           <p className="font-heading font-semibold text-brown-950 text-lg mt-0.5">Identity Verification</p>
           <p className="text-xs text-beige-500 mt-0.5">Verify your phone number and email address</p>
         </div>
@@ -116,7 +116,7 @@ export function Step2Verification({
                   <input
                     id="phone"
                     type="tel"
-                    placeholder="Phone number"
+                    placeholder="Work phone (with country code)"
                     value={phone.replace(/^\+\d+\s?/, "")}
                     onChange={e => {
                       const cc = selectedCountry?.code ?? "";
@@ -137,7 +137,7 @@ export function Step2Verification({
                   {phoneVerified ? (
                     <><CheckCircle className="w-4 h-4 text-teal-500" /> Verified</>
                   ) : phoneOtpLoading ? (
-                    <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Sending…</>
+                    <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Sending...</>
                   ) : otpSent ? "Verify OTP" : "Send OTP"}
                 </Button>
               </div>
@@ -150,7 +150,7 @@ export function Step2Verification({
                 </p>
                 <div className="flex gap-2 items-center">
                   <Input id="otp" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
-                    placeholder="• • • • • •"
+                    placeholder="Enter 6-digit code"
                     className="text-center tracking-[0.5em] font-mono flex-1" value={otp}
                     onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} autoFocus />
                   <Button type="button" size="sm" variant="primary" className="shrink-0"
@@ -186,7 +186,7 @@ export function Step2Verification({
             <div className="space-y-2">
               <Label htmlFor="verify-email">Email for Verification <span className="text-red-400">*</span></Label>
               <div className="flex gap-2">
-                <Input id="verify-email" type="email" placeholder="Your email address"
+                <Input id="verify-email" type="email" placeholder="Work email for verification"
                   value={verificationEmail} onChange={e => setVerificationEmail(e.target.value)}
                   className="flex-1" disabled={emailVerified} />
                 <Button type="button" size="sm"
@@ -197,7 +197,7 @@ export function Step2Verification({
                   {emailVerified ? (
                     <><CheckCircle className="w-4 h-4 text-teal-500" /> Verified</>
                   ) : emailOtpLoading ? (
-                    <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Sending…</>
+                    <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Sending...</>
                   ) : emailOtpSent ? "Verify OTP" : "Send OTP"}
                 </Button>
               </div>
@@ -210,7 +210,7 @@ export function Step2Verification({
                 </p>
                 <div className="flex gap-2 items-center">
                   <Input id="email-otp" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
-                    placeholder="• • • • • •"
+                    placeholder="Enter 6-digit code"
                     className="text-center tracking-[0.5em] font-mono flex-1" value={emailOtp}
                     onChange={e => setEmailOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} />
                   <Button type="button" size="sm" variant="primary" className="shrink-0"

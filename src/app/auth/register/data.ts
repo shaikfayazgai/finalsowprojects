@@ -144,4 +144,4 @@ export const TIMEZONES = [
   "UTC (UTC +0:00)",
 ];
 
-export const REGISTRATION_STEPS = ["Identity", "Verification", "Profile", "Consent"] as const;
+export const REGISTRATION_STEPS = ["Identity", "Profile", "Verification", "Consent"] as const;

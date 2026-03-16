@@ -64,7 +64,7 @@ export function CountryCombobox({ value, onChange }: Props) {
             <input
               ref={inputRef}
               type="text"
-              placeholder="Search country…"
+              placeholder="Search for a country"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="flex-1 text-sm text-brown-950 bg-transparent outline-none placeholder:text-beige-400"

@@ -21,7 +21,6 @@ interface Props {
   showPw: boolean;         setShowPw: (v: boolean) => void;
   showCon: boolean;        setShowCon: (v: boolean) => void;
   contribType: ContributorType; setContribType: (v: ContributorType) => void;
-  dob: string;             setDob: (v: string) => void;
   country: string;         setCountry: (v: string) => void;
   passwordStrength: PasswordStrength;
   error: string;
@@ -71,7 +70,6 @@ export function Step1Identity({
   showPw, setShowPw,
   showCon, setShowCon,
   contribType, setContribType,
-  dob, setDob,
   country, setCountry,
   passwordStrength,
   error,
@@ -92,12 +90,12 @@ export function Step1Identity({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="fn">First Name <span className="text-red-400">*</span></Label>
-              <Input id="fn" placeholder="First name" value={firstName}
+              <Input id="fn" placeholder="Enter first name" value={firstName}
                 onChange={e => setFirstName(e.target.value)} maxLength={50} autoFocus />
             </div>
             <div className="space-y-2">
               <Label htmlFor="ln">Last Name <span className="text-red-400">*</span></Label>
-              <Input id="ln" placeholder="Last name" value={lastName}
+              <Input id="ln" placeholder="Enter last name" value={lastName}
                 onChange={e => setLastName(e.target.value)} maxLength={50} />
             </div>
           </div>
@@ -105,7 +103,7 @@ export function Step1Identity({
           {/* Email */}
           <div className="space-y-2">
             <Label htmlFor="email">Email Address <span className="text-red-400">*</span></Label>
-            <Input id="email" type="email" placeholder="Your work email address" value={email}
+            <Input id="email" type="email" placeholder="name@company.com" value={email}
               onChange={e => setEmail(e.target.value)} autoComplete="email" />
           </div>
 
@@ -114,7 +112,7 @@ export function Step1Identity({
             <Label htmlFor="pw">Password <span className="text-red-400">*</span></Label>
             <div className="relative">
               <Input id="pw" type={showPw ? "text" : "password"}
-                placeholder="Create a strong password"
+                placeholder="Create a strong password (min 8 characters)"
                 value={password} onChange={e => setPassword(e.target.value)} className="pr-10" />
               <button type="button" onClick={() => setShowPw(!showPw)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600">
@@ -148,7 +146,7 @@ export function Step1Identity({
             <Label htmlFor="con">Confirm Password <span className="text-red-400">*</span></Label>
             <div className="relative">
               <Input id="con" type={showCon ? "text" : "password"}
-                placeholder="Confirm your password"
+                placeholder="Re-enter password to confirm"
                 value={confirm} onChange={e => setConfirm(e.target.value)} className="pr-10" />
               <button type="button" onClick={() => setShowCon(!showCon)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600">
@@ -180,19 +178,9 @@ export function Step1Identity({
             </div>
           </div>
 
-          {/* DOB + Country */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="dob">Date of Birth <span className="text-red-400">*</span></Label>
-              <Input id="dob" type="date" value={dob}
-                onChange={e => setDob(e.target.value)}
-                max={new Date().toISOString().split("T")[0]} />
-              <p className="text-[10px] text-beige-400">Must be 18 years or older</p>
-            </div>
-            <div className="space-y-2">
-              <Label>Country of Residence <span className="text-red-400">*</span></Label>
-              <CountryCombobox value={country} onChange={setCountry} />
-            </div>
+          <div className="space-y-2">
+            <Label>Country of Residence <span className="text-red-400">*</span></Label>
+            <CountryCombobox value={country} onChange={setCountry} />
           </div>
 
           {error && (

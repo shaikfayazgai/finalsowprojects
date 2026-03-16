@@ -74,7 +74,7 @@ export default function ActivatePage() {
               </div>
               <p className="font-semibold text-brown-950">Invitation Link Expired</p>
               <p className="text-sm text-beige-600">
-                This activation link has expired (links expire after 72 hours).
+                This account creation link has expired (links expire after 72 hours).
                 Please ask your administrator to resend the invitation.
               </p>
               <Link href="/auth/login">
@@ -94,7 +94,7 @@ export default function ActivatePage() {
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-brown-500 to-brown-700 shadow-xl shadow-brown-500/20 mb-4">
           <Sparkles className="w-7 h-7 text-white" />
         </div>
-        <h1 className="font-heading text-2xl font-semibold text-brown-950">Activate Your Account</h1>
+        <h1 className="font-heading text-2xl font-semibold text-brown-950">Create Your Account</h1>
         <p className="text-sm text-beige-600 mt-1">Set a password to get started</p>
       </div>
 

@@ -1,6 +1,4 @@
 "use client";
-
-import { useState } from "react";
 import {
   AlertCircle, ArrowRight, ArrowLeft, X,
   Briefcase, Users, GraduationCap, Clock,
@@ -165,6 +163,7 @@ function SkillFreeform({
 
 interface Props {
   contribType: ContributorType;
+  dob: string;                   setDob: (v: string) => void;
   timezone: string;              setTimezone: (v: string) => void;
   departmentCategory: string;    setDepartmentCategory: (v: string) => void;
   departmentOther: string;       setDepartmentOther: (v: string) => void;
@@ -200,6 +199,7 @@ interface Props {
 
 export function Step3Profile({
   contribType,
+  dob, setDob,
   timezone, setTimezone,
   departmentCategory, setDepartmentCategory,
   departmentOther, setDepartmentOther,
@@ -233,35 +233,49 @@ export function Step3Profile({
     <GlassCard variant="heavy" padding="lg">
       <GlassCardContent>
         <div className="mb-5">
-          <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 3 of 4</p>
-          <p className="font-heading font-semibold text-brown-950 text-lg mt-0.5">Skills &amp; Profile</p>
-          <p className="text-xs text-beige-500 mt-0.5">Help us intelligently match you to the right tasks</p>
+          <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 2 of 4</p>
+          <p className="font-heading font-semibold text-brown-950 text-lg mt-0.5">Profile &amp; Skills</p>
+          <p className="text-xs text-beige-500 mt-0.5">Add your profile details so we can intelligently match you to the right tasks</p>
         </div>
 
         <div className="space-y-6">
+          <div>
+            <SectionHeader icon={Globe} title="Profile Basics" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="dob">Date of Birth <span className="text-red-400">*</span></Label>
+                <Input
+                  id="dob"
+                  type="date"
+                  value={dob}
+                  onChange={e => setDob(e.target.value)}
+                  max={new Date().toISOString().split("T")[0]}
+                />
+                <p className="text-[10px] text-beige-400">Must be 18 years or older</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Time Zone <span className="text-red-400">*</span></Label>
+                <Select value={timezone} onValueChange={setTimezone}>
+                  <SelectTrigger><SelectValue placeholder="Select your timezone" /></SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
 
           {/* ══ Work Preferences ══ */}
           <div>
             <SectionHeader icon={Clock} title="Work Preferences" />
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Time Zone <span className="text-red-400">*</span></Label>
-                  <Select value={timezone} onValueChange={setTimezone}>
-                    <SelectTrigger><SelectValue placeholder="Select your timezone" /></SelectTrigger>
-                    <SelectContent>
-                      {TIMEZONES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="avail">Weekly Availability <span className="text-red-400">*</span></Label>
-                  <div className="relative">
-                    <Input id="avail" type="number" min="1" max="60"
-                      placeholder="Hours per week"
-                      value={availability} onChange={e => setAvailability(e.target.value)} className="pr-14" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-beige-400 pointer-events-none">hrs/wk</span>
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="avail">Weekly Availability <span className="text-red-400">*</span></Label>
+                <div className="relative">
+                  <Input id="avail" type="number" min="1" max="60"
+                    placeholder="Hours per week"
+                    value={availability} onChange={e => setAvailability(e.target.value)} className="pr-14" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-beige-400 pointer-events-none">hrs/wk</span>
                 </div>
               </div>
 
@@ -324,12 +338,12 @@ export function Step3Profile({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="degree">Degree / Qualification</Label>
-                <Input id="degree" placeholder="Degree or qualification"
+                <Input id="degree" placeholder="Highest degree or qualification"
                   value={degree} onChange={e => setDegree(e.target.value)} maxLength={80} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="branch">Field of Study / Branch</Label>
-                <Input id="branch" placeholder="Field of study"
+                <Input id="branch" placeholder="Field of study or major"
                   value={branch} onChange={e => setBranch(e.target.value)} maxLength={80} />
               </div>
             </div>
@@ -381,7 +395,7 @@ export function Step3Profile({
             <SectionHeader icon={Link2} title="Online Presence" badge="(optional)" />
             <div className="space-y-2">
               <Label htmlFor="li">LinkedIn Profile URL</Label>
-              <Input id="li" type="url" placeholder="linkedin.com/in/your-profile"
+              <Input id="li" type="url" placeholder="https://www.linkedin.com/in/your-profile"
                 value={linkedin} onChange={e => setLinkedin(e.target.value)} />
             </div>
           </div>
@@ -415,36 +429,6 @@ export function Step3Profile({
                     <SelectItem value="career-change">Career transition / change</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-            </div>
-          )}
-
-          {/* ══ General Workforce ══ */}
-          {contribType === "general_workforce" && (
-            <div className="space-y-4 p-4 rounded-xl bg-forest-50 border border-forest-200">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-forest-600" />
-                <p className="text-sm font-semibold text-forest-800">Professional Background</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="yoe">Years of Experience</Label>
-                  <Input id="yoe" type="number" min="0" max="50" placeholder="Years of experience"
-                    value={yearsExperience} onChange={e => setYearsExperience(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Career Stage</Label>
-                  <Select value={careerStage} onValueChange={setCareerStage}>
-                    <SelectTrigger><SelectValue placeholder="Select stage" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="entry">Entry Level</SelectItem>
-                      <SelectItem value="mid-career">Mid-Level</SelectItem>
-                      <SelectItem value="senior">Senior</SelectItem>
-                      <SelectItem value="lead">Lead / Principal</SelectItem>
-                      <SelectItem value="executive">Executive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
             </div>
           )}
