@@ -113,18 +113,18 @@
    ══════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Warm parchment surface system */
-  --page-bg:       #F7F3EF;
-  --sidebar-bg:    #FDFAF7;
-  --card-bg:       #FDFAF7;
-  --card-bg-alt:   #F9F5F1;
-  --topbar-bg:     rgba(247,243,239,0.92);
+  /* Clean neutral surface system */
+  --page-bg:       #F5F5F7;
+  --sidebar-bg:    #FEFEFE;
+  --card-bg:       #FEFEFE;
+  --card-bg-alt:   #F3F2F0;
+  --topbar-bg:     rgba(255,255,255,0.75);
 
-  /* Brown-tinted border system */
-  --border-hair:   rgba(166,119,99,0.10);
-  --border-soft:   rgba(166,119,99,0.16);
-  --border-mid:    rgba(166,119,99,0.24);
-  --border-strong: rgba(106,76,63,0.30);
+  /* Neutral border system */
+  --border-hair:   rgba(0,0,0,0.04);
+  --border-soft:   rgba(0,0,0,0.06);
+  --border-mid:    rgba(0,0,0,0.10);
+  --border-strong: rgba(0,0,0,0.14);
 
   /* Ink color system — neutral warm grays for text hierarchy */
   --ink:           #211713;
@@ -138,16 +138,16 @@
   --teal-soft:     rgba(91,155,162,0.14);
   --forest-soft:   rgba(77,87,65,0.12);
 
-  /* Warm shadow system */
-  --shadow-card:   0 1px 3px rgba(77,55,46,0.06), 0 4px 16px rgba(77,55,46,0.05);
-  --shadow-hover:  0 2px 8px rgba(77,55,46,0.08), 0 12px 40px rgba(77,55,46,0.10);
-  --shadow-float:  0 8px 32px rgba(77,55,46,0.14), 0 2px 8px rgba(77,55,46,0.08);
+  /* Neutral shadow system */
+  --shadow-card:   0 2px 8px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.03);
+  --shadow-hover:  0 4px 16px rgba(0,0,0,0.06), 0 12px 40px rgba(0,0,0,0.06);
+  --shadow-float:  0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
 
   /* Surface */
-  --surface: #F7F3EF;
-  --surface-alt: #F6F1EF;
-  --surface-raised: #FDFAF7;
-  --surface-overlay: rgba(247, 243, 239, 0.80);
+  --surface: #F5F5F7;
+  --surface-alt: #F0F0F2;
+  --surface-raised: #FEFEFE;
+  --surface-overlay: rgba(245, 245, 247, 0.80);
 
   /* Text */
   --text: #211713;
@@ -288,13 +288,16 @@ body::after {
    ══════════════════════════════════════════════════════════════ */
 
 .card-parchment {
-  background: linear-gradient(155deg, rgba(253,250,247,0.95), rgba(255,255,255,0.7) 40%, rgba(249,245,241,0.6));
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-soft);
-  border-radius: 18px;
-  box-shadow: 0 1px 3px rgba(77,55,46,0.05), 0 4px 16px rgba(77,55,46,0.04), inset 0 1px 0 rgba(255,255,255,0.7);
-  transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 20px;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.03),
+    0 8px 32px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255,255,255,0.7);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
   position: relative;
   overflow: hidden;
 }
@@ -304,24 +307,29 @@ body::after {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.98) 35%, rgba(255,255,255,0.98) 65%, transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.95) 30%, rgba(255,255,255,0.95) 70%, transparent);
 }
 
 .card-parchment:hover {
-  box-shadow: 0 1px 3px rgba(77,55,46,0.05), 0 4px 16px rgba(77,55,46,0.04), inset 0 1px 0 rgba(255,255,255,0.7);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.05),
+    0 16px 48px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255,255,255,0.8);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: translateY(-2px);
 }
 
 /* Gold horizontal rule */
 .gold-rule {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(208,176,96,0.35) 15%, rgba(208,176,96,0.5) 50%, rgba(208,176,96,0.35) 85%, transparent);
+  background: linear-gradient(90deg, transparent, rgba(208,176,96,0.30) 20%, rgba(208,176,96,0.45) 50%, rgba(208,176,96,0.30) 80%, transparent);
   position: relative;
 }
 .gold-rule::after {
   content: '';
   position: absolute;
-  inset: -2px 20% -2px 20%;
-  background: linear-gradient(90deg, transparent, rgba(208,176,96,0.08) 30%, rgba(208,176,96,0.10) 50%, rgba(208,176,96,0.08) 70%, transparent);
+  inset: -2px 25% -2px 25%;
+  background: linear-gradient(90deg, transparent, rgba(208,176,96,0.06) 30%, rgba(208,176,96,0.08) 50%, rgba(208,176,96,0.06) 70%, transparent);
   filter: blur(3px);
 }
 
@@ -330,18 +338,17 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 26px 16px;
-  border-bottom: 1px solid var(--border-hair);
+  padding: 18px 24px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
   position: relative;
 }
 .section-header-parchment::after {
   content: '';
   position: absolute;
   bottom: -1px;
-  left: 26px;
-  right: 26px;
+  left: 24px; right: 24px;
   height: 1px;
-  background: linear-gradient(90deg, rgba(208,176,96,0.12), rgba(166,119,99,0.06) 50%, transparent);
+  background: linear-gradient(90deg, rgba(0,0,0,0.03), transparent 60%);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -400,31 +407,27 @@ textarea::placeholder,
 
 .prog-track {
   height: 4px;
-  background: rgba(166,119,99,0.08);
+  background: rgba(0,0,0,0.06);
   border-radius: 100px;
   overflow: hidden;
-  box-shadow: inset 0 0.5px 1px rgba(77,55,46,0.06);
 }
 
 .prog-fill {
   height: 100%;
   border-radius: 100px;
-  transition: width 1.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  position: relative;
-  box-shadow: 0 0 6px rgba(166,119,99,0.12);
+  transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .badge-parchment {
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   padding: 3px 10px;
   border-radius: 100px;
   white-space: nowrap;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.4);
 }
 
 /* ── Filter trigger (inline, for pagination etc) ── */
@@ -481,19 +484,19 @@ textarea::placeholder,
    ══════════════════════════════════════════════════════════════ */
 
 .glass {
-  background: var(--glass-bg, linear-gradient(135deg, rgba(255,255,255,0.65), rgba(253,250,247,0.55)));
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 1px 3px rgba(77,55,46,0.05), 0 4px 16px rgba(77,55,46,0.04), inset 0 1px 0 rgba(255,255,255,0.5);
+  background: var(--glass-bg, rgba(255,255,255,0.68));
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.40);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03), 0 4px 20px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6);
 }
 
 .glass-heavy {
-  background: linear-gradient(135deg, rgba(255,255,255,0.80), rgba(253,250,247,0.70));
-  backdrop-filter: blur(24px) saturate(200%);
-  -webkit-backdrop-filter: blur(24px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow: 0 2px 6px rgba(77,55,46,0.06), 0 8px 24px rgba(77,55,46,0.05), inset 0 1px 0 rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.50);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.7);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -553,12 +556,12 @@ textarea::placeholder,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(166,119,99,0.18);
+  background: rgba(0,0,0,0.12);
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(166,119,99,0.30);
+  background: rgba(0,0,0,0.20);
 }
 
 /* ══════════════════════════════════════════════════════════════
