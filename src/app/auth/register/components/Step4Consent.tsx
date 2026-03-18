@@ -284,7 +284,7 @@ export function Step4Consent({
               onClick={onBack}
               className="w-full text-sm text-beige-600 hover:text-beige-800 flex items-center justify-center gap-1"
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back
+              <ArrowLeft className="w-3.5 h-3.5" /> Previous
             </button>
           </div>
 

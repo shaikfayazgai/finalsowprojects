@@ -55,6 +55,7 @@ export function useEnterpriseRegistration() {
   const [emailVerified, setEmailVerified] = useState(false);
   const [emailOtpLoading, setEmailOtpLoading] = useState(false);
 
+  const [incorporationCountry, setIncorporationCountry] = useState("");
   const [incorporationFile, setIncorporationFile] = useState<File | null>(null);
   const [incorporationDrag, setIncorporationDrag] = useState(false);
   const [acceptTos, setAcceptTos]           = useState(false);
@@ -62,15 +63,6 @@ export function useEnterpriseRegistration() {
   const [acceptEsa, setAcceptEsa]           = useState(false);
   const [acceptAhp, setAcceptAhp]           = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
-
-  useEffect(() => {
-    if (!hqCountry) return;
-    const match = COUNTRIES_DATA.find(c => c.name === hqCountry);
-    if (match) {
-      setPhoneCountry(match.name);
-      setPhone(prev => (prev.startsWith(match.code) ? prev : match.code + " "));
-    }
-  }, [hqCountry]);
 
   useEffect(() => {
     setPhoneVerified(false);
@@ -173,7 +165,6 @@ export function useEnterpriseRegistration() {
       return;
     }
     if (!companySize)     { setError("Please select your company size"); return; }
-    if (!hqCountry)       { setError("Please select your headquarters country"); return; }
     setError("");
     setStep(2);
   }
@@ -256,6 +247,7 @@ export function useEnterpriseRegistration() {
     emailOtpLoading,
     sendOTP, verifyOTP, sendEmailOTP, verifyEmailOTP,
 
+    incorporationCountry, setIncorporationCountry,
     incorporationFile, setIncorporationFile,
     incorporationDrag, setIncorporationDrag,
     acceptTos, setAcceptTos,

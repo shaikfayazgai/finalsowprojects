@@ -62,6 +62,8 @@ export function useRegistration(ssoData?: SSOData | null) {
   const [emailVerified,     setEmailVerified]     = useState(false);
   const [emailOtpLoading,   setEmailOtpLoading]   = useState(false);
 
+  const [ndaAccepted,     setNdaAccepted]     = useState(false);
+
   const [resumeFile,      setResumeFile]      = useState<File | null>(null);
   const [resumeDrag,      setResumeDrag]      = useState(false);
   const [acceptTos,       setAcceptTos]       = useState(false);
@@ -209,6 +211,10 @@ export function useRegistration(ssoData?: SSOData | null) {
   }
 
   function goToStep4() {
+    if (!ndaAccepted) {
+      setError("You must read and accept the NDA & Disclosure Agreement to continue");
+      return;
+    }
     if (!phoneVerified || !emailVerified) {
       setError("Please verify both your phone number and email address to continue");
       return;
@@ -283,6 +289,8 @@ export function useRegistration(ssoData?: SSOData | null) {
     emailVerified,
     emailOtpLoading,
     sendOTP, verifyOTP, sendEmailOTP, verifyEmailOTP,
+
+    ndaAccepted, setNdaAccepted,
 
     resumeFile, setResumeFile,
     resumeDrag, setResumeDrag,

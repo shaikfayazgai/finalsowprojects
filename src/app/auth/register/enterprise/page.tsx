@@ -15,24 +15,31 @@ export default function EnterpriseRegisterPage() {
 
   return (
     <div className="w-full max-w-xl py-8">
-      <div className="text-center mb-7">
-        <Link href="/" className="inline-flex items-center gap-2 mb-5 group">
-          <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brown-500 to-brown-700 flex items-center justify-center">
+
+      {/* ── Header row: logo left · badge right ── */}
+      <div className="flex items-center justify-between mb-8">
+        <Link href="/" className="flex items-center gap-2 group">
+          <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brown-500 to-brown-700 flex items-center justify-center shadow-sm">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <span className="font-heading font-semibold text-brown-950 group-hover:text-brown-700 transition-colors">
             GlimmoraTeam
           </span>
         </Link>
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brown-100 border border-brown-200 mb-3">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-brown-100 border border-brown-200">
           <Briefcase className="w-3.5 h-3.5 text-brown-600" />
           <span className="text-xs font-semibold text-brown-700">Enterprise Account</span>
         </div>
-        <h1 className="font-heading text-2xl font-bold text-brown-950">Register Your Organisation</h1>
-        <p className="text-sm text-beige-500 mt-1">Hire globally, manage intelligently - 4 quick steps to get started</p>
       </div>
 
-      <div className="mb-5">
+      {/* ── Page title ── */}
+      <div className="text-center mb-7">
+        <h1 className="font-heading text-2xl font-bold text-brown-950">Register Your Organisation</h1>
+        <p className="text-sm text-beige-500 mt-1">Hire globally, manage intelligently — 4 quick steps to get started</p>
+      </div>
+
+      {/* ── Step progress ── */}
+      <div className="mb-6">
         <EnterpriseStepProgress step={reg.step} />
       </div>
 
@@ -45,8 +52,9 @@ export default function EnterpriseRegisterPage() {
           industryOther={reg.industryOther} setIndustryOther={reg.setIndustryOther}
           companySize={reg.companySize} setCompanySize={reg.setCompanySize}
           website={reg.website} setWebsite={reg.setWebsite}
-          hqCountry={reg.hqCountry} setHqCountry={reg.setHqCountry}
-          hqCity={reg.hqCity} setHqCity={reg.setHqCity}
+          incorporationCountry={reg.incorporationCountry} setIncorporationCountry={reg.setIncorporationCountry}
+          incorporationFile={reg.incorporationFile} setIncorporationFile={reg.setIncorporationFile}
+          incorporationDrag={reg.incorporationDrag} setIncorporationDrag={reg.setIncorporationDrag}
           error={reg.error}
           onContinue={reg.goToStep2}
         />
@@ -97,8 +105,6 @@ export default function EnterpriseRegisterPage() {
 
       {reg.step === 4 && (
         <Step4Agreements
-          incorporationFile={reg.incorporationFile} setIncorporationFile={reg.setIncorporationFile}
-          incorporationDrag={reg.incorporationDrag} setIncorporationDrag={reg.setIncorporationDrag}
           acceptTos={reg.acceptTos} setAcceptTos={reg.setAcceptTos}
           acceptPp={reg.acceptPp} setAcceptPp={reg.setAcceptPp}
           acceptEsa={reg.acceptEsa} setAcceptEsa={reg.setAcceptEsa}

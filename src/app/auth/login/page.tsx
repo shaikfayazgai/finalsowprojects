@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,22 +13,15 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
-  Globe,
-  BarChart3,
-  Users,
   RefreshCw,
+  KeyRound,
+  Star,
 } from "lucide-react";
 import { GlassCard, GlassCardContent, Button, Input, Label, Badge } from "@/components/ui";
+import { useAuthStore } from "@/lib/stores/auth-store";
 import type { SSOData, SSOProvider } from "../register/types";
 
-type Step = "credentials" | "mfa";
-
-const FEATURE_CARDS = [
-  { icon: <Globe className="w-4 h-4" />, text: "Operate across 100+ countries from one control layer" },
-  { icon: <Shield className="w-4 h-4" />, text: "SOC 2 Type II aligned controls and audit trails" },
-  { icon: <BarChart3 className="w-4 h-4" />, text: "Live outcomes, delivery health, and team performance" },
-  { icon: <Users className="w-4 h-4" />, text: "Enterprise, contributor, reviewer, and admin governance" },
-];
+type Step = "credentials" | "mfa-prompt" | "mfa" | "recovery";
 
 const STATS = [
   { value: "50K+", label: "Contributors" },
@@ -36,51 +29,77 @@ const STATS = [
   { value: "99.9%", label: "Uptime SLA" },
 ];
 
+const MOCK_SSO_DATA: Record<SSOProvider, SSOData> = {
+  google: { firstName: "John", lastName: "Doe", email: "john.doe@gmail.com", provider: "google" },
+  microsoft: { firstName: "Jane", lastName: "Smith", email: "jane.smith@outlook.com", provider: "microsoft" },
+};
+
 export default function LoginPage() {
   const router = useRouter();
+  const isMfaEnabled = useAuthStore((s) => s.isMfaEnabled);
 
   const [step, setStep] = useState<Step>("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [ssoLoading, setSsoLoading] = useState<SSOProvider | null>(null);
   const [error, setError] = useState("");
+  const [timeLeft, setTimeLeft] = useState(30);
 
-  const handleCredentials = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) {
-      setError("Enter a valid email address");
-      return;
-    }
-    if (!password) {
-      setError("Please enter your password");
-      return;
-    }
-    setError("");
-    setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setIsLoading(false);
-    setStep("mfa");
-  };
+  /* ── TOTP countdown timer ── */
+  useEffect(() => {
+    if (step !== "mfa") return;
+    const tick = () => {
+      setTimeLeft(30 - (Math.floor(Date.now() / 1000) % 30));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [step]);
 
-  const handleMFA = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (mfaCode.length !== 6) {
-      setError("Please enter the 6-digit code");
-      return;
-    }
+  /* ── Auto-submit MFA when 6 digits entered ── */
+  const handleMFA = useCallback(async () => {
     setError("");
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
     setIsLoading(false);
     router.push("/enterprise/dashboard");
+  }, [router]);
+
+  useEffect(() => {
+    if (step === "mfa" && mfaCode.length === 6 && !isLoading) {
+      handleMFA();
+    }
+  }, [mfaCode, step, isLoading, handleMFA]);
+
+  const handleCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) { setError("Enter a valid email address"); return; }
+    if (!password) { setError("Please enter your password"); return; }
+    setError("");
+    setIsLoading(true);
+    await new Promise((r) => setTimeout(r, 1000));
+    setIsLoading(false);
+    setStep(isMfaEnabled ? "mfa" : "mfa-prompt");
   };
 
-  const MOCK_SSO_DATA: Record<SSOProvider, SSOData> = {
-    google: { firstName: "John", lastName: "Doe", email: "john.doe@gmail.com", provider: "google" },
-    microsoft: { firstName: "Jane", lastName: "Smith", email: "jane.smith@outlook.com", provider: "microsoft" },
+  const handleMFASubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (mfaCode.length !== 6) { setError("Please enter the 6-digit code"); return; }
+    await handleMFA();
+  };
+
+  const handleRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryCode) { setError("Please enter your recovery code"); return; }
+    setError("");
+    setIsLoading(true);
+    await new Promise((r) => setTimeout(r, 800));
+    setIsLoading(false);
+    router.push("/enterprise/dashboard");
   };
 
   const handleSSO = async (provider: SSOProvider) => {
@@ -91,70 +110,132 @@ export default function LoginPage() {
     router.push(`/auth/register?sso=${provider}`);
   };
 
+  const resetToCredentials = () => {
+    setStep("credentials");
+    setMfaCode("");
+    setRecoveryCode("");
+    setError("");
+  };
+
   return (
-    <div className="w-full flex items-stretch gap-10 max-w-6xl min-h-140">
-      <div className="hidden lg:flex flex-col flex-1 max-w-xl bg-linear-to-br from-stone-900 via-brown-950 to-stone-800 rounded-[2.5rem] p-10 text-white overflow-hidden relative border border-white/10 shadow-2xl">
-        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-brown-700/30 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full bg-teal-700/20 blur-2xl pointer-events-none" />
+    <div className="w-full flex items-start gap-10 max-w-6xl">
 
-        <Link href="/" className="flex items-center gap-2 mb-8 group w-fit">
-          <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center group-hover:bg-white/25 transition-colors">
-            <Sparkles className="w-4 h-4 text-white" />
+      {/* ── Left content (no box) ── */}
+      <div className="hidden lg:flex flex-col flex-1 max-w-lg py-8 pr-6 justify-between min-h-[640px]">
+
+        {/* TOP */}
+        <div>
+          <Link href="/" className="flex items-center gap-2 mb-8 group w-fit">
+            <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brown-500 to-brown-700 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-heading font-semibold text-brown-950 group-hover:text-brown-700 transition-colors">
+              GlimmoraTeam
+            </span>
+          </Link>
+
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-50 border border-teal-100 w-fit mb-5">
+            <div className="flex -space-x-1.5">
+              {["bg-teal-500","bg-brown-400","bg-amber-400","bg-violet-400"].map((c, i) => (
+                <div key={i} className={`w-5 h-5 rounded-full ${c} border-2 border-white flex items-center justify-center`}>
+                  <Zap className="w-2.5 h-2.5 text-white" />
+                </div>
+              ))}
+            </div>
+            <span className="text-xs font-medium text-teal-700">Trusted by 50K+ professionals</span>
           </div>
-          <span className="font-heading font-semibold text-white/90 group-hover:text-white transition-colors">GlimmoraTeam</span>
-        </Link>
 
-        <div className="mb-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brown-300 mb-3">Enterprise Intelligence</p>
-          <h2 className="font-heading text-2xl font-bold text-white leading-snug mb-2">Global Workforce Intelligence Platform</h2>
-          <p className="text-sm text-brown-200/90 leading-relaxed">
-            AI-governed delivery for distributed teams with measurable outcomes, built-in governance, and trusted scale.
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-600 mb-3 flex items-center gap-2">
+            <span className="w-5 h-px bg-teal-500" />
+            Enterprise Intelligence
+          </p>
+
+          <h2 className="font-heading text-4xl font-bold text-brown-950 leading-[1.15] mb-4">
+            Welcome back to<br />
+            <span className="text-teal-600">your workspace</span>.
+          </h2>
+
+          <p className="text-sm text-beige-600 leading-relaxed max-w-sm">
+            AI-governed delivery for distributed teams at trusted scale.
+            Sign in to manage your workforce, projects, and earnings.
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-8">
-          {STATS.map(({ value, label }) => (
-            <div key={label} className="bg-white/10 border border-white/10 rounded-xl p-3 text-center">
-              <p className="font-heading text-lg font-bold text-white">{value}</p>
-              <p className="text-[10px] text-brown-300 mt-0.5">{label}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="space-y-2.5 flex-1">
-          {FEATURE_CARDS.map((feature, i) => (
-            <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-brown-100/90 bg-white/[0.04] border border-white/[0.06]">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-white/10">{feature.icon}</div>
-              <p className="text-xs font-medium">{feature.text}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-3 pt-6 mt-auto border-t border-white/10 text-[10px] text-brown-300">
-          <div className="flex items-center gap-1">
-            <Lock className="w-3 h-3" />
-            <span>256-bit encryption</span>
+        {/* MIDDLE */}
+        <div>
+          <div className="flex items-center gap-6 mb-5">
+            {STATS.map(({ value, label }, i) => (
+              <div key={label} className={`${i > 0 ? "pl-6 border-l border-beige-200" : ""}`}>
+                <p className="font-heading text-2xl font-bold text-brown-950">{value}</p>
+                <p className="text-xs text-beige-500 mt-0.5">{label}</p>
+              </div>
+            ))}
           </div>
-          <span>|</span>
-          <div className="flex items-center gap-1">
-            <Shield className="w-3 h-3" />
-            <span>SOC 2 Type II</span>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            {[
+              { Icon: Shield,   label: "SOC 2 Certified"      },
+              { Icon: Lock,     label: "256-bit Encryption"   },
+              { Icon: Zap,      label: "99.9% Uptime SLA"     },
+              { Icon: ArrowRight, label: "GDPR Compliant"     },
+            ].map(({ Icon, label }) => (
+              <div key={label} className="flex items-center gap-2.5 p-3 rounded-xl bg-white/60 border border-beige-100">
+                <div className="w-7 h-7 rounded-lg bg-teal-50 border border-teal-100 flex items-center justify-center shrink-0">
+                  <Icon className="w-3.5 h-3.5 text-teal-600" />
+                </div>
+                <span className="text-sm text-brown-700 font-medium">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* BOTTOM — testimonial */}
+        <div>
+          <div className="p-4 rounded-2xl bg-white/70 border border-beige-100 mb-5">
+            <div className="flex gap-0.5 mb-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              ))}
+            </div>
+            <p className="text-sm text-brown-700 leading-relaxed mb-3">
+              &ldquo;GlimmoraTeam gave us real visibility into our global workforce for the first time.
+              The governance controls alone justified the switch within our first quarter.&rdquo;
+            </p>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-brown-500 flex items-center justify-center text-xs font-bold text-white shrink-0">SK</div>
+              <div>
+                <p className="text-xs font-semibold text-brown-900">Sarah Kim</p>
+                <p className="text-[11px] text-beige-500">VP of Operations · Acme Corp</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 text-xs text-beige-400">
+            <div className="flex items-center gap-1"><Lock className="w-3 h-3" /><span>256-bit SSL</span></div>
+            <span>·</span>
+            <div className="flex items-center gap-1"><Shield className="w-3 h-3" /><span>SOC 2 Type II</span></div>
           </div>
         </div>
       </div>
 
+      {/* ── Form panel (right) ── */}
       <div className="w-full max-w-md flex flex-col justify-center">
+
+        {/* Header */}
         <div className="text-center mb-7">
-          <Link href="/" className="inline-flex items-center gap-2 mb-5 group">
+          <Link href="/" className="lg:hidden inline-flex items-center gap-2 mb-5 group">
             <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brown-500 to-brown-700 flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <span className="font-heading font-semibold text-brown-950 group-hover:text-brown-700 transition-colors">GlimmoraTeam</span>
+            <span className="font-heading font-semibold text-brown-950 group-hover:text-brown-700 transition-colors">
+              GlimmoraTeam
+            </span>
           </Link>
           <h1 className="font-heading text-2xl font-bold text-brown-950">Welcome back</h1>
           <p className="text-sm text-beige-500 mt-1">Sign in to your account to continue</p>
         </div>
 
+        {/* ── Step: credentials ── */}
         {step === "credentials" && (
           <GlassCard variant="heavy" padding="lg">
             <GlassCardContent>
@@ -208,13 +289,9 @@ export default function LoginPage() {
 
                 <Button type="submit" variant="gradient-cta" size="lg" className="w-full" disabled={isLoading}>
                   {isLoading ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" /> Signing in...
-                    </>
+                    <><RefreshCw className="w-4 h-4 animate-spin" /> Signing in...</>
                   ) : (
-                    <>
-                      Sign In <ArrowRight className="w-4 h-4" />
-                    </>
+                    <>Sign In <ArrowRight className="w-4 h-4" /></>
                   )}
                 </Button>
 
@@ -274,6 +351,64 @@ export default function LoginPage() {
           </GlassCard>
         )}
 
+        {/* ── Step: mfa-prompt (MFA not yet set up) ── */}
+        {step === "mfa-prompt" && (
+          <GlassCard variant="heavy" padding="lg">
+            <GlassCardContent>
+              <div className="text-center space-y-5">
+                <div className="mx-auto w-14 h-14 rounded-2xl bg-linear-to-br from-teal-500 to-teal-700 flex items-center justify-center shadow-lg shadow-teal-200">
+                  <Shield className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <p className="font-heading font-semibold text-brown-950 text-lg">Secure Your Account</p>
+                  <p className="text-sm text-beige-500 mt-1">
+                    Enable two-factor authentication for stronger protection against unauthorized access.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-teal-50 border border-teal-200 text-left space-y-2">
+                  {[
+                    "Protects against password breaches",
+                    "Required for enterprise admin roles",
+                    "Takes less than 2 minutes to set up",
+                  ].map((point) => (
+                    <div key={point} className="flex items-center gap-2 text-sm text-teal-700">
+                      <div className="w-1.5 h-1.5 rounded-full bg-teal-500 flex-shrink-0" />
+                      {point}
+                    </div>
+                  ))}
+                </div>
+
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => router.push("/auth/mfa-setup?redirect=/enterprise/dashboard")}
+                >
+                  <Shield className="w-4 h-4" /> Set Up MFA Now
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => router.push("/enterprise/dashboard")}
+                  className="w-full text-sm text-beige-500 hover:text-beige-700 transition-colors py-1"
+                >
+                  Skip for now
+                </button>
+
+                <button
+                  type="button"
+                  onClick={resetToCredentials}
+                  className="flex items-center justify-center gap-1.5 text-xs text-beige-400 hover:text-beige-600 transition-colors w-full"
+                >
+                  <ArrowLeft className="w-3 h-3" /> Back to login
+                </button>
+              </div>
+            </GlassCardContent>
+          </GlassCard>
+        )}
+
+        {/* ── Step: mfa (verify 6-digit code) ── */}
         {step === "mfa" && (
           <GlassCard variant="heavy" padding="lg">
             <GlassCardContent>
@@ -286,8 +421,8 @@ export default function LoginPage() {
                 <p className="text-xs text-beige-500 mt-1">Enter the 6-digit code from your authenticator app</p>
               </div>
 
-              <form onSubmit={handleMFA} className="space-y-5">
-                <div className="space-y-2">
+              <form onSubmit={handleMFASubmit} className="space-y-5">
+                <div className="space-y-3">
                   <Label htmlFor="mfa">Authenticator Code</Label>
                   <Input
                     id="mfa"
@@ -295,13 +430,102 @@ export default function LoginPage() {
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={6}
-                    placeholder="Enter 6-digit code"
+                    placeholder="000000"
                     className="text-center text-2xl tracking-[0.5em] font-mono"
                     value={mfaCode}
                     onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     autoFocus
                   />
-                  <p className="text-xs text-beige-400 text-center">Code rotates every 30 seconds, use the current code shown in your app</p>
+
+                  {/* Countdown bar */}
+                  <div className="space-y-1">
+                    <div className="h-1 rounded-full bg-beige-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-1000 bg-teal-500"
+                        style={{ width: `${(timeLeft / 30) * 100}%` }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-beige-400 text-center">
+                      Code expires in <span className="font-mono font-semibold text-brown-700">{timeLeft}s</span>
+                    </p>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {error}
+                  </div>
+                )}
+
+                {isLoading && (
+                  <div className="flex items-center justify-center gap-2 py-2 text-sm text-beige-500">
+                    <RefreshCw className="w-4 h-4 animate-spin" /> Verifying...
+                  </div>
+                )}
+
+                {!isLoading && mfaCode.length < 6 && (
+                  <Button type="submit" variant="gradient-cta" size="lg" className="w-full" disabled={mfaCode.length !== 6}>
+                    Verify &amp; Sign In <ArrowRight className="w-4 h-4" />
+                  </Button>
+                )}
+
+                <div className="space-y-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => { setStep("recovery"); setError(""); }}
+                    className="text-sm text-teal-600 hover:text-teal-700 font-medium transition-colors"
+                  >
+                    Use a recovery code instead
+                  </button>
+                  <br />
+                  <button
+                    type="button"
+                    onClick={resetToCredentials}
+                    className="flex items-center justify-center gap-1.5 text-sm text-beige-600 hover:text-beige-800 transition-colors w-full"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back to login
+                  </button>
+                </div>
+              </form>
+            </GlassCardContent>
+          </GlassCard>
+        )}
+
+        {/* ── Step: recovery code ── */}
+        {step === "recovery" && (
+          <GlassCard variant="heavy" padding="lg">
+            <GlassCardContent>
+              <div className="mb-5">
+                <div className="w-12 h-12 rounded-xl bg-linear-to-br from-brown-400 to-brown-600 flex items-center justify-center mb-4">
+                  <KeyRound className="w-6 h-6 text-white" />
+                </div>
+                <p className="font-heading font-semibold text-brown-950 text-lg">Recovery Code</p>
+                <p className="text-xs text-beige-500 mt-1">
+                  Enter one of your 8-character backup codes saved during MFA setup.
+                </p>
+              </div>
+
+              <form onSubmit={handleRecovery} className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="recovery">Backup Recovery Code</Label>
+                  <Input
+                    id="recovery"
+                    type="text"
+                    placeholder="XXXXX-XXXXX"
+                    className="text-center font-mono tracking-widest uppercase"
+                    value={recoveryCode}
+                    onChange={(e) =>
+                      setRecoveryCode(
+                        e.target.value
+                          .replace(/[^A-Za-z0-9-]/g, "")
+                          .toUpperCase()
+                          .slice(0, 11)
+                      )
+                    }
+                    autoFocus
+                  />
+                  <p className="text-xs text-beige-400 text-center">Format: XXXXX-XXXXX</p>
                 </div>
 
                 {error && (
@@ -313,32 +537,25 @@ export default function LoginPage() {
 
                 <Button type="submit" variant="gradient-cta" size="lg" className="w-full" disabled={isLoading}>
                   {isLoading ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" /> Verifying...
-                    </>
+                    <><RefreshCw className="w-4 h-4 animate-spin" /> Verifying...</>
                   ) : (
-                    <>
-                      Verify &amp; Sign In <ArrowRight className="w-4 h-4" />
-                    </>
+                    <>Verify Recovery Code <ArrowRight className="w-4 h-4" /></>
                   )}
                 </Button>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setStep("credentials");
-                    setMfaCode("");
-                    setError("");
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 text-sm text-beige-600 hover:text-beige-800 transition-colors"
+                  onClick={() => { setStep("mfa"); setError(""); }}
+                  className="flex items-center justify-center gap-1.5 text-sm text-beige-600 hover:text-beige-800 transition-colors w-full"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" /> Back to login
+                  <ArrowLeft className="w-3.5 h-3.5" /> Back to authenticator code
                 </button>
               </form>
             </GlassCardContent>
           </GlassCard>
         )}
 
+        {/* ── Quick Access (Demo) ── */}
         <GlassCard variant="light" padding="md" className="mt-4">
           <div className="flex items-center justify-between gap-3 mb-3">
             <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Quick Access (Demo)</p>
@@ -346,41 +563,25 @@ export default function LoginPage() {
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x w-full">
             <Link href="/enterprise/dashboard" className="shrink-0 snap-start">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white"
-              >
+              <Button variant="outline" size="sm" className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
                 <Badge variant="brown" size="sm">E</Badge>
                 <span className="text-xs font-semibold tracking-wide">Enterprise</span>
               </Button>
             </Link>
             <Link href="/contributor/dashboard" className="shrink-0 snap-start">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white"
-              >
+              <Button variant="outline" size="sm" className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
                 <Badge variant="teal" size="sm">C</Badge>
                 <span className="text-xs font-semibold tracking-wide">Contributor</span>
               </Button>
             </Link>
             <Link href="/mentor/dashboard" className="shrink-0 snap-start">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white"
-              >
+              <Button variant="outline" size="sm" className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
                 <Badge variant="forest" size="sm">R</Badge>
                 <span className="text-xs font-semibold tracking-wide">Reviewer</span>
               </Button>
             </Link>
             <Link href="/enterprise/dashboard?demo=super-admin" className="shrink-0 snap-start">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white"
-              >
+              <Button variant="outline" size="sm" className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
                 <Badge variant="brown" size="sm">SA</Badge>
                 <span className="text-xs font-semibold tracking-wide">Super Admin</span>
               </Button>
@@ -388,6 +589,7 @@ export default function LoginPage() {
           </div>
         </GlassCard>
 
+        {/* Footer */}
         <div className="flex items-center justify-center gap-4 mt-5 text-xs text-beige-400">
           <div className="flex items-center gap-1">
             <Lock className="w-3 h-3" />

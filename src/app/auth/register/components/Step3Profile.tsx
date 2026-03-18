@@ -1,17 +1,164 @@
 "use client";
+import { useState, useRef, useEffect } from "react";
 import {
   AlertCircle, ArrowRight, ArrowLeft, X,
-  Briefcase, Users, GraduationCap, Clock,
+  Briefcase, GraduationCap, Clock,
   Sparkles, Globe, Link2,
+  ChevronDown, Search, Check,
 } from "lucide-react";
 import {
   GlassCard, GlassCardContent, Button, Input, Label,
-  Select, SelectContent, SelectGroup, SelectItem, SelectLabel,
-  SelectTrigger, SelectValue,
 } from "@/components/ui";
 import { Checkbox } from "@/components/ui";
 import { SKILL_OPTIONS, TIMEZONES } from "../data";
 import type { ContributorType } from "../types";
+
+/* ── Generic searchable combobox ── */
+function SearchCombobox({
+  value, onChange, options, placeholder, searchPlaceholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { label: string; value: string; group?: string }[];
+  placeholder: string;
+  searchPlaceholder: string;
+}) {
+  const [open, setOpen]     = useState(false);
+  const [search, setSearch] = useState("");
+  const ref                 = useRef<HTMLDivElement>(null);
+  const inputRef            = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false); setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 50);
+  }, [open]);
+
+  const filtered = search.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options;
+
+  // Group items if they have a group property
+  const hasGroups = options.some(o => o.group);
+  const groups = hasGroups
+    ? Array.from(new Set(options.map(o => o.group ?? ""))).map(g => ({
+        group: g,
+        items: filtered.filter(o => (o.group ?? "") === g),
+      })).filter(g => g.items.length > 0)
+    : null;
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className={`flex h-11 w-full items-center justify-between gap-2 rounded-xl border bg-white px-4 text-sm shadow-sm transition-all focus:outline-none ${
+          open ? "border-brown-500 ring-2 ring-brown-500/20" : "border-beige-200 hover:border-beige-300"
+        }`}
+      >
+        <span className={selected ? "text-brown-950 truncate" : "text-beige-400"}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <ChevronDown className={`h-4 w-4 text-beige-500 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-xl border border-beige-200 bg-white shadow-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-beige-100">
+            <Search className="w-3.5 h-3.5 text-beige-400 shrink-0" />
+            <input ref={inputRef} type="text" placeholder={searchPlaceholder} value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="flex-1 text-sm text-brown-950 bg-transparent outline-none placeholder:text-beige-400" />
+            {search && (
+              <button type="button" onClick={() => setSearch("")} className="text-beige-400 hover:text-beige-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="max-h-52 overflow-y-auto overscroll-contain">
+            {filtered.length === 0 && (
+              <p className="px-4 py-3 text-sm text-beige-400 text-center">No results found</p>
+            )}
+            {groups ? (
+              groups.map(({ group, items }) => (
+                <div key={group}>
+                  {group && (
+                    <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-beige-400 bg-beige-50 border-b border-beige-100">
+                      {group}
+                    </p>
+                  )}
+                  {items.map(item => (
+                    <button key={item.value} type="button"
+                      onClick={() => { onChange(item.value); setOpen(false); setSearch(""); }}
+                      className={`flex w-full items-center justify-between px-4 py-2.5 text-sm text-left transition-colors ${
+                        value === item.value ? "bg-brown-50 text-brown-900 font-medium" : "text-brown-800 hover:bg-beige-50"
+                      }`}>
+                      <span>{item.label}</span>
+                      {value === item.value && <Check className="w-3.5 h-3.5 text-brown-600 shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              ))
+            ) : (
+              filtered.map(item => (
+                <button key={item.value} type="button"
+                  onClick={() => { onChange(item.value); setOpen(false); setSearch(""); }}
+                  className={`flex w-full items-center justify-between px-4 py-2.5 text-sm text-left transition-colors ${
+                    value === item.value ? "bg-brown-50 text-brown-900 font-medium" : "text-brown-800 hover:bg-beige-50"
+                  }`}>
+                  <span>{item.label}</span>
+                  {value === item.value && <Check className="w-3.5 h-3.5 text-brown-600 shrink-0" />}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Static option lists ── */
+const TIMEZONE_OPTIONS = TIMEZONES.map(t => ({ label: t, value: t }));
+
+const DEPT_OPTIONS = [
+  { group: "Technology",          value: "engineering",      label: "Engineering & Development" },
+  { group: "Technology",          value: "devops",           label: "DevOps & Infrastructure" },
+  { group: "Technology",          value: "data",             label: "Data & Analytics" },
+  { group: "Technology",          value: "cybersecurity",    label: "Cybersecurity" },
+  { group: "Technology",          value: "qa",               label: "Quality Assurance & Testing" },
+  { group: "Creative & Design",   value: "design",           label: "Design & UX/UI" },
+  { group: "Creative & Design",   value: "content",          label: "Content & Copywriting" },
+  { group: "Creative & Design",   value: "media",            label: "Media & Video Production" },
+  { group: "Business",            value: "product",          label: "Product Management" },
+  { group: "Business",            value: "marketing",        label: "Marketing & Growth" },
+  { group: "Business",            value: "sales",            label: "Sales & Business Development" },
+  { group: "Business",            value: "finance",          label: "Finance & Accounting" },
+  { group: "Business",            value: "operations",       label: "Operations & Strategy" },
+  { group: "People & Support",    value: "hr",               label: "Human Resources" },
+  { group: "People & Support",    value: "customer-support", label: "Customer Support" },
+  { group: "People & Support",    value: "legal",            label: "Legal & Compliance" },
+  { group: "Research & Education",value: "research",         label: "Research & Development" },
+  { group: "Research & Education",value: "education",        label: "Education & Training" },
+  { group: "Other",               value: "other",            label: "Other" },
+];
+
+const CAREER_OPTIONS = [
+  { value: "re-entering",   label: "Re-entering the workforce" },
+  { value: "mid-career",    label: "Mid-career professional" },
+  { value: "senior",        label: "Senior professional" },
+  { value: "career-change", label: "Career transition / change" },
+];
 
 /* ── Reusable section header ── */
 function SectionHeader({
@@ -255,12 +402,12 @@ export function Step3Profile({
               </div>
               <div className="space-y-2">
                 <Label>Time Zone <span className="text-red-400">*</span></Label>
-                <Select value={timezone} onValueChange={setTimezone}>
-                  <SelectTrigger><SelectValue placeholder="Select your timezone" /></SelectTrigger>
-                  <SelectContent>
-                    {TIMEZONES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchCombobox
+                  value={timezone} onChange={setTimezone}
+                  options={TIMEZONE_OPTIONS}
+                  placeholder="Select your timezone"
+                  searchPlaceholder="Search timezones…"
+                />
               </div>
             </div>
           </div>
@@ -281,45 +428,12 @@ export function Step3Profile({
 
               <div className="space-y-2">
                 <Label>Department Category <span className="text-red-400">*</span></Label>
-                <Select value={departmentCategory} onValueChange={setDepartmentCategory}>
-                  <SelectTrigger><SelectValue placeholder="Select your department" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectLabel>Technology</SelectLabel>
-                      <SelectItem value="engineering">Engineering &amp; Development</SelectItem>
-                      <SelectItem value="devops">DevOps &amp; Infrastructure</SelectItem>
-                      <SelectItem value="data">Data &amp; Analytics</SelectItem>
-                      <SelectItem value="cybersecurity">Cybersecurity</SelectItem>
-                      <SelectItem value="qa">Quality Assurance &amp; Testing</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>Creative &amp; Design</SelectLabel>
-                      <SelectItem value="design">Design &amp; UX/UI</SelectItem>
-                      <SelectItem value="content">Content &amp; Copywriting</SelectItem>
-                      <SelectItem value="media">Media &amp; Video Production</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>Business</SelectLabel>
-                      <SelectItem value="product">Product Management</SelectItem>
-                      <SelectItem value="marketing">Marketing &amp; Growth</SelectItem>
-                      <SelectItem value="sales">Sales &amp; Business Development</SelectItem>
-                      <SelectItem value="finance">Finance &amp; Accounting</SelectItem>
-                      <SelectItem value="operations">Operations &amp; Strategy</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>People &amp; Support</SelectLabel>
-                      <SelectItem value="hr">Human Resources</SelectItem>
-                      <SelectItem value="customer-support">Customer Support</SelectItem>
-                      <SelectItem value="legal">Legal &amp; Compliance</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>Research &amp; Education</SelectLabel>
-                      <SelectItem value="research">Research &amp; Development</SelectItem>
-                      <SelectItem value="education">Education &amp; Training</SelectItem>
-                    </SelectGroup>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchCombobox
+                  value={departmentCategory} onChange={setDepartmentCategory}
+                  options={DEPT_OPTIONS}
+                  placeholder="Select your department"
+                  searchPlaceholder="Search departments…"
+                />
               </div>
 
               {departmentCategory === "other" && (
@@ -420,15 +534,12 @@ export function Step3Profile({
               </div>
               <div className="space-y-2">
                 <Label>Career Stage</Label>
-                <Select value={careerStage} onValueChange={setCareerStage}>
-                  <SelectTrigger><SelectValue placeholder="Select your career stage" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="re-entering">Re-entering the workforce</SelectItem>
-                    <SelectItem value="mid-career">Mid-career professional</SelectItem>
-                    <SelectItem value="senior">Senior professional</SelectItem>
-                    <SelectItem value="career-change">Career transition / change</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchCombobox
+                  value={careerStage} onChange={setCareerStage}
+                  options={CAREER_OPTIONS}
+                  placeholder="Select your career stage"
+                  searchPlaceholder="Search…"
+                />
               </div>
             </div>
           )}
@@ -459,7 +570,7 @@ export function Step3Profile({
 
           {error && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+              <AlertCircle className="w-4 h-4 shrink-0" />{error}
             </div>
           )}
 
@@ -469,7 +580,7 @@ export function Step3Profile({
 
           <button type="button" onClick={onBack}
             className="w-full text-sm text-beige-600 hover:text-beige-800 flex items-center justify-center gap-1">
-            <ArrowLeft className="w-3.5 h-3.5" /> Back
+            <ArrowLeft className="w-3.5 h-3.5" /> Previous
           </button>
         </div>
       </GlassCardContent>

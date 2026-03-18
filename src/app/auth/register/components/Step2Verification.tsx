@@ -2,7 +2,7 @@
 
 import {
   AlertCircle, ArrowRight, ArrowLeft,
-  CheckCircle, RefreshCw, Smartphone, Mail,
+  CheckCircle, RefreshCw, Smartphone, Mail, FileText,
 } from "lucide-react";
 import { ChevronDown } from "lucide-react";
 import {
@@ -29,6 +29,8 @@ interface Props {
   emailCooldown: number;
   emailVerified: boolean;
   emailOtpLoading: boolean;
+  ndaAccepted: boolean;
+  setNdaAccepted: (v: boolean) => void;
   error: string;
   onSendOTP: () => void;
   onVerifyOTP: () => void;
@@ -44,6 +46,7 @@ export function Step2Verification({
   otpSent, otp, setOtp, cooldown, phoneVerified, phoneOtpLoading,
   verificationEmail, setVerificationEmail,
   emailOtpSent, emailOtp, setEmailOtp, emailCooldown, emailVerified, emailOtpLoading,
+  ndaAccepted, setNdaAccepted,
   error,
   onSendOTP, onVerifyOTP, onSendEmailOTP, onVerifyEmailOTP,
   onContinue, onBack,
@@ -72,6 +75,85 @@ export function Step2Verification({
         </div>
 
         <div className="space-y-5">
+
+          {/* ── NDA & Disclosure Agreement ── */}
+          <div className={`space-y-3 p-4 rounded-xl border-2 transition-colors ${ndaAccepted ? "bg-teal-50/60 border-teal-200" : "bg-amber-50/60 border-amber-200"}`}>
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${ndaAccepted ? "bg-teal-100" : "bg-amber-100"}`}>
+                <FileText className={`w-3 h-3 ${ndaAccepted ? "text-teal-600" : "text-amber-600"}`} />
+              </div>
+              <p className={`text-xs font-semibold uppercase tracking-wide ${ndaAccepted ? "text-teal-700" : "text-amber-700"}`}>
+                NDA &amp; Disclosure Agreement
+              </p>
+              <span className="ml-auto text-[10px] font-semibold text-red-500 uppercase tracking-wide">Required</span>
+            </div>
+
+            <div className="h-36 overflow-y-auto rounded-lg bg-white border border-beige-200 p-3 text-[11px] text-beige-600 leading-relaxed space-y-2 scroll-smooth">
+              <p className="font-semibold text-brown-800 text-xs">Non-Disclosure &amp; Confidentiality Agreement</p>
+              <p>
+                By registering as a Contributor on the GlimmoraTeam platform, you acknowledge and agree to the following terms
+                regarding confidentiality, intellectual property, and professional conduct.
+              </p>
+              <p className="font-medium text-brown-700">1. Confidentiality Obligations</p>
+              <p>
+                You agree to keep strictly confidential all non-public information, trade secrets, client data, project details,
+                and proprietary materials disclosed to you through the platform or any associated project engagement.
+                This obligation survives the termination of your account.
+              </p>
+              <p className="font-medium text-brown-700">2. Intellectual Property</p>
+              <p>
+                All deliverables, work product, code, designs, and materials you produce during a project engagement are the
+                sole property of the client or GlimmoraTeam, as specified in the applicable project agreement. You hereby assign
+                all rights, title, and interest in such work product upon creation.
+              </p>
+              <p className="font-medium text-brown-700">3. Non-Solicitation</p>
+              <p>
+                During your engagement and for a period of twelve (12) months thereafter, you agree not to directly solicit,
+                recruit, or engage any client, enterprise, or contributor you were introduced to through the GlimmoraTeam
+                platform for business outside the platform.
+              </p>
+              <p className="font-medium text-brown-700">4. Data Protection</p>
+              <p>
+                You agree to handle all personal data in compliance with applicable data protection laws (including GDPR and
+                equivalent regulations) and GlimmoraTeam&apos;s Privacy Policy. You must not store, copy, or transmit personal
+                data beyond what is strictly necessary to fulfil your project obligations.
+              </p>
+              <p className="font-medium text-brown-700">5. Disclosure of Conflicts</p>
+              <p>
+                You agree to proactively disclose any actual or potential conflicts of interest — including competing employment,
+                financial interests, or personal relationships — that may affect your ability to perform project duties impartially.
+              </p>
+              <p className="font-medium text-brown-700">6. Breach &amp; Remedies</p>
+              <p>
+                Any breach of this agreement may result in immediate account suspension, forfeiture of pending earnings, and
+                legal action. GlimmoraTeam reserves the right to seek injunctive relief and recover damages without the
+                requirement of posting a bond.
+              </p>
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <div className="relative mt-0.5 shrink-0">
+                <input
+                  type="checkbox"
+                  checked={ndaAccepted}
+                  onChange={e => setNdaAccepted(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all
+                  ${ndaAccepted
+                    ? "bg-teal-500 border-teal-500"
+                    : "bg-white border-beige-300 group-hover:border-amber-400"}`}>
+                  {ndaAccepted && <CheckCircle className="w-3 h-3 text-white" />}
+                </div>
+              </div>
+              <span className="text-xs text-brown-700 leading-relaxed">
+                I have read, understood, and agree to the{" "}
+                <span className="font-semibold text-brown-900">NDA &amp; Disclosure Agreement</span>.
+                I understand this is a legally binding obligation.{" "}
+                <span className="text-red-500 font-semibold">*</span>
+              </span>
+            </label>
+          </div>
 
           {/* ── Phone Verification ── */}
           <div className="space-y-3 p-4 rounded-xl bg-beige-50 border border-beige-200">
@@ -236,13 +318,13 @@ export function Step2Verification({
           )}
 
           <Button type="button" variant="primary" size="lg" className="w-full"
-            onClick={onContinue} disabled={!phoneVerified || !emailVerified}>
+            onClick={onContinue} disabled={!ndaAccepted || !phoneVerified || !emailVerified}>
             Continue <ArrowRight className="w-4 h-4" />
           </Button>
 
           <button type="button" onClick={onBack}
             className="w-full text-sm text-beige-600 hover:text-beige-800 flex items-center justify-center gap-1">
-            <ArrowLeft className="w-3.5 h-3.5" /> Back
+            <ArrowLeft className="w-3.5 h-3.5" /> Previous
           </button>
         </div>
       </GlassCardContent>

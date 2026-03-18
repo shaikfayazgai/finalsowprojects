@@ -3,6 +3,7 @@
 import { useState, useMemo, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import { useAuthStore } from "@/lib/stores/auth-store";
 import {
   Sparkles, Shield, CheckCircle, Copy, Download, RefreshCw,
   AlertCircle, ChevronDown, ChevronUp,
@@ -23,9 +24,10 @@ const MOCK_SECRET = "JBSWY3DPEHPK3PXP";
 const MOCK_QR_ISSUER = "GlimmoraTeam";
 
 function MFASetupContent() {
-  const router       = useRouter();
-  const searchParams = useSearchParams();
-  const redirect     = searchParams.get("redirect") || "/enterprise/dashboard";
+  const router          = useRouter();
+  const searchParams    = useSearchParams();
+  const redirect        = searchParams.get("redirect") || "/enterprise/dashboard";
+  const setMfaEnabled   = useAuthStore((s) => s.setMfaEnabled);
 
   const recoveryCodes = useMemo(() => generateRecoveryCodes(), []);
   const [step, setStep]               = useState<1 | 2 | 3>(1);
@@ -66,6 +68,7 @@ function MFASetupContent() {
   const handleFinish = async () => {
     setIsLoading(true);
     await new Promise(r => setTimeout(r, 600));
+    setMfaEnabled(true);
     setIsLoading(false);
     router.push(redirect);
   };

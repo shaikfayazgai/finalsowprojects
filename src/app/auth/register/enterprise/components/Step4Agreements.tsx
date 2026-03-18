@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {
   AlertCircle, ArrowLeft, ArrowRight, RefreshCw,
-  Shield, CheckCircle, Upload,
+  Shield, CheckCircle,
 } from "lucide-react";
 import {
   GlassCard, GlassCardContent, Button, Checkbox,
@@ -43,10 +43,6 @@ const LEGAL_AGREEMENTS = [
 type AgreementId = (typeof LEGAL_AGREEMENTS)[number]["id"];
 
 interface Props {
-  incorporationFile: File | null;
-  setIncorporationFile: (v: File | null) => void;
-  incorporationDrag: boolean;
-  setIncorporationDrag: (v: boolean) => void;
   acceptTos: boolean; setAcceptTos: (v: boolean) => void;
   acceptPp: boolean; setAcceptPp: (v: boolean) => void;
   acceptEsa: boolean; setAcceptEsa: (v: boolean) => void;
@@ -59,7 +55,6 @@ interface Props {
 }
 
 export function Step4Agreements({
-  incorporationFile, setIncorporationFile, incorporationDrag, setIncorporationDrag,
   acceptTos, setAcceptTos,
   acceptPp, setAcceptPp,
   acceptEsa, setAcceptEsa,
@@ -85,70 +80,8 @@ export function Step4Agreements({
             <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 4 of 4</p>
             <p className="font-heading font-semibold text-brown-950 text-lg mt-0.5">Agreements & Account Creation</p>
             <p className="text-xs text-beige-500 mt-0.5">
-              Upload your incorporation certificate and accept all agreements to create your enterprise account
+              Accept all agreements below to create your enterprise account
             </p>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-5 h-5 rounded-md bg-beige-100 flex items-center justify-center shrink-0">
-                <Upload className="w-3 h-3 text-beige-500" />
-              </div>
-              <p className="text-xs font-semibold text-brown-700 uppercase tracking-wide">Certification of Incorporation</p>
-              <span className="text-[10px] text-beige-400 font-medium">(optional - PDF - max 10 MB)</span>
-            </div>
-            <label
-              onDragOver={e => { e.preventDefault(); setIncorporationDrag(true); }}
-              onDragLeave={() => setIncorporationDrag(false)}
-              onDrop={e => {
-                e.preventDefault();
-                setIncorporationDrag(false);
-                const file = e.dataTransfer.files[0];
-                if (file && file.type === "application/pdf") setIncorporationFile(file);
-              }}
-              className={`flex items-center gap-3 w-full rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-all ${
-                incorporationDrag
-                  ? "border-brown-400 bg-brown-50"
-                  : incorporationFile
-                  ? "border-teal-400 bg-teal-50"
-                  : "border-beige-300 hover:border-beige-400 bg-white"
-              }`}
-            >
-              <input
-                type="file"
-                accept=".pdf"
-                className="sr-only"
-                onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (file) setIncorporationFile(file);
-                }}
-              />
-              {incorporationFile ? (
-                <>
-                  <CheckCircle className="w-5 h-5 text-teal-500 shrink-0" />
-                  <p className="text-sm font-medium text-teal-700 flex-1 truncate">{incorporationFile.name}</p>
-                  <button
-                    type="button"
-                    onClick={e => { e.preventDefault(); setIncorporationFile(null); }}
-                    className="text-xs text-beige-400 hover:text-red-500 transition-colors shrink-0"
-                  >
-                    Remove
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="w-9 h-9 rounded-lg bg-beige-100 flex items-center justify-center shrink-0">
-                    <Upload className="w-4 h-4 text-beige-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-brown-700 font-medium">
-                      Drop the certificate here or <span className="text-teal-600 underline">browse files</span>
-                    </p>
-                    <p className="text-xs text-beige-400 mt-0.5">PDF only - Maximum 10 MB</p>
-                  </div>
-                </>
-              )}
-            </label>
           </div>
 
           <div>
@@ -255,7 +188,7 @@ export function Step4Agreements({
               onClick={onBack}
               className="w-full text-sm text-beige-600 hover:text-beige-800 flex items-center justify-center gap-1"
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back
+              <ArrowLeft className="w-3.5 h-3.5" /> Previous
             </button>
           </div>
         </form>
