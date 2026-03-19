@@ -45,6 +45,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -257,12 +258,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
-                    <Link href="/auth/forgot-password" className="text-xs text-teal-600 hover:text-teal-700 font-medium">
-                      Forgot password?
-                    </Link>
-                  </div>
+                  <Label htmlFor="password">Password</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -281,6 +277,21 @@ export default function LoginPage() {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="w-4 h-4 rounded border-beige-300 text-brown-700 accent-brown-700 focus:ring-brown-700/20 cursor-pointer"
+                    />
+                    <span className="text-sm text-brown-700">Remember me</span>
+                  </label>
+                  <Link href="/auth/forgot-password" className="text-sm text-teal-600 hover:text-teal-700 font-medium">
+                    Forgot password?
+                  </Link>
                 </div>
 
                 {error && (
