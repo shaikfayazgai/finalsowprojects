@@ -694,6 +694,7 @@ function ContributorRegisterContent() {
                 emailVerified={reg.emailVerified}
                 emailOtpLoading={reg.emailOtpLoading}
                 ndaAccepted={reg.ndaAccepted} setNdaAccepted={reg.setNdaAccepted}
+                ndaSignature={reg.ndaSignature} setNdaSignature={reg.setNdaSignature}
                 error={reg.error}
                 onSendOTP={reg.sendOTP}
                 onVerifyOTP={reg.verifyOTP}

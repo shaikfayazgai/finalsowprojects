@@ -2,7 +2,7 @@
 
 import {
   AlertCircle, ArrowRight, ArrowLeft,
-  CheckCircle, RefreshCw, Smartphone, Mail, FileText,
+  CheckCircle, RefreshCw, Smartphone, Mail, FileText, PenLine, ShieldCheck,
 } from "lucide-react";
 import { ChevronDown } from "lucide-react";
 import {
@@ -31,6 +31,8 @@ interface Props {
   emailOtpLoading: boolean;
   ndaAccepted: boolean;
   setNdaAccepted: (v: boolean) => void;
+  ndaSignature: string;
+  setNdaSignature: (v: string) => void;
   error: string;
   onSendOTP: () => void;
   onVerifyOTP: () => void;
@@ -47,11 +49,14 @@ export function Step2Verification({
   verificationEmail, setVerificationEmail,
   emailOtpSent, emailOtp, setEmailOtp, emailCooldown, emailVerified, emailOtpLoading,
   ndaAccepted, setNdaAccepted,
+  ndaSignature, setNdaSignature,
   error,
   onSendOTP, onVerifyOTP, onSendEmailOTP, onVerifyEmailOTP,
   onContinue, onBack,
 }: Props) {
   const selectedCountry = COUNTRIES_DATA.find(c => c.name === phoneCountry);
+  const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+
 
   const handlePhoneAction = () => {
     if (phoneVerified) return;
@@ -65,94 +70,121 @@ export function Step2Verification({
     else document.getElementById("email-otp")?.focus();
   };
 
+  const ndaSigned = ndaAccepted && ndaSignature.trim().length > 0;
+
   return (
     <GlassCard variant="heavy" padding="lg">
       <GlassCardContent>
         <div className="mb-5">
           <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 3 of 4</p>
           <p className="font-heading font-semibold text-brown-950 text-lg mt-0.5">Identity Verification</p>
-          <p className="text-xs text-beige-500 mt-0.5">Verify your phone number and email address</p>
+          <p className="text-xs text-beige-500 mt-0.5">Review the NDA, sign, then verify your contact details</p>
         </div>
 
         <div className="space-y-5">
 
-          {/* ── NDA & Disclosure Agreement ── */}
-          <div className={`space-y-3 p-4 rounded-xl border-2 transition-colors ${ndaAccepted ? "bg-teal-50/60 border-teal-200" : "bg-amber-50/60 border-amber-200"}`}>
-            <div className="flex items-center gap-2 mb-1">
-              <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${ndaAccepted ? "bg-teal-100" : "bg-amber-100"}`}>
-                <FileText className={`w-3 h-3 ${ndaAccepted ? "text-teal-600" : "text-amber-600"}`} />
-              </div>
-              <p className={`text-xs font-semibold uppercase tracking-wide ${ndaAccepted ? "text-teal-700" : "text-amber-700"}`}>
-                NDA &amp; Disclosure Agreement
-              </p>
-              <span className="ml-auto text-[10px] font-semibold text-red-500 uppercase tracking-wide">Required</span>
-            </div>
+          {/* ── NDA Document ── */}
+          <div className={`rounded-2xl overflow-hidden transition-all duration-300 ${ndaSigned ? "ring-2 ring-teal-300 shadow-lg shadow-teal-50" : "ring-1 ring-beige-200 shadow-md"}`}>
 
-            <div className="h-36 overflow-y-auto rounded-lg bg-white border border-beige-200 p-3 text-[11px] text-beige-600 leading-relaxed space-y-2 scroll-smooth">
-              <p className="font-semibold text-brown-800 text-xs">Non-Disclosure &amp; Confidentiality Agreement</p>
-              <p>
-                By registering as a Contributor on the GlimmoraTeam platform, you acknowledge and agree to the following terms
-                regarding confidentiality, intellectual property, and professional conduct.
-              </p>
-              <p className="font-medium text-brown-700">1. Confidentiality Obligations</p>
-              <p>
-                You agree to keep strictly confidential all non-public information, trade secrets, client data, project details,
-                and proprietary materials disclosed to you through the platform or any associated project engagement.
-                This obligation survives the termination of your account.
-              </p>
-              <p className="font-medium text-brown-700">2. Intellectual Property</p>
-              <p>
-                All deliverables, work product, code, designs, and materials you produce during a project engagement are the
-                sole property of the client or GlimmoraTeam, as specified in the applicable project agreement. You hereby assign
-                all rights, title, and interest in such work product upon creation.
-              </p>
-              <p className="font-medium text-brown-700">3. Non-Solicitation</p>
-              <p>
-                During your engagement and for a period of twelve (12) months thereafter, you agree not to directly solicit,
-                recruit, or engage any client, enterprise, or contributor you were introduced to through the GlimmoraTeam
-                platform for business outside the platform.
-              </p>
-              <p className="font-medium text-brown-700">4. Data Protection</p>
-              <p>
-                You agree to handle all personal data in compliance with applicable data protection laws (including GDPR and
-                equivalent regulations) and GlimmoraTeam&apos;s Privacy Policy. You must not store, copy, or transmit personal
-                data beyond what is strictly necessary to fulfil your project obligations.
-              </p>
-              <p className="font-medium text-brown-700">5. Disclosure of Conflicts</p>
-              <p>
-                You agree to proactively disclose any actual or potential conflicts of interest — including competing employment,
-                financial interests, or personal relationships — that may affect your ability to perform project duties impartially.
-              </p>
-              <p className="font-medium text-brown-700">6. Breach &amp; Remedies</p>
-              <p>
-                Any breach of this agreement may result in immediate account suspension, forfeiture of pending earnings, and
-                legal action. GlimmoraTeam reserves the right to seek injunctive relief and recover damages without the
-                requirement of posting a bond.
-              </p>
-            </div>
-
-            <label className="flex items-start gap-3 cursor-pointer group">
-              <div className="relative mt-0.5 shrink-0">
-                <input
-                  type="checkbox"
-                  checked={ndaAccepted}
-                  onChange={e => setNdaAccepted(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all
-                  ${ndaAccepted
-                    ? "bg-teal-500 border-teal-500"
-                    : "bg-white border-beige-300 group-hover:border-amber-400"}`}>
-                  {ndaAccepted && <CheckCircle className="w-3 h-3 text-white" />}
+            {/* Doc top bar — like DocuSign */}
+            <div className="bg-white px-5 py-3.5 flex items-center justify-between border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${ndaSigned ? "bg-teal-500" : "bg-brown-600"}`}>
+                  <FileText className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-[12px] font-semibold text-gray-900 leading-tight">Product Development Non-Disclosure Agreement</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Glimmora International, UAE · 3 pages · Review before signing</p>
                 </div>
               </div>
-              <span className="text-xs text-brown-700 leading-relaxed">
-                I have read, understood, and agree to the{" "}
-                <span className="font-semibold text-brown-900">NDA &amp; Disclosure Agreement</span>.
-                I understand this is a legally binding obligation.{" "}
-                <span className="text-red-500 font-semibold">*</span>
-              </span>
-            </label>
+              {ndaSigned
+                ? <span className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-full shrink-0">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Signed
+                  </span>
+                : <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full shrink-0">
+                    Signature required
+                  </span>
+              }
+            </div>
+
+            {/* PDF — toolbar hidden */}
+            <iframe
+              src="/Glimmora International Product-Development-Non-Disclosure-Agreement.pdf#toolbar=0&navpanes=0&scrollbar=1&view=FitH"
+              className="w-full bg-gray-50"
+              style={{ height: "400px", border: "none", display: "block" }}
+              title="NDA Agreement"
+            />
+
+            {/* Sign panel */}
+            <div className="bg-white border-t border-gray-100 px-5 py-4 space-y-4">
+
+              {/* Instruction row */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-2">Sign below</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+
+              {/* Signature input */}
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
+                  <PenLine className="w-3 h-3" />
+                  Full legal name <span className="text-red-500 normal-case font-bold">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Type your name to sign"
+                    value={ndaSignature}
+                    onChange={e => setNdaSignature(e.target.value)}
+                    className={`w-full h-12 px-4 rounded-xl border-2 text-[15px] transition-all outline-none bg-white
+                      placeholder:text-gray-300
+                      ${ndaSignature.trim()
+                        ? "border-teal-400 text-teal-800 font-medium"
+                        : "border-gray-200 text-gray-800 focus:border-brown-400"}`}
+                    style={{}}
+                  />
+                  {ndaSignature.trim() && (
+                    <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-500" />
+                  )}
+                </div>
+                {ndaSignature.trim() && (
+                  <p className="text-[10px] text-gray-400 pl-1">Signed as: <span className="italic text-gray-600">{ndaSignature}</span> · {today}</p>
+                )}
+              </div>
+
+              {/* Checkbox */}
+              <label className="flex items-start gap-3 cursor-pointer group p-3 rounded-xl hover:bg-gray-50 transition-colors -mx-1">
+                <div className="mt-0.5 shrink-0">
+                  <div
+                    onClick={() => setNdaAccepted(!ndaAccepted)}
+                    className={`w-4.5 h-4.5 w-[18px] h-[18px] rounded-md border-2 flex items-center justify-center transition-all cursor-pointer
+                      ${ndaAccepted ? "bg-teal-500 border-teal-500" : "bg-white border-gray-300 group-hover:border-brown-400"}`}
+                  >
+                    {ndaAccepted && <CheckCircle className="w-3 h-3 text-white" />}
+                  </div>
+                </div>
+                <span className="text-[12px] text-gray-600 leading-relaxed">
+                  I have read, understood, and agree to be legally bound by the{" "}
+                  <span className="font-semibold text-gray-900">Glimmora International Product Development Non-Disclosure Agreement</span>,
+                  governed by the Indian Contract Act 1872.{" "}
+                  <span className="text-red-500 font-semibold">*</span>
+                </span>
+              </label>
+
+              {/* Signed confirmation */}
+              {ndaSigned && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-teal-50 border border-teal-200">
+                  <ShieldCheck className="w-5 h-5 text-teal-500 shrink-0" />
+                  <div>
+                    <p className="text-[12px] font-semibold text-teal-800">Agreement signed</p>
+                    <p className="text-[11px] text-teal-600 mt-0.5">
+                      Signed by <strong>{ndaSignature}</strong> · {today}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── Phone Verification ── */}
@@ -172,7 +204,6 @@ export function Step2Verification({
             <div className="space-y-2">
               <Label htmlFor="phone">Mobile Number <span className="text-red-400">*</span></Label>
               <div className="flex gap-2">
-                {/* Country + dial-code selector */}
                 <div className="flex flex-1 h-11 rounded-xl border border-beige-200 bg-white shadow-sm overflow-hidden transition-all focus-within:border-brown-500 focus-within:ring-2 focus-within:ring-brown-500/20">
                   <div className="relative flex items-center border-r border-beige-200 shrink-0">
                     <select
@@ -318,7 +349,7 @@ export function Step2Verification({
           )}
 
           <Button type="button" variant="primary" size="lg" className="w-full"
-            onClick={onContinue} disabled={!ndaAccepted || !phoneVerified || !emailVerified}>
+            onClick={onContinue} disabled={!ndaSigned || !phoneVerified || !emailVerified}>
             Continue <ArrowRight className="w-4 h-4" />
           </Button>
 

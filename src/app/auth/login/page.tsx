@@ -37,6 +37,9 @@ const MOCK_SSO_DATA: Record<SSOProvider, SSOData> = {
 export default function LoginPage() {
   const router = useRouter();
   const isMfaEnabled = useAuthStore((s) => s.isMfaEnabled);
+  const isOnboardingComplete = useAuthStore((s) => s.isOnboardingComplete);
+
+  const enterpriseDest = isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding";
 
   const [step, setStep] = useState<Step>("credentials");
   const [email, setEmail] = useState("");
@@ -66,7 +69,7 @@ export default function LoginPage() {
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
     setIsLoading(false);
-    router.push("/enterprise/dashboard");
+    router.push(enterpriseDest);
   }, [router]);
 
   useEffect(() => {
@@ -99,7 +102,7 @@ export default function LoginPage() {
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
     setIsLoading(false);
-    router.push("/enterprise/dashboard");
+    router.push(enterpriseDest);
   };
 
   const handleSSO = async (provider: SSOProvider) => {
@@ -383,14 +386,14 @@ export default function LoginPage() {
                   variant="primary"
                   size="lg"
                   className="w-full"
-                  onClick={() => router.push("/auth/mfa-setup?redirect=/enterprise/dashboard")}
+                  onClick={() => router.push(`/auth/mfa-setup?redirect=${enterpriseDest}`)}
                 >
                   <Shield className="w-4 h-4" /> Set Up MFA Now
                 </Button>
 
                 <button
                   type="button"
-                  onClick={() => router.push("/enterprise/dashboard")}
+                  onClick={() => router.push(enterpriseDest)}
                   className="w-full text-sm text-beige-500 hover:text-beige-700 transition-colors py-1"
                 >
                   Skip for now

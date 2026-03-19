@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { COUNTRIES_DATA } from "../../data";
 import { getPasswordStrength } from "../../helpers";
+import { useAuthStore } from "@/lib/stores/auth-store";
 
 export type OrgType =
   | ""
@@ -196,6 +197,8 @@ export function useEnterpriseRegistration() {
     setStep(4);
   }
 
+  const setRegistrationData = useAuthStore((s) => s.setRegistrationData);
+
   async function handleFinalSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!acceptTos) { setError("You must accept the Terms of Use to proceed"); return; }
@@ -206,7 +209,15 @@ export function useEnterpriseRegistration() {
     setIsLoading(true);
     await new Promise(resolve => setTimeout(resolve, 1500));
     setIsLoading(false);
-    router.push("/enterprise/dashboard");
+
+    // Save registration data for onboarding wizard
+    setRegistrationData({
+      companyName: orgName,
+      countryOfIncorporation: incorporationCountry,
+      adminEmail: adminEmail,
+    });
+
+    router.push("/enterprise/onboarding");
   }
 
   const passwordStrength = getPasswordStrength(password);

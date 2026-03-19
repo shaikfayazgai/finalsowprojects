@@ -391,3 +391,65 @@ body {
   border-radius: 6px;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   NDA WORD DOCUMENT STYLES
+   ══════════════════════════════════════════════════════════════ */
+
+.nda-doc {
+  font-family: "Times New Roman", Times, serif;
+  font-size: 12px;
+  color: #1a1a1a;
+  line-height: 1.7;
+}
+
+.nda-doc p {
+  margin-bottom: 10px;
+}
+
+.nda-doc h1 {
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 16px;
+  color: #111;
+}
+
+.nda-doc h2 {
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 16px;
+  margin-bottom: 6px;
+  color: #111;
+}
+
+.nda-doc strong, .nda-doc b {
+  font-weight: 700;
+  color: #111;
+}
+
+.nda-doc em, .nda-doc i {
+  font-style: italic;
+}
+
+.nda-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  font-size: 11px;
+}
+
+.nda-doc td {
+  padding: 4px 8px;
+  vertical-align: top;
+  width: 50%;
+}
+
+.nda-doc ul, .nda-doc ol {
+  padding-left: 20px;
+  margin-bottom: 10px;
+}
+
+.nda-doc li {
+  margin-bottom: 4px;
+}
+
