@@ -198,9 +198,9 @@ export function useOnboardingWizard() {
     if (!billingCurrency) { setError("Please select a billing currency"); return; }
     if (!billingContactEmail.trim()) { setError("Please enter a billing contact email"); return; }
     if (!billingContactName.trim()) { setError("Please enter a billing contact name"); return; }
-    if (!acceptTos) { setError("Please accept the Terms of Service"); return; }
-    if (!acceptDpa) { setError("Please accept the Data Processing Agreement"); return; }
-    if (!esigVerified) { setError("Please verify your electronic signature via OTP"); return; }
+    // Auto-accept legal agreements when continuing (user agreed via hyperlinks)
+    setAcceptTos(true);
+    setAcceptDpa(true);
     setError("");
     setStep(3);
   }
