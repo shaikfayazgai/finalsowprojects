@@ -1,6 +1,7 @@
 "use client";
 
 import { Briefcase, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { useOnboardingWizard } from "../hooks/useOnboardingWizard";
 import { OnboardingStepProgress } from "./OnboardingStepProgress";
@@ -10,12 +11,43 @@ import { Step2BillingLegal } from "./Step2BillingLegal";
 import { Step3TeamSetup } from "./Step3TeamSetup";
 import { Step4UploadSOW } from "./Step4UploadSOW";
 
+const overlayVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.25 } },
+};
+
+const modalVariants = {
+  hidden: { opacity: 0, scale: 0.96, y: 16 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
+  },
+};
+
+const stepVariants = {
+  enter: { opacity: 0, x: 40 },
+  center: { opacity: 1, x: 0, transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] } },
+  exit: { opacity: 0, x: -40, transition: { duration: 0.2, ease: "easeIn" } },
+};
+
 export default function OnboardingModal() {
   const wiz = useOnboardingWizard();
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
-      <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-white border border-beige-200 shadow-[0_24px_80px_rgba(0,0,0,0.12),0_8px_32px_rgba(0,0,0,0.08)] mx-4">
+    <motion.div
+      className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
+      variants={overlayVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.div
+        className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-white border border-beige-200 shadow-[0_24px_80px_rgba(0,0,0,0.12),0_8px_32px_rgba(0,0,0,0.08)] mx-4"
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+      >
         {/* Fixed Header */}
         <div className="shrink-0 px-8 pt-8 pb-4 border-b border-beige-100">
           <div className="flex items-center justify-between mb-4">
@@ -39,12 +71,20 @@ export default function OnboardingModal() {
           {wiz.step > 0 && <OnboardingStepProgress step={wiz.step} />}
         </div>
 
-        {/* Scrollable Content */}
+        {/* Scrollable Content with animated transitions */}
         <div className="flex-1 overflow-y-auto px-8 py-6">
-          {wiz.step === 0 ? (
-            <WelcomeScreen onBegin={wiz.goToStep1} />
-          ) : (
-            <div className="space-y-4">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={wiz.step}
+              variants={stepVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+            >
+              {wiz.step === 0 && (
+                <WelcomeScreen onBegin={wiz.goToStep1} />
+              )}
+
               {wiz.step === 1 && (
                 <Step1CompanyVerification
                   companyName={wiz.companyName}
@@ -111,10 +151,10 @@ export default function OnboardingModal() {
                   onBack={() => { wiz.setStep(3); wiz.setError(""); }}
                 />
               )}
-            </div>
-          )}
+            </motion.div>
+          </AnimatePresence>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
