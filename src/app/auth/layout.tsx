@@ -6,8 +6,10 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <MeshBackground variant="warm" className="min-h-screen flex items-center justify-center p-4">
-      {children}
+    <MeshBackground variant="warm" className="min-h-screen flex justify-center p-4">
+      <div className="w-full max-w-6xl flex justify-center py-6">
+        {children}
+      </div>
     </MeshBackground>
   );
 }

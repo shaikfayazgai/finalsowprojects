@@ -7,17 +7,14 @@ import type { ContributorType } from "../types";
 interface Props {
   onClose: () => void;
   onEditStep: (step: number) => void;
-  // Step 1
   firstName: string;
   lastName: string;
   email: string;
   contribType: ContributorType;
   dob: string;
   country: string;
-  // Step 2
   phone: string;
   verificationEmail: string;
-  // Step 3
   timezone: string;
   departmentCategory: string;
   departmentOther: string;
@@ -83,8 +80,8 @@ function SkillsList({ title, skills, color }: { title: string; skills: string[];
     <div className="mt-3">
       <p className="text-[10px] text-beige-400 uppercase tracking-wider mb-1.5">{title}</p>
       <div className="flex flex-wrap gap-1">
-        {skills.map(s => (
-          <span key={s} className={`px-2 py-0.5 rounded-md border text-xs font-medium ${color}`}>{s}</span>
+        {skills.map(skill => (
+          <span key={skill} className={`px-2 py-0.5 rounded-md border text-xs font-medium ${color}`}>{skill}</span>
         ))}
       </div>
     </div>
@@ -100,7 +97,6 @@ export function ReviewPreviewModal({
   primarySkills, secondarySkills, otherSkills,
   yearsExperience, careerStage, workStart, workEnd,
 }: Props) {
-
   const displayDept =
     departmentCategory === "other"
       ? departmentOther
@@ -118,8 +114,6 @@ export function ReviewPreviewModal({
         onClick={onClose}
       />
       <div className="relative z-10 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl border border-beige-200 flex flex-col">
-
-        {/* Sticky header */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-white border-b border-beige-100">
           <div>
             <p className="font-heading font-semibold text-brown-950">Registration Preview</p>
@@ -134,20 +128,34 @@ export function ReviewPreviewModal({
           </button>
         </div>
 
-        {/* Body */}
         <div className="divide-y divide-beige-100 flex-1">
-
-          <PreviewSection title="Step 1 · Identity" step={1} onEdit={handleEdit}>
+          <PreviewSection title="Step 1 - Identity" step={1} onEdit={handleEdit}>
             <DataGrid rows={[
-              ["Full Name",         `${firstName} ${lastName}`],
-              ["Email",             email],
-              ["Contributor Type",  contribType?.replace(/_/g, " ")],
-              ["Date of Birth",     dob],
-              ["Country",           country],
+              ["Full Name", `${firstName} ${lastName}`],
+              ["Email", email],
+              ["Contributor Type", contribType?.replace(/_/g, " ")],
+              ["Country", country],
             ]} />
           </PreviewSection>
 
-          <PreviewSection title="Step 2 · Verification" step={2} onEdit={handleEdit}>
+          <PreviewSection title="Step 2 - Profile" step={2} onEdit={handleEdit}>
+            <DataGrid rows={[
+              ["Date of Birth", dob],
+              ["Time Zone", timezone],
+              ["Department", displayDept],
+              ["Availability", availability ? `${availability} hrs / week` : ""],
+              ...(degree ? [["Degree", degree + (branch ? ` - ${branch}` : "")] as [string, string]] : []),
+              ...(linkedin ? [["LinkedIn", linkedin] as [string, string]] : []),
+              ...(yearsExperience ? [["Experience", `${yearsExperience} years`] as [string, string]] : []),
+              ...(careerStage ? [["Career Stage", careerStage.replace(/-/g, " ")] as [string, string]] : []),
+              ...((workStart || workEnd) ? [["Work Hours", `${workStart} - ${workEnd}`] as [string, string]] : []),
+            ]} />
+            <SkillsList title="Primary Skills" skills={primarySkills} color="bg-teal-100 border-teal-200 text-teal-800" />
+            <SkillsList title="Secondary Skills" skills={secondarySkills} color="bg-forest-100 border-forest-200 text-forest-800" />
+            <SkillsList title="Other Skills" skills={otherSkills} color="bg-beige-100 border-beige-200 text-brown-700" />
+          </PreviewSection>
+
+          <PreviewSection title="Step 3 - Verification" step={3} onEdit={handleEdit}>
             <DataGrid rows={[
               ["Phone", (
                 <span className="flex items-center gap-1">
@@ -161,32 +169,15 @@ export function ReviewPreviewModal({
               )],
             ]} />
           </PreviewSection>
-
-          <PreviewSection title="Step 3 · Skills &amp; Profile" step={3} onEdit={handleEdit}>
-            <DataGrid rows={[
-              ["Time Zone",    timezone],
-              ["Department",   displayDept],
-              ["Availability", availability ? `${availability} hrs / week` : ""],
-              ...(degree ? [["Degree", degree + (branch ? ` — ${branch}` : "")] as [string, string]] : []),
-              ...(linkedin ? [["LinkedIn", linkedin] as [string, string]] : []),
-              ...(yearsExperience ? [["Experience", `${yearsExperience} years`] as [string, string]] : []),
-              ...(careerStage ? [["Career Stage", careerStage.replace(/-/g, " ")] as [string, string]] : []),
-              ...((workStart || workEnd) ? [["Work Hours", `${workStart} – ${workEnd}`] as [string, string]] : []),
-            ]} />
-            <SkillsList title="Primary Skills"   skills={primarySkills}   color="bg-teal-100 border-teal-200 text-teal-800" />
-            <SkillsList title="Secondary Skills" skills={secondarySkills} color="bg-forest-100 border-forest-200 text-forest-800" />
-            <SkillsList title="Other Skills"     skills={otherSkills}     color="bg-beige-100 border-beige-200 text-brown-700" />
-          </PreviewSection>
         </div>
 
-        {/* Sticky footer */}
         <div className="sticky bottom-0 px-5 py-4 bg-white border-t border-beige-100">
           <button
             type="button"
             onClick={onClose}
             className="w-full py-2.5 rounded-xl bg-brown-600 hover:bg-brown-700 text-white text-sm font-semibold transition-colors"
           >
-            Looks good — Close Preview
+            Looks good - Close Preview
           </button>
         </div>
       </div>

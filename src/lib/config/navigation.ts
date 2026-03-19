@@ -138,6 +138,12 @@ export const enterpriseNav: ModuleConfig = {
         { label: "Audit Log", href: "/enterprise/audit", icon: ScrollText },
       ],
     },
+    {
+      title: "Account",
+      items: [
+        { label: "Security", href: "/enterprise/settings/security", icon: ShieldCheck },
+      ],
+    },
   ],
 };
 

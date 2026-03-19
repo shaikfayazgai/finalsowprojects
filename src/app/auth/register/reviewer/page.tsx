@@ -93,7 +93,7 @@ export default function ReviewerRegisterPage() {
           <Sparkles className="w-7 h-7 text-white" />
         </div>
         <h1 className="font-heading text-2xl font-semibold text-brown-950">Complete Registration</h1>
-        <p className="text-sm text-beige-600 mt-1">Reviewer account — {MOCK_INVITE.project}</p>
+        <p className="text-sm text-beige-600 mt-1">Reviewer account - {MOCK_INVITE.project}</p>
       </div>
 
       {/* Invite info */}
@@ -115,12 +115,12 @@ export default function ReviewerRegisterPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" placeholder="Alex" value={firstName}
+                <Input id="firstName" placeholder="Enter first name" value={firstName}
                   onChange={e => setFirstName(e.target.value)} maxLength={50} autoFocus />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lastName">Last Name</Label>
-                <Input id="lastName" placeholder="Kumar" value={lastName}
+                <Input id="lastName" placeholder="Enter last name" value={lastName}
                   onChange={e => setLastName(e.target.value)} maxLength={50} />
               </div>
             </div>
@@ -135,12 +135,12 @@ export default function ReviewerRegisterPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="jobTitle">Job Title <span className="text-red-400">*</span></Label>
-                <Input id="jobTitle" placeholder="Senior Analyst" value={jobTitle}
+                <Input id="jobTitle" placeholder="Enter your job title" value={jobTitle}
                   onChange={e => setJobTitle(e.target.value)} maxLength={100} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="dept">Department</Label>
-                <Input id="dept" placeholder="Data Science" value={department}
+                <Input id="dept" placeholder="Department or function" value={department}
                   onChange={e => setDepartment(e.target.value)} maxLength={100} />
               </div>
             </div>
@@ -169,7 +169,7 @@ export default function ReviewerRegisterPage() {
               {/* Skill input with autocomplete */}
               <div className="relative">
                 <Input
-                  placeholder="Type to search skills…"
+                  placeholder="Type to search skills"
                   value={skillInput}
                   onChange={e => setSkillInput(e.target.value)}
                   disabled={expertise.length >= 10}
@@ -189,22 +189,22 @@ export default function ReviewerRegisterPage() {
                   </div>
                 )}
               </div>
-              <p className="text-xs text-beige-500">Select 1–10 areas used for project matching</p>
+              <p className="text-xs text-beige-500">Select 1-10 areas used for project matching</p>
             </div>
 
             {/* Phone */}
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number <span className="text-beige-400 text-xs">(optional)</span></Label>
-              <Input id="phone" type="tel" placeholder="+91 XXXXX XXXXX" value={phone}
+              <Input id="phone" type="tel" placeholder="Work phone with country code" value={phone}
                 onChange={e => setPhone(e.target.value)} />
             </div>
 
             {/* Password */}
             <div className="space-y-2">
-              <Label htmlFor="password">Password <span className="text-beige-400 text-xs">(min 12 chars)</span></Label>
+              <Label htmlFor="password">Password <span className="text-beige-400 text-xs">(min 8 chars)</span></Label>
               <div className="relative">
                 <Input id="password" type={showPw ? "text" : "password"}
-                  placeholder="At least 12 characters" value={password}
+                  placeholder="Minimum 8 characters" value={password}
                   onChange={e => setPassword(e.target.value)} className="pr-10" />
                 <button type="button" onClick={() => setShowPw(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600">
@@ -225,7 +225,7 @@ export default function ReviewerRegisterPage() {
               <Label htmlFor="confirm">Confirm Password</Label>
               <div className="relative">
                 <Input id="confirm" type={showCon ? "text" : "password"}
-                  placeholder="Re-enter password" value={confirm}
+                  placeholder="Re-enter password to confirm" value={confirm}
                   onChange={e => setConfirm(e.target.value)} className="pr-10" />
                 <button type="button" onClick={() => setShowCon(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600">

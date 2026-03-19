@@ -16,7 +16,7 @@ interface Props {
   setResumeDrag: (v: boolean) => void;
   acceptTos: boolean;       setAcceptTos: (v: boolean) => void;
   acceptCoc: boolean;       setAcceptCoc: (v: boolean) => void;
-  acceptDpa: boolean;       setAcceptDpa: (v: boolean) => void;
+  acceptPrivacy: boolean;   setAcceptPrivacy: (v: boolean) => void;
   acceptFee: boolean;       setAcceptFee: (v: boolean) => void;
   acceptAhp: boolean;       setAcceptAhp: (v: boolean) => void;
   marketingOptIn: boolean;  setMarketingOptIn: (v: boolean) => void;
@@ -41,9 +41,9 @@ const LEGAL_AGREEMENTS = [
     link:  "#",
   },
   {
-    id:    "dpa" as const,
-    label: "Data Processing Agreement",
-    note:  "GDPR / Privacy",
+    id:    "privacy" as const,
+    label: "Privacy Policy",
+    note:  undefined,
     link:  "#",
   },
   {
@@ -60,7 +60,7 @@ export function Step4Consent({
   resumeFile, setResumeFile, resumeDrag, setResumeDrag,
   acceptTos, setAcceptTos,
   acceptCoc, setAcceptCoc,
-  acceptDpa, setAcceptDpa,
+  acceptPrivacy, setAcceptPrivacy,
   acceptFee, setAcceptFee,
   acceptAhp, setAcceptAhp,
   marketingOptIn, setMarketingOptIn,
@@ -68,36 +68,33 @@ export function Step4Consent({
   onPreview, onSubmit, onBack,
 }: Props) {
 
-  /* Map agreement id → checked / setter pair */
   const agreementState: Record<AgreementId, { checked: boolean; set: (v: boolean) => void }> = {
     tos: { checked: acceptTos, set: setAcceptTos },
     coc: { checked: acceptCoc, set: setAcceptCoc },
-    dpa: { checked: acceptDpa, set: setAcceptDpa },
+    privacy: { checked: acceptPrivacy, set: setAcceptPrivacy },
     ahp: { checked: acceptAhp, set: setAcceptAhp },
   };
 
-  const allRequired = acceptTos && acceptCoc && acceptDpa && acceptFee && acceptAhp;
+  const allRequired = acceptTos && acceptCoc && acceptPrivacy && acceptFee && acceptAhp;
 
   return (
     <GlassCard variant="heavy" padding="lg">
       <GlassCardContent>
         <form onSubmit={onSubmit} className="space-y-6">
 
-          {/* ── Header ── */}
           <div className="pb-1 border-b border-beige-100">
             <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 4 of 4</p>
             <p className="font-heading font-semibold text-brown-950 text-lg mt-0.5">Consent &amp; Terms</p>
-            <p className="text-xs text-beige-500 mt-0.5">Upload your résumé and accept the agreements below to complete registration</p>
+            <p className="text-xs text-beige-500 mt-0.5">Upload your resume and accept the agreements below to complete registration</p>
           </div>
 
-          {/* ── Resume / CV ── */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-5 h-5 rounded-md bg-beige-100 flex items-center justify-center shrink-0">
                 <ArrowRight className="w-3 h-3 text-beige-500 rotate-[-90deg]" />
               </div>
-              <p className="text-xs font-semibold text-brown-700 uppercase tracking-wide">Résumé / CV</p>
-              <span className="text-[10px] text-beige-400 font-medium">(optional · PDF · max 5 MB)</span>
+              <p className="text-xs font-semibold text-brown-700 uppercase tracking-wide">Resume / CV</p>
+              <span className="text-[10px] text-beige-400 font-medium">(optional - PDF - max 5 MB)</span>
             </div>
             <label
               onDragOver={e => { e.preventDefault(); setResumeDrag(true); }}
@@ -141,17 +138,16 @@ export function Step4Consent({
                   </div>
                   <div>
                     <p className="text-sm text-brown-700 font-medium">
-                      Drop your résumé here or{" "}
+                      Drop your resume here or{" "}
                       <span className="text-teal-600 underline">browse files</span>
                     </p>
-                    <p className="text-xs text-beige-400 mt-0.5">PDF only · Maximum 5 MB</p>
+                    <p className="text-xs text-beige-400 mt-0.5">PDF only - Maximum 5 MB</p>
                   </div>
                 </>
               )}
             </label>
           </div>
 
-          {/* ── Legal Agreements ── */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-5 h-5 rounded-md bg-brown-100 flex items-center justify-center shrink-0">
@@ -196,7 +192,6 @@ export function Step4Consent({
             </div>
           </div>
 
-          {/* ── Acknowledgments ── */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-5 h-5 rounded-md bg-gold-100 flex items-center justify-center shrink-0">
@@ -205,7 +200,6 @@ export function Step4Consent({
               <p className="text-xs font-semibold text-brown-700 uppercase tracking-wide">Acknowledgments</p>
             </div>
 
-            {/* Platform service fee */}
             <label
               htmlFor="fee"
               className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
@@ -230,7 +224,6 @@ export function Step4Consent({
               {acceptFee && <CheckCircle className="w-4 h-4 text-teal-500 shrink-0 mt-0.5" />}
             </label>
 
-            {/* Marketing opt-in (optional) */}
             <label
               htmlFor="mkt"
               className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
@@ -256,7 +249,6 @@ export function Step4Consent({
             </label>
           </div>
 
-          {/* ── Actions ── */}
           <div className="space-y-3 pt-1">
             <button
               type="button"
@@ -281,7 +273,7 @@ export function Step4Consent({
               disabled={isLoading || !allRequired}
             >
               {isLoading ? (
-                <><RefreshCw className="w-4 h-4 animate-spin" /> Creating your account…</>
+                <><RefreshCw className="w-4 h-4 animate-spin" /> Creating your account...</>
               ) : (
                 <>Create Account <ArrowRight className="w-4 h-4" /></>
               )}
@@ -292,7 +284,7 @@ export function Step4Consent({
               onClick={onBack}
               className="w-full text-sm text-beige-600 hover:text-beige-800 flex items-center justify-center gap-1"
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back
+              <ArrowLeft className="w-3.5 h-3.5" /> Previous
             </button>
           </div>
 

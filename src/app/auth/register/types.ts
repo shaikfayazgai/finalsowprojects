@@ -6,3 +6,12 @@ export interface PasswordStrength {
   label: "Weak" | "Fair" | "Strong";
   color: string;
 }
+
+export type SSOProvider = "google" | "microsoft";
+
+export interface SSOData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  provider: SSOProvider;
+}
