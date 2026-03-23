@@ -477,3 +477,66 @@ export interface ActivityEvent {
   type: "task" | "review" | "payment" | "escalation" | "milestone" | "sow" | "team";
   color: string;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   DASHBOARD TYPES (FSD 6.2–6.8)
+   ══════════════════════════════════════════════════════════════ */
+
+export type AttentionPriority =
+  | "MILESTONE_OVERDUE"
+  | "MILESTONE_DUE"
+  | "ESCALATION"
+  | "REWORK"
+  | "REVIEW_PENDING"
+  | "SOW_APPROVAL"
+  | "PLAN_APPROVAL"
+  | "BUDGET_REVIEW";
+
+export interface AttentionItem {
+  id: string;
+  type: AttentionPriority;
+  title: string;
+  description: string;
+  href: string;
+  timestamp: string;
+  projectId?: string;
+}
+
+export interface DashboardMetrics {
+  activeProjects: number;
+  openExceptions: number;
+  exceptionsProjectCount: number;
+  pendingApprovals: number;
+  budgetSpent: number;
+  budgetTotal: number;
+  budgetPercent: number;
+  currency: string;
+}
+
+export interface PortfolioCounts {
+  onTrack: number;
+  atRisk: number;
+  behind: number;
+}
+
+export interface FinancialFigures {
+  contracted: number;
+  paid: number;
+  nextDue: { amount: number; dueDate: string; label: string } | null;
+  overdue: number;
+  overdueProjectCount: number;
+  activeProjectCount: number;
+  currency: string;
+}
+
+export type NotificationSeverity = "high" | "medium" | "low";
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  body: string;
+  severity: NotificationSeverity;
+  read: boolean;
+  timestamp: string;
+  href?: string;
+}
