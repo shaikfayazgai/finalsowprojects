@@ -83,9 +83,9 @@ const trackConfig: Record<
   general: {
     label: "General",
     gradient: "from-beige-400 to-beige-600",
-    bg: "bg-beige-100",
-    text: "text-beige-700",
-    ring: "ring-beige-200",
+    bg: "bg-gray-100",
+    text: "text-gray-600",
+    ring: "ring-gray-200",
   },
 };
 
@@ -110,11 +110,11 @@ function StarRating({ rating }: { rating: number }) {
             "w-3 h-3",
             star <= Math.round(rating)
               ? "text-gold-500 fill-gold-500"
-              : "text-beige-300"
+              : "text-gray-300"
           )}
         />
       ))}
-      <span className="ml-1 text-[10px] font-semibold text-brown-700">
+      <span className="ml-1 text-[10px] font-semibold text-gray-700">
         {rating.toFixed(1)}
       </span>
     </div>
@@ -145,7 +145,7 @@ function MemberCard({ member }: { member: TeamMember }) {
   return (
     <motion.div
       variants={scaleIn}
-      className="group relative rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden hover:shadow-xl hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300"
+      className="group relative card-parchment overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
     >
       {/* Track accent stripe */}
       <div
@@ -185,13 +185,13 @@ function MemberCard({ member }: { member: TeamMember }) {
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className="text-[14px] font-bold text-brown-900 truncate">
+              <p className="text-[14px] font-bold text-gray-900 truncate">
                 {member.displayName}
               </p>
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Fingerprint className="w-3 h-3 text-beige-400 shrink-0 cursor-help" />
+                    <Fingerprint className="w-3 h-3 text-gray-400 shrink-0 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="text-xs">
@@ -231,7 +231,7 @@ function MemberCard({ member }: { member: TeamMember }) {
           {member.skills.map((skill) => (
             <span
               key={skill}
-              className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-beige-100/80 text-beige-600 border border-beige-200/40"
+              className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 border border-gray-200"
             >
               {skill}
             </span>
@@ -241,7 +241,7 @@ function MemberCard({ member }: { member: TeamMember }) {
         {/* Match score bar */}
         <div className="mb-3">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-beige-500 font-medium">
+            <span className="text-[10px] text-gray-400 font-medium">
               Match Score
             </span>
             <span
@@ -261,10 +261,10 @@ function MemberCard({ member }: { member: TeamMember }) {
         </div>
 
         {/* Stats row */}
-        <div className="flex items-center justify-between pt-3 border-t border-beige-100">
+        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
           <div className="flex items-center gap-1.5">
             <CheckCircle2 className="w-3 h-3 text-forest-500" />
-            <span className="text-[11px] text-brown-700 font-medium">
+            <span className="text-[11px] text-gray-700 font-medium">
               {member.tasksCompleted} deliveries
             </span>
           </div>
@@ -328,15 +328,15 @@ function TaskAssignmentRow({
   const track = member ? trackConfig[member.track] : trackConfig.general;
 
   return (
-    <div className="flex items-center gap-3 py-3 px-4 rounded-xl hover:bg-beige-50/60 transition-colors group">
+    <div className="flex items-center gap-3 py-3 px-4 rounded-xl hover:bg-gray-50 transition-colors group">
       {/* Task info */}
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-semibold text-brown-900 truncate">
+        <p className="text-[13px] font-semibold text-gray-900 truncate">
           {task?.title ?? taskId}
         </p>
         {task && (
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[10px] text-beige-500 font-mono">
+            <span className="text-[10px] text-gray-400 font-mono">
               {task.id}
             </span>
             <Badge
@@ -352,7 +352,7 @@ function TaskAssignmentRow({
               {task.priority}
             </Badge>
             {task.estimatedHours && (
-              <span className="text-[10px] text-beige-500">
+              <span className="text-[10px] text-gray-400">
                 {task.estimatedHours}h est.
               </span>
             )}
@@ -374,12 +374,12 @@ function TaskAssignmentRow({
                 {member.avatar}
               </AvatarFallback>
             </Avatar>
-            <span className="text-[12px] font-medium text-brown-800 hidden sm:inline">
+            <span className="text-[12px] font-medium text-gray-800 hidden sm:inline">
               {member.displayName}
             </span>
           </>
         ) : (
-          <span className="text-[11px] text-beige-500 italic">
+          <span className="text-[11px] text-gray-400 italic">
             {memberId}
           </span>
         )}
@@ -427,14 +427,14 @@ export default function TeamDetailPage() {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-[600px] mx-auto mt-24 text-center"
       >
-        <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-12">
-          <div className="w-16 h-16 rounded-full bg-beige-100 flex items-center justify-center mx-auto mb-4">
-            <Users className="w-7 h-7 text-beige-400" />
+        <div className="rounded-2xl border border-gray-200 bg-white p-12">
+          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <Users className="w-7 h-7 text-gray-400" />
           </div>
-          <h2 className="text-lg font-bold text-brown-900 mb-2">
+          <h2 className="text-lg font-bold text-gray-900 mb-2">
             Team not found
           </h2>
-          <p className="text-[13px] text-beige-500 mb-6">
+          <p className="text-[13px] text-gray-400 mb-6">
             The team &quot;{teamId}&quot; doesn&apos;t exist or has been
             removed.
           </p>
@@ -505,86 +505,42 @@ export default function TeamDetailPage() {
         animate="show"
         className="max-w-[1280px] mx-auto space-y-6"
       >
-        {/* ── Back link ── */}
-        <motion.div variants={fadeUp}>
-          <Link
-            href="/enterprise/team"
-            className="inline-flex items-center gap-1.5 text-[12px] text-beige-500 hover:text-brown-600 transition-colors mb-4 group/back"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 group-hover/back:-translate-x-0.5 transition-transform" />
-            Back to Teams
-          </Link>
-        </motion.div>
-
         {/* ── Header ── */}
-        <motion.div
-          variants={fadeUp}
-          className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6"
-        >
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-            {/* Left: ring + info */}
-            <div className="flex items-center gap-5">
-              <MetricRing
-                value={team.matchScore}
-                size={64}
-                strokeWidth={5}
-                color={matchScoreColor(team.matchScore)}
-                label="Match"
-              />
-
-              <div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-xl font-bold text-brown-900 tracking-[-0.02em]">
-                    {team.name}
-                  </h1>
-                  <Badge variant={status.variant} size="sm" dot>
-                    {status.label}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center gap-3 mt-1.5 flex-wrap text-[12px] text-beige-500">
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5" />
-                    {team.totalMembers} members
-                  </span>
-                  <span className="text-beige-300">&middot;</span>
-                  <span className="flex items-center gap-1">
-                    <Target className="w-3.5 h-3.5" />
-                    {team.requiredSkills.length} required skills
-                  </span>
-                  <span className="text-beige-300">&middot;</span>
-                  {plan ? (
-                    <Link
-                      href={`/enterprise/decomposition/${plan.id}`}
-                      className="flex items-center gap-1 text-teal-600 hover:text-teal-700 transition-colors"
-                    >
-                      <ListChecks className="w-3.5 h-3.5" />
-                      {plan.title}
-                      <ExternalLink className="w-2.5 h-2.5" />
-                    </Link>
-                  ) : (
-                    <span>Plan: {team.planId}</span>
-                  )}
-                </div>
+        <motion.div variants={fadeUp} className="mb-2">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <Badge variant={status.variant} dot>{status.label}</Badge>
+                <span className="inline-flex items-center text-[9px] font-medium tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                  {team.matchScore}% match
+                </span>
+              </div>
+              <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight leading-tight">{team.name}</h1>
+              <div className="flex items-center gap-2 mt-2 flex-wrap text-[12px] text-gray-400">
+                <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{team.totalMembers} members</span>
+                <span className="w-1 h-1 rounded-full bg-gray-300" />
+                <span>{team.requiredSkills.length} required skills</span>
+                <span className="w-1 h-1 rounded-full bg-gray-300" />
+                {plan ? (
+                  <Link href={`/enterprise/decomposition/${plan.id}`} className="text-brown-500 hover:text-brown-600 font-medium transition-colors">{plan.title}</Link>
+                ) : (
+                  <span>Plan: {team.planId}</span>
+                )}
               </div>
             </div>
-
-            {/* Right: CTAs */}
             <div className="flex items-center gap-2 shrink-0">
               {(team.status === "forming" || team.status === "ready") && (
                 <Link href={`/enterprise/team/${team.id}/confirm`}>
-                  <Button variant="gradient-primary" size="sm">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    Confirm Team
-                  </Button>
+                  <button className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Confirm Team
+                  </button>
                 </Link>
               )}
               {team.status === "active" && team.projectId && (
                 <Link href={`/enterprise/projects/${team.projectId}`}>
-                  <Button variant="outline" size="sm">
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    View Project
-                  </Button>
+                  <button className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
+                    <ExternalLink className="w-3.5 h-3.5" /> View Project
+                  </button>
                 </Link>
               )}
             </div>
@@ -594,10 +550,10 @@ export default function TeamDetailPage() {
         {/* ── Privacy notice ── */}
         <motion.div
           variants={fadeUp}
-          className="flex items-center gap-3 rounded-xl bg-teal-50/60 border border-teal-200/30 p-3"
+          className="flex items-center gap-2 rounded-lg bg-forest-50 px-3 py-2"
         >
-          <div className="w-7 h-7 rounded-full bg-teal-100 flex items-center justify-center shrink-0">
-            <EyeOff className="w-3.5 h-3.5 text-teal-600" />
+          <div className="shrink-0">
+            <EyeOff className="w-3.5 h-3.5 text-forest-500" />
           </div>
           <p className="text-[11px] text-teal-800 leading-relaxed">
             <span className="font-semibold">Privacy-first.</span> All
@@ -614,17 +570,17 @@ export default function TeamDetailPage() {
             {assignmentEntries.length > 0 && (
               <motion.div
                 variants={fadeUp}
-                className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden"
+                className="card-parchment overflow-hidden"
               >
-                <div className="px-5 pt-5 pb-3 border-b border-beige-100">
+                <div className="px-5 pt-5 pb-3 border-b border-gray-100">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-[14px] font-bold text-brown-900 flex items-center gap-2">
+                    <h2 className="text-[14px] font-bold text-gray-900 flex items-center gap-2">
                       <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-forest-400 to-forest-600 flex items-center justify-center">
                         <ListChecks className="w-3.5 h-3.5 text-white" />
                       </div>
                       Task Assignments
                     </h2>
-                    <span className="text-[11px] text-beige-500 font-mono">
+                    <span className="text-[11px] text-gray-400 font-mono">
                       {assignmentEntries.length} tasks assigned
                     </span>
                   </div>
@@ -646,13 +602,13 @@ export default function TeamDetailPage() {
             {/* Team Members */}
             <motion.div variants={fadeUp}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[14px] font-bold text-brown-900 flex items-center gap-2">
+                <h2 className="text-[14px] font-bold text-gray-900 flex items-center gap-2">
                   <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center">
                     <Users className="w-3.5 h-3.5 text-white" />
                   </div>
                   Team Members
                 </h2>
-                <span className="text-[11px] text-beige-500">
+                <span className="text-[11px] text-gray-400">
                   {team.members.length} contributors
                 </span>
               </div>
@@ -670,8 +626,8 @@ export default function TeamDetailPage() {
           {/* ─── Right Column (1/3) ─── */}
           <motion.div variants={slideInRight} className="space-y-5">
             {/* Skill Coverage */}
-            <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5">
-              <h3 className="text-[13px] font-bold text-brown-900 mb-4 flex items-center gap-2">
+            <div className="card-parchment p-5">
+              <h3 className="text-[13px] font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md bg-teal-100 flex items-center justify-center">
                   <Target className="w-3 h-3 text-teal-600" />
                 </div>
@@ -687,7 +643,7 @@ export default function TeamDetailPage() {
                   label="Covered"
                   className="mx-auto"
                 />
-                <p className="text-[10px] text-beige-500 mt-1.5">
+                <p className="text-[10px] text-gray-400 mt-1.5">
                   {coveredSkills.length} of {team.requiredSkills.length} skills
                   matched
                 </p>
@@ -706,19 +662,19 @@ export default function TeamDetailPage() {
                         "flex items-center justify-between py-2 px-2.5 rounded-lg transition-colors",
                         covered
                           ? "bg-forest-50/50"
-                          : "bg-beige-50/50"
+                          : "bg-gray-50/50"
                       )}
                     >
                       <div className="flex items-center gap-2">
                         {covered ? (
                           <CheckCircle2 className="w-3.5 h-3.5 text-forest-500" />
                         ) : (
-                          <XCircle className="w-3.5 h-3.5 text-beige-400" />
+                          <XCircle className="w-3.5 h-3.5 text-gray-400" />
                         )}
                         <span
                           className={cn(
                             "text-[12px] font-medium",
-                            covered ? "text-brown-800" : "text-beige-500"
+                            covered ? "text-gray-800" : "text-gray-400"
                           )}
                         >
                           {skill}
@@ -746,16 +702,16 @@ export default function TeamDetailPage() {
             </div>
 
             {/* Track Distribution */}
-            <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5">
-              <h3 className="text-[13px] font-bold text-brown-900 mb-4 flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md bg-beige-100 flex items-center justify-center">
-                  <BarChart3 className="w-3 h-3 text-beige-500" />
+            <div className="card-parchment p-5">
+              <h3 className="text-[13px] font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center">
+                  <BarChart3 className="w-3 h-3 text-gray-400" />
                 </div>
                 Track Distribution
               </h3>
 
               {/* Stacked bar */}
-              <div className="h-3 rounded-full bg-beige-100 overflow-hidden flex mb-4">
+              <div className="h-3 rounded-full bg-gray-100 overflow-hidden flex mb-4">
                 {(["women", "student", "general"] as const).map((key) => {
                   const count = trackCounts[key] || 0;
                   const pct =
@@ -820,7 +776,7 @@ export default function TeamDetailPage() {
                           {label}
                         </span>
                       </div>
-                      <span className="text-[11px] text-beige-500 font-mono">
+                      <span className="text-[11px] text-gray-400 font-mono">
                         {count} ({pct}%)
                       </span>
                     </div>
@@ -830,8 +786,8 @@ export default function TeamDetailPage() {
             </div>
 
             {/* Team Stats */}
-            <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5">
-              <h3 className="text-[13px] font-bold text-brown-900 mb-4 flex items-center gap-2">
+            <div className="card-parchment p-5">
+              <h3 className="text-[13px] font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md bg-forest-100 flex items-center justify-center">
                   <TrendingUp className="w-3 h-3 text-forest-600" />
                 </div>
@@ -882,11 +838,11 @@ export default function TeamDetailPage() {
                   >
                     <div className="flex items-center gap-2">
                       {item.icon}
-                      <span className="text-[12px] text-beige-600">
+                      <span className="text-[12px] text-gray-500">
                         {item.label}
                       </span>
                     </div>
-                    <span className="text-[13px] font-bold text-brown-800 font-mono">
+                    <span className="text-[13px] font-bold text-gray-800 font-mono">
                       {item.value}
                     </span>
                   </div>

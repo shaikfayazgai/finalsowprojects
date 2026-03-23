@@ -168,7 +168,7 @@ function getSlaColor(hoursLeft: number): {
     };
   return {
     label: "Critical",
-    text: "text-brown-700",
+    text: "text-gray-700",
     bg: "bg-brown-50",
     dot: "bg-brown-600",
     ring: "ring-brown-200",
@@ -210,37 +210,15 @@ function MiniStat({
   subtext?: string;
 }) {
   return (
-    <motion.div
-      variants={scaleIn}
-      className="relative overflow-hidden rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 hover:shadow-lg transition-all group"
-    >
-      <div
-        className={cn(
-          "absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity",
-          accent.includes("brown")
-            ? "bg-brown-500"
-            : accent.includes("teal")
-              ? "bg-teal-500"
-              : accent.includes("forest")
-                ? "bg-forest-500"
-                : "bg-gold-500"
-        )}
-      />
-      <div
-        className={cn(
-          "w-10 h-10 rounded-xl flex items-center justify-center mb-3",
-          accent
-        )}
-      >
-        <Icon className="w-5 h-5" />
+    <motion.div variants={scaleIn} className="card-parchment flex items-center gap-5 px-5 py-5">
+      <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0", accent)}>
+        <Icon className="w-5 h-5 text-white" />
       </div>
-      <p className="text-[24px] font-bold text-brown-900 tracking-tight leading-none">
-        {value}
-      </p>
-      <p className="text-[11px] text-beige-500 font-medium mt-1.5">{label}</p>
-      {subtext && (
-        <p className="text-[10px] text-beige-400 mt-0.5">{subtext}</p>
-      )}
+      <div className="flex-1 min-w-0">
+        <div className="text-[11px] font-medium text-gray-400">{label}</div>
+        <div className="num-display text-[28px] text-gray-900 leading-none mt-1">{value}</div>
+        {subtext && <div className="text-[10px] text-gray-400 mt-1">{subtext}</div>}
+      </div>
     </motion.div>
   );
 }
@@ -267,15 +245,15 @@ function FormationQueueCard({
 
   return (
     <motion.div variants={fadeUp}>
-      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden hover:shadow-xl hover:shadow-brown-100/20 transition-all duration-300">
+      <div className="card-parchment overflow-hidden hover:shadow-md transition-all duration-300">
         <div className="p-5">
           {/* Top row: Plan info */}
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1 min-w-0">
-              <h3 className="text-[14px] font-bold text-brown-900 truncate">
+              <h3 className="text-[14px] font-bold text-gray-900 truncate">
                 {plan.title}
               </h3>
-              <p className="text-[11px] text-beige-500 mt-0.5">
+              <p className="text-[11px] text-gray-400 mt-0.5">
                 SOW: {plan.sowId} &middot; {plan.totalTasks} tasks &middot;{" "}
                 {plan.estimatedHours.toLocaleString()}h estimated
               </p>
@@ -303,14 +281,14 @@ function FormationQueueCard({
               </span>
             ))}
             {(team?.requiredSkills?.length ?? 0) > 5 && (
-              <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-beige-200 text-beige-500">
+              <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-gray-200 text-gray-400">
                 +{(team?.requiredSkills?.length ?? 0) - 5}
               </span>
             )}
           </div>
 
           {/* Bottom row: Action area */}
-          <div className="flex items-center justify-between pt-3 border-t border-beige-100">
+          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
             {team ? (
               <>
                 {/* Team exists - show match score + members + action */}
@@ -323,7 +301,7 @@ function FormationQueueCard({
                     label="Match"
                   />
                   <div>
-                    <p className="text-[12px] font-semibold text-brown-800">
+                    <p className="text-[12px] font-semibold text-gray-800">
                       {team.totalMembers} contributors matched
                     </p>
                     <div className="flex -space-x-1.5 mt-1">
@@ -336,7 +314,7 @@ function FormationQueueCard({
                         </div>
                       ))}
                       {team.totalMembers > 4 && (
-                        <div className="w-6 h-6 rounded-full bg-beige-200 border-2 border-white flex items-center justify-center text-[8px] font-bold text-beige-600">
+                        <div className="w-6 h-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[8px] font-bold text-gray-500">
                           +{team.totalMembers - 4}
                         </div>
                       )}
@@ -358,7 +336,7 @@ function FormationQueueCard({
                   <div className="w-8 h-8 rounded-full bg-gold-100 flex items-center justify-center">
                     <Brain className="w-4 h-4 text-gold-500" />
                   </div>
-                  <p className="text-[11px] text-beige-500">
+                  <p className="text-[11px] text-gray-400">
                     Ready for AI matching
                   </p>
                 </div>
@@ -402,14 +380,14 @@ function ActiveTeamCard({ team }: { team: TeamPool }) {
         href={`/enterprise/team/${team.id}`}
         className="group block"
       >
-        <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 hover:shadow-xl hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
+        <div className="card-parchment p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
           {/* Header */}
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1 min-w-0">
-              <h3 className="text-[14px] font-bold text-brown-900 group-hover:text-brown-700 transition-colors truncate">
+              <h3 className="text-[14px] font-bold text-gray-900 group-hover:text-gray-700 transition-colors truncate">
                 {team.name}
               </h3>
-              <p className="text-[11px] text-beige-500 mt-0.5">
+              <p className="text-[11px] text-gray-400 mt-0.5">
                 {plan?.title ?? team.planId}
               </p>
             </div>
@@ -430,7 +408,7 @@ function ActiveTeamCard({ team }: { team: TeamPool }) {
             <div className="flex-1 space-y-3">
               {/* Avatar stack */}
               <div>
-                <p className="text-[10px] text-beige-500 mb-1.5">Team</p>
+                <p className="text-[10px] text-gray-400 mb-1.5">Team</p>
                 <div className="flex -space-x-2">
                   {team.members.slice(0, 4).map((m) => (
                     <TooltipProvider key={m.id} delayDuration={200}>
@@ -447,7 +425,7 @@ function ActiveTeamCard({ team }: { team: TeamPool }) {
                     </TooltipProvider>
                   ))}
                   {team.totalMembers > 4 && (
-                    <div className="w-8 h-8 rounded-full bg-beige-200 border-2 border-white flex items-center justify-center text-[9px] font-bold text-beige-600">
+                    <div className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[9px] font-bold text-gray-500">
                       +{team.totalMembers - 4}
                     </div>
                   )}
@@ -457,19 +435,19 @@ function ActiveTeamCard({ team }: { team: TeamPool }) {
               {/* Stats row */}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1">
-                  <UsersRound className="w-3 h-3 text-beige-400" />
-                  <span className="text-[11px] font-semibold text-brown-800">
+                  <UsersRound className="w-3 h-3 text-gray-400" />
+                  <span className="text-[11px] font-semibold text-gray-800">
                     {team.totalMembers}
                   </span>
-                  <span className="text-[10px] text-beige-500">members</span>
+                  <span className="text-[10px] text-gray-400">members</span>
                 </div>
-                <div className="w-px h-4 bg-beige-200" />
+                <div className="w-px h-4 bg-gray-200" />
                 <div className="flex items-center gap-1">
-                  <Layers className="w-3 h-3 text-beige-400" />
-                  <span className="text-[11px] font-semibold text-brown-800">
+                  <Layers className="w-3 h-3 text-gray-400" />
+                  <span className="text-[11px] font-semibold text-gray-800">
                     {team.requiredSkills.length}
                   </span>
-                  <span className="text-[10px] text-beige-500">skills</span>
+                  <span className="text-[10px] text-gray-400">skills</span>
                 </div>
               </div>
             </div>
@@ -480,27 +458,27 @@ function ActiveTeamCard({ team }: { team: TeamPool }) {
             {team.requiredSkills.slice(0, 4).map((skill) => (
               <span
                 key={skill}
-                className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-beige-100 text-beige-600"
+                className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-500"
               >
                 {skill}
               </span>
             ))}
             {team.requiredSkills.length > 4 && (
-              <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-beige-200 text-beige-500">
+              <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-gray-200 text-gray-400">
                 +{team.requiredSkills.length - 4}
               </span>
             )}
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-beige-100">
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
             <div className="flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-forest-400" />
-              <span className="text-[10px] text-beige-500">
+              <span className="text-[10px] text-gray-400">
                 Anonymized &middot; AI-governed
               </span>
             </div>
-            <ArrowRight className="w-4 h-4 text-beige-300 group-hover:text-brown-500 group-hover:translate-x-1 transition-all" />
+            <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-brown-500 group-hover:translate-x-1 transition-all" />
           </div>
         </div>
       </Link>
@@ -553,17 +531,17 @@ function FormTeamDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="my-4 rounded-xl border border-beige-200/50 bg-beige-50/50 p-4 space-y-2">
+            <div className="my-4 rounded-xl border border-gray-200 bg-gray-50/50 p-4 space-y-2">
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-beige-500">Tasks to staff</span>
-                <span className="font-semibold text-brown-800">{plan.totalTasks}</span>
+                <span className="text-gray-400">Tasks to staff</span>
+                <span className="font-semibold text-gray-800">{plan.totalTasks}</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-beige-500">Estimated hours</span>
-                <span className="font-semibold text-brown-800">{plan.estimatedHours.toLocaleString()}h</span>
+                <span className="text-gray-400">Estimated hours</span>
+                <span className="font-semibold text-gray-800">{plan.estimatedHours.toLocaleString()}h</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-beige-500">Complexity</span>
+                <span className="text-gray-400">Complexity</span>
                 <Badge variant={complexityConfig[plan.complexity].variant} size="sm">
                   {complexityConfig[plan.complexity].label}
                 </Badge>
@@ -596,14 +574,14 @@ function FormTeamDialog({
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 mx-auto mb-5 flex items-center justify-center shadow-lg shadow-gold-500/20"
+              className="w-16 h-16 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 mx-auto mb-5 flex items-center justify-center shadow-md"
             >
               <Brain className="w-8 h-8 text-white" />
             </motion.div>
-            <p className="text-[14px] font-semibold text-brown-900">
+            <p className="text-[14px] font-semibold text-gray-900">
               Matching Engine Running...
             </p>
-            <p className="text-[11px] text-beige-500 mt-1 max-w-[280px] mx-auto">
+            <p className="text-[11px] text-gray-400 mt-1 max-w-[280px] mx-auto">
               Analyzing Skill Genome data across contributor pool for{" "}
               {plan.totalTasks} tasks
             </p>
@@ -619,18 +597,18 @@ function FormTeamDialog({
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", stiffness: 200, damping: 15 }}
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-forest-400 to-forest-600 mx-auto mb-5 flex items-center justify-center shadow-lg shadow-forest-500/20"
+              className="w-14 h-14 rounded-full bg-gradient-to-br from-forest-400 to-forest-600 mx-auto mb-5 flex items-center justify-center shadow-md"
             >
               <CheckCircle2 className="w-7 h-7 text-white" />
             </motion.div>
-            <h3 className="text-[16px] font-bold text-brown-900 mb-1">
+            <h3 className="text-[16px] font-bold text-gray-900 mb-1">
               Team Matched Successfully
             </h3>
-            <p className="text-[12px] text-beige-600 max-w-[320px] mx-auto mb-1">
+            <p className="text-[12px] text-gray-500 max-w-[320px] mx-auto mb-1">
               Found optimal contributors for all {plan.totalTasks} tasks with
               a 92% average match score.
             </p>
-            <p className="text-[11px] text-beige-400 mb-6">
+            <p className="text-[11px] text-gray-400 mb-6">
               Review the proposed team composition before sending invitations
             </p>
 
@@ -786,7 +764,7 @@ function ReassignDialog({
               <div className="flex items-start gap-2.5 p-3 rounded-xl bg-brown-50/60 border border-brown-200/40 mt-1">
                 <AlertTriangle className="w-4 h-4 text-brown-500 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-[10px] font-semibold text-brown-700 mb-0.5">
+                  <p className="text-[10px] font-semibold text-gray-700 mb-0.5">
                     Decline Reason
                   </p>
                   <p className="text-[11px] text-brown-600 leading-relaxed">
@@ -805,7 +783,7 @@ function ReassignDialog({
                     "w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left",
                     method === m.id
                       ? "border-brown-300 bg-brown-50/60 ring-1 ring-brown-200"
-                      : "border-beige-200/50 bg-white/70 hover:border-beige-300 hover:bg-white/90"
+                      : "border-gray-200 bg-white hover:border-gray-300 hover:bg-white/90"
                   )}
                 >
                   <div
@@ -817,10 +795,10 @@ function ReassignDialog({
                     <m.icon className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-semibold text-brown-900">
+                    <p className="text-[12px] font-semibold text-gray-900">
                       {m.label}
                     </p>
-                    <p className="text-[10px] text-beige-500 mt-0.5">
+                    <p className="text-[10px] text-gray-400 mt-0.5">
                       {m.description}
                     </p>
                   </div>
@@ -860,13 +838,13 @@ function ReassignDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="rounded-xl border border-beige-200/50 bg-white/70 p-4 my-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 my-3">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-forest-300 to-forest-500 flex items-center justify-center text-[11px] font-bold text-white">
                   {mockNextCandidate.avatar}
                 </div>
                 <div className="flex-1">
-                  <p className="text-[13px] font-semibold text-brown-900">
+                  <p className="text-[13px] font-semibold text-gray-900">
                     {mockNextCandidate.displayName}
                   </p>
                   <div className="flex items-center gap-1.5 mt-0.5">
@@ -879,10 +857,10 @@ function ReassignDialog({
                 </div>
                 <div className="text-center">
                   <p className="text-[18px] font-bold text-forest-600">{mockNextCandidate.matchScore}%</p>
-                  <p className="text-[9px] text-beige-500">Match</p>
+                  <p className="text-[9px] text-gray-400">Match</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-[10px] text-beige-500 mb-3">
+              <div className="flex items-center gap-4 text-[10px] text-gray-400 mb-3">
                 <span>{mockNextCandidate.deliveries} deliveries</span>
                 <span>{mockNextCandidate.rating}/5.0 rating</span>
               </div>
@@ -926,17 +904,17 @@ function ReassignDialog({
                     "w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border transition-all text-left",
                     selectedCandidate === c.id
                       ? "border-teal-300 bg-teal-50/60 ring-1 ring-teal-200"
-                      : "border-beige-200/50 bg-white/70 hover:border-beige-300"
+                      : "border-gray-200 bg-white hover:border-gray-300"
                   )}
                 >
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-300 to-teal-500 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
                     {c.avatar}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-semibold text-brown-900">{c.displayName}</p>
+                    <p className="text-[12px] font-semibold text-gray-900">{c.displayName}</p>
                     <div className="flex items-center gap-1 mt-0.5">
                       {c.skills.map((s) => (
-                        <span key={s} className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-beige-100 text-beige-600">
+                        <span key={s} className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
                           {s}
                         </span>
                       ))}
@@ -944,7 +922,7 @@ function ReassignDialog({
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-[14px] font-bold text-teal-600">{c.matchScore}%</p>
-                    <p className="text-[9px] text-beige-500">Match</p>
+                    <p className="text-[9px] text-gray-400">Match</p>
                   </div>
                   {selectedCandidate === c.id && (
                     <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />
@@ -977,13 +955,13 @@ function ReassignDialog({
             </DialogHeader>
 
             <div className="relative my-3">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400 pointer-events-none" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search by name or skill..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-9 rounded-xl bg-white/80 border border-beige-200/50 pl-9 pr-4 text-[12px] text-brown-800 placeholder:text-beige-400 focus:outline-none focus:ring-2 focus:ring-brown-200/30 focus:border-brown-200/50"
+                className="w-full h-9 rounded-xl bg-white border border-gray-200 pl-9 pr-4 text-[12px] text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brown-200/30 focus:border-brown-200/50"
               />
             </div>
 
@@ -996,17 +974,17 @@ function ReassignDialog({
                     "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border transition-all text-left",
                     selectedCandidate === c.id
                       ? "border-gold-300 bg-gold-50/60 ring-1 ring-gold-200"
-                      : "border-beige-200/50 bg-white/70 hover:border-beige-300"
+                      : "border-gray-200 bg-white hover:border-gray-300"
                   )}
                 >
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold-300 to-gold-500 flex items-center justify-center text-[9px] font-bold text-white shrink-0">
                     {c.avatar}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-semibold text-brown-900">{c.displayName}</p>
+                    <p className="text-[11px] font-semibold text-gray-900">{c.displayName}</p>
                     <div className="flex items-center gap-1 mt-0.5">
                       {c.skills.map((s) => (
-                        <span key={s} className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-beige-100 text-beige-600">
+                        <span key={s} className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
                           {s}
                         </span>
                       ))}
@@ -1054,13 +1032,13 @@ function ReassignDialog({
 
             {/* Contributor selection */}
             <div className="relative my-3">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400 pointer-events-none" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search contributor..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-9 rounded-xl bg-white/80 border border-beige-200/50 pl-9 pr-4 text-[12px] text-brown-800 placeholder:text-beige-400 focus:outline-none focus:ring-2 focus:ring-brown-200/30 focus:border-brown-200/50"
+                className="w-full h-9 rounded-xl bg-white border border-gray-200 pl-9 pr-4 text-[12px] text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brown-200/30 focus:border-brown-200/50"
               />
             </div>
 
@@ -1073,13 +1051,13 @@ function ReassignDialog({
                     "w-full flex items-center gap-3 px-3.5 py-2 rounded-lg border transition-all text-left",
                     selectedCandidate === c.id
                       ? "border-brown-300 bg-brown-50/60 ring-1 ring-brown-200"
-                      : "border-beige-200/50 bg-white/70 hover:border-beige-300"
+                      : "border-gray-200 bg-white hover:border-gray-300"
                   )}
                 >
                   <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brown-300 to-brown-500 flex items-center justify-center text-[9px] font-bold text-white shrink-0">
                     {c.avatar}
                   </div>
-                  <p className="text-[11px] font-semibold text-brown-900 flex-1">{c.displayName}</p>
+                  <p className="text-[11px] font-semibold text-gray-900 flex-1">{c.displayName}</p>
                   <span className="text-[11px] font-bold text-brown-600 shrink-0">{c.matchScore}%</span>
                   {selectedCandidate === c.id && (
                     <CheckCircle2 className="w-3.5 h-3.5 text-brown-600 shrink-0" />
@@ -1090,7 +1068,7 @@ function ReassignDialog({
 
             {/* Mandatory reason (SOW D3 Step 2) */}
             <div className="mt-3">
-              <label className="text-[11px] font-semibold text-brown-800 mb-1.5 block">
+              <label className="text-[11px] font-semibold text-gray-800 mb-1.5 block">
                 Override Reason <span className="text-brown-500">*</span>
               </label>
               <textarea
@@ -1098,7 +1076,7 @@ function ReassignDialog({
                 onChange={(e) => setOverrideReason(e.target.value)}
                 placeholder="Provide a reason for overriding the matching engine recommendation..."
                 rows={3}
-                className="w-full rounded-xl bg-white/80 border border-beige-200/50 px-3.5 py-2.5 text-[12px] text-brown-800 placeholder:text-beige-400 focus:outline-none focus:ring-2 focus:ring-brown-200/30 focus:border-brown-200/50 resize-none"
+                className="w-full rounded-xl bg-white border border-gray-200 px-3.5 py-2.5 text-[12px] text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brown-200/30 focus:border-brown-200/50 resize-none"
               />
               {!overrideReason.trim() && selectedCandidate && (
                 <p className="text-[10px] text-brown-500 mt-1">
@@ -1130,11 +1108,11 @@ function ReassignDialog({
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-brown-400 to-brown-600 mx-auto mb-5 flex items-center justify-center shadow-lg shadow-brown-500/20"
+              className="w-14 h-14 rounded-full bg-gradient-to-br from-brown-400 to-brown-600 mx-auto mb-5 flex items-center justify-center shadow-md"
             >
               <Brain className="w-7 h-7 text-white" />
             </motion.div>
-            <p className="text-[14px] font-semibold text-brown-900">
+            <p className="text-[14px] font-semibold text-gray-900">
               {method === "next_best"
                 ? "Assigning next best contributor..."
                 : method === "rerun"
@@ -1143,7 +1121,7 @@ function ReassignDialog({
                     ? "Processing manual assignment..."
                     : "Applying admin override..."}
             </p>
-            <p className="text-[11px] text-beige-500 mt-1">
+            <p className="text-[11px] text-gray-400 mt-1">
               {method === "override"
                 ? "Override will be flagged in the audit trail"
                 : "Matching engine is updating assignments"}
@@ -1158,18 +1136,18 @@ function ReassignDialog({
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", stiffness: 200, damping: 15 }}
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-forest-400 to-forest-600 mx-auto mb-5 flex items-center justify-center shadow-lg shadow-forest-500/20"
+              className="w-14 h-14 rounded-full bg-gradient-to-br from-forest-400 to-forest-600 mx-auto mb-5 flex items-center justify-center shadow-md"
             >
               <CheckCircle2 className="w-7 h-7 text-white" />
             </motion.div>
-            <h3 className="text-[16px] font-bold text-brown-900 mb-1">
+            <h3 className="text-[16px] font-bold text-gray-900 mb-1">
               Reassignment Complete
             </h3>
-            <p className="text-[12px] text-beige-600 max-w-[320px] mx-auto mb-1">
+            <p className="text-[12px] text-gray-500 max-w-[320px] mx-auto mb-1">
               A new contributor has been matched to &ldquo;
               {assignment.taskTitle}&rdquo; and notified.
             </p>
-            <p className="text-[11px] text-beige-400 mb-1">
+            <p className="text-[11px] text-gray-400 mb-1">
               SLA response timer has been restarted (72 hours)
             </p>
             {method === "override" && (
@@ -1210,7 +1188,7 @@ function PendingResponseRow({ assignment }: { assignment: Assignment }) {
     <>
       <motion.div
         variants={fadeUp}
-        className="group flex items-center gap-4 px-5 py-4 rounded-xl border border-beige-200/30 bg-white/50 backdrop-blur-sm hover:bg-white/70 hover:shadow-md transition-all"
+        className="group flex items-center gap-4 px-5 py-4 rounded-xl border border-gray-200/30 bg-white/50 hover:bg-white hover:shadow-md transition-all"
       >
         {/* Avatar + Name — clickable to team detail */}
         <Link
@@ -1221,10 +1199,10 @@ function PendingResponseRow({ assignment }: { assignment: Assignment }) {
             {assignment.memberAvatar}
           </div>
           <div className="min-w-0">
-            <p className="text-[12px] font-semibold text-brown-900 truncate group-hover:text-brown-700 transition-colors">
+            <p className="text-[12px] font-semibold text-gray-900 truncate group-hover:text-gray-700 transition-colors">
               {assignment.memberDisplayName}
             </p>
-            <p className="text-[10px] text-beige-500 truncate">
+            <p className="text-[10px] text-gray-400 truncate">
               {assignment.teamName}
             </p>
           </div>
@@ -1232,18 +1210,18 @@ function PendingResponseRow({ assignment }: { assignment: Assignment }) {
 
         {/* Task */}
         <div className="flex-1 min-w-0">
-          <p className="text-[12px] font-medium text-brown-800 truncate">
+          <p className="text-[12px] font-medium text-gray-800 truncate">
             {assignment.taskTitle}
           </p>
-          <p className="text-[10px] text-beige-500 truncate">
+          <p className="text-[10px] text-gray-400 truncate">
             {assignment.projectName}
           </p>
         </div>
 
         {/* Sent at */}
         <div className="hidden lg:block min-w-[120px]">
-          <p className="text-[10px] text-beige-500">Sent</p>
-          <p className="text-[11px] font-medium text-brown-700">
+          <p className="text-[10px] text-gray-400">Sent</p>
+          <p className="text-[11px] font-medium text-gray-700">
             {formatDate(assignment.sentAt)}
           </p>
         </div>
@@ -1324,22 +1302,22 @@ function SlaLegend() {
     {
       label: "< 12h — Critical",
       dot: "bg-brown-600",
-      text: "text-brown-700",
+      text: "text-gray-700",
     },
   ];
 
   return (
     <motion.div
       variants={fadeIn}
-      className="flex items-center gap-5 px-5 py-3 rounded-xl bg-gradient-to-r from-beige-50/80 to-brown-50/50 border border-beige-200/40"
+      className="flex items-center gap-5 px-5 py-3 rounded-xl bg-gradient-to-r from-beige-50/80 to-brown-50/50 border border-gray-200"
     >
       <div className="flex items-center gap-1.5">
-        <Timer className="w-3.5 h-3.5 text-beige-400" />
-        <span className="text-[10px] font-semibold text-brown-700">
+        <Timer className="w-3.5 h-3.5 text-gray-400" />
+        <span className="text-[10px] font-semibold text-gray-700">
           SLA Response Window
         </span>
       </div>
-      <div className="w-px h-4 bg-beige-200" />
+      <div className="w-px h-4 bg-gray-200" />
       {items.map((item) => (
         <div key={item.label} className="flex items-center gap-1.5">
           <span className={cn("w-2 h-2 rounded-full", item.dot)} />
@@ -1412,24 +1390,11 @@ export default function TeamsPage() {
       className="max-w-[1200px] mx-auto space-y-6"
     >
       {/* ── Page Header ── */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3"
-      >
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brown-500 to-brown-600 flex items-center justify-center">
-              <UsersRound className="w-4 h-4 text-white" />
-            </div>
-            <h1 className="text-[22px] font-bold text-brown-900 tracking-[-0.02em]">
-              Teams
-            </h1>
-          </div>
-          <p className="text-[13px] text-beige-500 mt-1 max-w-lg">
-            AI-matched team formation, contributor assignments, and response
-            tracking across all projects.
-          </p>
-        </div>
+      <motion.div variants={fadeUp} className="mb-2">
+        <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight leading-tight">Teams</h1>
+        <p className="text-[13px] text-gray-400 mt-1.5">
+          AI-matched team formation, contributor assignments, and response tracking across all projects.
+        </p>
       </motion.div>
 
       {/* ── Summary Stats ── */}
@@ -1438,21 +1403,21 @@ export default function TeamsPage() {
           label="Formation Queue"
           value={formationQueue.length}
           icon={Layers}
-          accent="bg-gold-100 text-gold-700"
+          accent="bg-gradient-to-br from-gold-400 to-gold-600"
           subtext="Plans awaiting teams"
         />
         <MiniStat
           label="Active Teams"
           value={activeTeams.length}
           icon={UserCheck}
-          accent="bg-forest-100 text-forest-600"
+          accent="bg-gradient-to-br from-forest-400 to-forest-600"
           subtext="Delivering projects"
         />
         <MiniStat
           label="Pending Responses"
           value={pendingAssignments.length}
           icon={Send}
-          accent="bg-teal-100 text-teal-600"
+          accent="bg-gradient-to-br from-teal-400 to-teal-600"
           subtext={
             hasUrgent
               ? "Some approaching SLA deadline"
@@ -1463,7 +1428,7 @@ export default function TeamsPage() {
           label="Avg Match Score"
           value={`${avgMatchScore}%`}
           icon={Target}
-          accent="bg-brown-100 text-brown-600"
+          accent="bg-gradient-to-br from-brown-400 to-brown-600"
           subtext="Across non-disbanded teams"
         />
       </div>
@@ -1471,7 +1436,7 @@ export default function TeamsPage() {
       {/* ── Tab Navigation ── */}
       <motion.div
         variants={fadeUp}
-        className="flex items-center gap-0 border-b border-beige-200/60 overflow-x-auto"
+        className="flex items-center gap-0 border-b border-gray-200 overflow-x-auto"
       >
         {tabs.map((tab) => (
           <button
@@ -1480,8 +1445,8 @@ export default function TeamsPage() {
             className={cn(
               "px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 whitespace-nowrap",
               activeTab === tab.key
-                ? "text-brown-800 border-brown-500"
-                : "text-beige-500 border-transparent hover:text-brown-600"
+                ? "text-gray-800 border-brown-500"
+                : "text-gray-400 border-transparent hover:text-gray-600"
             )}
           >
             {tab.label}
@@ -1491,10 +1456,10 @@ export default function TeamsPage() {
                 activeTab === tab.key
                   ? tab.urgent
                     ? "bg-gold-100 text-gold-800"
-                    : "bg-brown-100 text-brown-700"
+                    : "bg-brown-100 text-gray-700"
                   : tab.urgent
                     ? "bg-gold-100 text-gold-700 animate-pulse"
-                    : "bg-beige-100 text-beige-500"
+                    : "bg-gray-100 text-gray-400"
               )}
             >
               {tab.count}
@@ -1520,16 +1485,16 @@ export default function TeamsPage() {
             {/* AI engine callout */}
             <motion.div
               variants={fadeUp}
-              className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-brown-50/80 via-beige-50/80 to-teal-50/80 border border-beige-200/40 p-4"
+              className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-brown-50/80 via-beige-50/80 to-teal-50/80 border border-gray-200 p-4"
             >
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-500 flex items-center justify-center shrink-0">
                 <Brain className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1">
-                <p className="text-[12px] text-brown-800 font-semibold">
+                <p className="text-[12px] text-gray-800 font-semibold">
                   Instant Team Formation Engine
                 </p>
-                <p className="text-[11px] text-beige-500 mt-0.5">
+                <p className="text-[11px] text-gray-400 mt-0.5">
                   Approved plans are matched with contributors using the Skill
                   Genome. Each candidate includes an AI-generated explanation of
                   why they were selected. No resumes, no bidding.
@@ -1541,13 +1506,13 @@ export default function TeamsPage() {
             {formationQueue.length === 0 ? (
               <motion.div
                 variants={fadeIn}
-                className="text-center py-16 rounded-2xl border border-beige-200/50 bg-white/50 backdrop-blur-sm"
+                className="text-center py-16 rounded-2xl border border-gray-200 bg-white/50"
               >
-                <Sparkles className="w-8 h-8 text-beige-300 mx-auto mb-3" />
-                <p className="text-[14px] font-medium text-beige-500">
+                <Sparkles className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+                <p className="text-[14px] font-medium text-gray-400">
                   No plans in the formation queue
                 </p>
-                <p className="text-[12px] text-beige-400 mt-1">
+                <p className="text-[12px] text-gray-400 mt-1">
                   Approve a decomposition plan to start team formation
                 </p>
               </motion.div>
@@ -1577,13 +1542,13 @@ export default function TeamsPage() {
             {activeTeams.length === 0 ? (
               <motion.div
                 variants={fadeIn}
-                className="text-center py-16 rounded-2xl border border-beige-200/50 bg-white/50 backdrop-blur-sm"
+                className="text-center py-16 rounded-2xl border border-gray-200 bg-white/50"
               >
-                <UsersRound className="w-8 h-8 text-beige-300 mx-auto mb-3" />
-                <p className="text-[14px] font-medium text-beige-500">
+                <UsersRound className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+                <p className="text-[14px] font-medium text-gray-400">
                   No active teams
                 </p>
-                <p className="text-[12px] text-beige-400 mt-1">
+                <p className="text-[12px] text-gray-400 mt-1">
                   Teams will appear here once formation is approved and
                   contributors accept assignments
                 </p>
@@ -1612,19 +1577,19 @@ export default function TeamsPage() {
 
             {/* Column headers */}
             <div className="flex items-center gap-4 px-5 py-2">
-              <span className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider min-w-[180px]">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[180px]">
                 Contributor
               </span>
-              <span className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider flex-1">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider flex-1">
                 Task / Project
               </span>
-              <span className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider hidden lg:block min-w-[120px]">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden lg:block min-w-[120px]">
                 Sent
               </span>
-              <span className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider min-w-[100px] text-right">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[100px] text-right">
                 SLA Timer
               </span>
-              <span className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider min-w-[140px] text-right">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[140px] text-right">
                 Status
               </span>
             </div>
@@ -1632,13 +1597,13 @@ export default function TeamsPage() {
             {allAssignments.length === 0 ? (
               <motion.div
                 variants={fadeIn}
-                className="text-center py-16 rounded-2xl border border-beige-200/50 bg-white/50 backdrop-blur-sm"
+                className="text-center py-16 rounded-2xl border border-gray-200 bg-white/50"
               >
-                <Send className="w-8 h-8 text-beige-300 mx-auto mb-3" />
-                <p className="text-[14px] font-medium text-beige-500">
+                <Send className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+                <p className="text-[14px] font-medium text-gray-400">
                   No pending assignments
                 </p>
-                <p className="text-[12px] text-beige-400 mt-1">
+                <p className="text-[12px] text-gray-400 mt-1">
                   Assignments will appear when teams are formed and invitations
                   are sent
                 </p>
