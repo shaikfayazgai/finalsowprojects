@@ -22,14 +22,14 @@ const modalVariants = {
     opacity: 1,
     scale: 1,
     y: 0,
-    transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
+    transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] as const },
   },
 };
 
 const stepVariants = {
   enter: { opacity: 0, x: 40 },
-  center: { opacity: 1, x: 0, transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] } },
-  exit: { opacity: 0, x: -40, transition: { duration: 0.2, ease: "easeIn" } },
+  center: { opacity: 1, x: 0, transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] as const } },
+  exit: { opacity: 0, x: -40, transition: { duration: 0.2, ease: "easeIn" as const } },
 };
 
 export default function OnboardingModal() {
