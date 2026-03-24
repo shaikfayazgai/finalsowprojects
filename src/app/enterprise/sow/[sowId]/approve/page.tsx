@@ -38,12 +38,12 @@ function Badge({ variant, dot, children }: { variant: string; dot?: boolean; chi
 
 /* ═══ Stage config ═══ */
 
-const stageLabels: Record<string, string> = { business: "Business Owner", legal: "Legal / Compliance", security: "Security Review", final: "Final Sign-off" };
+const stageLabels: Record<string, string> = { business: "Business Owner", glimmora_commercial: "GlimmoraTeam Commercial", legal: "Legal / Compliance", security: "Security Review", final: "Final Sign-off" };
 const stageDesc: Record<string, string> = {
-  business: "Verify budget, scope, and business alignment", legal: "Review contractual terms and compliance",
-  security: "Assess data sensitivity and security requirements", final: "Executive sign-off for project initiation",
+  business: "Verify budget, scope, and business alignment", glimmora_commercial: "Validate budget viability, rate cards, and contracted value",
+  legal: "Review contractual terms and compliance", security: "Assess data sensitivity and security requirements", final: "Executive sign-off for project initiation",
 };
-const stageIcons: Record<string, LucideIcon> = { business: DollarSign, legal: Scale, security: Shield, final: ShieldCheck };
+const stageIcons: Record<string, LucideIcon> = { business: DollarSign, glimmora_commercial: Target, legal: Scale, security: Shield, final: ShieldCheck };
 
 interface CLI { id: string; label: string; description: string; }
 const stageChecklists: Record<ApprovalStage, CLI[]> = {
@@ -52,6 +52,12 @@ const stageChecklists: Record<ApprovalStage, CLI[]> = {
     { id: "budget-ok", label: "Budget within procurement limits", description: "Cost falls within approved spending authority" },
     { id: "timeline-ok", label: "Timeline is feasible", description: "Milestone dates are realistic" },
     { id: "stakeholders", label: "Stakeholders identified and notified", description: "All decision-makers are listed and aware" },
+  ],
+  glimmora_commercial: [
+    { id: "rate-card", label: "Rate card alignment verified", description: "All declared roles have configured rate cards" },
+    { id: "margin-ok", label: "Margin and fee structure approved", description: "Budget viability vs scope confirmed" },
+    { id: "resource-avail", label: "Resource availability confirmed", description: "Contributor matching feasible for declared skills" },
+    { id: "commercial-terms", label: "Commercial terms standard-compliant", description: "Pricing model and payment schedule supported" },
   ],
   legal: [
     { id: "ip-rights", label: "IP rights and ownership clauses reviewed", description: "Intellectual property terms are acceptable" },
@@ -66,7 +72,7 @@ const stageChecklists: Record<ApprovalStage, CLI[]> = {
     { id: "audit-trail", label: "Audit logging requirements defined", description: "Traceability mechanisms in place" },
   ],
   final: [
-    { id: "all-stages", label: "All prior stages approved", description: "Business, Legal, and Security reviews complete" },
+    { id: "all-stages", label: "All prior stages approved", description: "Business, Commercial, Legal, and Security reviews complete" },
     { id: "risk-accept", label: "Residual risks accepted", description: "Outstanding risks documented" },
     { id: "decomp-ready", label: "Ready for decomposition", description: "SOW can be broken into tasks" },
   ],

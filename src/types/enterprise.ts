@@ -22,8 +22,8 @@ export type AuditAction = "created" | "updated" | "approved" | "rejected" | "esc
 export type UserRole = "owner" | "admin" | "manager" | "viewer";
 export type NotificationChannel = "email" | "in_app" | "slack" | "webhook";
 
-/* ── SOW Approval Pipeline (4-Stage per SOW V2.1 Section 6.3 + UX Flow B7) ── */
-export type ApprovalStage = "business" | "legal" | "security" | "final";
+/* ── SOW Approval Pipeline (5-Stage per FSD v2.7 Section 7.7) ── */
+export type ApprovalStage = "business" | "glimmora_commercial" | "legal" | "security" | "final";
 export type ApprovalStageStatus = "pending" | "in_review" | "approved" | "rejected";
 
 export interface SOWApprovalStage {
@@ -539,4 +539,239 @@ export interface AppNotification {
   read: boolean;
   timestamp: string;
   href?: string;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MANUAL SOW UPLOAD FLOW TYPES (FSD 7.5–7.8.3)
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── File Upload & Validation (FSD 7.5) ── */
+export interface FileValidationResult {
+  rule: string;
+  passed: boolean;
+  message: string;
+}
+
+export type UploadProcessingState =
+  | "idle"
+  | "validating"
+  | "uploading"
+  | "scanned_pdf_detected"
+  | "mixed_doc_detected"
+  | "large_doc_processing"
+  | "timeout"
+  | "non_english_detected"
+  | "embedded_attachments_detected"
+  | "extracting"
+  | "analyzing"
+  | "detecting"
+  | "scoring"
+  | "complete"
+  | "error";
+
+/* ── Extraction Intelligence Report (FSD 7.6.1) ── */
+export type ContextDetectionStatus = "PRESENT" | "PARTIAL" | "ABSENT";
+
+export interface ExtractionIntelligenceReport {
+  contextDetection: {
+    businessObjectives: ContextDetectionStatus;
+    painPoints: ContextDetectionStatus;
+    userContext: ContextDetectionStatus;
+  };
+  sectionsFound: number;
+  aiConfidence: number;
+  gapScore: number;
+  ambiguities: number;
+  sensitiveDataDetected: "none" | "possible" | "explicit";
+  sensitiveDataTypes?: string[];
+  estimatedReviewTime: string;
+  /* NO budget or timeline — EIR-001 / EIR-002 */
+}
+
+/* ── Parsed SOW Review (FSD 7.6.2) ── */
+export type ExtractionCategory =
+  | "business_objectives"
+  | "user_context"
+  | "features"
+  | "timeline"
+  | "budget"
+  | "compliance"
+  | "assumptions"
+  | "technical"
+  | "risk";
+
+export type ExtractionReviewState = "pending" | "accepted" | "edited" | "excluded";
+
+export interface ExtractionItem {
+  id: string;
+  category: ExtractionCategory;
+  text: string;
+  sourcePageNumber: number;
+  sourceHighlight: string;
+  reviewState: ExtractionReviewState;
+  editedText?: string;
+  confidence: number;
+  isDuplicate?: boolean;
+  duplicateCount?: number;
+}
+
+/* ── Gap Analysis Resolution (FSD 7.6.3) ── */
+export type GapSeverity = "critical" | "important" | "optional";
+
+export interface GapItem {
+  id: string;
+  severity: GapSeverity;
+  title: string;
+  description: string;
+  section: string;
+  remediationSuggestions?: string[];
+  isResolved: boolean;
+  isAcknowledged: boolean;
+  isDismissed: boolean;
+  isProhibited: boolean;
+  prohibitedReason?: string;
+}
+
+/* ── Commercial & Project Details (FSD 7.6.4) ── */
+export interface CommercialBusinessContext {
+  projectVision: string;
+  businessObjectives: { objective: string; measurableTarget: string; timeline: string }[];
+  painPoints: { problem: string; whoExperiences: string }[];
+  businessCriticality: "" | "mission_critical" | "business_important" | "standard" | "low";
+  currentState: string;
+  desiredFutureState: string;
+  endUserProfiles: { roleName: string; count: string; techLiteracy: string; primaryDevice: string }[];
+  successMetrics: { metricName: string; baseline: string; target: string; method: string }[];
+  definitionOfSuccess: string;
+}
+
+export interface CommercialDeliveryScope {
+  developmentScope: string[];
+  uiuxDesignScope: "" | "not_in_scope" | "in_scope" | "client_provides";
+  uiuxDetails: string[];
+  deploymentScope: "" | "not_in_scope" | "cloud" | "on_premise" | "both";
+  cloudProvider: string;
+  goLiveScope: "" | "not_in_scope" | "go_live" | "go_live_hypercare";
+  hypercareDuration: string;
+  dataMigrationScope: "" | "not_in_scope" | "in_scope";
+  dataMigrationDetails: string;
+}
+
+export interface CommercialTechIntegrations {
+  technologyStack: string;
+  scalabilityRequirements: string;
+  thirdPartyIntegrations: { name: string; direction: string; protocol: string }[];
+  userManagementScope: string;
+  ssoRequired: boolean;
+}
+
+export interface CommercialTimelineTeam {
+  startDate: string;
+  targetEndDate: string;
+  phasingStrategy: string;
+  milestones: { name: string; targetDate: string; acceptanceCriteria: string }[];
+  estimatedTeamSize: string;
+  workModel: string;
+  requiredRoles: { roleName: string; seniority: string }[];
+  uatOwnership: string;
+  uatDuration: string;
+  uatSignOffAuthority: string;
+  uatSignOffConfirmed: boolean;
+}
+
+export interface CommercialBudgetRisk {
+  budgetMinimum: number;
+  budgetMaximum: number;
+  currency: string;
+  pricingModel: "" | "fixed_price" | "time_and_materials" | "outcome_based" | "hybrid";
+  knownRisks: { description: string; likelihood: string; impact: string }[];
+  contingencyPercent: string;
+}
+
+export interface CommercialGovernance {
+  nonDiscriminationConfirmed: boolean;
+  dataSensitivityLevel: DataSensitivity | "";
+  personalDataInvolved: "" | "yes" | "no";
+  applicablePrivacyLaw: string[];
+  dpaRequired: "" | "yes" | "no" | "already_in_place";
+  regulatoryFrameworks: string[];
+  dataResidency: string;
+}
+
+export interface CommercialLegal {
+  ipOwnership: "" | "client_owns_all" | "glimmora_retains_framework" | "joint" | "custom";
+  sourceCodeOwnership: "" | "client_hosts" | "glimmora_hosts_transfer" | "client_provides_day_one";
+  portfolioReferenceRights: "" | "with_name" | "without_name" | "no_reference";
+  thirdPartyCosts: "" | "client_pays" | "glimmora_absorbs" | "split";
+  warrantyPeriod: "" | "30_days" | "60_days" | "90_days" | "6_months" | "custom" | "none";
+  changeRequestProcess: "" | "formal_cr" | "threshold_cr" | "time_and_materials";
+  changeRequestApprover: string;
+}
+
+export interface CommercialDetailsForm {
+  businessContext: CommercialBusinessContext;
+  deliveryScope: CommercialDeliveryScope;
+  techIntegrations: CommercialTechIntegrations;
+  timelineTeam: CommercialTimelineTeam;
+  budgetRisk: CommercialBudgetRisk;
+  governance: CommercialGovernance;
+  commercialLegal: CommercialLegal;
+}
+
+export type CommercialSectionKey = keyof CommercialDetailsForm;
+export type CommercialSectionStatus = "not_started" | "in_progress" | "complete" | "pre_populated";
+
+export interface ApprovalAuthorities {
+  businessOwnerApprover: string;
+  finalApprover: string;
+  legalReviewer?: string;
+  securityReviewer?: string;
+}
+
+/* ── Preview & Confirm (FSD 7.6.6) ── */
+export interface PreviewQualityMetrics {
+  confidence: number;
+  riskScore: number;
+  hallucinationFlags: number;
+  completeness: number;
+}
+
+export interface PreviewConfirmState {
+  qualityMetrics: PreviewQualityMetrics;
+  isStaleDocument: boolean;
+  hardBlocks: string[];
+}
+
+/* ── SOW Detail Status-Aware (FSD 7.8) ── */
+export interface KickOffReadiness {
+  contractAcknowledged: boolean;
+  contractIssuedAt?: string;
+  m1PaymentConfirmed: boolean;
+  m1Amount?: number;
+}
+
+export interface ContractStatus {
+  status: "not_issued" | "issued" | "acknowledged";
+  issuedAt?: string;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  pdfUrl?: string;
+}
+
+/* ── Upload Flow Metadata ── */
+export interface UploadedFileInfo {
+  name: string;
+  size: number;
+  type: string;
+  uploadedAt: string;
+}
+
+export interface RecentUploadItem {
+  id: string;
+  fileName: string;
+  client: string;
+  fileSize: string;
+  aiConfidence: number;
+  status: SowStatus;
+  uploadedAt: string;
 }

@@ -87,6 +87,7 @@ function NotificationBell() {
         <button
           className="relative flex items-center justify-center w-8 h-8 rounded-full text-gray-500 bg-white/50 border border-white/30 hover:bg-white/70 transition-all"
           aria-label={`Notifications, ${unread.length} unread`}
+          suppressHydrationWarning
         >
           <Bell className="w-[14px] h-[14px]" />
           {unread.length > 0 && (
@@ -235,7 +236,7 @@ export function TopBar({ config }: TopBarProps) {
           {/* Avatar */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="rounded-full focus:outline-none focus:ring-2 focus:ring-teal-200/40 focus:ring-offset-1">
+              <button className="rounded-full focus:outline-none focus:ring-2 focus:ring-teal-200/40 focus:ring-offset-1" suppressHydrationWarning>
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer text-white text-xs font-semibold transition-shadow"
                   style={{

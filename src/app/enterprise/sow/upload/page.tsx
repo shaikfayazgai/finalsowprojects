@@ -2,13 +2,21 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Upload, FileUp, CheckCircle2, X, File, FileType, Loader2, ArrowRight,
-  Search, Brain, LayoutList, AlertTriangle, ShieldCheck, Sparkles, RotateCcw,
+  Upload, FileUp, CheckCircle2, File, FileType, Loader2, ArrowRight,
+  Search, Brain, LayoutList, AlertTriangle, ShieldCheck, Sparkles, RotateCcw, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
+import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
+import { KpiRow } from "@/components/enterprise/sow/KpiRow";
+import { WhatHappensNext } from "./components/WhatHappensNext";
+import { RecentUploads } from "./components/RecentUploads";
+import { aiPoweredFeatures } from "@/mocks/data/sow-upload-flow";
+import { mockSOWs } from "@/mocks/data/enterprise-sow";
+import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 
 /* ═══ Parsing stages ═══ */
 
@@ -38,6 +46,7 @@ function getProgressPercent(stage: ParsingStage): number {
 /* ═══ File helpers ═══ */
 
 const ACCEPTED_EXTENSIONS = ".pdf,.docx,.doc";
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 function getFileTypeLabel(file: File): string {
   if (file.name.endsWith(".pdf")) return "PDF";
@@ -52,243 +61,345 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/* ═══ Mock results ═══ */
+function validateFile(file: File): { passed: boolean; errors: string[] } {
+  const errors: string[] = [];
+  const ext = file.name.toLowerCase();
+  if (!ext.endsWith(".pdf") && !ext.endsWith(".docx") && !ext.endsWith(".doc")) {
+    errors.push("Unsupported file format. Please upload a PDF, DOCX, or DOC file.");
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    errors.push("File size exceeds 50MB. Please compress the document.");
+  }
+  return { passed: errors.length === 0, errors };
+}
+
+/* ═══ Mock results (NO budget/duration per EIR-001/EIR-002) ═══ */
 
 const MOCK_RESULTS = {
-  sectionsDetected: 14, aiConfidence: 92, gapScore: 88,
-  ambiguities: 3, estimatedBudget: "$310,000", estimatedDuration: "7 months",
+  sectionsDetected: 14, aiConfidence: 87, gapScore: 72, ambiguities: 5,
 };
 
 /* ═══ PAGE ═══ */
 
 export default function SOWUploadPage() {
+  const router = useRouter();
+  const store = useSOWUploadStore();
+
   const [isDragging, setIsDragging] = React.useState(false);
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
   const [parsingStage, setParsingStage] = React.useState<ParsingStage>(null);
+  const [validationErrors, setValidationErrors] = React.useState<string[]>([]);
+  const [projectTitle, setProjectTitle] = React.useState(store.projectTitle);
+  const [clientOrg, setClientOrg] = React.useState(store.clientOrganisation);
+  const [linkedSowId, setLinkedSowId] = React.useState(store.linkedSowId || "");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const isParsing = parsingStage !== null && parsingStage !== "complete";
   const isComplete = parsingStage === "complete";
 
+  const existingSows = mockSOWs.filter((s) => s.status === "draft" || s.status === "review");
+
   const handleFileSelect = (file: File) => {
-    const ext = file.name.toLowerCase();
-    if (!ext.endsWith(".pdf") && !ext.endsWith(".docx") && !ext.endsWith(".doc")) return;
+    const result = validateFile(file);
+    if (!result.passed) {
+      setValidationErrors(result.errors);
+      return;
+    }
+    setValidationErrors([]);
     setSelectedFile(file);
     setParsingStage(null);
   };
 
   const handleBrowseClick = () => fileInputRef.current?.click();
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) handleFileSelect(file); e.target.value = ""; };
-  const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); const file = e.dataTransfer.files?.[0]; if (file) handleFileSelect(file); };
-  const handleReset = () => { setSelectedFile(null); setParsingStage(null); };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileSelect(file);
+    e.target.value = "";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 1) {
+      setValidationErrors(["Only one document per SOW upload. Please upload files one at a time."]);
+      return;
+    }
+    const file = files[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleReset = () => {
+    setSelectedFile(null);
+    setParsingStage(null);
+    setValidationErrors([]);
+  };
 
   const startParsing = () => {
     if (!selectedFile || isParsing) return;
+    /* Save to store */
+    store.setProjectTitle(projectTitle);
+    store.setClientOrganisation(clientOrg);
+    store.setLinkedSowId(linkedSowId || null);
+    store.setFile({ name: selectedFile.name, size: selectedFile.size, type: selectedFile.type, uploadedAt: new Date().toISOString() });
+    store.setFlowStep(1);
+
     const stages: ParsingStage[] = ["uploading", "extracting", "analyzing", "detecting", "scoring", "complete"];
     stages.forEach((stage, i) => { setTimeout(() => setParsingStage(stage), i * 600); });
+  };
+
+  const handleViewReport = () => {
+    store.setFlowStep(2);
+    router.push("/enterprise/sow/upload/report");
   };
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
       <input ref={fileInputRef} type="file" accept={ACCEPTED_EXTENSIONS} onChange={handleInputChange} className="hidden" aria-hidden="true" />
 
+      {/* Flow step progress */}
+      <motion.div variants={fadeUp} className="mb-6">
+        <FlowStepProgress currentStep={1} />
+      </motion.div>
+
       {/* Header */}
-      <motion.div variants={fadeUp} className="mb-8">
+      <motion.div variants={fadeUp} className="mb-6">
         <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight">Upload Statement of Work</h1>
         <p className="mt-1.5 text-[13px] text-gray-500">Upload your SOW document and our AI will parse, extract, and structure key sections automatically.</p>
       </motion.div>
 
-      {/* ═══ STATE 1: No file — Drop zone ═══ */}
-      {!selectedFile && !isParsing && !isComplete && (
-        <motion.div variants={fadeUp}>
-          <div
-            className={cn("card-parchment cursor-pointer transition-all duration-200", isDragging && "ring-2 ring-brown-200 border-dashed border-2 border-brown-300")}
-            style={{ padding: "64px 40px" }}
-            onClick={handleBrowseClick}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-          >
-            <div className="flex flex-col items-center text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center mb-6">
-                <FileUp className="w-7 h-7 text-white" />
-              </div>
-              <h3 className="text-[17px] font-semibold text-gray-900 mb-1.5">Drag & drop your SOW document</h3>
-              <p className="text-[13px] text-gray-400 mb-6">or click anywhere to browse your files</p>
-              <button onClick={(e) => { e.stopPropagation(); handleBrowseClick(); }}
-                className="flex items-center gap-2 text-[12px] font-medium text-gray-500 px-5 py-2 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all">
-                <Upload className="w-3.5 h-3.5" /> Browse Files
-              </button>
-              <div className="flex items-center gap-3 mt-5">
-                <span className="text-[10px] text-gray-400">PDF, DOCX, DOC</span>
-                <span className="w-1 h-1 rounded-full bg-gray-300" />
-                <span className="text-[10px] text-gray-400">Max 50MB</span>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
+      {/* Two-column layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
 
-      {/* ═══ STATE 2: File selected — Ready to parse ═══ */}
-      {selectedFile && !isParsing && !isComplete && (
-        <motion.div variants={fadeUp}>
-          <div className="card-parchment px-6 py-6">
-            <div className="flex items-center gap-4">
-              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
-                selectedFile.name.endsWith(".pdf") ? "bg-gradient-to-br from-brown-400 to-brown-600" : "bg-gradient-to-br from-teal-400 to-teal-600"
-              )}>
-                {selectedFile.name.endsWith(".pdf") ? <File className="w-5 h-5 text-white" /> : <FileType className="w-5 h-5 text-white" />}
+        {/* ═══ LEFT COLUMN — Main content ═══ */}
+        <div>
+          {/* Optional fields */}
+          {!isParsing && !isComplete && (
+            <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">Project Title (optional)</label>
+                <input type="text" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)}
+                  placeholder="We'll try to extract this from your document"
+                  className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[15px] font-semibold text-gray-900 truncate">{selectedFile.name}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{getFileTypeLabel(selectedFile)}</span>
-                  <span className="text-[11px] text-gray-400">{formatFileSize(selectedFile.size)}</span>
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">Client / Organisation (optional)</label>
+                <input type="text" value={clientOrg} onChange={(e) => setClientOrg(e.target.value)}
+                  placeholder="Override if AI cannot extract"
+                  className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
+              </div>
+              {existingSows.length > 0 && (
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">Link to existing SOW? (version upload)</label>
+                  <select value={linkedSowId} onChange={(e) => setLinkedSowId(e.target.value)}
+                    className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
+                    <option value="">No — create new SOW</option>
+                    {existingSows.map((s) => <option key={s.id} value={s.id}>{s.title} ({s.status})</option>)}
+                  </select>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Validation errors */}
+          <AnimatePresence>
+            {validationErrors.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                className="rounded-2xl bg-red-50 border border-red-200 px-5 py-4 mb-4">
+                {validationErrors.map((err, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <X className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+                    <span className="text-[12px] text-red-700">{err}</span>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* STATE 1: Drop zone */}
+          {!selectedFile && !isParsing && !isComplete && (
+            <motion.div variants={fadeUp}>
+              <div
+                className={cn("card-parchment cursor-pointer transition-all duration-200", isDragging && "ring-2 ring-brown-200 border-dashed border-2 border-brown-300")}
+                style={{ padding: "64px 40px" }}
+                onClick={handleBrowseClick}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+              >
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center mb-6">
+                    <FileUp className="w-7 h-7 text-white" />
+                  </div>
+                  <h3 className="text-[17px] font-semibold text-gray-900 mb-1.5">Drag & drop your SOW document</h3>
+                  <p className="text-[13px] text-gray-400 mb-6">or click anywhere to browse your files</p>
+                  <button onClick={(e) => { e.stopPropagation(); handleBrowseClick(); }}
+                    className="flex items-center gap-2 text-[12px] font-medium text-gray-500 px-5 py-2 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all">
+                    <Upload className="w-3.5 h-3.5" /> Browse Files
+                  </button>
+                  <div className="flex items-center gap-3 mt-5">
+                    <span className="text-[10px] text-gray-400">PDF, DOCX, DOC</span>
+                    <span className="w-1 h-1 rounded-full bg-gray-300" />
+                    <span className="text-[10px] text-gray-400">Max 50MB</span>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button onClick={handleReset}
-                  className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
-                  <RotateCcw className="w-3 h-3" /> Change
-                </button>
-                <button onClick={startParsing}
-                  className="flex items-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all">
-                  <Upload className="w-3.5 h-3.5" /> Upload & Parse
-                </button>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
+            </motion.div>
+          )}
 
-      {/* ═══ STATE 3: Parsing — Progress ═══ */}
-      <AnimatePresence>
-        {isParsing && selectedFile && (
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }}>
-            <div className="card-parchment px-6 py-6">
-              {/* Top info */}
-              <div className="flex items-center gap-4 mb-5">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center shrink-0">
-                  <Loader2 className="w-5 h-5 text-white animate-spin" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-semibold text-gray-900">Parsing {selectedFile.name}</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">{getFileTypeLabel(selectedFile)} · {formatFileSize(selectedFile.size)}</p>
-                </div>
-                <span className="num-display text-[24px] text-gray-900">{getProgressPercent(parsingStage)}%</span>
-              </div>
-
-              {/* Progress bar */}
-              <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-6">
-                <div className="h-full rounded-full bg-gradient-to-r from-brown-400 to-brown-500 transition-all duration-500" style={{ width: `${getProgressPercent(parsingStage)}%` }} />
-              </div>
-
-              {/* Stages */}
-              <div className="space-y-1">
-                {PARSING_STAGES.map((stage) => {
-                  const currentIdx = getStageIndex(parsingStage);
-                  const stageIdx = PARSING_STAGES.indexOf(stage);
-                  const isActive = stage.key === parsingStage;
-                  const isDone = currentIdx > stageIdx;
-                  const StageIcon = stage.icon;
-                  return (
-                    <div key={stage.key} className={cn("flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all",
-                      isActive && "bg-brown-50", !isActive && !isDone && "opacity-40"
-                    )}>
-                      {isDone ? <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" /> :
-                       isActive ? <Loader2 className="w-4 h-4 text-brown-500 animate-spin shrink-0" /> :
-                       <StageIcon className="w-4 h-4 text-gray-400 shrink-0" />}
-                      <div className="flex-1 min-w-0">
-                        <span className={cn("text-[12px] font-medium",
-                          isDone ? "text-forest-700" : isActive ? "text-brown-700" : "text-gray-400"
-                        )}>{stage.label}</span>
-                        <span className="text-[11px] text-gray-400 ml-2">{stage.description}</span>
-                      </div>
+          {/* STATE 2: File selected */}
+          {selectedFile && !isParsing && !isComplete && (
+            <motion.div variants={fadeUp}>
+              <div className="card-parchment px-6 py-6">
+                <div className="flex items-center gap-4">
+                  <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
+                    selectedFile.name.endsWith(".pdf") ? "bg-gradient-to-br from-brown-400 to-brown-600" : "bg-gradient-to-br from-teal-400 to-teal-600"
+                  )}>
+                    {selectedFile.name.endsWith(".pdf") ? <File className="w-5 h-5 text-white" /> : <FileType className="w-5 h-5 text-white" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[15px] font-semibold text-gray-900 truncate">{selectedFile.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{getFileTypeLabel(selectedFile)}</span>
+                      <span className="text-[11px] text-gray-400">{formatFileSize(selectedFile.size)}</span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ═══ STATE 4: Complete — Results ═══ */}
-      <AnimatePresence>
-        {isComplete && selectedFile && (
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-
-            {/* Success banner */}
-            <div className="card-parchment px-6 py-5 mb-5">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest-400 to-forest-600 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={handleReset} className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
+                      <RotateCcw className="w-3 h-3" /> Change
+                    </button>
+                    <button onClick={startParsing} className="flex items-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all">
+                      <Upload className="w-3.5 h-3.5" /> Upload & Parse
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-gray-900">Parsing Complete</p>
-                  <p className="text-[12px] text-gray-400 mt-0.5">{selectedFile.name} · {getFileTypeLabel(selectedFile)} · {formatFileSize(selectedFile.size)}</p>
-                </div>
-                <span className="text-[10px] font-semibold text-forest-700 bg-forest-50 px-2.5 py-1 rounded-full">All stages passed</span>
               </div>
-            </div>
+            </motion.div>
+          )}
 
-            {/* KPI cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-              {[
-                { label: "Sections Detected", value: MOCK_RESULTS.sectionsDetected, icon: LayoutList, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
-                { label: "AI Confidence", value: `${MOCK_RESULTS.aiConfidence}%`, icon: Sparkles, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
-                { label: "Completeness", value: `${MOCK_RESULTS.gapScore}%`, icon: ShieldCheck, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
-                { label: "Ambiguities", value: MOCK_RESULTS.ambiguities, icon: AlertTriangle, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
-              ].map((kpi) => {
-                const KpiIcon = kpi.icon;
-                return (
-                  <motion.div key={kpi.label} variants={scaleIn} className="card-parchment flex items-center gap-5 px-5 py-5">
-                    <div className={`w-12 h-12 rounded-2xl ${kpi.iconBg} flex items-center justify-center shrink-0`}>
-                      <KpiIcon className="w-5 h-5 text-white" />
+          {/* STATE 3: Parsing progress */}
+          <AnimatePresence>
+            {isParsing && selectedFile && (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }}>
+                <div className="card-parchment px-6 py-6">
+                  <div className="flex items-center gap-4 mb-5">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center shrink-0">
+                      <Loader2 className="w-5 h-5 text-white animate-spin" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-medium text-gray-400">{kpi.label}</div>
-                      <div className="num-display text-[28px] text-gray-900 leading-none mt-1">{kpi.value}</div>
+                      <p className="text-[14px] font-semibold text-gray-900">Parsing {selectedFile.name}</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">{getFileTypeLabel(selectedFile)} · {formatFileSize(selectedFile.size)}</p>
                     </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-
-            {/* Estimates + Warning */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-              <div className="card-parchment px-5 py-4">
-                <div className="label-caps mb-1">Estimated Budget</div>
-                <div className="num-display text-[20px] text-gray-900">{MOCK_RESULTS.estimatedBudget}</div>
-              </div>
-              <div className="card-parchment px-5 py-4">
-                <div className="label-caps mb-1">Estimated Duration</div>
-                <div className="num-display text-[20px] text-gray-900">{MOCK_RESULTS.estimatedDuration}</div>
-              </div>
-              <div className="rounded-2xl bg-gold-50 px-5 py-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-3.5 h-3.5 text-gold-600" />
-                  <span className="text-[12px] font-semibold text-gold-700">{MOCK_RESULTS.ambiguities} ambiguities flagged</span>
+                    <span className="num-display text-[24px] text-gray-900">{getProgressPercent(parsingStage)}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-6">
+                    <div className="h-full rounded-full bg-gradient-to-r from-brown-400 to-brown-500 transition-all duration-500" style={{ width: `${getProgressPercent(parsingStage)}%` }} />
+                  </div>
+                  <div className="space-y-1">
+                    {PARSING_STAGES.map((stage) => {
+                      const currentIdx = getStageIndex(parsingStage);
+                      const stageIdx = PARSING_STAGES.indexOf(stage);
+                      const isActive = stage.key === parsingStage;
+                      const isDone = currentIdx > stageIdx;
+                      const StageIcon = stage.icon;
+                      return (
+                        <div key={stage.key} className={cn("flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all",
+                          isActive && "bg-brown-50", !isActive && !isDone && "opacity-40"
+                        )}>
+                          {isDone ? <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" /> :
+                           isActive ? <Loader2 className="w-4 h-4 text-brown-500 animate-spin shrink-0" /> :
+                           <StageIcon className="w-4 h-4 text-gray-400 shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            <span className={cn("text-[12px] font-medium",
+                              isDone ? "text-forest-700" : isActive ? "text-brown-700" : "text-gray-400"
+                            )}>{stage.label}</span>
+                            <span className="text-[11px] text-gray-400 ml-2">{stage.description}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <p className="text-[11px] text-gold-600 leading-relaxed">Review these in the parsed SOW before decomposition.</p>
-              </div>
-            </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-            {/* Actions */}
-            <div className="flex items-center justify-between">
-              <button onClick={handleReset}
-                className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
-                <RotateCcw className="w-3 h-3" /> Upload Another
-              </button>
-              <Link href="/enterprise/sow/sow-003">
-                <button className="flex items-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all">
-                  View Parsed SOW <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </Link>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {/* STATE 4: Complete — Results (NO budget/duration per EIR-001/002) */}
+          <AnimatePresence>
+            {isComplete && selectedFile && (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+                {/* Success banner */}
+                <div className="card-parchment px-6 py-5 mb-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest-400 to-forest-600 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] font-semibold text-gray-900">Parsing Complete</p>
+                      <p className="text-[12px] text-gray-400 mt-0.5">{selectedFile.name} · {getFileTypeLabel(selectedFile)} · {formatFileSize(selectedFile.size)}</p>
+                    </div>
+                    <span className="text-[10px] font-semibold text-forest-700 bg-forest-50 px-2.5 py-1 rounded-full">PARSING COMPLETE</span>
+                  </div>
+                </div>
+
+                {/* KPI cards — NO budget or duration */}
+                <KpiRow className="mb-5" items={[
+                  { label: "Sections Detected", value: MOCK_RESULTS.sectionsDetected, icon: LayoutList, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
+                  { label: "AI Confidence", value: `${MOCK_RESULTS.aiConfidence}%`, icon: Sparkles, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
+                  { label: "Completeness", value: `${MOCK_RESULTS.gapScore}%`, icon: ShieldCheck, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
+                  { label: "Ambiguities", value: MOCK_RESULTS.ambiguities, icon: AlertTriangle, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
+                ]} />
+
+                {/* Ambiguities warning */}
+                {MOCK_RESULTS.ambiguities > 0 && (
+                  <div className="rounded-2xl bg-gold-50 px-5 py-4 mb-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertTriangle className="w-3.5 h-3.5 text-gold-600" />
+                      <span className="text-[12px] font-semibold text-gold-700">{MOCK_RESULTS.ambiguities} ambiguities flagged</span>
+                    </div>
+                    <p className="text-[11px] text-gold-600 leading-relaxed">Review these in the Extraction Intelligence Report before proceeding.</p>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center justify-between">
+                  <button onClick={handleReset}
+                    className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all uppercase">
+                    <RotateCcw className="w-3 h-3" /> Upload Another
+                  </button>
+                  <button onClick={handleViewReport}
+                    className="flex items-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all uppercase">
+                    View Extraction Report <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* ═══ RIGHT COLUMN — Sidebar ═══ */}
+        <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+          <WhatHappensNext activeStep={isComplete ? 2 : 1} />
+
+          {/* AI-Powered Features */}
+          <div className="card-parchment px-5 py-5">
+            <h3 className="text-[13px] font-semibold text-gray-800 mb-3 flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5 text-brown-400" /> AI-Powered Features
+            </h3>
+            <ul className="space-y-2">
+              {aiPoweredFeatures.map((feat, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3 h-3 text-forest-500 shrink-0 mt-0.5" />
+                  <span className="text-[11px] text-gray-600">{feat}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <RecentUploads />
+        </div>
+      </div>
     </motion.div>
   );
 }

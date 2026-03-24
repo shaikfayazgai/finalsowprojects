@@ -379,7 +379,7 @@ export default function SOWDetailPage() {
             {!submitted ? (
               <>
                 <h3 className="text-[16px] font-semibold text-gray-900 mb-1">Submit for Approval?</h3>
-                <p className="text-[13px] text-gray-400 mb-5">This will send the SOW through the 4-stage approval pipeline.</p>
+                <p className="text-[13px] text-gray-400 mb-5">This will send the SOW through the 5-stage approval pipeline.</p>
                 <div className="card-parchment mb-5">
                   {[
                     { l: "Title", v: sow.title },
