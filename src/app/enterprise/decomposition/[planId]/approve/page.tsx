@@ -97,6 +97,8 @@ export default function ApprovePlanPage() {
   const warnings = validations.filter((v) => v.status === "warning").length;
   const errors = validations.filter((v) => v.status === "error").length;
   const hasErrors = errors > 0;
+
+  /* ── Checklist completion ── */
   const checklistKeys = Object.keys(checklist);
   const allChecked = checklistKeys.every((k) => checklist[k]);
   const checkedCount = checklistKeys.filter((k) => checklist[k]).length;
@@ -509,7 +511,6 @@ export default function ApprovePlanPage() {
           </motion.div>
         )}
       </AnimatePresence>
-
     </motion.div>
   );
 }

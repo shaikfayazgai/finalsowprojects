@@ -1905,7 +1905,7 @@ export default function EditDecompositionPage() {
   const plan = mockPlans.find((p) => p.id === planId) ?? mockPlans[0];
 
   /* ── C6: Revision warning for approved plans ── */
-  const isApproved = plan.status === "approved" || plan.status === "completed";
+  const isApproved = plan.status === "approved" || plan.status === "completed" || plan.status === "in_progress";
   const [showRevisionWarning, setShowRevisionWarning] = React.useState(isApproved);
 
   /* ── Initialize editable milestones from mock data ── */

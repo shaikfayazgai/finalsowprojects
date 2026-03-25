@@ -26,9 +26,10 @@ const statusBadge: Record<
   { variant: "beige" | "gold" | "teal" | "forest" | "brown"; label: string }
 > = {
   draft: { variant: "beige", label: "Draft" },
-  pending_review: { variant: "gold", label: "Pending Review" },
-  approved: { variant: "teal", label: "Approved" },
-  in_progress: { variant: "forest", label: "In Progress" },
+  pending_review: { variant: "gold", label: "Plan Review Required" },
+  revision_in_progress: { variant: "teal", label: "Revision In Progress" },
+  approved: { variant: "forest", label: "Plan Confirmed" },
+  in_progress: { variant: "beige", label: "Plan Locked" },
   completed: { variant: "brown", label: "Completed" },
 };
 

@@ -44,8 +44,11 @@ function Badge({ variant, dot, children }: { variant: string; dot?: boolean; chi
 /* ═══ Status configs ═══ */
 
 const planStatusMap: Record<PlanStatus, { variant: string; label: string }> = {
-  draft: { variant: "beige", label: "Draft" }, pending_review: { variant: "gold", label: "Pending Review" },
-  approved: { variant: "teal", label: "Approved" }, in_progress: { variant: "forest", label: "In Progress" },
+  draft: { variant: "beige", label: "Draft" },
+  pending_review: { variant: "gold", label: "Plan Review Required" },
+  revision_in_progress: { variant: "teal", label: "Revision In Progress" },
+  approved: { variant: "forest", label: "Plan Confirmed" },
+  in_progress: { variant: "beige", label: "Plan Locked" },
   completed: { variant: "brown", label: "Completed" },
 };
 

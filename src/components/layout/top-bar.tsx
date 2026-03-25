@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Popover,
   PopoverContent,
@@ -249,25 +250,10 @@ export function TopBar({ config }: TopBarProps) {
                 </div>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-semibold"
-                    style={{ background: "linear-gradient(135deg, #5B9BA2, #4D5741)" }}>PN</div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">Priya Nair</p>
-                    <p className="text-xs text-gray-400">priya@enterprise.com</p>
-                  </div>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuLabel>
                   <div className="flex items-center gap-3">
-                    <Avatar size="md">
-                      <AvatarFallback className="bg-gradient-to-br from-brown-400 to-brown-600 text-white font-bold">
-                        PN
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-semibold bg-gradient-to-br from-brown-400 to-brown-600">PN</div>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">
                         Priya Nair
@@ -300,7 +286,6 @@ export function TopBar({ config }: TopBarProps) {
             </DropdownMenu>
           </div>
         </div>
-      </div>
     </header>
   );
 }
