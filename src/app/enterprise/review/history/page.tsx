@@ -17,12 +17,12 @@ import {
   ChevronRight,
   Search,
   Download,
-  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Badge, Button, Input } from "@/components/ui";
 import { MetricRing } from "@/components/enterprise/metric-ring";
+import { toast } from "@/lib/stores/toast-store";
 
 /* ══════════════════════════════════════════
    F4 — Review History / Acceptance Logs
@@ -265,7 +265,11 @@ export default function ReviewHistoryPage() {
             <Download className="w-3.5 h-3.5" />
             Export CSV
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toast.info("Export PDF", "PDF export requires backend integration.")}
+          >
             <Download className="w-3.5 h-3.5" />
             Export PDF
           </Button>

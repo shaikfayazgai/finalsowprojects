@@ -121,6 +121,9 @@ export default function MonitorPage() {
   const project = mockProjects.find((p) => p.id === projectId) ?? mockProjects[0];
   const ringColor = ringColorMap[project.health];
 
+  /* Alert action state */
+  const [alertStatuses, setAlertStatuses] = React.useState<Record<number, "resolved" | "escalated" | null>>({});
+
   /* Build SVG path from perf data */
   const chartW = 400;
   const chartH = 120;
@@ -270,7 +273,7 @@ export default function MonitorPage() {
           </div>
 
           <div className="space-y-3">
-            {mockAlerts.map((alert) => (
+            {mockAlerts.map((alert, index) => (
               <div
                 key={alert.id}
                 className={cn(
@@ -322,15 +325,35 @@ export default function MonitorPage() {
                   </div>
                 </div>
 
-                {/* Action buttons */}
+                {/* Action buttons / Status indicator */}
                 <div className="flex items-center gap-2 mt-3 ml-10">
-                  <button className="text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-beige-200 text-brown-700 hover:bg-beige-50 hover:border-brown-300 transition-all">
-                    Resolve
-                  </button>
-                  {alert.severity !== "info" && (
-                    <button className="text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-brown-600 text-white hover:bg-brown-700 shadow-sm transition-all">
-                      Escalate
-                    </button>
+                  {alertStatuses[index] === "resolved" ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-forest-50 border border-forest-200 text-forest-700">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Resolved
+                    </span>
+                  ) : alertStatuses[index] === "escalated" ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-gold-50 border border-gold-200 text-gold-700">
+                      <AlertTriangle className="w-3 h-3" />
+                      Escalated
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setAlertStatuses((prev) => ({ ...prev, [index]: "resolved" }))}
+                        className="text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-white border border-beige-200 text-brown-700 hover:bg-beige-50 hover:border-brown-300 transition-all"
+                      >
+                        Resolve
+                      </button>
+                      {alert.severity !== "info" && (
+                        <button
+                          onClick={() => setAlertStatuses((prev) => ({ ...prev, [index]: "escalated" }))}
+                          className="text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-brown-600 text-white hover:bg-brown-700 shadow-sm transition-all"
+                        >
+                          Escalate
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

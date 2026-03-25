@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft,
   GripVertical,
   Plus,
   Save,
@@ -95,7 +94,7 @@ const skillsTaxonomy = [
 ];
 
 const priorityColors: Record<string, string> = {
-  low: "border-l-beige-300",
+  low: "border-l-gray-300",
   medium: "border-l-teal-400",
   high: "border-l-gold-400",
   critical: "border-l-brown-500",
@@ -240,23 +239,23 @@ function SkillsPopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="text-[10px] font-semibold px-2 py-1 rounded-md border border-dashed border-beige-300 text-beige-500 hover:border-brown-400 hover:text-brown-600 transition-colors inline-flex items-center gap-1">
+        <button className="text-[10px] font-semibold px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors inline-flex items-center gap-1">
           <Plus className="w-3 h-3" />
           Add Skill
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-72 p-0 border-beige-200/60 bg-white/95 backdrop-blur-md shadow-xl"
+        className="w-72 p-0 border-gray-200 bg-white shadow-xl"
         align="start"
       >
-        <div className="p-3 border-b border-beige-100">
+        <div className="p-3 border-b border-gray-100">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search skills..."
-              className="h-8 pl-8 text-[12px] border-beige-200/60 rounded-lg"
+              className="h-8 pl-8 text-[12px] border-gray-200 rounded-lg"
               autoFocus
             />
           </div>
@@ -267,7 +266,7 @@ function SkillsPopover({
             {/* AI Suggestions section */}
             {filteredSuggestions.length > 0 && search === "" && (
               <>
-                <p className="text-[9px] uppercase tracking-wider text-beige-400 font-semibold px-2 py-1.5 flex items-center gap-1">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold px-2 py-1.5 flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-gold-500" />
                   AI Suggested
                 </p>
@@ -285,7 +284,7 @@ function SkillsPopover({
                   >
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-3 h-3 text-gold-400" />
-                      <span className="text-[12px] font-medium text-brown-800">
+                      <span className="text-[12px] font-medium text-gray-800">
                         {s.name}
                       </span>
                     </div>
@@ -293,20 +292,20 @@ function SkillsPopover({
                       <span className="text-[9px] font-mono text-gold-600 bg-gold-50 px-1.5 py-0.5 rounded">
                         {Math.round(s.confidence * 100)}%
                       </span>
-                      <Plus className="w-3 h-3 text-beige-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <Plus className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </button>
                 ))}
-                <Separator className="my-1.5 bg-beige-100" />
+                <Separator className="my-1.5 bg-gray-100" />
               </>
             )}
 
             {/* Taxonomy list */}
-            <p className="text-[9px] uppercase tracking-wider text-beige-400 font-semibold px-2 py-1.5">
+            <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold px-2 py-1.5">
               {search ? "Search Results" : "All Skills"}
             </p>
             {filteredTaxonomy.length === 0 && (
-              <p className="text-[11px] text-beige-400 px-2 py-3 text-center">
+              <p className="text-[11px] text-gray-400 px-2 py-3 text-center">
                 No matching skills
               </p>
             )}
@@ -317,14 +316,14 @@ function SkillsPopover({
                   onAdd({ name: s, source: "manual" });
                   setSearch("");
                 }}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-beige-50 transition-colors group"
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition-colors group"
               >
-                <span className="text-[12px] text-brown-700">{s}</span>
-                <Plus className="w-3 h-3 text-beige-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span className="text-[12px] text-gray-700">{s}</span>
+                <Plus className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
             ))}
             {filteredTaxonomy.length > 15 && (
-              <p className="text-[10px] text-beige-400 text-center py-1.5">
+              <p className="text-[10px] text-gray-400 text-center py-1.5">
                 +{filteredTaxonomy.length - 15} more...
               </p>
             )}
@@ -345,7 +344,7 @@ function SkillProficiencySelect({
 }) {
   const [open, setOpen] = React.useState(false);
   const levels: { value: SkillTag["proficiency"]; label: string; color: string }[] = [
-    { value: "beginner", label: "Beginner", color: "text-beige-500" },
+    { value: "beginner", label: "Beginner", color: "text-gray-400" },
     { value: "intermediate", label: "Intermediate", color: "text-teal-600" },
     { value: "advanced", label: "Advanced", color: "text-gold-600" },
     { value: "expert", label: "Expert", color: "text-brown-600" },
@@ -355,7 +354,7 @@ function SkillProficiencySelect({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className="text-[8px] font-mono text-beige-400 hover:text-brown-500 transition-colors underline decoration-dashed underline-offset-2"
+          className="text-[8px] font-mono text-gray-400 hover:text-gray-600 transition-colors underline decoration-dashed underline-offset-2"
           title="Set proficiency level"
         >
           {skill.proficiency
@@ -363,7 +362,7 @@ function SkillProficiencySelect({
             : "Lvl"}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-36 p-1 border-beige-200/60 bg-white/95 backdrop-blur-md shadow-lg" align="start">
+      <PopoverContent className="w-36 p-1 border-gray-200 bg-white shadow-lg" align="start">
         {levels.map((l) => (
           <button
             key={l.value}
@@ -372,8 +371,8 @@ function SkillProficiencySelect({
               setOpen(false);
             }}
             className={cn(
-              "w-full text-left px-2.5 py-1.5 rounded-md text-[11px] font-medium hover:bg-beige-50 transition-colors flex items-center gap-2",
-              skill.proficiency === l.value ? "bg-beige-50" : ""
+              "w-full text-left px-2.5 py-1.5 rounded-md text-[11px] font-medium hover:bg-gray-50 transition-colors flex items-center gap-2",
+              skill.proficiency === l.value ? "bg-gray-50" : ""
             )}
           >
             <span className={cn("w-1.5 h-1.5 rounded-full", l.color, "bg-current")} />
@@ -405,25 +404,25 @@ function EditableSubtaskCard({
       animate={{ opacity: 1, height: "auto" }}
       exit={{ opacity: 0, height: 0 }}
       className={cn(
-        "flex items-center gap-2 p-2.5 rounded-lg border bg-beige-50/40 group/sub",
+        "flex items-center gap-2 p-2.5 rounded-lg border bg-gray-50 group/sub",
         subtask.isNew
           ? "border-forest-200 bg-forest-50/20"
           : subtask.isModified
             ? "border-gold-200 bg-gold-50/20"
-            : "border-beige-200/40"
+            : "border-gray-200"
       )}
     >
-      <GripVertical className="w-3 h-3 text-beige-300 shrink-0 cursor-grab" />
+      <GripVertical className="w-3 h-3 text-gray-300 shrink-0 cursor-grab" />
       <Input
         value={subtask.title}
         onChange={(e) =>
           onUpdate({ ...subtask, title: e.target.value, isModified: true })
         }
-        className="flex-1 h-7 text-[11px] border-transparent bg-transparent hover:bg-white/60 focus:bg-white px-2 rounded-md"
+        className="flex-1 h-7 text-[11px] border-transparent bg-transparent hover:bg-white focus:bg-white px-2 rounded-md"
         placeholder="Subtask title..."
       />
       <div className="flex items-center gap-1 shrink-0">
-        <Clock className="w-2.5 h-2.5 text-beige-400" />
+        <Clock className="w-2.5 h-2.5 text-gray-400" />
         <Input
           type="number"
           value={subtask.estimatedHours}
@@ -434,9 +433,9 @@ function EditableSubtaskCard({
               isModified: true,
             })
           }
-          className="h-7 w-12 text-[10px] text-center px-1 rounded-md border-beige-200/40"
+          className="h-7 w-12 text-[10px] text-center px-1 rounded-md border-gray-200"
         />
-        <span className="text-[9px] text-beige-400">h</span>
+        <span className="text-[9px] text-gray-400">h</span>
       </div>
       {subtask.isNew && (
         <span className="inline-flex items-center text-[8px] font-semibold h-4 border border-forest-300 text-forest-600 bg-forest-50 px-1 rounded-full">
@@ -450,7 +449,7 @@ function EditableSubtaskCard({
       )}
       <button
         onClick={onDelete}
-        className="opacity-0 group-hover/sub:opacity-100 p-1 rounded text-beige-400 hover:text-red-500 transition-all shrink-0"
+        className="opacity-0 group-hover/sub:opacity-100 p-1 rounded text-gray-400 hover:text-red-500 transition-all shrink-0"
       >
         <Trash2 className="w-3 h-3" />
       </button>
@@ -566,20 +565,20 @@ function EditableTaskCard({
       layout
       variants={fadeUp}
       className={cn(
-        "group relative rounded-xl border bg-white/90 backdrop-blur-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-brown-100/10 border-l-[3px]",
+        "group relative rounded-xl border bg-white overflow-hidden transition-all duration-300 hover:shadow-md border-l-[3px]",
         priorityColors[task.priority],
         task.isNew
           ? "border-forest-200 ring-1 ring-forest-200/40"
           : task.isModified
             ? "border-gold-200/60 ring-1 ring-gold-200/30"
-            : "border-beige-200/60"
+            : "border-gray-200"
       )}
     >
       <div className="flex items-start gap-3 p-4">
         {/* Drag handle */}
         <div className="flex flex-col items-center gap-1 pt-1.5 shrink-0 cursor-grab active:cursor-grabbing">
-          <GripVertical className="w-4 h-4 text-beige-300 group-hover:text-beige-500 transition-colors" />
-          <span className="text-[9px] font-bold text-beige-400 font-mono">
+          <GripVertical className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors" />
+          <span className="text-[9px] font-bold text-gray-400 font-mono">
             #{index + 1}
           </span>
         </div>
@@ -593,7 +592,7 @@ function EditableTaskCard({
               onChange={(e) =>
                 onUpdate({ ...task, title: e.target.value, isModified: true })
               }
-              className="flex-1 h-9 text-[13px] font-semibold border-transparent bg-transparent hover:bg-beige-50/60 focus:bg-white px-2 -mx-2 rounded-lg"
+              className="flex-1 h-9 text-[13px] font-semibold border-transparent bg-transparent hover:bg-gray-50 focus:bg-white px-2 -mx-2 rounded-lg"
               placeholder="Task title..."
             />
             {task.isNew && (
@@ -612,7 +611,7 @@ function EditableTaskCard({
           <div>
             <button
               onClick={() => setExpanded(!expanded)}
-              className="text-[10px] text-beige-500 hover:text-brown-600 transition-colors flex items-center gap-1 font-medium"
+              className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 font-medium"
             >
               <PenLine className="w-3 h-3" />
               {expanded ? "Hide description" : "Edit description"}
@@ -639,7 +638,7 @@ function EditableTaskCard({
                         isModified: true,
                       })
                     }
-                    className="text-[12px] min-h-[60px] border-beige-200/60 bg-beige-50/30 rounded-lg resize-none"
+                    className="text-[12px] min-h-[60px] border-gray-200 bg-gray-50 rounded-lg resize-none"
                     placeholder="Task description..."
                   />
                 </motion.div>
@@ -661,7 +660,7 @@ function EditableTaskCard({
                   })
                 }
               >
-                <SelectTrigger className="h-8 text-[11px] rounded-lg border-beige-200/60">
+                <SelectTrigger className="h-8 text-[11px] rounded-lg border-gray-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -695,7 +694,7 @@ function EditableTaskCard({
 
             {/* Hours input */}
             <div className="flex items-center gap-1.5">
-              <Clock className="w-3 h-3 text-beige-400" />
+              <Clock className="w-3 h-3 text-gray-400" />
               <Input
                 type="number"
                 value={task.estimatedHours}
@@ -706,9 +705,9 @@ function EditableTaskCard({
                     isModified: true,
                   })
                 }
-                className="h-8 w-16 text-[11px] text-center px-2 rounded-lg border-beige-200/60"
+                className="h-8 w-16 text-[11px] text-center px-2 rounded-lg border-gray-200"
               />
-              <span className="text-[10px] text-beige-500">hrs</span>
+              <span className="text-[10px] text-gray-400">hrs</span>
             </div>
 
             {/* Dependencies indicator */}
@@ -731,7 +730,7 @@ function EditableTaskCard({
 
           {/* Skills tags — C2: Skills Tagging */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <Tag className="w-3 h-3 text-beige-400 shrink-0" />
+            <Tag className="w-3 h-3 text-gray-400 shrink-0" />
             {task.skillsRequired.map((skill) => (
               <span
                 key={skill.name}
@@ -739,7 +738,7 @@ function EditableTaskCard({
                   "text-[9px] font-semibold px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors cursor-default",
                   skill.source === "ai"
                     ? "bg-gold-50 text-gold-700 border border-gold-200/40"
-                    : "bg-beige-100 text-beige-600"
+                    : "bg-gray-100 text-gray-500"
                 )}
               >
                 {skill.source === "ai" && (
@@ -754,7 +753,7 @@ function EditableTaskCard({
                 />
                 <button
                   onClick={() => handleSkillRemove(skill.name)}
-                  className="ml-0.5 text-beige-400 hover:text-brown-500 transition-colors"
+                  className="ml-0.5 text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <X className="w-2.5 h-2.5" />
                 </button>
@@ -771,7 +770,7 @@ function EditableTaskCard({
           <div className="space-y-1.5">
             <button
               onClick={() => {}}
-              className="text-[10px] text-beige-500 font-medium flex items-center gap-1"
+              className="text-[10px] text-gray-400 font-medium flex items-center gap-1"
             >
               <ListChecks className="w-3 h-3" />
               Acceptance Criteria ({task.acceptanceCriteria.length})
@@ -783,24 +782,24 @@ function EditableTaskCard({
                   className="flex items-center gap-2 group/crit"
                 >
                   <Check className="w-3 h-3 text-forest-400 shrink-0" />
-                  <span className="text-[11px] text-brown-700 flex-1">
+                  <span className="text-[11px] text-gray-700 flex-1">
                     {criteria}
                   </span>
                   <button
                     onClick={() => handleRemoveCriteria(idx)}
-                    className="opacity-0 group-hover/crit:opacity-100 p-0.5 text-beige-400 hover:text-red-500 transition-all"
+                    className="opacity-0 group-hover/crit:opacity-100 p-0.5 text-gray-400 hover:text-red-500 transition-all"
                   >
                     <X className="w-3 h-3" />
                   </button>
                 </div>
               ))}
               <div className="flex items-center gap-2">
-                <Plus className="w-3 h-3 text-beige-300 shrink-0" />
+                <Plus className="w-3 h-3 text-gray-300 shrink-0" />
                 <Input
                   value={newCriteria}
                   onChange={(e) => setNewCriteria(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddCriteria()}
-                  className="flex-1 h-7 text-[11px] border-transparent bg-transparent hover:bg-beige-50/60 focus:bg-white px-2 rounded-md"
+                  className="flex-1 h-7 text-[11px] border-transparent bg-transparent hover:bg-gray-50 focus:bg-white px-2 rounded-md"
                   placeholder="Add acceptance criteria..."
                 />
                 {newCriteria && (
@@ -819,7 +818,7 @@ function EditableTaskCard({
           <div className="pt-1">
             <button
               onClick={() => setSubtasksOpen(!subtasksOpen)}
-              className="text-[10px] text-beige-500 hover:text-brown-600 transition-colors flex items-center gap-1 font-medium"
+              className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 font-medium"
             >
               <Layers className="w-3 h-3" />
               Subtasks ({task.subtasks.length})
@@ -835,7 +834,7 @@ function EditableTaskCard({
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-2 space-y-1.5 pl-2 border-l-2 border-beige-200/40 ml-1.5"
+                  className="mt-2 space-y-1.5 pl-2 border-l-2 border-gray-200 ml-1.5"
                 >
                   <AnimatePresence>
                     {task.subtasks.map((st) => (
@@ -849,7 +848,7 @@ function EditableTaskCard({
                   </AnimatePresence>
                   <button
                     onClick={handleAddSubtask}
-                    className="flex items-center gap-1.5 w-full py-2 px-3 rounded-lg border border-dashed border-beige-300 text-beige-500 hover:border-brown-400 hover:text-brown-600 hover:bg-brown-50/30 transition-all text-[10px] font-medium"
+                    className="flex items-center gap-1.5 w-full py-2 px-3 rounded-lg border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all text-[10px] font-medium"
                   >
                     <Plus className="w-3 h-3" />
                     Add Subtask
@@ -863,7 +862,7 @@ function EditableTaskCard({
         {/* Delete button */}
         <button
           onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-beige-400 hover:text-red-500 hover:bg-red-50 transition-all shrink-0"
+          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all shrink-0"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -933,11 +932,11 @@ function EditableMilestoneGroup({
                 autoFocus
               />
             ) : (
-              <h3 className="text-[14px] font-bold text-brown-900 truncate">
+              <h3 className="text-[14px] font-bold text-gray-900 truncate">
                 Milestone {milestoneIndex + 1}: {milestone.title}
               </h3>
             )}
-            <p className="text-[11px] text-beige-500">
+            <p className="text-[11px] text-gray-400">
               {tasks.length} tasks &middot; {subtaskCount} subtasks &middot;{" "}
               {milestoneHours.toLocaleString()}h
             </p>
@@ -957,15 +956,15 @@ function EditableMilestoneGroup({
           )}
           <button
             onClick={() => setEditingTitle(true)}
-            className="p-1.5 rounded-lg text-beige-400 hover:text-brown-600 hover:bg-beige-50 transition-all opacity-0 group-hover:opacity-100"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100"
           >
             <PenLine className="w-3.5 h-3.5" />
           </button>
           <button onClick={() => setOpen(!open)} className="p-1">
             {open ? (
-              <ChevronDown className="w-4 h-4 text-beige-400" />
+              <ChevronDown className="w-4 h-4 text-gray-400" />
             ) : (
-              <ChevronRight className="w-4 h-4 text-beige-400" />
+              <ChevronRight className="w-4 h-4 text-gray-400" />
             )}
           </button>
         </div>
@@ -983,7 +982,7 @@ function EditableMilestoneGroup({
               variants={stagger}
               initial="hidden"
               animate="show"
-              className="space-y-2.5 pl-3 border-l-2 border-beige-200/60 ml-4"
+              className="space-y-2.5 pl-3 border-l-2 border-gray-200 ml-4"
             >
               {tasks.map((task, i) => (
                 <EditableTaskCard
@@ -997,7 +996,7 @@ function EditableMilestoneGroup({
               ))}
               <button
                 onClick={() => onAddTask(milestone.id)}
-                className="flex items-center gap-2 w-full py-3 px-4 rounded-xl border border-dashed border-beige-300 text-beige-500 hover:border-brown-400 hover:text-brown-600 hover:bg-brown-50/30 transition-all text-[12px] font-medium"
+                className="flex items-center gap-2 w-full py-3 px-4 rounded-xl border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all text-[12px] font-medium"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add Task to {milestone.title}
@@ -1101,10 +1100,10 @@ function DependencyView({
             <Route className="w-4.5 h-4.5 text-white" />
           </div>
           <div>
-            <h3 className="text-[14px] font-bold text-brown-900">
+            <h3 className="text-[14px] font-bold text-gray-900">
               Dependencies & Critical Path
             </h3>
-            <p className="text-[11px] text-beige-500">
+            <p className="text-[11px] text-gray-400">
               {tasks.reduce((s, t) => s + t.dependencies.length, 0)} dependencies
               &middot; Critical path: {criticalPathDuration.toLocaleString()}h
             </p>
@@ -1141,13 +1140,13 @@ function DependencyView({
       </div>
 
       {/* Gantt-like timeline */}
-      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden">
-        <div className="p-4 border-b border-beige-100">
+      <div className="card-parchment overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
           <div className="flex items-center justify-between">
-            <p className="text-[12px] font-semibold text-brown-900">
+            <p className="text-[12px] font-semibold text-gray-900">
               Task Timeline
             </p>
-            <div className="flex items-center gap-3 text-[9px] text-beige-500">
+            <div className="flex items-center gap-3 text-[9px] text-gray-400">
               <span className="flex items-center gap-1">
                 <span className="w-3 h-1.5 rounded-full bg-brown-400" />
                 Milestone 1
@@ -1178,7 +1177,7 @@ function DependencyView({
             {[0, 25, 50, 75, 100].map((pct) => (
               <div
                 key={pct}
-                className="text-[8px] text-beige-400 font-mono"
+                className="text-[8px] text-gray-400 font-mono"
                 style={{
                   position: "absolute" as const,
                   left: `calc(180px + ${pct}% * (100% - 200px) / 100)`,
@@ -1252,7 +1251,7 @@ function DependencyView({
                   return (
                     <div key={task.id} className="flex items-center gap-2 py-1 group/row">
                       {/* Task label */}
-                      <div className="w-[170px] shrink-0 truncate text-[11px] text-brown-700 font-medium pr-2">
+                      <div className="w-[170px] shrink-0 truncate text-[11px] text-gray-700 font-medium pr-2">
                         {task.title}
                       </div>
 
@@ -1307,7 +1306,7 @@ function DependencyView({
                       </div>
 
                       {/* Hours label */}
-                      <span className="text-[9px] text-beige-500 font-mono w-10 text-right shrink-0">
+                      <span className="text-[9px] text-gray-400 font-mono w-10 text-right shrink-0">
                         {task.estimatedHours}h
                       </span>
                     </div>
@@ -1320,8 +1319,8 @@ function DependencyView({
       </div>
 
       {/* Dependency list */}
-      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-4 space-y-3">
-        <p className="text-[12px] font-semibold text-brown-900">
+      <div className="card-parchment p-4 space-y-3">
+        <p className="text-[12px] font-semibold text-gray-900">
           All Dependencies
         </p>
         <div className="space-y-2">
@@ -1338,10 +1337,10 @@ function DependencyView({
                       "flex items-center gap-3 p-2.5 rounded-lg border",
                       dep.type === "blocks"
                         ? "border-brown-200/40 bg-brown-50/20"
-                        : "border-beige-200/40 bg-beige-50/30"
+                        : "border-gray-200 bg-gray-50"
                     )}
                   >
-                    <span className="text-[11px] font-medium text-brown-700 flex-1 truncate">
+                    <span className="text-[11px] font-medium text-gray-700 flex-1 truncate">
                       {target.title}
                     </span>
                     <span
@@ -1349,13 +1348,13 @@ function DependencyView({
                         "inline-flex items-center text-[9px] font-semibold h-5 shrink-0 px-2 rounded-full border",
                         dep.type === "blocks"
                           ? "border-brown-300 text-brown-600 bg-brown-50"
-                          : "border-beige-300 text-beige-600 bg-beige-50"
+                          : "border-gray-300 text-gray-500 bg-gray-50"
                       )}
                     >
                       {dep.type === "blocks" ? "blocks" : "related"}
                     </span>
-                    <ArrowRight className="w-3 h-3 text-beige-400 shrink-0" />
-                    <span className="text-[11px] font-medium text-brown-700 flex-1 truncate">
+                    <ArrowRight className="w-3 h-3 text-gray-400 shrink-0" />
+                    <span className="text-[11px] font-medium text-gray-700 flex-1 truncate">
                       {task.title}
                     </span>
                   </div>
@@ -1367,24 +1366,24 @@ function DependencyView({
 
       {/* Add Dependency Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="sm:max-w-[440px] border-beige-200/60 bg-white/95 backdrop-blur-md">
+        <DialogContent className="sm:max-w-[440px] border-gray-200 bg-white">
           <DialogHeader>
-            <DialogTitle className="text-[16px] font-bold text-brown-900 flex items-center gap-2">
+            <DialogTitle className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
               <Link2 className="w-4 h-4 text-teal-500" />
               Add Dependency
             </DialogTitle>
-            <DialogDescription className="text-[12px] text-beige-500">
+            <DialogDescription className="text-[12px] text-gray-400">
               Define a dependency between two tasks.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-3">
             <div className="space-y-2">
-              <Label className="text-[11px] font-semibold text-brown-800">
+              <Label className="text-[11px] font-semibold text-gray-800">
                 Source Task (blocks other)
               </Label>
               <Select value={sourceTask} onValueChange={setSourceTask}>
-                <SelectTrigger className="h-9 text-[12px] border-beige-200/60">
+                <SelectTrigger className="h-9 text-[12px] border-gray-200">
                   <SelectValue placeholder="Select source task..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -1398,15 +1397,15 @@ function DependencyView({
             </div>
 
             <div className="flex items-center justify-center">
-              <ArrowRight className="w-4 h-4 text-beige-400" />
+              <ArrowRight className="w-4 h-4 text-gray-400" />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[11px] font-semibold text-brown-800">
+              <Label className="text-[11px] font-semibold text-gray-800">
                 Target Task (is blocked)
               </Label>
               <Select value={targetTask} onValueChange={setTargetTask}>
-                <SelectTrigger className="h-9 text-[12px] border-beige-200/60">
+                <SelectTrigger className="h-9 text-[12px] border-gray-200">
                   <SelectValue placeholder="Select target task..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -1422,14 +1421,14 @@ function DependencyView({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[11px] font-semibold text-brown-800">
+              <Label className="text-[11px] font-semibold text-gray-800">
                 Dependency Type
               </Label>
               <Select
                 value={depType}
                 onValueChange={(v) => setDepType(v as "blocks" | "related")}
               >
-                <SelectTrigger className="h-9 text-[12px] border-beige-200/60">
+                <SelectTrigger className="h-9 text-[12px] border-gray-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1441,7 +1440,7 @@ function DependencyView({
                   </SelectItem>
                   <SelectItem value="related">
                     <span className="flex items-center gap-1.5">
-                      <Link2 className="w-3 h-3 text-beige-500" />
+                      <Link2 className="w-3 h-3 text-gray-400" />
                       Related (soft dependency)
                     </span>
                   </SelectItem>
@@ -1517,10 +1516,10 @@ function ChangeSummaryView({
           <History className="w-4.5 h-4.5 text-white" />
         </div>
         <div>
-          <h3 className="text-[14px] font-bold text-brown-900">
+          <h3 className="text-[14px] font-bold text-gray-900">
             Change Summary
           </h3>
-          <p className="text-[11px] text-beige-500">
+          <p className="text-[11px] text-gray-400">
             Version {plan.version} to v{plan.version + 1}-draft
           </p>
         </div>
@@ -1591,9 +1590,9 @@ function ChangeSummaryView({
       )}
 
       {/* Detailed change list */}
-      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden">
-        <div className="p-4 border-b border-beige-100">
-          <p className="text-[12px] font-semibold text-brown-900">
+      <div className="card-parchment overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <p className="text-[12px] font-semibold text-gray-900">
             Detailed Changes
           </p>
         </div>
@@ -1608,7 +1607,7 @@ function ChangeSummaryView({
                 Added
               </span>
               <Target className="w-3.5 h-3.5 text-forest-500" />
-              <span className="text-[11px] font-medium text-brown-700">
+              <span className="text-[11px] font-medium text-gray-700">
                 Milestone: {m.title}
               </span>
             </div>
@@ -1624,7 +1623,7 @@ function ChangeSummaryView({
                 Modified
               </span>
               <Target className="w-3.5 h-3.5 text-gold-500" />
-              <span className="text-[11px] font-medium text-brown-700">
+              <span className="text-[11px] font-medium text-gray-700">
                 Milestone: {m.title}
               </span>
             </div>
@@ -1640,10 +1639,10 @@ function ChangeSummaryView({
                 Added
               </span>
               <FileEdit className="w-3.5 h-3.5 text-forest-500" />
-              <span className="text-[11px] font-medium text-brown-700 flex-1 truncate">
+              <span className="text-[11px] font-medium text-gray-700 flex-1 truncate">
                 Task: {t.title || "(untitled)"}
               </span>
-              <span className="text-[10px] text-beige-500 font-mono">
+              <span className="text-[10px] text-gray-400 font-mono">
                 {t.estimatedHours}h
               </span>
             </div>
@@ -1659,17 +1658,17 @@ function ChangeSummaryView({
                 Modified
               </span>
               <FileEdit className="w-3.5 h-3.5 text-gold-500" />
-              <span className="text-[11px] font-medium text-brown-700 flex-1 truncate">
+              <span className="text-[11px] font-medium text-gray-700 flex-1 truncate">
                 Task: {t.title}
               </span>
-              <span className="text-[10px] text-beige-500 font-mono">
+              <span className="text-[10px] text-gray-400 font-mono">
                 {t.estimatedHours}h
               </span>
             </div>
           ))}
 
           {!hasChanges && (
-            <div className="text-center py-8 text-[12px] text-beige-400">
+            <div className="text-center py-8 text-[12px] text-gray-400">
               No changes made yet. Edit tasks above to see changes here.
             </div>
           )}
@@ -1677,38 +1676,38 @@ function ChangeSummaryView({
       </div>
 
       {/* Version history */}
-      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-4 space-y-3">
-        <p className="text-[12px] font-semibold text-brown-900 flex items-center gap-2">
-          <History className="w-3.5 h-3.5 text-beige-400" />
+      <div className="card-parchment p-4 space-y-3">
+        <p className="text-[12px] font-semibold text-gray-900 flex items-center gap-2">
+          <History className="w-3.5 h-3.5 text-gray-400" />
           Version History
         </p>
         <div className="space-y-2">
           {mockPlanVersions.map((v) => (
             <div
               key={v.version}
-              className="flex items-start gap-3 p-3 rounded-lg border border-beige-200/40 bg-beige-50/20"
+              className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50"
             >
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-beige-200 to-beige-300 flex items-center justify-center shrink-0 text-[11px] font-bold text-brown-600">
                 v{v.version}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-brown-800">
+                  <span className="text-[11px] font-semibold text-gray-800">
                     {v.createdBy}
                   </span>
                   <span
                     className={cn(
                       "inline-flex items-center text-[8px] font-semibold h-4 px-1.5 rounded-full border",
                       v.status === "draft"
-                        ? "border-beige-300 text-beige-500"
+                        ? "border-gray-300 text-gray-400"
                         : "border-teal-300 text-teal-600"
                     )}
                   >
                     {v.status}
                   </span>
                 </div>
-                <p className="text-[10px] text-beige-500 mt-0.5">{v.changes}</p>
-                <p className="text-[9px] text-beige-400 mt-1 font-mono">
+                <p className="text-[10px] text-gray-400 mt-0.5">{v.changes}</p>
+                <p className="text-[9px] text-gray-400 mt-1 font-mono">
                   {new Date(v.createdAt).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
@@ -1728,7 +1727,7 @@ function ChangeSummaryView({
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-brown-800">
+                <span className="text-[11px] font-semibold text-gray-800">
                   Current Session
                 </span>
                 <span className="inline-flex items-center text-[8px] font-semibold h-4 border border-gold-300 text-gold-600 bg-gold-50 px-1.5 rounded-full">
@@ -1740,7 +1739,7 @@ function ChangeSummaryView({
                   ? `${newTasks.length + newMilestones.length} added, ${modifiedTasks.length + modifiedMilestones.length} modified`
                   : "No changes yet"}
               </p>
-              <p className="text-[9px] text-beige-400 mt-1 font-mono">
+              <p className="text-[9px] text-gray-400 mt-1 font-mono">
                 In progress...
               </p>
             </div>
@@ -1788,42 +1787,42 @@ function PlanSummarySidebar({
 
   return (
     <motion.div variants={slideInRight} className="space-y-5">
-      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 space-y-4 sticky top-4">
-        <h3 className="text-[14px] font-bold text-brown-900 flex items-center gap-2">
-          <Layers className="w-4 h-4 text-beige-400" />
+      <div className="card-parchment p-5 space-y-4 sticky top-4">
+        <h3 className="text-[14px] font-bold text-gray-900 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-gray-400" />
           Plan Summary
         </h3>
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between py-2 border-b border-beige-100">
-            <span className="text-[12px] text-beige-600">Milestones</span>
-            <span className="text-[16px] font-bold text-brown-900">
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <span className="text-[12px] text-gray-500">Milestones</span>
+            <span className="text-[16px] font-bold text-gray-900">
               {milestones.length}
             </span>
           </div>
-          <div className="flex items-center justify-between py-2 border-b border-beige-100">
-            <span className="text-[12px] text-beige-600">Tasks</span>
-            <span className="text-[16px] font-bold text-brown-900">
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <span className="text-[12px] text-gray-500">Tasks</span>
+            <span className="text-[16px] font-bold text-gray-900">
               {totalTasks}
             </span>
           </div>
-          <div className="flex items-center justify-between py-2 border-b border-beige-100">
-            <span className="text-[12px] text-beige-600">Subtasks</span>
-            <span className="text-[16px] font-bold text-brown-900">
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <span className="text-[12px] text-gray-500">Subtasks</span>
+            <span className="text-[16px] font-bold text-gray-900">
               {totalSubtasks}
             </span>
           </div>
-          <div className="flex items-center justify-between py-2 border-b border-beige-100">
-            <span className="text-[12px] text-beige-600 flex items-center gap-1.5">
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <span className="text-[12px] text-gray-500 flex items-center gap-1.5">
               <Clock className="w-3 h-3" />
               Total Hours
             </span>
-            <span className="text-[16px] font-bold text-brown-900">
+            <span className="text-[16px] font-bold text-gray-900">
               {totalHours.toLocaleString()}
             </span>
           </div>
-          <div className="flex items-center justify-between py-2 border-b border-beige-100">
-            <span className="text-[12px] text-beige-600 flex items-center gap-1.5">
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <span className="text-[12px] text-gray-500 flex items-center gap-1.5">
               <DollarSign className="w-3 h-3" />
               Est. Cost
             </span>
@@ -1832,7 +1831,7 @@ function PlanSummarySidebar({
             </span>
           </div>
           <div className="flex items-center justify-between py-2">
-            <span className="text-[12px] text-beige-600 flex items-center gap-1.5">
+            <span className="text-[12px] text-gray-500 flex items-center gap-1.5">
               <Zap className="w-3 h-3" />
               Critical Path
             </span>
@@ -1843,8 +1842,8 @@ function PlanSummarySidebar({
         </div>
 
         {/* Hours by milestone breakdown */}
-        <div className="pt-3 border-t border-beige-100 space-y-2.5">
-          <p className="text-[11px] text-beige-500 font-medium uppercase tracking-wider">
+        <div className="pt-3 border-t border-gray-100 space-y-2.5">
+          <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">
             Hours by Milestone
           </p>
           {milestones.map((ms, msIdx) => {
@@ -1854,14 +1853,14 @@ function PlanSummarySidebar({
             return (
               <div key={ms.id}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] text-brown-700 font-semibold truncate pr-2">
+                  <span className="text-[10px] text-gray-700 font-semibold truncate pr-2">
                     {ms.title}
                   </span>
-                  <span className="text-[10px] text-beige-500 font-mono shrink-0">
+                  <span className="text-[10px] text-gray-400 font-mono shrink-0">
                     {msHours}h ({pct}%)
                   </span>
                 </div>
-                <div className="h-2 rounded-full bg-beige-100 overflow-hidden">
+                <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
                   <div
                     className={cn(
                       "h-full rounded-full transition-all duration-500 bg-gradient-to-r",
@@ -1876,15 +1875,15 @@ function PlanSummarySidebar({
         </div>
 
         {/* Required skills */}
-        <div className="pt-3 border-t border-beige-100">
-          <p className="text-[11px] text-beige-500 font-medium uppercase tracking-wider mb-2">
+        <div className="pt-3 border-t border-gray-100">
+          <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider mb-2">
             Required Skills ({allSkills.length})
           </p>
           <div className="flex flex-wrap gap-1.5">
             {allSkills.map((skill) => (
               <span
                 key={skill}
-                className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-beige-100 text-beige-600"
+                className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-500"
               >
                 {skill}
               </span>
@@ -2026,13 +2025,13 @@ export default function EditDecompositionPage() {
     <>
       {/* C6: Revision warning modal */}
       <Dialog open={showRevisionWarning} onOpenChange={setShowRevisionWarning}>
-        <DialogContent className="sm:max-w-[480px] border-gold-200/60 bg-white/95 backdrop-blur-md">
+        <DialogContent className="sm:max-w-[480px] border-gray-200 bg-white">
           <DialogHeader>
-            <DialogTitle className="text-[16px] font-bold text-brown-900 flex items-center gap-2">
+            <DialogTitle className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-gold-500" />
               Editing an Approved Plan
             </DialogTitle>
-            <DialogDescription className="text-[12px] text-beige-600 mt-2 leading-relaxed">
+            <DialogDescription className="text-[12px] text-gray-500 mt-2 leading-relaxed">
               Editing an approved plan will create a new version and require
               re-approval. Existing assignments may be affected.
             </DialogDescription>
@@ -2076,50 +2075,34 @@ export default function EditDecompositionPage() {
         animate="show"
         className="max-w-[1400px] mx-auto space-y-6"
       >
-        {/* Back + header */}
-        <motion.div variants={fadeUp}>
-          <Link
-            href={`/enterprise/decomposition/${plan.id}`}
-            className="inline-flex items-center gap-1.5 text-[12px] text-beige-500 hover:text-brown-600 transition-colors mb-3"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to Plan Detail
-          </Link>
-
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-500 flex items-center justify-center shrink-0 shadow-lg shadow-gold-200/30">
-                <Network className="w-5 h-5 text-white" />
+        {/* Header */}
+        <motion.div variants={fadeUp} className="mb-2">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <span className="inline-flex items-center gap-1.5 text-[9px] font-medium tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-gold-50 text-gold-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />
+                  Editing
+                </span>
+                <span className="inline-flex items-center text-[9px] font-medium tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                  v{plan.version} → v{plan.version + 1}-draft
+                </span>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-[20px] font-bold text-brown-900 tracking-[-0.02em]">
-                    Edit Plan
-                  </h1>
-                  <span className="inline-flex items-center text-[9px] font-semibold h-5 border border-gold-300 text-gold-600 bg-gold-50 px-2 rounded-full">
-                    v{plan.version} &rarr; v{plan.version + 1}-draft
-                  </span>
-                </div>
-                <p className="text-[12px] text-beige-500 mt-0.5">
-                  {plan.title}
-                </p>
-              </div>
+              <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight leading-tight">Edit Plan</h1>
+              <p className="text-[12px] text-gray-400 mt-2">{plan.title}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <Link href={`/enterprise/decomposition/${plan.id}`}>
-                <Button variant="outline" size="sm">
-                  <X className="w-3.5 h-3.5" />
-                  Cancel
-                </Button>
+                <button className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
+                  <X className="w-3 h-3" /> Cancel
+                </button>
               </Link>
-              <Button variant="outline" size="sm">
-                <Save className="w-3.5 h-3.5" />
-                Save as Draft
-              </Button>
-              <Button variant="gradient-primary" size="sm">
-                <Send className="w-3.5 h-3.5" />
-                Save & Submit for Approval
-              </Button>
+              <button className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
+                <Save className="w-3 h-3" /> Save Draft
+              </button>
+              <button className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">
+                <Send className="w-3.5 h-3.5" /> Submit for Approval
+              </button>
             </div>
           </div>
         </motion.div>
@@ -2127,24 +2110,24 @@ export default function EditDecompositionPage() {
         {/* Tabs */}
         <motion.div variants={fadeUp}>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-beige-100/60 border border-beige-200/40 p-1 rounded-xl">
+            <TabsList className="bg-gray-100 border border-gray-200 p-1 rounded-xl">
               <TabsTrigger
                 value="tasks"
-                className="text-[12px] rounded-lg data-[state=active]:bg-white data-[state=active]:text-brown-900 data-[state=active]:shadow-sm px-4"
+                className="text-[12px] rounded-lg data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm px-4"
               >
                 <FileEdit className="w-3.5 h-3.5 mr-1.5" />
                 Tasks
               </TabsTrigger>
               <TabsTrigger
                 value="dependencies"
-                className="text-[12px] rounded-lg data-[state=active]:bg-white data-[state=active]:text-brown-900 data-[state=active]:shadow-sm px-4"
+                className="text-[12px] rounded-lg data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm px-4"
               >
                 <GitBranch className="w-3.5 h-3.5 mr-1.5" />
                 Dependencies
               </TabsTrigger>
               <TabsTrigger
                 value="changes"
-                className="text-[12px] rounded-lg data-[state=active]:bg-white data-[state=active]:text-brown-900 data-[state=active]:shadow-sm px-4"
+                className="text-[12px] rounded-lg data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm px-4"
               >
                 <History className="w-3.5 h-3.5 mr-1.5" />
                 Change Summary
@@ -2189,7 +2172,7 @@ export default function EditDecompositionPage() {
                     <motion.div variants={fadeUp}>
                       <button
                         onClick={handleAddMilestone}
-                        className="flex items-center gap-2 w-full py-4 px-5 rounded-2xl border-2 border-dashed border-beige-300 text-beige-500 hover:border-brown-400 hover:text-brown-600 hover:bg-brown-50/20 transition-all text-[13px] font-semibold"
+                        className="flex items-center gap-2 w-full py-4 px-5 rounded-2xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all text-[13px] font-semibold"
                       >
                         <Plus className="w-4 h-4" />
                         Add New Milestone

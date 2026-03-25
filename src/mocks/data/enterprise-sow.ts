@@ -1,7 +1,9 @@
 import type { SOW, SOWSection, RiskScoreBreakdown, SOWApprovalStage } from "@/types/enterprise";
 
+/* 5-stage approval pipeline per FSD v2.7 §7.7 */
 const approvedStages: SOWApprovalStage[] = [
   { stage: "business", status: "approved", reviewer: "Priya Nair", reviewedAt: "2026-02-25T10:00:00Z", comments: "Budget and scope align with Q2 priorities." },
+  { stage: "glimmora_commercial", status: "approved", reviewer: "GlimmoraTeam Commercial", reviewedAt: "2026-02-25T18:00:00Z", comments: "Contracted value confirmed at $285,000. Rate cards aligned." },
   { stage: "legal", status: "approved", reviewer: "Kavita Sharma", reviewedAt: "2026-02-26T14:30:00Z", comments: "All clauses compliant with standard terms." },
   { stage: "security", status: "approved", reviewer: "Arjun Reddy", reviewedAt: "2026-02-27T09:15:00Z", comments: "Data handling meets ISO 27001 requirements." },
   { stage: "final", status: "approved", reviewer: "Rajesh Kumar", reviewedAt: "2026-02-28T16:00:00Z", comments: "Approved for decomposition." },
@@ -9,6 +11,7 @@ const approvedStages: SOWApprovalStage[] = [
 
 const pendingApprovalStages: SOWApprovalStage[] = [
   { stage: "business", status: "approved", reviewer: "Priya Nair", reviewedAt: "2026-03-04T10:00:00Z", comments: "Scope verified." },
+  { stage: "glimmora_commercial", status: "approved", reviewer: "GlimmoraTeam Commercial", reviewedAt: "2026-03-05T11:30:00Z", comments: "Budget viability confirmed." },
   { stage: "legal", status: "in_review", reviewer: "Kavita Sharma" },
   { stage: "security", status: "pending" },
   { stage: "final", status: "pending" },
@@ -16,6 +19,15 @@ const pendingApprovalStages: SOWApprovalStage[] = [
 
 const draftStages: SOWApprovalStage[] = [
   { stage: "business", status: "pending" },
+  { stage: "glimmora_commercial", status: "pending" },
+  { stage: "legal", status: "pending" },
+  { stage: "security", status: "pending" },
+  { stage: "final", status: "pending" },
+];
+
+const changesRequestedStages: SOWApprovalStage[] = [
+  { stage: "business", status: "approved", reviewer: "Priya Nair", reviewedAt: "2026-03-10T10:00:00Z", comments: "Scope verified." },
+  { stage: "glimmora_commercial", status: "rejected", reviewer: "GlimmoraTeam Commercial", reviewedAt: "2026-03-11T15:00:00Z", comments: "Budget range too low for declared scope. Minimum viable budget for this scope is $220,000." },
   { stage: "legal", status: "pending" },
   { stage: "security", status: "pending" },
   { stage: "final", status: "pending" },
@@ -168,6 +180,32 @@ export const mockSOWs: SOW[] = [
     approvalStages: approvedStages,
     industry: "Retail",
     gapAnalysisScore: 98,
+  },
+  {
+    id: "sow-006",
+    title: "Logistics Tracking Dashboard",
+    client: "TransGlobal Freight",
+    status: "changes_requested",
+    intakeMode: "manual_upload",
+    confidentiality: "internal",
+    dataSensitivity: "internal",
+    version: 2,
+    createdAt: "2026-03-08T09:00:00Z",
+    updatedAt: "2026-03-11T15:00:00Z",
+    createdBy: "Meera Iyer",
+    fileSize: "1.9 MB",
+    pages: 32,
+    parsedSections: 10,
+    totalSections: 12,
+    aiConfidence: 82,
+    riskScore: { completeness: 25, confidence: 20, compliance: 18, patternMatch: 15, overall: 38 },
+    tags: ["Logistics", "Dashboard", "Real-time"],
+    estimatedBudget: 180000,
+    estimatedDuration: "5 months",
+    stakeholders: ["Meera Iyer", "Priya Nair"],
+    approvalStages: changesRequestedStages,
+    industry: "Logistics",
+    gapAnalysisScore: 75,
   },
 ];
 

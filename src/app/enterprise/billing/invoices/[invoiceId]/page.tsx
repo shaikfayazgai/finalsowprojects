@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, slideInRight } from "@/lib/utils/motion-variants";
 import { Badge, Button } from "@/components/ui";
+import { toast } from "@/lib/stores/toast-store";
 import { mockInvoices } from "@/mocks/data/enterprise-billing";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
 
@@ -105,22 +106,22 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           {invoice.status === "pending" && (
-            <Button variant="gradient-forest" size="sm">
+            <Button variant="gradient-forest" size="sm" onClick={() => toast.success("Payment Recorded", `Invoice ${invoice.number} marked as paid.`)}>
               <CheckCircle2 className="w-3.5 h-3.5" />
               Mark as Paid
             </Button>
           )}
           {invoice.status === "overdue" && (
-            <Button variant="gold" size="sm">
+            <Button variant="gold" size="sm" onClick={() => toast.success("Reminder Sent", `Payment reminder sent for ${invoice.number}.`)}>
               <Send className="w-3.5 h-3.5" />
               Send Reminder
             </Button>
           )}
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => toast.info("Download PDF", "PDF download requires backend integration.")}>
             <Download className="w-3.5 h-3.5" />
             Download PDF
           </Button>
-          <Button variant="ghost" size="icon-sm">
+          <Button variant="ghost" size="icon-sm" onClick={() => toast.info("Print Dialog", "Opening print preview...")}>
             <Printer className="w-4 h-4" />
           </Button>
         </div>
