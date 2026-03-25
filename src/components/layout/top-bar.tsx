@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import {
   Menu,
   Search,
@@ -153,7 +154,7 @@ export function TopBar({ config }: TopBarProps) {
                   </div>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuLabel>
                   <div className="flex items-center gap-3">
                     <Avatar size="md">
@@ -172,14 +173,21 @@ export function TopBar({ config }: TopBarProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <User className="w-4 h-4" /> <span>Profile</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/enterprise/profile">
+                    <User className="w-4 h-4" /> <span>Profile</span>
+                  </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Settings className="w-4 h-4" /> <span>Settings</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/enterprise/settings">
+                    <Settings className="w-4 h-4" /> <span>Settings</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-[var(--danger)] focus:text-[var(--danger-hover)] focus:bg-[var(--danger-light)]">
+                <DropdownMenuItem
+                  className="text-[var(--danger)] focus:text-[var(--danger-hover)] focus:bg-[var(--danger-light)]"
+                  onClick={() => signOut({ callbackUrl: "/auth/login" })}
+                >
                   <LogOut className="w-4 h-4" /> <span>Log out</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>

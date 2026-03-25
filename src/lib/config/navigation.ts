@@ -171,6 +171,7 @@ export const enterpriseNav: ModuleConfig = {
     {
       title: "Account",
       items: [
+        { label: "Settings", href: "/enterprise/settings", icon: Settings },
         { label: "Security", href: "/enterprise/settings/security", icon: ShieldCheck },
       ],
     },
