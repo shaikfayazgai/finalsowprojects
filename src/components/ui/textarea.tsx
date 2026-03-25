@@ -14,13 +14,13 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       <div className="relative w-full">
         <textarea
           className={cn(
-            "flex min-h-[100px] w-full rounded-xl border bg-white px-4 py-3 font-body text-sm text-brown-950 shadow-sm transition-all duration-200 resize-none",
-            "placeholder:text-beige-500",
-            "focus:outline-none focus:ring-2 focus:ring-brown-500/20 focus:border-brown-500",
-            "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-beige-50",
+            "flex min-h-[100px] w-full rounded-xl border bg-white px-3.5 py-3 font-body text-[13px] text-gray-900 transition-all duration-200 resize-none",
+            "placeholder:text-gray-400",
+            "focus:outline-none focus:ring-2 focus:ring-brown-100 focus:border-brown-300",
+            "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-50",
             error
-              ? "border-red-400 focus:ring-red-500/20 focus:border-red-500"
-              : "border-beige-200 hover:border-beige-300",
+              ? "border-red-400 focus:ring-red-100 focus:border-red-400"
+              : "border-gray-200 hover:border-gray-300",
             className
           )}
           ref={ref}

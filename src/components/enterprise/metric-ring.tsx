@@ -61,7 +61,7 @@ export function MetricRing({
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-base font-bold text-brown-900 tracking-tight">
-          {Math.round(value)}
+          {max === 100 ? Math.round(value) : value}
           {max === 100 && <span className="text-[10px] text-beige-500">%</span>}
         </span>
         {label && (

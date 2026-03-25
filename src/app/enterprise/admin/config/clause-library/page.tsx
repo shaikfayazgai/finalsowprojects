@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import {
   BookMarked,
   Plus,
@@ -15,16 +14,17 @@ import {
   ArrowLeft,
   Filter,
   CheckCircle2,
-  AlertTriangle,
   Edit,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { stagger, fadeUp } from "@/lib/utils/motion-variants";
+import { toast } from "@/lib/stores/toast-store";
 import {
   Button,
   Badge,
   Input,
+  Label,
+  Textarea,
   Select,
   SelectTrigger,
   SelectContent,
@@ -41,7 +41,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogTrigger,
+  DialogFooter,
 } from "@/components/ui";
 
 /* ── Mock clause data ── */
@@ -188,11 +188,22 @@ export default function ClauseLibraryPage() {
   >(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
 
+  // Add / Edit clause dialog
+  const [addClauseOpen, setAddClauseOpen] = React.useState(false);
+  const [editClauseOpen, setEditClauseOpen] = React.useState(false);
+  const [newClauseName, setNewClauseName] = React.useState("");
+  const [newClauseCategory, setNewClauseCategory] = React.useState("");
+  const [newClauseBody, setNewClauseBody] = React.useState("");
+
+  // Delete confirmation dialog
+  const [deleteClauseOpen, setDeleteClauseOpen] = React.useState(false);
+
   const filteredClauses = mockClauses.filter((clause) => {
     const matchesSearch =
       searchQuery === "" ||
       clause.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      clause.category.toLowerCase().includes(searchQuery.toLowerCase());
+      clause.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      clause.author.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
       categoryFilter === "all" || clause.category === categoryFilter;
     const matchesStatus =
@@ -202,33 +213,24 @@ export default function ClauseLibraryPage() {
   });
 
   const categories = [...new Set(mockClauses.map((c) => c.category))];
-  const activeClauses = mockClauses.filter((c) => c.status === "Active");
 
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      animate="show"
-      className="max-w-[1200px] mx-auto space-y-6"
-    >
+    <div className="max-w-[1200px] mx-auto space-y-6">
       {/* Header */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3"
-      >
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 animate-fade-up">
         <div>
           <Link
             href="/enterprise/admin/config"
-            className="inline-flex items-center gap-1.5 text-[12px] text-beige-500 hover:text-brown-600 transition-colors mb-2"
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-teal-600 hover:text-teal-700 transition-colors mb-2"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            Tenant Setup
+            Back to General
           </Link>
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center">
               <BookMarked className="w-4 h-4 text-white" />
             </div>
-            <h1 className="text-[22px] font-bold text-brown-900 tracking-[-0.02em]">
+            <h1 className="text-[22px] font-bold text-brown-900 tracking-[-0.02em] font-heading">
               Clause Library
             </h1>
           </div>
@@ -237,17 +239,14 @@ export default function ClauseLibraryPage() {
             hallucination prevention.
           </p>
         </div>
-        <Button variant="gradient-primary" size="sm">
+        <Button variant="gradient-primary" size="sm" onClick={() => { setNewClauseName(""); setNewClauseCategory(""); setNewClauseBody(""); setAddClauseOpen(true); }}>
           <Plus className="w-3.5 h-3.5" />
           Add Clause
         </Button>
-      </motion.div>
+      </div>
 
       {/* Stats Row */}
-      <motion.div
-        variants={fadeUp}
-        className="grid grid-cols-2 sm:grid-cols-4 gap-3"
-      >
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-fade-up [animation-delay:50ms]">
         <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-brown-100 flex items-center justify-center">
@@ -299,13 +298,10 @@ export default function ClauseLibraryPage() {
           <p className="text-[20px] font-bold text-brown-900">Mar 5</p>
           <p className="text-[10px] text-beige-500">2026</p>
         </div>
-      </motion.div>
+      </div>
 
       {/* Filter Bar */}
-      <motion.div
-        variants={fadeUp}
-        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-4"
-      >
+      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-4 animate-fade-up [animation-delay:100ms]">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="relative flex-1 w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400" />
@@ -346,13 +342,10 @@ export default function ClauseLibraryPage() {
             </Select>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Clauses Table */}
-      <motion.div
-        variants={fadeUp}
-        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden"
-      >
+      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden animate-fade-up [animation-delay:150ms]">
         <div className="px-5 py-4 border-b border-beige-100 flex items-center justify-between">
           <h2 className="text-[14px] font-semibold text-brown-900">
             All Clauses
@@ -388,6 +381,19 @@ export default function ClauseLibraryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {filteredClauses.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-10 h-10 rounded-xl bg-beige-100 flex items-center justify-center">
+                        <Search className="w-5 h-5 text-beige-400" />
+                      </div>
+                      <p className="text-[13px] font-medium text-brown-800">No clauses match your filters</p>
+                      <p className="text-[11px] text-beige-500">Try adjusting your search or filter criteria.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
               {filteredClauses.map((clause) => (
                 <TableRow
                   key={clause.id}
@@ -470,7 +476,7 @@ export default function ClauseLibraryPage() {
             </TableBody>
           </Table>
         </div>
-      </motion.div>
+      </div>
 
       {/* Clause Detail Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -538,11 +544,29 @@ export default function ClauseLibraryPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 pt-1">
-                  <Button variant="gradient-primary" size="sm" className="flex-1">
+                  <Button
+                    variant="gradient-primary"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      setNewClauseName(selectedClause.name);
+                      setNewClauseCategory(selectedClause.category);
+                      setNewClauseBody(selectedClause.clauseText);
+                      setDialogOpen(false);
+                      setEditClauseOpen(true);
+                    }}
+                  >
                     <Edit className="w-3.5 h-3.5" />
                     Edit Clause
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setDialogOpen(false);
+                      setDeleteClauseOpen(true);
+                    }}
+                  >
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
@@ -552,11 +576,182 @@ export default function ClauseLibraryPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Add Clause Dialog */}
+      <Dialog open={addClauseOpen} onOpenChange={setAddClauseOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-[16px] font-bold text-brown-900">
+              Add New Clause
+            </DialogTitle>
+            <DialogDescription className="text-[12px] text-beige-500">
+              Create a new pre-approved clause for SOW generation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-semibold text-brown-800">Name</Label>
+              <Input
+                placeholder="e.g. Standard Payment Net-30"
+                value={newClauseName}
+                onChange={(e) => setNewClauseName(e.target.value)}
+                className="h-9 text-[13px]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-semibold text-brown-800">Category</Label>
+              <Select value={newClauseCategory} onValueChange={setNewClauseCategory}>
+                <SelectTrigger className="h-9 text-[13px]">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-semibold text-brown-800">Clause Body</Label>
+              <Textarea
+                placeholder="Enter the clause text..."
+                value={newClauseBody}
+                onChange={(e) => setNewClauseBody(e.target.value)}
+                className="min-h-[120px] text-[13px]"
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="ghost" size="sm" onClick={() => setAddClauseOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="gradient-primary"
+              size="sm"
+              disabled={!newClauseName.trim() || !newClauseCategory || !newClauseBody.trim()}
+              onClick={() => {
+                toast.success("Clause Added", `"${newClauseName}" has been added to the library.`);
+                setAddClauseOpen(false);
+              }}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Clause
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Clause Dialog */}
+      <Dialog open={editClauseOpen} onOpenChange={setEditClauseOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-[16px] font-bold text-brown-900">
+              Edit Clause
+            </DialogTitle>
+            <DialogDescription className="text-[12px] text-beige-500">
+              Update clause details. Changes apply to future SOW generation only.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-semibold text-brown-800">Name</Label>
+              <Input
+                placeholder="e.g. Standard Payment Net-30"
+                value={newClauseName}
+                onChange={(e) => setNewClauseName(e.target.value)}
+                className="h-9 text-[13px]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-semibold text-brown-800">Category</Label>
+              <Select value={newClauseCategory} onValueChange={setNewClauseCategory}>
+                <SelectTrigger className="h-9 text-[13px]">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-semibold text-brown-800">Clause Body</Label>
+              <Textarea
+                placeholder="Enter the clause text..."
+                value={newClauseBody}
+                onChange={(e) => setNewClauseBody(e.target.value)}
+                className="min-h-[120px] text-[13px]"
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="ghost" size="sm" onClick={() => setEditClauseOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="gradient-primary"
+              size="sm"
+              disabled={!newClauseName.trim() || !newClauseCategory || !newClauseBody.trim()}
+              onClick={() => {
+                toast.success("Clause Updated", `"${newClauseName}" has been updated successfully.`);
+                setEditClauseOpen(false);
+              }}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteClauseOpen} onOpenChange={setDeleteClauseOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-[16px] font-bold text-brown-900">
+              Archive Clause
+            </DialogTitle>
+            <DialogDescription className="text-[12px] text-beige-500">
+              Are you sure you want to archive this clause? It will be excluded
+              from future SOW generation but retained for audit purposes.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedClause && (
+            <div className="rounded-xl bg-beige-50/80 border border-beige-200/50 p-3 mt-2">
+              <p className="text-[13px] font-semibold text-brown-900">
+                {selectedClause.name}
+              </p>
+              <p className="text-[11px] text-beige-500 mt-0.5">
+                {selectedClause.category} &middot; {selectedClause.usedCount} uses
+              </p>
+            </div>
+          )}
+          <DialogFooter className="mt-4">
+            <Button variant="ghost" size="sm" onClick={() => setDeleteClauseOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-red-200 text-red-600 hover:bg-red-50"
+              onClick={() => {
+                toast.success("Clause Archived", `"${selectedClause?.name}" has been archived.`);
+                setDeleteClauseOpen(false);
+              }}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Info Banner */}
-      <motion.div
-        variants={fadeUp}
-        className="rounded-2xl bg-gradient-to-r from-teal-50 to-beige-50 border border-teal-100/60 p-5"
-      >
+      <div className="rounded-2xl bg-gradient-to-r from-teal-50 to-beige-50 border border-teal-100/60 p-5 animate-fade-up [animation-delay:200ms]">
         <div className="flex items-start gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-400 to-teal-500 flex items-center justify-center shrink-0">
             <Shield className="w-4 h-4 text-white" />
@@ -578,7 +773,7 @@ export default function ClauseLibraryPage() {
             </p>
           </div>
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }

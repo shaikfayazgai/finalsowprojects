@@ -266,25 +266,23 @@ export default function ReviewQueuePage() {
       <motion.div variants={fadeUp}>
         <Tabs defaultValue="pending" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="pending" className="gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              Pending
-              <span className="ml-1 text-[10px] bg-gold-100 text-gold-700 px-1.5 py-0.5 rounded-full font-bold">
-                {mockDeliverables.filter((d) => d.status === "pending").length}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="approved" className="gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Approved
-            </TabsTrigger>
-            <TabsTrigger value="rejected" className="gap-1.5">
-              <XCircle className="w-3.5 h-3.5" />
-              Rejected
-            </TabsTrigger>
-            <TabsTrigger value="rework" className="gap-1.5">
-              <RotateCcw className="w-3.5 h-3.5" />
-              Rework
-            </TabsTrigger>
+            {([
+              { value: "pending", label: "Pending", icon: Clock, badgeCls: "bg-gold-100 text-gold-700" },
+              { value: "approved", label: "Approved", icon: CheckCircle2, badgeCls: "bg-forest-100 text-forest-700" },
+              { value: "rejected", label: "Rejected", icon: XCircle, badgeCls: "bg-brown-100 text-brown-700" },
+              { value: "rework", label: "Rework", icon: RotateCcw, badgeCls: "bg-brown-100 text-brown-700" },
+            ] as const).map((tab) => {
+              const count = mockDeliverables.filter((d) => d.status === tab.value).length;
+              return (
+                <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5">
+                  <tab.icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                  <span className={cn("ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold", tab.badgeCls)}>
+                    {count}
+                  </span>
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
 
           {(["pending", "approved", "rejected", "rework"] as const).map(

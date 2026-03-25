@@ -1,31 +1,25 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   CircleDollarSign,
   Clock,
   CheckCircle2,
-  FileText,
   BarChart3,
-  ChevronRight,
   TrendingUp,
   Wallet,
   Receipt,
-  ArrowRight,
-  Download,
-  BadgeDollarSign,
-  DollarSign,
   ArrowUpRight,
   ArrowDownRight,
   FileDown,
   Printer,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
-import { Badge, Button } from "@/components/ui";
-import { mockInvoices, mockEscrowAccounts, billingStats } from "@/mocks/data/enterprise-billing";
+import { stagger, fadeUp } from "@/lib/utils/motion-variants";
+import { Badge } from "@/components/ui";
+import { toast } from "@/lib/stores/toast-store";
+import { mockInvoices, billingStats } from "@/mocks/data/enterprise-billing";
 import { mockProjects, mockDeliverables, mockMilestones } from "@/mocks/data/enterprise-projects";
 
 function formatCurrency(amount: number): string {
@@ -136,11 +130,12 @@ function MonthlySpendChart() {
    BILLING DASHBOARD PAGE (G3/G4)
    ═══════════════════════════════════ */
 export default function BillingDashboardPage() {
-  const [exporting, setExporting] = React.useState(false);
-
   const handleExport = (format: "csv" | "pdf") => {
-    setExporting(true);
-    setTimeout(() => setExporting(false), 1500);
+    if (format === "csv") {
+      toast.info("Export CSV", "CSV export requires backend integration.");
+    } else {
+      toast.info("Export PDF", "PDF export requires backend integration.");
+    }
   };
 
   return (
@@ -173,7 +168,6 @@ export default function BillingDashboardPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleExport("csv")}
-            disabled={exporting}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-beige-200 bg-white/80 hover:bg-beige-50 text-[12px] font-semibold text-brown-700 transition-all hover:-translate-y-0.5 disabled:opacity-50"
           >
             <FileDown className="w-3.5 h-3.5" />
@@ -181,7 +175,6 @@ export default function BillingDashboardPage() {
           </button>
           <button
             onClick={() => handleExport("pdf")}
-            disabled={exporting}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brown-600 hover:bg-brown-700 text-white text-[12px] font-semibold shadow-md hover:shadow-lg hover:shadow-brown-500/25 transition-all hover:-translate-y-0.5 disabled:opacity-50"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -401,73 +394,6 @@ export default function BillingDashboardPage() {
           )}
         </motion.div>
       </div>
-
-      {/* Quick Links Row */}
-      <motion.div variants={fadeUp}>
-        <h3 className="text-[13px] font-semibold text-brown-800 mb-3">
-          Billing Management
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            {
-              href: "/enterprise/billing/rate-cards",
-              label: "Rate Cards",
-              desc: "Manage pricing tiers",
-              icon: BadgeDollarSign,
-              accent: "text-teal-600",
-              bg: "bg-teal-50",
-              gradient: "from-teal-400 to-teal-600",
-            },
-            {
-              href: "/enterprise/billing/pricing",
-              label: "Task Pricing",
-              desc: "AI-driven pricing",
-              icon: DollarSign,
-              accent: "text-brown-600",
-              bg: "bg-brown-50",
-              gradient: "from-brown-400 to-brown-600",
-            },
-            {
-              href: "/enterprise/billing/invoices",
-              label: "Invoices",
-              desc: `${mockInvoices.length} total`,
-              icon: Receipt,
-              accent: "text-gold-600",
-              bg: "bg-gold-50",
-              gradient: "from-gold-400 to-gold-600",
-            },
-            {
-              href: "/enterprise/billing/reports",
-              label: "Financial Reports",
-              desc: "Generate & export",
-              icon: BarChart3,
-              accent: "text-forest-600",
-              bg: "bg-forest-50",
-              gradient: "from-forest-400 to-forest-600",
-            },
-          ].map((link) => (
-            <Link key={link.href} href={link.href} className="block group">
-              <div className="flex items-center gap-3 p-4 rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all">
-                <div
-                  className={cn(
-                    "w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br shadow-sm shrink-0",
-                    link.gradient
-                  )}
-                >
-                  <link.icon className="w-4.5 h-4.5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold text-brown-800 group-hover:text-brown-900 transition-colors">
-                    {link.label}
-                  </p>
-                  <p className="text-[10px] text-beige-500">{link.desc}</p>
-                </div>
-                <ChevronRight className="w-3.5 h-3.5 text-beige-300 group-hover:text-brown-400 group-hover:translate-x-0.5 transition-all" />
-              </div>
-            </Link>
-          ))}
-        </div>
-      </motion.div>
 
       {/* Avg Payment Time bar */}
       <motion.div

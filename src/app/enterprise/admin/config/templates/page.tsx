@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import {
   FileStack,
   Plus,
@@ -19,19 +18,29 @@ import {
   Eye,
   Sparkles,
   Building2,
+  Loader2,
+  Check,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { stagger, fadeUp } from "@/lib/utils/motion-variants";
+import { toast } from "@/lib/stores/toast-store";
 import {
   Button,
   Badge,
   Input,
+  Label,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
   DialogTrigger,
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
 } from "@/components/ui";
 
 /* ── Industry accent config ── */
@@ -159,11 +168,86 @@ const mockTemplates = [
   },
 ];
 
+const industryOptions = ["Healthcare", "Financial Services", "Technology", "Retail", "Government", "Manufacturing", "Education"];
+
+/* ── Create Template Dialog ── */
+function CreateTemplateDialog({ trigger }: { trigger: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+  const [name, setName] = React.useState("");
+  const [industry, setIndustry] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const handleCreate = () => {
+    if (!name.trim()) { setError("Template name is required"); return; }
+    if (!industry) { setError("Select an industry"); return; }
+    setSaving(true);
+    setTimeout(() => {
+      toast.success("Template Created", `"${name.trim()}" would be added as a draft.`);
+      setSaving(false);
+      setOpen(false);
+      setName("");
+      setIndustry("");
+      setError("");
+    }, 500);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setName(""); setIndustry(""); setError(""); } }}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-brown-900 font-heading">Create SOW Template</DialogTitle>
+          <DialogDescription className="text-beige-500">
+            Define a new industry-specific template with required sections
+            and compliance clauses.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="tpl-name" className="text-[12px] text-brown-700">Template Name</Label>
+            <Input
+              id="tpl-name"
+              placeholder="e.g. Manufacturing QA SOW"
+              value={name}
+              onChange={(e) => { setName(e.target.value); if (error) setError(""); }}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="tpl-industry" className="text-[12px] text-brown-700">Industry</Label>
+            <Select value={industry} onValueChange={(v) => { setIndustry(v); if (error) setError(""); }}>
+              <SelectTrigger id="tpl-industry">
+                <SelectValue placeholder="Select industry" />
+              </SelectTrigger>
+              <SelectContent>
+                {industryOptions.map((ind) => (
+                  <SelectItem key={ind} value={ind}>{ind}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {error && <p className="text-[11px] text-red-500">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="gradient-primary" size="sm" onClick={handleCreate} disabled={saving}>
+            {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Creating...</> : <><Sparkles className="w-3.5 h-3.5" />Create</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ── Template Card ── */
 function TemplateCard({
   template,
+  onDuplicate,
+  onEdit,
 }: {
   template: (typeof mockTemplates)[0];
+  onDuplicate: (template: (typeof mockTemplates)[0]) => void;
+  onEdit: (template: (typeof mockTemplates)[0]) => void;
 }) {
   const accent = industryAccents[template.industry] ?? industryAccents["All Industries"];
   const modifiedDate = new Date(template.lastModified).toLocaleDateString("en-US", {
@@ -173,8 +257,7 @@ function TemplateCard({
   });
 
   return (
-    <motion.div
-      variants={fadeUp}
+    <div
       className={cn(
         "group relative rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden",
         "hover:shadow-xl hover:shadow-brown-100/20 transition-all duration-300 hover:-translate-y-0.5"
@@ -266,42 +349,92 @@ function TemplateCard({
 
       {/* Quick actions */}
       <div className="flex items-center gap-1 px-4 py-3 bg-beige-50/40 border-t border-beige-100">
-        <button
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-beige-600 hover:text-teal-700 hover:bg-teal-50 transition-colors"
-          title="View template"
-        >
-          <Eye className="w-3.5 h-3.5" />
-          View
-        </button>
-        <button
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-beige-600 hover:text-brown-700 hover:bg-brown-50 transition-colors"
-          title="Duplicate template"
+        <Link href={`/enterprise/admin/config/templates/${template.id}`}>
+          <Button variant="ghost" size="sm">
+            <Eye className="w-3.5 h-3.5" />
+            View
+          </Button>
+        </Link>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onDuplicate(template)}
         >
           <Copy className="w-3.5 h-3.5" />
           Duplicate
-        </button>
-        <button
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-beige-600 hover:text-brown-700 hover:bg-brown-50 transition-colors"
-          title="Edit template"
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onEdit(template)}
         >
           <Settings className="w-3.5 h-3.5" />
           Edit
-        </button>
+        </Button>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 /* ================================================================
    SOW TEMPLATES GOVERNANCE PAGE
    ================================================================ */
+type TemplateItem = (typeof mockTemplates)[0];
+
 export default function SOWTemplatesPage() {
   const [search, setSearch] = React.useState("");
+
+  /* ── Duplicate dialog state ── */
+  const [duplicateOpen, setDuplicateOpen] = React.useState(false);
+  const [duplicateTarget, setDuplicateTarget] = React.useState<TemplateItem | null>(null);
+  const [duplicateName, setDuplicateName] = React.useState("");
+
+  /* ── Edit dialog state ── */
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editTarget, setEditTarget] = React.useState<TemplateItem | null>(null);
+  const [editName, setEditName] = React.useState("");
+  const [editIndustry, setEditIndustry] = React.useState("");
+  const [editSections, setEditSections] = React.useState("");
+  const [editClauses, setEditClauses] = React.useState("");
+
+  /* ── Duplicate handlers ── */
+  const handleOpenDuplicate = (template: TemplateItem) => {
+    setDuplicateTarget(template);
+    setDuplicateName(`${template.name} (Copy)`);
+    setDuplicateOpen(true);
+  };
+
+  const handleConfirmDuplicate = () => {
+    if (!duplicateTarget || !duplicateName.trim()) return;
+    setDuplicateOpen(false);
+    toast.success("Template Duplicated", `"${duplicateName.trim()}" has been created as a draft.`);
+  };
+
+  /* ── Edit handlers ── */
+  const handleOpenEdit = (template: TemplateItem) => {
+    setEditTarget(template);
+    setEditName(template.name);
+    setEditIndustry(template.industry);
+    setEditSections(String(template.sections));
+    setEditClauses(String(template.clauses));
+    setEditOpen(true);
+  };
+
+  const handleEditSave = () => {
+    if (!editTarget) return;
+    if (!editName.trim()) {
+      toast.error("Validation Error", "Template name is required.");
+      return;
+    }
+    setEditOpen(false);
+    toast.success("Template Updated", `"${editName.trim()}" has been saved.`);
+  };
 
   const filtered = mockTemplates.filter(
     (t) =>
       t.name.toLowerCase().includes(search.toLowerCase()) ||
-      t.industry.toLowerCase().includes(search.toLowerCase())
+      t.industry.toLowerCase().includes(search.toLowerCase()) ||
+      t.creator.toLowerCase().includes(search.toLowerCase())
   );
 
   const totalTemplates = mockTemplates.length;
@@ -310,24 +443,16 @@ export default function SOWTemplatesPage() {
   const totalSOWs = mockTemplates.reduce((s, t) => s + t.sowsGenerated, 0);
 
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      animate="show"
-      className="max-w-[1200px] mx-auto space-y-6"
-    >
+    <div className="max-w-[1200px] mx-auto space-y-6">
       {/* ── Header ── */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4"
-      >
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 animate-fade-up">
         <div>
           <Link
             href="/enterprise/admin/config"
-            className="inline-flex items-center gap-1.5 text-[12px] text-beige-500 hover:text-brown-600 transition-colors mb-2"
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-teal-600 hover:text-teal-700 transition-colors mb-2"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            Admin & Configuration
+            Back to General
           </Link>
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brown-500 to-brown-600 flex items-center justify-center shadow-md shadow-brown-500/20">
@@ -343,50 +468,18 @@ export default function SOWTemplatesPage() {
           </p>
         </div>
 
-        <Dialog>
-          <DialogTrigger asChild>
+        <CreateTemplateDialog
+          trigger={
             <Button variant="gradient-primary" size="sm">
               <Plus className="w-3.5 h-3.5" />
               Create Template
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create SOW Template</DialogTitle>
-              <DialogDescription>
-                Define a new industry-specific template with required sections
-                and compliance clauses.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div className="space-y-2">
-                <label className="text-[12px] font-semibold text-brown-700">
-                  Template Name
-                </label>
-                <Input placeholder="e.g. Manufacturing QA SOW" className="h-9 text-[13px]" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[12px] font-semibold text-brown-700">
-                  Industry
-                </label>
-                <Input placeholder="e.g. Manufacturing" className="h-9 text-[13px]" />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" size="sm">
-                  Cancel
-                </Button>
-                <Button variant="gradient-primary" size="sm">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Create
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </motion.div>
+          }
+        />
+      </div>
 
       {/* ── Stats Row ── */}
-      <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-fade-up [animation-delay:50ms]">
         {[
           {
             label: "Templates",
@@ -435,33 +528,32 @@ export default function SOWTemplatesPage() {
             </div>
           </div>
         ))}
-      </motion.div>
+      </div>
 
       {/* ── Search ── */}
-      <motion.div variants={fadeUp}>
+      <div className="animate-fade-up [animation-delay:100ms]">
         <Input
           placeholder="Search templates by name or industry..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="h-10 text-[13px] bg-white/70 backdrop-blur-sm max-w-md"
         />
-      </motion.div>
+      </div>
 
       {/* ── Template Grid ── */}
-      <motion.div
-        variants={stagger}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-      >
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-up [animation-delay:150ms]">
         {filtered.map((template) => (
-          <TemplateCard key={template.id} template={template} />
+          <TemplateCard
+            key={template.id}
+            template={template}
+            onDuplicate={handleOpenDuplicate}
+            onEdit={handleOpenEdit}
+          />
         ))}
-      </motion.div>
+      </div>
 
       {filtered.length === 0 && (
-        <motion.div
-          variants={fadeUp}
-          className="text-center py-16 rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm"
-        >
+        <div className="text-center py-16 rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm animate-fade-up">
           <FileStack className="w-10 h-10 text-beige-300 mx-auto mb-3" />
           <p className="text-[14px] font-semibold text-brown-800">
             No templates found
@@ -469,14 +561,11 @@ export default function SOWTemplatesPage() {
           <p className="text-[12px] text-beige-500 mt-1">
             Try adjusting your search terms
           </p>
-        </motion.div>
+        </div>
       )}
 
       {/* ── Info Banner: Template Locking & Hallucination Prevention ── */}
-      <motion.div
-        variants={fadeUp}
-        className="rounded-2xl border border-teal-200/50 bg-gradient-to-br from-teal-50/60 to-forest-50/40 backdrop-blur-sm p-6"
-      >
+      <div className="rounded-2xl border border-teal-200/50 bg-gradient-to-br from-teal-50/60 to-forest-50/40 backdrop-blur-sm p-6 animate-fade-up [animation-delay:200ms]">
         <div className="flex items-start gap-4">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-forest-500 flex items-center justify-center shadow-md shrink-0">
             <Shield className="w-5 h-5 text-white" />
@@ -508,7 +597,125 @@ export default function SOWTemplatesPage() {
             </div>
           </div>
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+
+      {/* ── Duplicate Confirmation Dialog ── */}
+      <Dialog open={duplicateOpen} onOpenChange={(v) => { setDuplicateOpen(v); if (!v) setDuplicateName(""); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-brown-900 font-heading">
+              Duplicate Template
+            </DialogTitle>
+            <DialogDescription className="text-beige-500">
+              Create a copy of &ldquo;{duplicateTarget?.name}&rdquo; as a new draft template.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="dup-name" className="text-[12px] text-brown-700">
+                New Template Name
+              </Label>
+              <Input
+                id="dup-name"
+                value={duplicateName}
+                onChange={(e) => setDuplicateName(e.target.value)}
+                placeholder="Enter a name for the copy"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDuplicateOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmDuplicate}
+              disabled={!duplicateName.trim()}
+            >
+              <Copy className="w-3.5 h-3.5" />
+              Duplicate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit Template Dialog ── */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-brown-900 font-heading">
+              Edit Template
+            </DialogTitle>
+            <DialogDescription className="text-beige-500">
+              Update the template details for &ldquo;{editTarget?.name}&rdquo;.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name" className="text-[12px] text-brown-700">
+                Template Name
+              </Label>
+              <Input
+                id="edit-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Template name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-industry" className="text-[12px] text-brown-700">
+                Industry
+              </Label>
+              <Select value={editIndustry} onValueChange={setEditIndustry}>
+                <SelectTrigger id="edit-industry">
+                  <SelectValue placeholder="Select industry" />
+                </SelectTrigger>
+                <SelectContent>
+                  {industryOptions.map((ind) => (
+                    <SelectItem key={ind} value={ind}>{ind}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="edit-sections" className="text-[12px] text-brown-700">
+                  Sections
+                </Label>
+                <Input
+                  id="edit-sections"
+                  type="number"
+                  min={1}
+                  value={editSections}
+                  onChange={(e) => setEditSections(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-clauses" className="text-[12px] text-brown-700">
+                  Clauses
+                </Label>
+                <Input
+                  id="edit-clauses"
+                  type="number"
+                  min={0}
+                  value={editClauses}
+                  onChange={(e) => setEditClauses(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleEditSave}>
+              <Pencil className="w-3.5 h-3.5" />
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

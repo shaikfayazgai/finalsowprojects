@@ -1,27 +1,29 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { motion } from "framer-motion";
 import {
   Search,
   UserPlus,
   Users,
   UserCheck,
-  Mail,
-  UserX,
-  ChevronRight,
-  Upload,
   Star,
   Briefcase,
-  Filter,
   FileUp,
+  Upload,
   X,
+  Loader2,
+  Check,
+  Eye,
+  MoreHorizontal,
+  Ban,
+  ShieldCheck,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { stagger, fadeUp } from "@/lib/utils/motion-variants";
+import { toast } from "@/lib/stores/toast-store";
 import {
   Badge,
+  Button,
   Input,
   Avatar,
   AvatarFallback,
@@ -43,8 +45,12 @@ import {
   DialogDescription,
   DialogFooter,
   DialogTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Label,
-  Textarea,
 } from "@/components/ui";
 
 /* ── Contributor mock data (H5) ── */
@@ -110,10 +116,7 @@ function StatMini({
   accent: string;
 }) {
   return (
-    <motion.div
-      variants={fadeUp}
-      className="flex items-center gap-3 rounded-xl border border-beige-200/50 bg-white/70 backdrop-blur-sm px-4 py-3"
-    >
+    <div className="flex items-center gap-3 rounded-xl border border-beige-200/50 bg-white/70 backdrop-blur-sm px-4 py-3">
       <div
         className={cn(
           "w-9 h-9 rounded-lg flex items-center justify-center bg-gradient-to-br",
@@ -126,7 +129,7 @@ function StatMini({
         <p className="text-[20px] font-bold text-brown-900 leading-none">{value}</p>
         <p className="text-[10px] text-beige-500 font-medium mt-0.5">{label}</p>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -168,34 +171,106 @@ function BulkImportDialog({ trigger }: { trigger: React.ReactNode }) {
             <p className="text-[11px] text-beige-500 mb-3">
               or click to browse your files
             </p>
-            <button className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-beige-200 text-[12px] font-semibold text-brown-700 hover:bg-beige-50 transition-colors">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toast.info("Choose File", "File upload requires backend integration. Accepts CSV files.")}
+            >
               <Upload className="w-3.5 h-3.5" />
               Choose File
-            </button>
+            </Button>
           </div>
 
           {/* Template download */}
           <div className="flex items-center justify-between mt-4 pt-3 border-t border-beige-100">
             <span className="text-[11px] text-beige-500">Need a template?</span>
-            <button className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 transition-colors">
+            <Button
+              variant="link"
+              size="sm"
+              onClick={() => toast.info("Download Template", "CSV template download requires backend integration.")}
+              className="text-teal-600 hover:text-teal-700"
+            >
               Download CSV Template
-            </button>
+            </Button>
           </div>
         </div>
 
         <DialogFooter>
-          <button
-            onClick={() => setOpen(false)}
-            className="px-4 py-2 rounded-xl border border-beige-200 text-[12px] font-semibold text-brown-700 hover:bg-beige-50 transition-colors"
-          >
+          <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
             Cancel
-          </button>
-          <button
-            className="px-4 py-2.5 rounded-xl bg-brown-600 hover:bg-brown-700 text-white text-[12px] font-semibold shadow-md hover:shadow-lg hover:shadow-brown-500/25 transition-all opacity-50 cursor-not-allowed"
-            disabled
-          >
+          </Button>
+          <Button variant="gradient-primary" size="sm" disabled>
             Import
-          </button>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Add Contributor Dialog ── */
+function AddContributorDialog({ trigger }: { trigger: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+  const [email, setEmail] = React.useState("");
+  const [track, setTrack] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const handleInvite = () => {
+    if (!email.trim()) { setError("Email is required"); return; }
+    if (!track) { setError("Select a track"); return; }
+    setSaving(true);
+    setTimeout(() => {
+      toast.success("Invitation sent", `Contributor invite sent to ${email.trim()}.`);
+      setSaving(false);
+      setOpen(false);
+      setEmail("");
+      setTrack("");
+      setError("");
+    }, 600);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setError(""); }}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-brown-900 font-heading">Add Contributor</DialogTitle>
+          <DialogDescription className="text-beige-500">
+            Send an invitation to join the contributor pool. They will receive onboarding instructions.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="contributor-email" className="text-[12px] text-brown-700">Email Address</Label>
+            <Input
+              id="contributor-email"
+              type="email"
+              placeholder="contributor@example.com"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); if (error) setError(""); }}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="contributor-track" className="text-[12px] text-brown-700">Track / Segment</Label>
+            <Select value={track} onValueChange={(v) => { setTrack(v); if (error) setError(""); }}>
+              <SelectTrigger id="contributor-track">
+                <SelectValue placeholder="Select track" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="women">Women</SelectItem>
+                <SelectItem value="student">Student</SelectItem>
+                <SelectItem value="general">General</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {error && <p className="text-[11px] text-red-500">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="gradient-primary" size="sm" onClick={handleInvite} disabled={saving}>
+            {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Sending...</> : <><Check className="w-3.5 h-3.5" />Send Invite</>}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -208,32 +283,27 @@ function BulkImportDialog({ trigger }: { trigger: React.ReactNode }) {
 export default function ContributorManagementPage() {
   const [search, setSearch] = React.useState("");
   const [segmentFilter, setSegmentFilter] = React.useState("all");
+  const [statusFilter, setStatusFilter] = React.useState("all");
 
   const filteredContributors = mockContributors.filter((c) => {
     const matchesSearch =
       c.anonymizedId.toLowerCase().includes(search.toLowerCase()) ||
       c.skills.some((s) => s.toLowerCase().includes(search.toLowerCase()));
     const matchesSegment = segmentFilter === "all" || c.track === segmentFilter;
-    return matchesSearch && matchesSegment;
+    const matchesStatus = statusFilter === "all" || c.status === statusFilter;
+    return matchesSearch && matchesSegment && matchesStatus;
   });
+
+  const hasActiveFilters = segmentFilter !== "all" || statusFilter !== "all";
 
   const activeCount = mockContributors.filter((c) => c.status === "active").length;
   const womenCount = mockContributors.filter((c) => c.track === "women").length;
   const studentCount = mockContributors.filter((c) => c.track === "student").length;
-  const onboardingCount = mockContributors.filter((c) => c.status === "onboarding").length;
 
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      animate="show"
-      className="max-w-[1200px] mx-auto space-y-6"
-    >
+    <div className="max-w-[1200px] mx-auto space-y-6">
       {/* Header */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3"
-      >
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 animate-fade-up">
         <div>
           <h1 className="text-[22px] font-bold text-brown-900 tracking-[-0.02em] font-heading">
             Contributor Management
@@ -245,52 +315,33 @@ export default function ContributorManagementPage() {
         <div className="flex items-center gap-2">
           <BulkImportDialog
             trigger={
-              <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-beige-200 bg-white/80 hover:bg-beige-50 text-[12px] font-semibold text-brown-700 transition-all hover:-translate-y-0.5">
+              <Button variant="outline" size="sm">
                 <Upload className="w-3.5 h-3.5" />
                 Bulk Import
-              </button>
+              </Button>
             }
           />
-          <button className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brown-600 hover:bg-brown-700 text-white text-[12px] font-semibold shadow-md hover:shadow-lg hover:shadow-brown-500/25 transition-all hover:-translate-y-0.5">
-            <UserPlus className="w-3.5 h-3.5" />
-            Add Contributor
-          </button>
+          <AddContributorDialog
+            trigger={
+              <Button variant="gradient-primary" size="sm">
+                <UserPlus className="w-3.5 h-3.5" />
+                Add Contributor
+              </Button>
+            }
+          />
         </div>
-      </motion.div>
+      </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatMini
-          icon={Users}
-          label="Total Contributors"
-          value={mockContributors.length}
-          accent="from-brown-400 to-brown-600"
-        />
-        <StatMini
-          icon={UserCheck}
-          label="Active"
-          value={activeCount}
-          accent="from-forest-400 to-forest-600"
-        />
-        <StatMini
-          icon={Users}
-          label="Women Track"
-          value={womenCount}
-          accent="from-teal-400 to-teal-600"
-        />
-        <StatMini
-          icon={Briefcase}
-          label="Student Track"
-          value={studentCount}
-          accent="from-gold-400 to-gold-600"
-        />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-fade-up [animation-delay:50ms]">
+        <StatMini icon={Users} label="Total Contributors" value={mockContributors.length} accent="from-brown-400 to-brown-600" />
+        <StatMini icon={UserCheck} label="Active" value={activeCount} accent="from-forest-400 to-forest-600" />
+        <StatMini icon={Users} label="Women Track" value={womenCount} accent="from-teal-400 to-teal-600" />
+        <StatMini icon={Briefcase} label="Student Track" value={studentCount} accent="from-gold-400 to-gold-600" />
       </div>
 
       {/* Search + Segment Filter bar */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-col sm:flex-row gap-3"
-      >
+      <div className="flex flex-col sm:flex-row gap-3 animate-fade-up [animation-delay:100ms]">
         <div className="flex-1">
           <Input
             placeholder="Search by anonymized ID or skill..."
@@ -310,13 +361,21 @@ export default function ContributorManagementPage() {
             <SelectItem value="general">General</SelectItem>
           </SelectContent>
         </Select>
-      </motion.div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-[160px]">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="onboarding">Onboarding</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Contributors table */}
-      <motion.div
-        variants={fadeUp}
-        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden"
-      >
+      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden animate-fade-up [animation-delay:150ms]">
         <Table>
           <TableHeader>
             <TableRow>
@@ -326,6 +385,7 @@ export default function ContributorManagementPage() {
               <TableHead className="text-center">Tasks Done</TableHead>
               <TableHead className="text-center">Rating</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -334,7 +394,11 @@ export default function ContributorManagementPage() {
               const sConfig = statusConfig[contributor.status];
 
               return (
-                <TableRow key={contributor.id} className="group">
+                <TableRow
+                  key={contributor.id}
+                  className="group cursor-pointer hover:bg-beige-50/60 transition-colors"
+                  onClick={() => toast.info("View Profile", `Contributor detail page for ${contributor.anonymizedId} coming in a future update.`)}
+                >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar size="sm">
@@ -379,12 +443,52 @@ export default function ContributorManagementPage() {
                       {sConfig.label}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem
+                          onClick={() => toast.info("View Profile", `Contributor detail page for ${contributor.anonymizedId} coming in a future update.`)}
+                        >
+                          <Eye className="w-3.5 h-3.5" /> <span>View Profile</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {contributor.status === "active" ? (
+                          <DropdownMenuItem
+                            onClick={() => toast.success("Status Updated", `${contributor.anonymizedId} has been deactivated.`)}
+                          >
+                            <Ban className="w-3.5 h-3.5" /> <span>Deactivate</span>
+                          </DropdownMenuItem>
+                        ) : contributor.status === "inactive" ? (
+                          <DropdownMenuItem
+                            onClick={() => toast.success("Status Updated", `${contributor.anonymizedId} has been reactivated.`)}
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" /> <span>Reactivate</span>
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={() => toast.info("Onboarding", `${contributor.anonymizedId} is still in onboarding.`)}
+                          >
+                            <Clock className="w-3.5 h-3.5" /> <span>View Onboarding</span>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
                 </TableRow>
               );
             })}
             {filteredContributors.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8">
+                <TableCell colSpan={7} className="text-center py-8">
                   <p className="text-[13px] text-beige-400">No contributors match your filters.</p>
                 </TableCell>
               </TableRow>
@@ -399,18 +503,20 @@ export default function ContributorManagementPage() {
             <span className="font-semibold text-brown-700">{mockContributors.length}</span> contributors
           </span>
           <div className="flex items-center gap-2">
-            {segmentFilter !== "all" && (
-              <button
-                onClick={() => setSegmentFilter("all")}
-                className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-600 hover:text-teal-700 transition-colors"
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setSegmentFilter("all"); setStatusFilter("all"); }}
+                className="text-teal-600 hover:text-teal-700"
               >
                 <X className="w-3 h-3" />
-                Clear filter
-              </button>
+                Clear filters
+              </Button>
             )}
           </div>
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -9,7 +10,6 @@ import {
   DollarSign,
   AlertTriangle,
   ChevronRight,
-  Target,
   Briefcase,
   CircleDollarSign,
   Calendar,
@@ -20,6 +20,10 @@ import {
   CheckCircle2,
   LayoutGrid,
   LayoutList,
+  Search,
+  ListChecks,
+  ArrowUpDown,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
@@ -105,6 +109,7 @@ function fmtDate(d: string) {
 
 /* -- Project Card (Grid View) -- */
 function ProjectCard({ project }: { project: Project }) {
+  const router = useRouter();
   const hc = healthConfig[project.health];
   const budgetPct = Math.round((project.spent / project.budget) * 100);
 
@@ -247,10 +252,13 @@ function ProjectCard({ project }: { project: Project }) {
 
         {/* SOW Link + Escalations */}
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-[10px] text-teal-600 font-medium flex items-center gap-1 truncate max-w-[60%]">
+          <button
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); router.push(`/enterprise/sow/${project.sowId}`); }}
+            className="text-[10px] text-teal-600 font-medium flex items-center gap-1 truncate max-w-[60%] hover:text-teal-700 hover:underline transition-colors"
+          >
             <FileText className="w-3 h-3 shrink-0" />
             {project.sowTitle}
-          </span>
+          </button>
           {project.escalations > 0 && (
             <span className="flex items-center gap-1">
               <AlertTriangle className="w-3 h-3 text-gold-600" />
@@ -275,27 +283,75 @@ function ProjectCard({ project }: { project: Project }) {
 /* ================================================================
    PROJECTS LIST PAGE
    ================================================================ */
+type SortKey = "title" | "health" | "progress" | "tasks" | "team" | "budget" | "sla" | "startDate";
+
+const healthOrder: Record<ProjectHealth, number> = { behind: 0, at_risk: 1, on_track: 2, completed: 3 };
+
 export default function ProjectsPage() {
   const [activeFilter, setActiveFilter] = React.useState("all");
   const [viewMode, setViewMode] = React.useState<"grid" | "table">("grid");
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [sortKey, setSortKey] = React.useState<SortKey>("title");
+  const [sortDir, setSortDir] = React.useState<"asc" | "desc">("asc");
 
-  const filtered =
-    activeFilter === "all"
+  /* Filter by status + search */
+  const filtered = React.useMemo(() => {
+    let results = activeFilter === "all"
       ? mockProjects
       : mockProjects.filter((p) => p.health === activeFilter);
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      results = results.filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          p.client.toLowerCase().includes(q) ||
+          p.sowTitle.toLowerCase().includes(q)
+      );
+    }
+
+    return results;
+  }, [activeFilter, searchQuery]);
+
+  /* Sort (table view only) */
+  const sorted = React.useMemo(() => {
+    if (viewMode !== "table") return filtered;
+    const arr = [...filtered];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      switch (sortKey) {
+        case "title": return dir * a.title.localeCompare(b.title);
+        case "health": return dir * (healthOrder[a.health] - healthOrder[b.health]);
+        case "progress": return dir * (a.progress - b.progress);
+        case "tasks": return dir * (a.tasksCompleted - b.tasksCompleted);
+        case "team": return dir * (a.teamSize - b.teamSize);
+        case "budget": return dir * (a.budget - b.budget);
+        case "sla": return dir * (a.slaCompliance - b.slaCompliance);
+        case "startDate": return dir * (new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+        default: return 0;
+      }
+    });
+    return arr;
+  }, [filtered, sortKey, sortDir, viewMode]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
 
   /* Summary stats */
   const activeProjects = mockProjects.filter(
     (p) => p.health !== "completed"
   ).length;
   const totalBudget = mockProjects.reduce((s, p) => s + p.budget, 0);
-  const avgApg = Math.round(
-    mockProjects.reduce((s, p) => s + p.apgScore, 0) / mockProjects.length
-  );
+  const totalTasks = mockProjects.reduce((s, p) => s + p.tasksTotal, 0);
   const avgSla = Math.round(
     mockProjects.reduce((s, p) => s + p.slaCompliance, 0) / mockProjects.length
   );
-  const totalTeam = mockProjects.reduce((s, p) => s + p.teamSize, 0);
 
   const stats = [
     {
@@ -305,16 +361,16 @@ export default function ProjectsPage() {
       color: "from-brown-400 to-brown-600",
     },
     {
+      icon: ListChecks,
+      label: "Total Tasks",
+      value: totalTasks,
+      color: "from-teal-400 to-teal-600",
+    },
+    {
       icon: DollarSign,
       label: "Total Budget",
       value: `$${(totalBudget / 1000).toFixed(0)}k`,
       color: "from-forest-400 to-forest-600",
-    },
-    {
-      icon: Target,
-      label: "Avg APG Score",
-      value: avgApg,
-      color: "from-teal-400 to-teal-600",
     },
     {
       icon: ShieldCheck,
@@ -372,11 +428,11 @@ export default function ProjectsPage() {
             </button>
           </div>
           <Link
-            href="/enterprise/projects"
+            href="/enterprise/sow/intake"
             className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brown-600 hover:bg-brown-700 text-white text-[12px] font-semibold shadow-md hover:shadow-lg hover:shadow-brown-500/25 hover:-translate-y-0.5 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
-            New Project
+            New SOW
           </Link>
         </div>
       </motion.div>
@@ -411,11 +467,22 @@ export default function ProjectsPage() {
         ))}
       </motion.div>
 
-      {/* Filter Tabs */}
-      <motion.div
-        variants={fadeUp}
-        className="flex items-center gap-0 border-b border-beige-200/60"
-      >
+      {/* Search + Filter Row */}
+      <motion.div variants={fadeUp} className="space-y-0">
+        {/* Search bar */}
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-beige-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search projects by name, client, or SOW..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-10 rounded-xl bg-white/60 border border-beige-200/60 pl-10 pr-4 text-[13px] text-brown-800 placeholder:text-beige-400 transition-all focus:outline-none focus:ring-2 focus:ring-brown-200/40 focus:border-brown-200/60 focus:bg-white/80"
+          />
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-0 border-b border-beige-200/60">
         {filterTabs.map((tab) => {
           const count =
             tab.key === "all"
@@ -446,10 +513,38 @@ export default function ProjectsPage() {
             </button>
           );
         })}
+        </div>
       </motion.div>
 
+      {/* Empty State */}
+      {filtered.length === 0 && (
+        <motion.div
+          variants={fadeUp}
+          className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-12 flex flex-col items-center text-center"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-beige-100 flex items-center justify-center mb-4">
+            <FolderOpen className="w-7 h-7 text-beige-400" />
+          </div>
+          <h3 className="text-[15px] font-bold text-brown-800">No projects found</h3>
+          <p className="text-[13px] text-beige-500 mt-1 max-w-sm">
+            {searchQuery.trim()
+              ? `No projects match "${searchQuery}". Try adjusting your search or filters.`
+              : "No projects in this category. Start by uploading a SOW to create your first project."}
+          </p>
+          {!searchQuery.trim() && (
+            <Link
+              href="/enterprise/sow/intake"
+              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brown-600 hover:bg-brown-700 text-white text-[12px] font-semibold shadow-md hover:shadow-lg transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New SOW
+            </Link>
+          )}
+        </motion.div>
+      )}
+
       {/* Grid View */}
-      {viewMode === "grid" && (
+      {viewMode === "grid" && filtered.length > 0 && (
         <motion.div
           variants={stagger}
           className="grid grid-cols-1 md:grid-cols-2 gap-4"
@@ -461,7 +556,7 @@ export default function ProjectsPage() {
       )}
 
       {/* Table View */}
-      {viewMode === "table" && (
+      {viewMode === "table" && filtered.length > 0 && (
         <motion.div
           variants={fadeUp}
           className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden"
@@ -469,19 +564,36 @@ export default function ProjectsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Project</TableHead>
-                <TableHead>Health</TableHead>
-                <TableHead>Progress</TableHead>
-                <TableHead>Tasks</TableHead>
-                <TableHead>Team</TableHead>
-                <TableHead>Budget</TableHead>
-                <TableHead>SLA</TableHead>
-                <TableHead>Dates</TableHead>
+                {([
+                  ["title", "Project"],
+                  ["health", "Health"],
+                  ["progress", "Progress"],
+                  ["tasks", "Tasks"],
+                  ["team", "Team"],
+                  ["budget", "Budget"],
+                  ["sla", "SLA"],
+                  ["startDate", "Dates"],
+                ] as [SortKey, string][]).map(([key, label]) => (
+                  <TableHead key={key}>
+                    <button
+                      onClick={() => toggleSort(key)}
+                      className="flex items-center gap-1 hover:text-brown-700 transition-colors group"
+                    >
+                      {label}
+                      <ArrowUpDown
+                        className={cn(
+                          "w-3 h-3 transition-colors",
+                          sortKey === key ? "text-brown-600" : "text-beige-300 group-hover:text-beige-500"
+                        )}
+                      />
+                    </button>
+                  </TableHead>
+                ))}
                 <TableHead>SOW</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((project) => {
+              {sorted.map((project) => {
                 const hc = healthConfig[project.health];
                 return (
                   <TableRow key={project.id}>
@@ -562,10 +674,13 @@ export default function ProjectsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-[10px] text-teal-600 font-medium flex items-center gap-1 max-w-[120px] truncate">
+                      <Link
+                        href={`/enterprise/sow/${project.sowId}`}
+                        className="text-[10px] text-teal-600 font-medium flex items-center gap-1 max-w-[120px] truncate hover:text-teal-700 hover:underline transition-colors"
+                      >
                         <FileText className="w-3 h-3 shrink-0" />
                         {project.sowTitle}
-                      </span>
+                      </Link>
                     </TableCell>
                   </TableRow>
                 );
