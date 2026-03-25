@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 import {
   Sparkles,
   Briefcase,
@@ -516,9 +517,16 @@ function ContributorRegisterContent() {
 
   const handleSSO = async (provider: SSOProvider) => {
     setSsoLoading(provider);
-    await new Promise((r) => setTimeout(r, 1200));
-    sessionStorage.setItem("sso_data", JSON.stringify(MOCK_SSO_DATA[provider]));
-    router.push(`/auth/register?sso=${provider}`);
+    try {
+      const providerId = provider === "microsoft" ? "microsoft-entra-id" : "google";
+      await signIn(providerId, {
+        callbackUrl: selectedRole === "enterprise"
+          ? "/enterprise/dashboard"
+          : "/contributor/dashboard",
+      });
+    } catch {
+      setSsoLoading(null);
+    }
   };
 
   const handleManual = () => {

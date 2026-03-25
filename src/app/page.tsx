@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useSession, signOut } from "next-auth/react";
 import {
   Sparkles, ArrowRight, Globe, Shield, Zap, BarChart3, Users,
   Star, CheckCircle, ChevronRight, Lock, MessageSquare,
-  Cpu, CreditCard, FileText, ChevronDown, Quote
+  Cpu, CreditCard, FileText, ChevronDown, Quote, LogOut
 } from "lucide-react";
 import { Button, Badge, MeshBackground } from "@/components/ui";
 
@@ -84,6 +85,9 @@ const TESTIMONIALS = [
 ];
 
 export default function HomePage() {
+  const { data: session } = useSession();
+  const isLoggedIn = !!session?.user;
+
   return (
     <MeshBackground variant="warm" className="min-h-screen">
 
@@ -107,14 +111,32 @@ export default function HomePage() {
           </nav>
 
           <div className="flex items-center gap-4">
-            <Link href="/auth/login" className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors">
-              Sign In
-            </Link>
-            <Link href="/auth/register">
-              <Button variant="gradient-cta" size="md" className="shadow-lg shadow-brown-500/20 hover:shadow-brown-500/40 rounded-full px-6">
-                Get Started <ArrowRight className="w-4 h-4 ml-1.5" />
-              </Button>
-            </Link>
+            {isLoggedIn ? (
+              <>
+                <Link href="/enterprise/dashboard" className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors">
+                  Dashboard
+                </Link>
+                <Button
+                  variant="gradient-cta"
+                  size="md"
+                  className="shadow-lg shadow-brown-500/20 hover:shadow-brown-500/40 rounded-full px-6"
+                  onClick={() => signOut({ callbackUrl: "/" })}
+                >
+                  <LogOut className="w-4 h-4 mr-1.5" /> Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link href="/auth/login" className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors">
+                  Sign In
+                </Link>
+                <Button asChild variant="gradient-cta" size="md" className="shadow-lg shadow-brown-500/20 hover:shadow-brown-500/40 rounded-full px-6">
+                  <Link href="/auth/register">
+                    Get Started <ArrowRight className="w-4 h-4 ml-1.5" />
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -135,16 +157,16 @@ export default function HomePage() {
           From SOW to delivery — intelligent, transparent, and outcome-based.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link href="/auth/register">
-            <Button variant="gradient-cta" size="lg" className="min-w-44">
+          <Button asChild variant="gradient-cta" size="lg" className="min-w-44">
+            <Link href="/auth/register">
               Start for Free <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
-          <Link href="/auth/login">
-            <Button variant="outline" size="lg" className="min-w-44">
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="lg" className="min-w-44">
+            <Link href="/auth/login">
               Sign In to Portal
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
 
         {/* Stats */}
@@ -214,12 +236,12 @@ export default function HomePage() {
                   </li>
                 ))}
               </ul>
-              <Link href={role.href} className="mt-auto">
-                <Button variant="outline" size="sm" className="w-full group">
+              <Button asChild variant="outline" size="sm" className="w-full group mt-auto">
+                <Link href={role.href}>
                   {role.cta}
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           ))}
         </div>
@@ -252,16 +274,16 @@ export default function HomePage() {
             ))}
           </div>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/register">
-              <Button variant="gradient-cta" size="lg" className="min-w-48 shadow-xl shadow-brown-900/50">
+            <Button asChild variant="gradient-cta" size="lg" className="min-w-48 shadow-xl shadow-brown-900/50">
+              <Link href="/auth/register">
                 Get Started Free <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-            <Link href="/auth/login">
-              <Button variant="glass" size="lg" className="min-w-48">
+              </Link>
+            </Button>
+            <Button asChild variant="glass" size="lg" className="min-w-48">
+              <Link href="/auth/login">
                 Sign In to Portal
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </div>
       </section>

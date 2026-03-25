@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 import {
   Sparkles,
   ArrowRight,
@@ -19,7 +20,6 @@ import {
 } from "lucide-react";
 import { GlassCard, GlassCardContent, Button, Input, Label, Badge } from "@/components/ui";
 import { useAuthStore } from "@/lib/stores/auth-store";
-import type { SSOData, SSOProvider } from "../register/types";
 
 type Step = "credentials" | "mfa-prompt" | "mfa" | "recovery";
 
@@ -29,17 +29,15 @@ const STATS = [
   { value: "99.9%", label: "Uptime SLA" },
 ];
 
-const MOCK_SSO_DATA: Record<SSOProvider, SSOData> = {
-  google: { firstName: "John", lastName: "Doe", email: "john.doe@gmail.com", provider: "google" },
-  microsoft: { firstName: "Jane", lastName: "Smith", email: "jane.smith@outlook.com", provider: "microsoft" },
-};
-
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isMfaEnabled = useAuthStore((s) => s.isMfaEnabled);
   const isOnboardingComplete = useAuthStore((s) => s.isOnboardingComplete);
 
+  const callbackUrl = searchParams.get("callbackUrl") || undefined;
   const enterpriseDest = isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding";
+  const redirectTo = callbackUrl || enterpriseDest;
 
   const [step, setStep] = useState<Step>("credentials");
   const [email, setEmail] = useState("");
@@ -49,9 +47,32 @@ export default function LoginPage() {
   const [mfaCode, setMfaCode] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [ssoLoading, setSsoLoading] = useState<SSOProvider | null>(null);
+  const [ssoLoading, setSsoLoading] = useState<"google" | "microsoft" | null>(null);
   const [error, setError] = useState("");
   const [timeLeft, setTimeLeft] = useState(30);
+
+  // Show error from URL params (e.g., OAuth errors)
+  useEffect(() => {
+    const urlError = searchParams.get("error");
+    if (urlError) {
+      switch (urlError) {
+        case "OAuthAccountNotLinked":
+          setError("This email is already registered with a different sign-in method. Please use your original sign-in method.");
+          break;
+        case "OAuthCallbackError":
+          setError("There was a problem signing in with your provider. Please try again.");
+          break;
+        case "AccessDenied":
+          setError("Access denied. You may not have permission to sign in.");
+          break;
+        case "CredentialsSignin":
+          setError("Invalid email or password. Please try again.");
+          break;
+        default:
+          setError("An unexpected error occurred. Please try again.");
+      }
+    }
+  }, [searchParams]);
 
   /* ── TOTP countdown timer ── */
   useEffect(() => {
@@ -70,8 +91,8 @@ export default function LoginPage() {
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
     setIsLoading(false);
-    router.push(enterpriseDest);
-  }, [router]);
+    router.push(redirectTo);
+  }, [router, redirectTo]);
 
   useEffect(() => {
     if (step === "mfa" && mfaCode.length === 6 && !isLoading) {
@@ -79,15 +100,65 @@ export default function LoginPage() {
     }
   }, [mfaCode, step, isLoading, handleMFA]);
 
+  /* ── Email + Password login via NextAuth Credentials ── */
   const handleCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) { setError("Enter a valid email address"); return; }
-    if (!password) { setError("Please enter your password"); return; }
     setError("");
+
+    if (!email.trim()) {
+      setError("Enter a valid email address");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
+    if (!password) {
+      setError("Please enter your password");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setIsLoading(false);
-    setStep(isMfaEnabled ? "mfa" : "mfa-prompt");
+
+    try {
+      const result = await signIn("credentials", {
+        email: email.trim().toLowerCase(),
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        // NextAuth returns the error message from authorize()
+        setError(result.error === "CredentialsSignin"
+          ? "Invalid email or password"
+          : result.error
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      if (result?.ok) {
+        // Credentials verified - check MFA
+        if (isMfaEnabled) {
+          setStep("mfa");
+          setIsLoading(false);
+        } else {
+          setStep("mfa-prompt");
+          setIsLoading(false);
+        }
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   const handleMFASubmit = async (e: React.FormEvent) => {
@@ -103,15 +174,23 @@ export default function LoginPage() {
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
     setIsLoading(false);
-    router.push(enterpriseDest);
+    router.push(redirectTo);
   };
 
-  const handleSSO = async (provider: SSOProvider) => {
+  /* ── Google / Microsoft SSO via NextAuth ── */
+  const handleSSO = async (provider: "google" | "microsoft") => {
     setError("");
     setSsoLoading(provider);
-    await new Promise((r) => setTimeout(r, 1200));
-    sessionStorage.setItem("sso_data", JSON.stringify(MOCK_SSO_DATA[provider]));
-    router.push(`/auth/register?sso=${provider}`);
+
+    try {
+      const providerId = provider === "microsoft" ? "microsoft-entra-id" : "google";
+      await signIn(providerId, {
+        callbackUrl: redirectTo,
+      });
+    } catch {
+      setError(`Failed to sign in with ${provider}. Please try again.`);
+      setSsoLoading(null);
+    }
   };
 
   const resetToCredentials = () => {
@@ -397,14 +476,14 @@ export default function LoginPage() {
                   variant="primary"
                   size="lg"
                   className="w-full"
-                  onClick={() => router.push(`/auth/mfa-setup?redirect=${enterpriseDest}`)}
+                  onClick={() => router.push(`/auth/mfa-setup?redirect=${redirectTo}`)}
                 >
                   <Shield className="w-4 h-4" /> Set Up MFA Now
                 </Button>
 
                 <button
                   type="button"
-                  onClick={() => router.push(enterpriseDest)}
+                  onClick={() => router.push(redirectTo)}
                   className="w-full text-sm text-beige-500 hover:text-beige-700 transition-colors py-1"
                 >
                   Skip for now
@@ -576,30 +655,30 @@ export default function LoginPage() {
             <span className="text-[11px] text-beige-400">Sandbox roles</span>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x w-full">
-            <Link href="/enterprise/dashboard" className="shrink-0 snap-start">
-              <Button variant="outline" size="sm" className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
+            <Button asChild variant="outline" size="sm" className="shrink-0 snap-start justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
+              <Link href="/enterprise/dashboard">
                 <Badge variant="brown" size="sm">E</Badge>
                 <span className="text-xs font-semibold tracking-wide">Enterprise</span>
-              </Button>
-            </Link>
-            <Link href="/contributor/dashboard" className="shrink-0 snap-start">
-              <Button variant="outline" size="sm" className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="shrink-0 snap-start justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
+              <Link href="/contributor/dashboard">
                 <Badge variant="teal" size="sm">C</Badge>
                 <span className="text-xs font-semibold tracking-wide">Contributor</span>
-              </Button>
-            </Link>
-            <Link href="/mentor/dashboard" className="shrink-0 snap-start">
-              <Button variant="outline" size="sm" className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="shrink-0 snap-start justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
+              <Link href="/mentor/dashboard">
                 <Badge variant="forest" size="sm">R</Badge>
                 <span className="text-xs font-semibold tracking-wide">Reviewer</span>
-              </Button>
-            </Link>
-            <Link href="/enterprise/dashboard?demo=super-admin" className="shrink-0 snap-start">
-              <Button variant="outline" size="sm" className="w-full justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="shrink-0 snap-start justify-center gap-2 rounded-full border-brown-200 bg-white/80 text-brown-800 shadow-sm hover:bg-white">
+              <Link href="/enterprise/dashboard?demo=super-admin">
                 <Badge variant="brown" size="sm">SA</Badge>
                 <span className="text-xs font-semibold tracking-wide">Super Admin</span>
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </GlassCard>
 
@@ -621,5 +700,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

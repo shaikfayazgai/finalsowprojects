@@ -42,6 +42,7 @@ export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading]         = useState(false);
   const [error, setError]                 = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [otpVerified, setOtpVerified]     = useState(false);
 
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const strength = getStrength(password);
@@ -110,11 +111,21 @@ export default function ForgotPasswordPage() {
     otpRefs.current[0]?.focus();
   }, [resendCooldown]);
 
-  // Step 2: Verify OTP + Reset Password
+  // Step 2a: Verify OTP
+  const handleVerifyOtp = async () => {
+    if (otpValue.length < 6) { setError("Please enter the complete 6-digit OTP"); return; }
+    setError("");
+    setIsLoading(true);
+    await new Promise(r => setTimeout(r, 1000));
+    setIsLoading(false);
+    setOtpVerified(true);
+  };
+
+  // Step 2b: Reset Password
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (otpValue.length < 6)  { setError("Please enter the complete 6-digit OTP"); return; }
+    if (!otpVerified) { setError("Please verify your OTP first"); return; }
     if (password.length < 8)  { setError("Password must be at least 8 characters"); return; }
     if (!/[A-Z]/.test(password))      { setError("Password must contain an uppercase letter"); return; }
     if (!/[0-9]/.test(password))      { setError("Password must contain a number"); return; }
@@ -195,7 +206,7 @@ export default function ForgotPasswordPage() {
               {/* Back button */}
               <button
                 type="button"
-                onClick={() => { setStep("email"); setError(""); setOtp(["", "", "", "", "", ""]); }}
+                onClick={() => { setStep("email"); setError(""); setOtp(["", "", "", "", "", ""]); setOtpVerified(false); }}
                 className="flex items-center gap-1 text-sm text-beige-600 hover:text-brown-800 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" /> Back
@@ -218,27 +229,53 @@ export default function ForgotPasswordPage() {
                       value={digit}
                       onChange={e => handleOtpChange(i, e.target.value)}
                       onKeyDown={e => handleOtpKeyDown(i, e)}
-                      className="w-11 h-12 text-center text-lg font-semibold rounded-lg border border-beige-300 bg-white/80
-                        focus:border-brown-500 focus:ring-2 focus:ring-brown-500/20 outline-none transition-all
-                        text-brown-950 placeholder:text-beige-300"
-                      autoFocus={i === 0}
+                      disabled={otpVerified}
+                      className={`w-11 h-12 text-center text-lg font-semibold rounded-lg border outline-none transition-all
+                        ${otpVerified
+                          ? "border-beige-300 bg-white/80 text-brown-950 cursor-not-allowed opacity-100"
+                          : "border-beige-300 bg-white/80 focus:border-brown-500 focus:ring-2 focus:ring-brown-500/20 text-brown-950 placeholder:text-beige-300"
+                        }`}
+                      autoFocus={!otpVerified && i === 0}
                     />
                   ))}
                 </div>
-                <div className="flex items-center justify-center gap-1 text-xs text-beige-500 mt-1">
-                  {resendCooldown > 0 ? (
-                    <span>Resend code in <span className="font-medium text-brown-700">{resendCooldown}s</span></span>
-                  ) : (
-                    <button
+                {otpVerified ? (
+                  <p className="flex items-center justify-center gap-1 text-xs text-teal-600 mt-1">
+                    <CheckCircle className="w-3 h-3" /> OTP Verified
+                  </p>
+                ) : otpValue.length === 6 ? (
+                  <div className="mt-3">
+                    <Button
                       type="button"
-                      onClick={handleResendOtp}
+                      variant="primary"
+                      size="md"
+                      className="w-full"
                       disabled={isLoading}
-                      className="text-brown-600 hover:text-brown-800 font-medium underline underline-offset-2 transition-colors"
+                      onClick={handleVerifyOtp}
                     >
-                      Resend code
-                    </button>
-                  )}
-                </div>
+                      {isLoading ? (
+                        <><RefreshCw className="w-4 h-4 animate-spin" /> Verifying…</>
+                      ) : (
+                        <><ShieldCheck className="w-4 h-4" /> Verify OTP</>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-1 text-xs text-beige-500 mt-1">
+                    {resendCooldown > 0 ? (
+                      <span>Resend code in <span className="font-medium text-brown-700">{resendCooldown}s</span></span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleResendOtp}
+                        disabled={isLoading}
+                        className="text-brown-600 hover:text-brown-800 font-medium underline underline-offset-2 transition-colors"
+                      >
+                        Resend code
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Divider */}
@@ -254,19 +291,21 @@ export default function ForgotPasswordPage() {
               {/* New Password */}
               <div className="space-y-2">
                 <Label htmlFor="password">New Password</Label>
-                <div className="relative">
+                <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setShowPassword(false); }}>
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="Min 8 chars, uppercase, number, special"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    className="pr-10"
+                    disabled={!otpVerified}
+                    className={`pr-10 ${!otpVerified ? "cursor-not-allowed opacity-50" : ""}`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600"
+                    disabled={!otpVerified}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600 ${!otpVerified ? "cursor-not-allowed" : ""}`}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -299,19 +338,21 @@ export default function ForgotPasswordPage() {
               {/* Confirm Password */}
               <div className="space-y-2">
                 <Label htmlFor="confirm">Confirm New Password</Label>
-                <div className="relative">
+                <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setShowConfirm(false); }}>
                   <Input
                     id="confirm"
                     type={showConfirm ? "text" : "password"}
                     placeholder="Re-enter your new password"
                     value={confirm}
                     onChange={e => setConfirm(e.target.value)}
-                    className="pr-10"
+                    disabled={!otpVerified}
+                    className={`pr-10 ${!otpVerified ? "cursor-not-allowed opacity-50" : ""}`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirm(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600"
+                    disabled={!otpVerified}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600 ${!otpVerified ? "cursor-not-allowed" : ""}`}
                   >
                     {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -354,7 +395,7 @@ export default function ForgotPasswordPage() {
                 </div>
               )}
 
-              <Button type="submit" variant="primary" size="lg" className="w-full" disabled={isLoading}>
+              <Button type="submit" variant="primary" size="lg" className={`w-full ${!otpVerified ? "cursor-not-allowed opacity-50" : ""}`} disabled={isLoading || !otpVerified}>
                 {isLoading ? (
                   <><RefreshCw className="w-4 h-4 animate-spin" /> Resetting…</>
                 ) : (
