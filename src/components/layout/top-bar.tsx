@@ -282,6 +282,7 @@ export function TopBar({ config }: TopBarProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      </div>
     </header>
   );
 }

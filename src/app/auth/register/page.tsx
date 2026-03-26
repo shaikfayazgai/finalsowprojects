@@ -86,12 +86,11 @@ const LEFT_FEATURES = [
 
 function LeftContent() {
   return (
-    <div className="hidden lg:flex flex-col flex-1 max-w-lg py-8 pr-6 justify-between min-h-[680px]">
+    <div className="hidden lg:flex flex-col flex-1 max-w-lg pt-8 pb-8 pr-10 gap-14">
 
-      {/* ── TOP ── */}
+      {/* TOP — Branding + Headline */}
       <div>
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 mb-7 group w-fit">
+        <Link href="/" className="flex items-center gap-2 mb-8 group w-fit">
           <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brown-500 to-brown-700 flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
@@ -100,72 +99,40 @@ function LeftContent() {
           </span>
         </Link>
 
-        {/* Trust badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-50 border border-teal-100 w-fit mb-5">
-          <div className="flex -space-x-1.5">
-            {["bg-teal-500","bg-brown-400","bg-amber-400","bg-violet-400"].map((c, i) => (
-              <div key={i} className={`w-5 h-5 rounded-full ${c} border-2 border-white flex items-center justify-center`}>
-                <Users className="w-2.5 h-2.5 text-white" />
-              </div>
-            ))}
-          </div>
-          <span className="text-xs font-medium text-teal-700">Trusted by 50K+ professionals</span>
-        </div>
-
-        {/* Eyebrow */}
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-600 mb-3 flex items-center gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-600 mb-4 flex items-center gap-2">
           <span className="w-5 h-px bg-teal-500" />
           Global Workforce Platform
         </p>
 
-        {/* Headline */}
-        <h2 className="font-heading text-4xl font-bold text-brown-950 leading-[1.15] mb-4">
+        <h2 className="font-heading text-4xl font-bold text-brown-950 leading-[1.2] mb-5">
           Your career or company<br />
-          <span className="text-teal-600">starts here</span> — on a<br />
-          global stage.
+          <span className="text-teal-600">starts here</span>.
         </h2>
 
-        {/* Description */}
         <p className="text-sm text-beige-600 leading-relaxed max-w-sm">
-          Whether you&apos;re a student landing your first role, a professional growing your freelance career,
-          or a company scaling with world-class talent — GlimmoraTeam connects you.
+          Whether you&apos;re a student, a professional, or a company scaling with
+          world-class talent — GlimmoraTeam connects you.
         </p>
       </div>
 
-      {/* ── MIDDLE ── */}
+      {/* MIDDLE — Stats + Badges */}
       <div>
-        {/* Stats row */}
-        <div className="flex items-center gap-6 mb-5">
+        <div className="flex items-center gap-8 mb-8">
           {LEFT_STATS.map(({ value, label }, i) => (
-            <div key={label} className={`${i > 0 ? "pl-6 border-l border-beige-200" : ""}`}>
+            <div key={label} className={`${i > 0 ? "pl-8 border-l border-beige-200" : ""}`}>
               <p className="font-heading text-2xl font-bold text-brown-950">{value}</p>
-              <p className="text-xs text-beige-500 mt-0.5">{label}</p>
+              <p className="text-xs text-beige-500 mt-1">{label}</p>
             </div>
           ))}
         </div>
 
-        {/* Features 2×2 */}
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="flex flex-wrap gap-3">
           {LEFT_FEATURES.map(({ Icon, label }) => (
-            <div key={label} className="flex items-center gap-2.5 p-3 rounded-xl bg-white/60 border border-beige-100 hover:border-teal-100 hover:bg-white transition-colors">
-              <div className="w-7 h-7 rounded-lg bg-teal-50 border border-teal-100 flex items-center justify-center shrink-0">
-                <Icon className="w-3.5 h-3.5 text-teal-600" />
-              </div>
-              <span className="text-sm text-brown-700 font-medium">{label}</span>
+            <div key={label} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/50 border border-beige-100">
+              <Icon className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+              <span className="text-xs text-brown-700 font-medium">{label}</span>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* ── BOTTOM ── */}
-      <div>
-        {/* Trust footer */}
-        <div className="flex items-center gap-3 text-xs text-beige-400">
-          <div className="flex items-center gap-1"><Lock className="w-3 h-3" /><span>256-bit SSL</span></div>
-          <span>·</span>
-          <div className="flex items-center gap-1"><Shield className="w-3 h-3" /><span>SOC 2 Type II</span></div>
-          <span>·</span>
-          <div className="flex items-center gap-1"><Globe className="w-3 h-3" /><span>GDPR</span></div>
         </div>
       </div>
     </div>
@@ -762,26 +729,18 @@ function ContributorRegisterContent() {
           />
         )}
 
-        {/* Footer trust line */}
-        {uiState !== "registering" && (
-          <div className="flex items-center justify-center gap-4 mt-5 text-xs text-beige-400">
-            <div className="flex items-center gap-1"><Lock className="w-3 h-3" /><span>256-bit encryption</span></div>
-            <span>|</span>
-            <div className="flex items-center gap-1"><Zap className="w-3 h-3" /><span>SOC 2 compliant</span></div>
-          </div>
-        )}
     </>
   );
 
   /* ── Picker: two-column with left content ── */
   if (showLeftContent) {
     return (
-      <div className="w-full flex items-start gap-8 max-w-6xl">
+      <div className="w-full flex items-start gap-16 max-w-7xl mx-auto px-8">
         <LeftContent />
-        <div className="w-full max-w-xl flex flex-col">
-          <div className="text-center mb-7">
-            <h1 className="font-heading text-2xl font-bold text-brown-950">Create Your Account</h1>
-            <p className="text-sm text-beige-500 mt-1">Join the Global Workforce Intelligence Platform</p>
+        <div className="w-full max-w-[520px] flex flex-col justify-center">
+          <div className="mb-6">
+            <h1 className="font-heading text-[22px] font-bold text-brown-950">Create your account</h1>
+            <p className="text-sm text-gray-500 mt-1">Join the Global Workforce Intelligence Platform</p>
           </div>
           {formBody}
         </div>
@@ -791,7 +750,7 @@ function ContributorRegisterContent() {
 
   /* ── Auth options + form: logo top-left, form centered ── */
   return (
-    <div className="w-full max-w-xl mx-auto flex flex-col py-8">
+    <div className="w-full max-w-[520px] mx-auto flex flex-col py-8">
       <div className="mb-8">{logo}</div>
       {formBody}
     </div>
