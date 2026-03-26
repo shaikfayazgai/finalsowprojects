@@ -8,7 +8,7 @@ const protectedRoutes = ["/enterprise", "/contributor", "/mentor"];
 // Routes that should redirect to dashboard if already authenticated
 const authRoutes = ["/auth/login", "/auth/register"];
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Use getToken (Edge-compatible) instead of importing auth (which pulls in bcryptjs)
