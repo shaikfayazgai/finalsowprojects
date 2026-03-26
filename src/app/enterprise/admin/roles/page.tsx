@@ -826,7 +826,6 @@ function EditUserDialog({
         username: form.username.trim(),
         role: form.role,
         isActive: form.isActive,
-        mustChangePassword: false,
         language: form.language.trim() || undefined,
         timeZone: form.timeZone.trim() || undefined,
       });
@@ -1746,12 +1745,15 @@ function RoleCard({
 }
 
 /* ═══════════════════════════════
-   ROLES & PERMISSIONS PAGE
+   ROLES & ACCESS PAGE
    ═══════════════════════════════ */
 export default function RolesPage() {
+  // ── Roles state ──
   const [roles, setRoles] = React.useState(mockRoles);
-  const [users, setUsers] = React.useState(initialMockUsers);
   const [search, setSearch] = React.useState("");
+
+  // ── Users state ──
+  const [users, setUsers] = React.useState<ManagedUser[]>(initialMockUsers);
   const [userSearch, setUserSearch] = React.useState("");
 
   const systemRoles = roles.filter((r) => r.isSystem);
@@ -1761,7 +1763,7 @@ export default function RolesPage() {
   const customCount = customRoles.length;
   const totalUsers = roles.reduce((sum, r) => sum + r.userCount, 0);
 
-  // Filter by search
+  // Filter roles by search
   const filteredSystem = systemRoles.filter(
     (r) => r.name.toLowerCase().includes(search.toLowerCase()) || r.description.toLowerCase().includes(search.toLowerCase())
   );
@@ -1808,35 +1810,79 @@ export default function RolesPage() {
     setRoles((prev) => prev.filter((r) => r.id !== roleId));
   };
 
+  // ── User handlers ──
+  const handleCreateUser = (newUser: Omit<ManagedUser, "id">) => {
+    setUsers((prev) => [
+      ...prev,
+      {
+        id: `u-${String(Date.now()).slice(-4)}`,
+        mustChangePassword: true,
+        ...newUser,
+      },
+    ]);
+  };
+
+  const handleEditUser = (id: string, updated: Omit<ManagedUser, "id">) => {
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...updated } : u)));
+  };
+
+  const handleDeleteUser = (id: string) => {
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+  };
+
   return (
     <div className="max-w-[1200px] mx-auto space-y-6">
       {/* Header */}
-      <div
-        className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 animate-fade-up"
-      >
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 animate-fade-up">
         <div>
           <h1 className="text-[22px] font-bold text-brown-900 tracking-[-0.02em] font-heading">
             Roles & Access
           </h1>
           <p className="text-[13px] text-beige-500 mt-1">
-            Define access levels and permission sets for your organization.
+            Manage users and define access levels for your organization.
           </p>
         </div>
-        <CreateRoleDialog
-          onCreated={handleCreateRole}
+        <CreateUserDialog
+          onCreated={handleCreateUser}
           trigger={
             <Button variant="gradient-primary" size="sm">
-              <Plus className="w-3.5 h-3.5" />
-              Create Role
+              <UserPlus className="w-3.5 h-3.5" />
+              New User
             </Button>
           }
         />
       </div>
 
+      {/* ── Users Section ── */}
+      <div className="space-y-3 animate-fade-up [animation-delay:100ms]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-teal-500" />
+            <h2 className="text-[14px] font-semibold text-brown-800">Users</h2>
+            <span className="text-[11px] text-beige-500">— managed by Enterprise Admin</span>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400" />
+            <Input
+              placeholder="Search users…"
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              className="pl-9 h-8 w-56 text-[12px]"
+            />
+          </div>
+        </div>
+
+        <UsersTable
+          users={filteredUsers}
+          onEdit={handleEditUser}
+          onDelete={handleDeleteUser}
+        />
+      </div>
+
+      {/* ── Permissions Section ── */}
+
       {/* Summary bar + search */}
-      <div
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-3 rounded-xl border border-beige-200/50 bg-white/60 backdrop-blur-sm animate-fade-up [animation-delay:100ms]"
-      >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-3 rounded-xl border border-beige-200/50 bg-white/60 backdrop-blur-sm animate-fade-up [animation-delay:200ms]">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-beige-400" />
@@ -1874,9 +1920,7 @@ export default function RolesPage() {
       </div>
 
       {/* System Roles Section */}
-      <div
-        className="space-y-3 animate-fade-up [animation-delay:200ms]"
-      >
+      <div className="space-y-3 animate-fade-up [animation-delay:300ms]">
         <div className="flex items-center gap-2">
           <Lock className="w-4 h-4 text-beige-400" />
           <h2 className="text-[14px] font-semibold text-brown-800">System Roles</h2>
@@ -1894,13 +1938,22 @@ export default function RolesPage() {
       </div>
 
       {/* Custom Roles Section */}
-      <div
-        className="space-y-3 animate-fade-up [animation-delay:300ms]"
-      >
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-gold-500" />
-          <h2 className="text-[14px] font-semibold text-brown-800">Custom Roles</h2>
-          <span className="text-[11px] text-beige-500">— created by your organization</span>
+      <div className="space-y-3 animate-fade-up [animation-delay:400ms]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-gold-500" />
+            <h2 className="text-[14px] font-semibold text-brown-800">Custom Roles</h2>
+            <span className="text-[11px] text-beige-500">— created by your organization</span>
+          </div>
+          <CreateRoleDialog
+            onCreated={handleCreateRole}
+            trigger={
+              <Button variant="outline" size="sm">
+                <Plus className="w-3.5 h-3.5" />
+                Create Role
+              </Button>
+            }
+          />
         </div>
         {filteredCustom.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

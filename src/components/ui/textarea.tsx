@@ -14,15 +14,18 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       <div className="relative w-full">
         <textarea
           className={cn(
-            "flex min-h-[100px] w-full rounded-xl border bg-white px-3.5 py-3 font-body text-[13px] text-gray-900 transition-all duration-200 resize-none",
-            "placeholder:text-gray-400",
-            "focus:outline-none focus:ring-2 focus:ring-brown-100 focus:border-brown-300",
-            "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-50",
-            error
-              ? "border-red-400 focus:ring-red-100 focus:border-red-400"
-              : "border-gray-200 hover:border-gray-300",
+            "flex min-h-[100px] w-full rounded-lg border bg-white/80 px-3.5 py-3 font-body text-sm transition-all duration-200 resize-none",
+            "focus:outline-none focus:ring-1",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+            error ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : "",
             className
           )}
+          style={{
+            color: 'var(--ink)',
+            borderColor: error ? undefined : 'var(--border-soft)',
+          }}
+          onFocus={(e) => { if (!error) { e.currentTarget.style.borderColor = 'rgba(166,119,99,0.35)'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(166,119,99,0.08)'; } props.onFocus?.(e); }}
+          onBlur={(e) => { if (!error) { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.boxShadow = 'none'; } props.onBlur?.(e); }}
           ref={ref}
           {...props}
         />

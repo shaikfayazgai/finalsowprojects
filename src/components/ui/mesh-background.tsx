@@ -104,16 +104,13 @@ export function MeshBackground({
   return (
     <div
       className={cn(
-        "relative",
+        "relative overflow-hidden",
         variant === "dark" ? "bg-brown-950" : "bg-beige-50",
         className
       )}
       {...props}
     >
-      {/* Blobs clipped to their own container so they never affect layout or overflow */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {meshStyles[variant]}
-      </div>
+      {meshStyles[variant]}
       <div className="relative z-10">{children}</div>
     </div>
   );

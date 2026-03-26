@@ -3,7 +3,6 @@ import {
   FileText,
   FolderKanban,
   Users,
-  BarChart3,
   Shield,
   ScrollText,
   Settings,
@@ -18,31 +17,15 @@ import {
   AlertTriangle,
   TrendingUp,
   Activity,
-  Eye,
   Server,
   Boxes,
-  Gauge,
   PieChart,
-  Upload,
-  Receipt,
-  Landmark,
   UserCog,
   KeyRound,
-  Wrench,
-  Network,
-  BookCheck,
-  DollarSign,
   Building2,
   ShieldCheck,
   Plug,
   UsersRound,
-  LineChart,
-  Scale,
-  Sliders,
-  FormInput,
-  Sparkles,
-  BookMarked,
-  FileStack,
   type LucideIcon,
 } from "lucide-react";
 
@@ -78,26 +61,38 @@ export const enterpriseNav: ModuleConfig = {
   basePath: "/enterprise",
   accentColor: "brown",
   sections: [
+    /* ─── Dashboard (no section label) ─── */
     {
       items: [
         { label: "Dashboard", href: "/enterprise/dashboard", icon: LayoutDashboard },
       ],
     },
+    /* ─── SOW ─── */
     {
+      title: "SOW",
       items: [
         { label: "SOW Repository", href: "/enterprise/sow", icon: FileText },
+        { label: "Approval Pipeline", href: "/enterprise/sow/approval", icon: ClipboardCheck },
+        { label: "Archive", href: "/enterprise/sow/archive", icon: History },
+      ],
+    },
+    /* ─── Planning ─── */
+    {
+      title: "Planning",
+      items: [
         { label: "Decomposition", href: "/enterprise/decomposition", icon: Boxes },
         { label: "Teams", href: "/enterprise/team", icon: UsersRound },
       ],
     },
+    /* ─── Project Monitoring ─── */
     {
       title: "Project Monitoring",
       items: [
         { label: "Project Portfolio", href: "/enterprise/projects", icon: FolderKanban },
-        // #7: Kept Exception Management — exceptions need high visibility for PMs
         { label: "Exceptions", href: "/enterprise/projects/exceptions", icon: AlertTriangle },
       ],
     },
+    /* ─── Review & Acceptance ─── */
     {
       title: "Review & Acceptance",
       items: [
@@ -105,44 +100,29 @@ export const enterpriseNav: ModuleConfig = {
         { label: "Acceptance Logs", href: "/enterprise/review/history", icon: History },
       ],
     },
+    /* ─── Billing ─── */
     {
+      title: "Billing",
       items: [
         { label: "Billing", href: "/enterprise/billing", icon: Wallet },
       ],
     },
+    /* ─── Organization ─── */
     {
       title: "Organization",
       items: [
-        { label: "General", href: "/enterprise/admin/config", icon: Building2 },
+        { label: "Settings", href: "/enterprise/admin/config", icon: Building2 },
         { label: "Roles & Access", href: "/enterprise/admin/roles", icon: KeyRound },
         { label: "Policies", href: "/enterprise/admin/config/apg", icon: ShieldCheck },
         { label: "Integrations", href: "/enterprise/admin/config/integrations", icon: Plug },
         { label: "Contributors", href: "/enterprise/admin/users", icon: UserCog },
-        { label: "SOW Intake Forms", href: "/enterprise/admin/config/sow-forms", icon: FormInput },
-        { label: "Clause Library", href: "/enterprise/admin/config/clause-library", icon: BookMarked },
-        { label: "SOW Templates", href: "/enterprise/admin/config/templates", icon: FileStack },
-        { label: "Review Rubrics", href: "/enterprise/admin/config/review-rubrics", icon: Scale },
       ],
     },
+    /* ─── Audit ─── */
     {
-      title: "Analytics & Intelligence",
-      items: [
-        { label: "Workforce", href: "/enterprise/analytics", icon: BarChart3 },
-        { label: "Economic", href: "/enterprise/analytics/economic", icon: TrendingUp },
-        { label: "Governance & Risk", href: "/enterprise/analytics/governance", icon: Shield },
-        { label: "Self-service", href: "/enterprise/analytics/reports", icon: PieChart },
-      ],
-    },
-    {
+      title: "Audit",
       items: [
         { label: "Audit Log", href: "/enterprise/audit", icon: ScrollText },
-      ],
-    },
-    {
-      title: "Account",
-      items: [
-        { label: "Settings", href: "/enterprise/settings", icon: Settings },
-        { label: "Security", href: "/enterprise/settings/security", icon: ShieldCheck },
       ],
     },
   ],
@@ -178,9 +158,14 @@ export const contributorNav: ModuleConfig = {
     {
       title: "Connect",
       items: [
-        { label: "Community", href: "/contributor/community", icon: UsersRound },
         { label: "Support", href: "/contributor/support", icon: HeartHandshake },
         { label: "Messages", href: "/contributor/messages", icon: MessageSquare },
+      ],
+    },
+    {
+      items: [
+        { label: "Profile", href: "/contributor/profile", icon: Users },
+        { label: "Settings", href: "/contributor/settings", icon: Settings },
       ],
     },
   ],
@@ -202,6 +187,7 @@ export const mentorNav: ModuleConfig = {
       title: "Reviews",
       items: [
         { label: "Review Queue", href: "/mentor/queue", icon: ListChecks },
+        { label: "Active Review", href: "/mentor/review", icon: ClipboardCheck },
         { label: "History", href: "/mentor/history", icon: History },
       ],
     },
@@ -210,6 +196,11 @@ export const mentorNav: ModuleConfig = {
       items: [
         { label: "Escalations", href: "/mentor/escalation", icon: AlertTriangle },
         { label: "Mentorship", href: "/mentor/mentorship", icon: GraduationCap },
+      ],
+    },
+    {
+      items: [
+        { label: "Settings", href: "/mentor/settings", icon: Settings },
       ],
     },
   ],
