@@ -307,7 +307,7 @@ function ExtractionPanel({
                 <Edit3 className="w-3.5 h-3.5 mr-1.5" /> Edit
               </Button>
               <Button
-                variant={isCompleted ? "outline" : "default"}
+                variant={isCompleted ? "outline" : "primary"}
                 size="sm"
                 onClick={onToggleComplete}
                 className={cn(
@@ -521,7 +521,7 @@ export default function ExtractionReportPage() {
           {/* Continue Button */}
           <Link href="/enterprise/sow/upload/preview-confirm">
             <Button
-              variant="default"
+              variant="primary"
               disabled={!allSectionsReviewed}
               className={cn(
                 "gap-2",

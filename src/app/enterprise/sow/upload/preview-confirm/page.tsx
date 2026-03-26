@@ -565,7 +565,7 @@ export default function PreviewConfirmPage() {
                           <span className="text-xs text-[#8B7355]">{flag.section}</span>
                         </div>
                         <Button
-                          variant={isResolved ? "outline" : "default"}
+                          variant={isResolved ? "outline" : "primary"}
                           size="sm"
                           onClick={() => toggleResolveFlag(flag.id)}
                           className={cn(
@@ -619,7 +619,7 @@ export default function PreviewConfirmPage() {
               </p>
             )}
             <Button
-              variant="default"
+              variant="primary"
               size="lg"
               disabled={!allFlagsResolved || isSubmitting}
               onClick={handleConfirm}

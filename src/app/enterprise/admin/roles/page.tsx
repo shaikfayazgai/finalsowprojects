@@ -770,6 +770,7 @@ function EditUserDialog({
     username: user.username,
     role: user.role,
     isActive: user.isActive,
+    mustChangePassword: user.mustChangePassword,
     language: user.language ?? "",
     timeZone: user.timeZone ?? "",
   });
@@ -787,6 +788,7 @@ function EditUserDialog({
         username: user.username,
         role: user.role,
         isActive: user.isActive,
+        mustChangePassword: user.mustChangePassword,
         language: user.language ?? "",
         timeZone: user.timeZone ?? "",
       });
@@ -826,6 +828,7 @@ function EditUserDialog({
         username: form.username.trim(),
         role: form.role,
         isActive: form.isActive,
+        mustChangePassword: form.mustChangePassword ?? false,
         language: form.language.trim() || undefined,
         timeZone: form.timeZone.trim() || undefined,
       });
@@ -1816,7 +1819,6 @@ export default function RolesPage() {
       ...prev,
       {
         id: `u-${String(Date.now()).slice(-4)}`,
-        mustChangePassword: true,
         ...newUser,
       },
     ]);

@@ -2,288 +2,69 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft,
-  ShieldCheck,
-  CheckCircle2,
-  Clock,
-  DollarSign,
-  Layers,
-  Zap,
-  Users,
-  AlertTriangle,
-  XCircle,
-  GitBranch,
-  Network,
-  Undo2,
-  Sparkles,
-  Target,
-  TrendingDown,
-  TrendingUp,
-  Lock,
-  ArrowRight,
-  ListChecks,
-  BarChart3,
-  FileText,
-  Scale,
-  Send,
-  Ban,
+  ShieldCheck, CheckCircle2, Clock, DollarSign, Layers, Zap, Users,
+  AlertTriangle, XCircle, GitBranch, Sparkles, Target, TrendingDown,
+  TrendingUp, Lock, ArrowRight, ListChecks, Send, Ban, Undo2, Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
-import {
-  Badge,
-  Button,
-  Checkbox,
-  GlassCard,
-  GlassCardHeader,
-  GlassCardTitle,
-  GlassCardContent,
-  GlassCardFooter,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-  Textarea,
-  Progress,
-  Separator,
-} from "@/components/ui";
-import { MetricRing } from "@/components/enterprise/metric-ring";
-import {
-  mockPlans,
-  mockTasks,
-  mockPlanMilestones,
-  mockAIRecommendations,
-} from "@/mocks/data/enterprise-projects";
+import { Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, Textarea } from "@/components/ui";
+import { mockPlans, mockTasks, mockPlanMilestones } from "@/mocks/data/enterprise-projects";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
-import type {
-  DecompositionTask,
-  PlanValidationResult,
-  PlanMilestone,
-} from "@/types/enterprise";
+import type { PlanValidationResult } from "@/types/enterprise";
 
-/* ── Validation status icon + color mapping ── */
-const validationConfig = {
-  passed: {
-    icon: CheckCircle2,
-    iconColor: "text-forest-500",
-    bg: "bg-forest-50/60",
-    border: "border-forest-200/50",
-    textColor: "text-forest-700",
-    badgeBg: "bg-forest-100 text-forest-700",
-  },
-  warning: {
-    icon: AlertTriangle,
-    iconColor: "text-gold-600",
-    bg: "bg-gold-50/60",
-    border: "border-gold-200/50",
-    textColor: "text-gold-700",
-    badgeBg: "bg-gold-100 text-gold-700",
-  },
-  error: {
-    icon: XCircle,
-    iconColor: "text-red-600",
-    bg: "bg-red-50/60",
-    border: "border-red-200/50",
-    textColor: "text-red-700",
-    badgeBg: "bg-red-100 text-red-700",
-  },
+/* ═══ Badge ═══ */
+
+const badgeStyles: Record<string, { bg: string; text: string; dot: string }> = {
+  forest: { bg: "bg-forest-50", text: "text-forest-700", dot: "bg-forest-500" },
+  teal: { bg: "bg-teal-50", text: "text-teal-700", dot: "bg-teal-500" },
+  gold: { bg: "bg-gold-50", text: "text-gold-700", dot: "bg-gold-500" },
+  brown: { bg: "bg-brown-50", text: "text-brown-700", dot: "bg-brown-500" },
+  beige: { bg: "bg-gray-100", text: "text-gray-600", dot: "bg-gray-400" },
+  danger: { bg: "bg-red-50", text: "text-red-600", dot: "bg-red-500" },
+};
+
+function Badge({ variant, dot, children }: { variant: string; dot?: boolean; children: React.ReactNode }) {
+  const s = badgeStyles[variant] || badgeStyles.beige;
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 text-[9px] font-medium tracking-wide uppercase px-2.5 py-0.5 rounded-full", s.bg, s.text)}>
+      {dot && <span className={cn("w-1.5 h-1.5 rounded-full", s.dot)} />}
+      {children}
+    </span>
+  );
+}
+
+/* ═══ Helpers ═══ */
+
+function formatCost(n: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n); }
+function fmtK(n: number) { return n >= 1000 ? `$${Math.round(n / 1000)}K` : `$${n}`; }
+
+const valIcon = {
+  passed: { icon: CheckCircle2, color: "text-forest-500" },
+  warning: { icon: AlertTriangle, color: "text-gold-500" },
+  error: { icon: XCircle, color: "text-red-500" },
 } as const;
 
-/* ── Validation result row ── */
-function ValidationRow({ result }: { result: PlanValidationResult }) {
-  const config = validationConfig[result.status];
-  const Icon = config.icon;
+const varianceTextColor: Record<string, string> = {
+  forest: "text-forest-600", gold: "text-gold-600", teal: "text-teal-600",
+};
 
-  return (
-    <motion.div
-      variants={fadeUp}
-      className={cn(
-        "flex items-start gap-3 px-4 py-3 rounded-xl border transition-all",
-        config.bg,
-        config.border
-      )}
-    >
-      <Icon className={cn("w-4 h-4 mt-0.5 shrink-0", config.iconColor)} />
-      <div className="flex-1 min-w-0">
-        <p className={cn("text-[13px] font-semibold", config.textColor)}>
-          {result.field}
-        </p>
-        <p className="text-[11px] text-beige-500 mt-0.5">{result.message}</p>
-      </div>
-      <span
-        className={cn(
-          "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider shrink-0",
-          config.badgeBg
-        )}
-      >
-        {result.status}
-      </span>
-    </motion.div>
-  );
-}
+/* ═══ PAGE ═══ */
 
-/* ── Checklist item ── */
-function ChecklistItem({
-  label,
-  description,
-  checked,
-  onToggle,
-  disabled = false,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onToggle: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <motion.div
-      variants={fadeUp}
-      className={cn(
-        "flex items-start gap-3.5 p-4 rounded-xl border transition-all duration-300",
-        disabled
-          ? "border-beige-200/40 bg-beige-50/30 opacity-60 cursor-not-allowed"
-          : checked
-            ? "border-forest-200 bg-forest-50/40 cursor-pointer"
-            : "border-beige-200/60 bg-white/70 hover:border-beige-300 cursor-pointer"
-      )}
-      onClick={() => !disabled && onToggle()}
-    >
-      <Checkbox
-        checked={checked}
-        onCheckedChange={() => !disabled && onToggle()}
-        disabled={disabled}
-        className="mt-0.5"
-      />
-      <div className="flex-1 min-w-0">
-        <p
-          className={cn(
-            "text-[13px] font-semibold transition-colors",
-            checked ? "text-forest-800" : "text-brown-900"
-          )}
-        >
-          {label}
-        </p>
-        <p className="text-[11px] text-beige-500 mt-0.5 leading-relaxed">
-          {description}
-        </p>
-      </div>
-      {checked && (
-        <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0 mt-0.5" />
-      )}
-    </motion.div>
-  );
-}
-
-/* ── Skill badge with availability ── */
-function SkillBadge({
-  skill,
-  taskCount,
-  contributors,
-}: {
-  skill: string;
-  taskCount: number;
-  contributors: number;
-}) {
-  const isLimited = contributors <= 3;
-  return (
-    <div
-      className={cn(
-        "inline-flex items-center gap-2 text-[11px] font-semibold px-3 py-2 rounded-xl border transition-all",
-        isLimited
-          ? "bg-gold-50/60 border-gold-200/50 text-gold-800"
-          : "bg-beige-100/80 border-beige-200/50 text-beige-700"
-      )}
-    >
-      <span>{skill}</span>
-      <span className="text-[9px] bg-beige-200/80 text-beige-600 px-1.5 py-0.5 rounded-md font-mono">
-        {taskCount} tasks
-      </span>
-      <span
-        className={cn(
-          "text-[9px] px-1.5 py-0.5 rounded-md font-medium",
-          isLimited
-            ? "bg-gold-100 text-gold-700"
-            : "bg-forest-100 text-forest-700"
-        )}
-      >
-        {contributors} contributors
-      </span>
-    </div>
-  );
-}
-
-/* ── SOW comparison row ── */
-function ComparisonRow({
-  metric,
-  sowValue,
-  planValue,
-  variance,
-  status,
-}: {
-  metric: string;
-  sowValue: string;
-  planValue: string;
-  variance: string;
-  status: "good" | "neutral" | "warning";
-}) {
-  return (
-    <div className="grid grid-cols-4 gap-3 items-center py-3 border-b border-beige-100/60 last:border-0">
-      <p className="text-[12px] font-semibold text-brown-800">{metric}</p>
-      <p className="text-[12px] text-beige-600 text-center">{sowValue}</p>
-      <p className="text-[12px] text-brown-900 font-medium text-center">
-        {planValue}
-      </p>
-      <div className="flex items-center justify-center gap-1">
-        {status === "good" && (
-          <CheckCircle2 className="w-3 h-3 text-forest-500" />
-        )}
-        {status === "warning" && (
-          <AlertTriangle className="w-3 h-3 text-gold-600" />
-        )}
-        {status === "neutral" && (
-          <Target className="w-3 h-3 text-teal-500" />
-        )}
-        <span
-          className={cn(
-            "text-[11px] font-medium",
-            status === "good"
-              ? "text-forest-600"
-              : status === "warning"
-                ? "text-gold-600"
-                : "text-teal-600"
-          )}
-        >
-          {variance}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════
-   APPROVE PLAN PAGE — Flow C4
-   ══════════════════════════════════════════ */
 export default function ApprovePlanPage() {
   const params = useParams();
-  const router = useRouter();
   const planId = params.planId as string;
   const plan = mockPlans.find((p) => p.id === planId) ?? mockPlans[0];
   const tasks = mockTasks.filter((t) => t.planId === plan.id);
   const milestones = mockPlanMilestones.filter((m) => m.planId === plan.id);
   const sow = mockSOWs.find((s) => s.id === plan.sowId);
 
-  /* ── Generate plan-specific validation results ── */
+  /* ── Validations ── */
   const sowBudgetCeiling = sow?.estimatedBudget ?? 300000;
-  const planEstCost = plan.estimatedCost;
-  const budgetOk = planEstCost <= sowBudgetCeiling;
-  const fmtK = (n: number) => (n >= 1000 ? `$${Math.round(n / 1000)}K` : `$${n}`);
+  const budgetOk = plan.estimatedCost <= sowBudgetCeiling;
   const taskCount = tasks.length;
   const tasksWithDesc = tasks.filter((t) => t.description).length;
   const tasksWithSkills = tasks.filter((t) => t.skillsRequired.length > 0).length;
@@ -291,35 +72,27 @@ export default function ApprovePlanPage() {
   const softDeps = tasks.filter((t) => t.dependencies.some((d) => d.type === "related")).length;
   const critPathTight = plan.criticalPathDuration > 1800;
   const rareSkillCombos = tasks.some((t) =>
-    t.skillsRequired.length >= 2 &&
-    t.skillsRequired.every((s) => ["Finance", "HR", "Compliance", "Legal"].includes(s.name))
+    t.skillsRequired.length >= 2 && t.skillsRequired.every((s) => ["Finance", "HR", "Compliance", "Legal"].includes(s.name))
   );
+
   const validations: PlanValidationResult[] = [
     { field: "All tasks have descriptions", status: tasksWithDesc === taskCount ? "passed" : "error", message: `${tasksWithDesc}/${taskCount} tasks have descriptions` },
     { field: "Effort estimates complete", status: "passed", message: "All tasks have hour estimates" },
     { field: "Skills tags assigned", status: tasksWithSkills === taskCount ? "passed" : "error", message: tasksWithSkills === taskCount ? "All tasks have at least 1 skill tag" : `${tasksWithSkills}/${taskCount} tasks have skills` },
     { field: "Acceptance criteria defined", status: tasksWithCriteria === taskCount ? "passed" : "warning", message: `${tasksWithCriteria}/${taskCount} tasks have acceptance criteria` },
-    { field: "Dependencies validated", status: softDeps > 0 ? "warning" : "passed", message: softDeps > 0 ? `${softDeps} task(s) have soft dependencies that may need review` : "All dependencies are firm blocks" },
-    { field: "Budget within SOW limits", status: budgetOk ? "passed" : "error", message: budgetOk ? `Estimated cost ${fmtK(planEstCost)} is within ${fmtK(sowBudgetCeiling)} SOW ceiling` : `Estimated cost ${fmtK(planEstCost)} exceeds ${fmtK(sowBudgetCeiling)} SOW ceiling` },
-    { field: "Critical path feasible", status: critPathTight ? "warning" : "passed", message: critPathTight ? `Critical path (${plan.criticalPathDuration.toLocaleString()}h) is tight for the project timeline` : `Critical path (${plan.criticalPathDuration.toLocaleString()}h) is within acceptable range` },
-    { field: "Skill coverage available", status: rareSkillCombos ? "error" : "passed", message: rareSkillCombos ? "Rare skill combination has limited matching contributors" : "All required skills have sufficient contributor coverage" },
+    { field: "Dependencies validated", status: softDeps > 0 ? "warning" : "passed", message: softDeps > 0 ? `${softDeps} task(s) have soft dependencies` : "All dependencies are firm blocks" },
+    { field: "Budget within SOW limits", status: budgetOk ? "passed" : "error", message: budgetOk ? `${fmtK(plan.estimatedCost)} within ${fmtK(sowBudgetCeiling)} ceiling` : `${fmtK(plan.estimatedCost)} exceeds ${fmtK(sowBudgetCeiling)} ceiling` },
+    { field: "Critical path feasible", status: critPathTight ? "warning" : "passed", message: critPathTight ? `${plan.criticalPathDuration.toLocaleString()}h — tight for timeline` : `${plan.criticalPathDuration.toLocaleString()}h — within range` },
+    { field: "Skill coverage available", status: rareSkillCombos ? "error" : "passed", message: rareSkillCombos ? "Rare skill combination has limited contributors" : "Sufficient contributor coverage" },
   ];
 
-  /* ── Checklist state — all unchecked to force deliberate review (#12) ── */
-  const [checklist, setChecklist] = React.useState<Record<string, boolean>>({
-    breakdown: false,
-    dependencies: false,
-    estimates: false,
-    budget: false,
-    skills: false,
-  });
-
-  /* ── Rejection dialog state ── */
+  /* ── State ── */
+  const [checklist, setChecklist] = React.useState<Record<string, boolean>>({ breakdown: false, dependencies: false, estimates: false, budget: false, skills: false });
   const [rejectionOpen, setRejectionOpen] = React.useState(false);
   const [rejectionReason, setRejectionReason] = React.useState("");
   const [submitted, setSubmitted] = React.useState(false);
 
-  /* ── Validation summary counts ── */
+  /* ── Derived ── */
   const passed = validations.filter((v) => v.status === "passed").length;
   const warnings = validations.filter((v) => v.status === "warning").length;
   const errors = validations.filter((v) => v.status === "error").length;
@@ -331,907 +104,409 @@ export default function ApprovePlanPage() {
   const checkedCount = checklistKeys.filter((k) => checklist[k]).length;
   const canApprove = allChecked && !hasErrors;
 
-  /* ── Skill analysis with mock contributor counts ── */
-  const uniqueSkills = Array.from(
-    new Set(tasks.flatMap((t) => t.skillsRequired.map((s) => s.name)))
-  );
-  const skillData = uniqueSkills.map((skill) => {
-    const taskCount = tasks.filter((t) =>
-      t.skillsRequired.some((s) => s.name === skill)
-    ).length;
-    // Simulated contributor availability
-    const contributorMap: Record<string, number> = {
-      DevOps: 8,
-      TypeScript: 15,
-      Backend: 12,
-      Security: 5,
-      Database: 7,
-      Architecture: 4,
-      Frontend: 14,
-      Design: 6,
-      Finance: 3,
-      HR: 2,
-      "Full-Stack": 11,
-      Data: 5,
-      QA: 9,
-    };
-    return {
-      name: skill,
-      taskCount,
-      contributors: contributorMap[skill] ?? 4,
-    };
-  });
+  /* ── Skills ── */
+  const uniqueSkills = Array.from(new Set(tasks.flatMap((t) => t.skillsRequired.map((s) => s.name))));
+  const contributorMap: Record<string, number> = { DevOps: 8, TypeScript: 15, Backend: 12, Security: 5, Database: 7, Architecture: 4, Frontend: 14, Design: 6, Finance: 3, HR: 2, "Full-Stack": 11, Data: 5, QA: 9 };
+  const skillData = uniqueSkills.map((skill) => ({
+    name: skill,
+    taskCount: tasks.filter((t) => t.skillsRequired.some((s) => s.name === skill)).length,
+    contributors: contributorMap[skill] ?? 4,
+  }));
 
-  /* ── Currency formatter ── */
-  const fmt = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
-
-  /* ── SOW comparison data ── */
+  /* ── SOW comparison ── */
   const sowBudget = sow?.estimatedBudget ?? 300000;
   const planCost = plan.estimatedCost;
   const budgetVariance = ((planCost - sowBudget) / sowBudget) * 100;
-  const budgetVarianceStr =
-    budgetVariance < 0
-      ? `${budgetVariance.toFixed(0)}%`
-      : `+${budgetVariance.toFixed(0)}%`;
+  const budgetVarianceStr = budgetVariance < 0 ? `${budgetVariance.toFixed(0)}%` : `+${budgetVariance.toFixed(0)}%`;
 
-  /* ── Stats data ── */
-  const stats = [
-    {
-      label: "Milestones",
-      value: plan.totalMilestones.toString(),
-      icon: Target,
-      accent: "from-brown-500 to-brown-600",
-      iconBg: "bg-brown-100 text-brown-600",
-    },
-    {
-      label: "Tasks",
-      value: plan.totalTasks.toString(),
-      icon: Layers,
-      accent: "from-teal-500 to-teal-600",
-      iconBg: "bg-teal-100 text-teal-600",
-    },
-    {
-      label: "Subtasks",
-      value: plan.totalSubtasks.toString(),
-      icon: ListChecks,
-      accent: "from-forest-500 to-forest-600",
-      iconBg: "bg-forest-100 text-forest-600",
-    },
-    {
-      label: "Total Hours",
-      value: plan.estimatedHours.toLocaleString() + "h",
-      icon: Clock,
-      accent: "from-gold-500 to-gold-600",
-      iconBg: "bg-gold-100 text-gold-700",
-    },
-    {
-      label: "Est. Cost",
-      value: fmt.format(plan.estimatedCost),
-      icon: DollarSign,
-      accent: "from-forest-500 to-teal-500",
-      iconBg: "bg-forest-100 text-forest-600",
-    },
-    {
-      label: "Critical Path",
-      value: plan.criticalPathDuration.toLocaleString() + "h",
-      icon: Zap,
-      accent: "from-brown-500 to-gold-500",
-      iconBg: "bg-brown-100 text-brown-600",
-    },
-    {
-      label: "AI Confidence",
-      value: plan.aiConfidence + "%",
-      icon: Sparkles,
-      accent: "from-teal-500 to-forest-500",
-      iconBg: "bg-teal-100 text-teal-600",
-    },
-    {
-      label: "Dependencies",
-      value: plan.dependencyCount.toString(),
-      icon: GitBranch,
-      accent: "from-beige-400 to-brown-500",
-      iconBg: "bg-beige-200 text-brown-600",
-    },
-  ];
+  const toggleChecklist = (key: string) => setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const toggleChecklist = (key: string) => {
-    setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  /* ── Already approved/in_progress/completed — show confirmation view ── */
+  /* ══ Already Approved View ══ */
   const isAlreadyApproved = plan.status === "approved" || plan.status === "in_progress" || plan.status === "completed";
 
   if (isAlreadyApproved) {
-    const statusDisplay = {
-      approved: { label: "Approved", sublabel: "Ready for team formation", icon: ShieldCheck, gradient: "from-forest-500 to-teal-500", bg: "bg-forest-50", border: "border-forest-200/50", text: "text-forest-700", nextLabel: "Proceed to Team Formation", nextHref: "/enterprise/team" },
-      in_progress: { label: "In Progress", sublabel: "Project delivery is active", icon: Zap, gradient: "from-teal-500 to-forest-500", bg: "bg-teal-50", border: "border-teal-200/50", text: "text-teal-700", nextLabel: "View Active Project", nextHref: `/enterprise/projects/${plan.projectId ?? "proj-001"}` },
-      completed: { label: "Completed", sublabel: "Project delivery finished", icon: CheckCircle2, gradient: "from-brown-500 to-gold-500", bg: "bg-brown-50", border: "border-brown-200/50", text: "text-brown-700", nextLabel: "View Completed Project", nextHref: `/enterprise/projects/${plan.projectId ?? "proj-001"}` },
+    const statusMap = {
+      approved: { label: "Approved", sub: "Ready for team formation", icon: ShieldCheck, variant: "forest", nextLabel: "Proceed to Team Formation", nextHref: "/enterprise/team" },
+      in_progress: { label: "In Progress", sub: "Project delivery is active", icon: Zap, variant: "teal", nextLabel: "View Active Project", nextHref: `/enterprise/projects/${plan.projectId ?? "proj-001"}` },
+      completed: { label: "Completed", sub: "Project delivery finished", icon: CheckCircle2, variant: "brown", nextLabel: "View Project", nextHref: `/enterprise/projects/${plan.projectId ?? "proj-001"}` },
     } as const;
-    const display = statusDisplay[plan.status as "approved" | "in_progress" | "completed"];
-    const DisplayIcon = display.icon;
+    const d = statusMap[plan.status as "approved" | "in_progress" | "completed"];
+    const StatusIcon = d.icon;
 
     return (
-      <motion.div
-        variants={stagger}
-        initial="hidden"
-        animate="show"
-        className="max-w-[900px] mx-auto space-y-7 pb-12"
-      >
-        {/* Back */}
-        <motion.div variants={fadeUp}>
-          <Link
-            href={`/enterprise/decomposition/${plan.id}`}
-            className="inline-flex items-center gap-1.5 text-[12px] text-beige-500 hover:text-brown-600 transition-colors mb-4"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to Plan Detail
-          </Link>
+      <motion.div variants={stagger} initial="hidden" animate="show">
+        <motion.div variants={fadeUp} className="mb-8">
+          <div className="flex flex-wrap gap-1.5 mb-3"><Badge variant={d.variant} dot>{d.label}</Badge></div>
+          <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight leading-tight">Plan {d.label}</h1>
+          <p className="text-[12px] text-gray-400 mt-2">{plan.title} · v{plan.version}</p>
         </motion.div>
 
-        {/* Approval Confirmation Card */}
-        <motion.div variants={scaleIn}>
-          <GlassCard padding="none" className="overflow-hidden">
-            <div className={cn("px-8 py-10 text-center relative", display.bg)}>
-              {/* Decorative gradient orb */}
-              <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full bg-gradient-to-br opacity-10 blur-3xl pointer-events-none" style={{ backgroundImage: `linear-gradient(135deg, var(--tw-gradient-stops))` }} />
-
-              <div className={cn("w-16 h-16 rounded-2xl bg-gradient-to-br mx-auto flex items-center justify-center shadow-lg mb-5", display.gradient)}>
-                <DisplayIcon className="w-8 h-8 text-white" />
-              </div>
-              <h1 className="text-[22px] font-bold text-brown-900 tracking-[-0.02em]">
-                Plan {display.label}
-              </h1>
-              <p className="text-[13px] text-beige-500 mt-1">{display.sublabel}</p>
-              <p className="text-[12px] text-beige-400 mt-2">
-                {plan.title} <span className="mx-1">·</span> <span className="text-teal-600 font-medium">v{plan.version}</span>
-              </p>
+        <motion.div variants={fadeUp} className="card-parchment mb-6">
+          <div className="px-5 py-6 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brown-400 to-brown-600 mx-auto flex items-center justify-center mb-4">
+              <StatusIcon className="w-7 h-7 text-white" />
             </div>
-
-            {/* Approval Details */}
-            <div className="px-8 py-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-xl bg-beige-50/60 border border-beige-200/40 p-4">
-                  <p className="text-[10px] text-beige-400 uppercase tracking-wider font-semibold mb-1">Approved On</p>
-                  <p className="text-[13px] font-semibold text-brown-800">{new Date(plan.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
-                </div>
-                <div className="rounded-xl bg-beige-50/60 border border-beige-200/40 p-4">
-                  <p className="text-[10px] text-beige-400 uppercase tracking-wider font-semibold mb-1">Approved By</p>
-                  <p className="text-[13px] font-semibold text-brown-800">Priya Nair (Enterprise Admin)</p>
-                </div>
-              </div>
-
-              {/* Validation summary — all passed at approval time */}
-              <div className="rounded-xl bg-forest-50/40 border border-forest-200/30 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <ShieldCheck className="w-4 h-4 text-forest-500" />
-                  <p className="text-[12px] font-semibold text-forest-800">All Validations Passed at Approval</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {["Task breakdown verified", "Dependencies validated", "Estimates reviewed", "Budget within SOW limits", "Skills requirements confirmed"].map((item) => (
-                    <div key={item} className="flex items-center gap-2 text-[11px] text-forest-700">
-                      <CheckCircle2 className="w-3 h-3 text-forest-500 shrink-0" />
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* CTAs */}
-            <div className="px-8 py-5 bg-beige-50/30 border-t border-beige-200/40 flex items-center justify-between">
-              <Link href={`/enterprise/decomposition/${plan.id}`}>
-                <Button variant="outline" size="sm">
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  View Plan Details
-                </Button>
-              </Link>
-              <Link href={display.nextHref}>
-                <Button variant="gradient-primary" size="sm">
-                  {display.nextLabel}
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
-              </Link>
-            </div>
-          </GlassCard>
-        </motion.div>
-
-        {/* Plan Summary Stats — still useful for reference */}
-        <motion.div variants={fadeUp}>
-          <div className="flex items-center gap-2 mb-3">
-            <BarChart3 className="w-4 h-4 text-beige-400" />
-            <h2 className="text-[14px] font-bold text-brown-900">Plan Summary</h2>
+            <h2 className="text-[18px] font-semibold text-gray-900">{d.sub}</h2>
+            <p className="text-[12px] text-gray-400 mt-1">Approved on {new Date(plan.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })} by Priya Nair</p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {stats.map((stat) => (
-              <motion.div
-                key={stat.label}
-                variants={scaleIn}
-                className="rounded-xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-4 text-center hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group"
-              >
-                <div className={cn("w-9 h-9 rounded-lg mx-auto flex items-center justify-center mb-2.5 transition-transform group-hover:scale-110", stat.iconBg)}>
-                  <stat.icon className="w-4 h-4" />
+          <div className="px-5 py-4" style={{ borderTop: "1px solid var(--border-soft)" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <ShieldCheck className="w-4 h-4 text-forest-500" />
+              <span className="text-[12px] font-semibold text-gray-800">All Validations Passed</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {["Task breakdown verified", "Dependencies validated", "Estimates reviewed", "Budget within SOW limits", "Skills requirements confirmed"].map((item) => (
+                <div key={item} className="flex items-center gap-2 text-[11px] text-forest-700">
+                  <CheckCircle2 className="w-3 h-3 text-forest-500 shrink-0" /><span>{item}</span>
                 </div>
-                <p className="text-[17px] font-bold text-brown-900 tracking-tight leading-none">{stat.value}</p>
-                <p className="text-[10px] text-beige-500 mt-1 font-medium uppercase tracking-wider">{stat.label}</p>
+              ))}
+            </div>
+          </div>
+          <div className="px-5 py-4 flex items-center justify-end gap-2" style={{ borderTop: "1px solid var(--border-soft)" }}>
+            <Link href={`/enterprise/decomposition/${plan.id}`}>
+              <button className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">View Plan Details</button>
+            </Link>
+            <Link href={d.nextHref}>
+              <button className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">
+                {d.nextLabel} <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </Link>
+          </div>
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: "Milestones", value: plan.totalMilestones, icon: Target, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
+            { label: "Tasks", value: plan.totalTasks, icon: Layers, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
+            { label: "Est. Hours", value: plan.estimatedHours.toLocaleString() + "h", icon: Clock, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
+            { label: "Est. Cost", value: formatCost(plan.estimatedCost), icon: DollarSign, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
+          ].map((kpi) => {
+            const KpiIcon = kpi.icon;
+            return (
+              <motion.div key={kpi.label} variants={scaleIn} className="card-parchment flex items-center gap-5 px-5 py-5">
+                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0", kpi.iconBg)}><KpiIcon className="w-5 h-5 text-white" /></div>
+                <div>
+                  <div className="text-[11px] font-medium text-gray-400">{kpi.label}</div>
+                  <div className="num-display text-[24px] text-gray-900 leading-none mt-1">{kpi.value}</div>
+                </div>
               </motion.div>
-            ))}
-          </div>
+            );
+          })}
         </motion.div>
       </motion.div>
     );
   }
 
+  /* ══ APPROVAL WORKFLOW ══ */
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      animate="show"
-      className="max-w-[900px] mx-auto space-y-7 pb-12"
-    >
-      {/* ── Back + Header ── */}
-      <motion.div variants={fadeUp}>
-        <Link
-          href={`/enterprise/decomposition/${plan.id}`}
-          className="inline-flex items-center gap-1.5 text-[12px] text-beige-500 hover:text-brown-600 transition-colors mb-4"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Back to Plan Detail
-        </Link>
+    <motion.div variants={stagger} initial="hidden" animate="show">
 
-        <div className="flex items-start gap-4">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-forest-500 to-teal-500 flex items-center justify-center shrink-0 shadow-lg shadow-forest-500/20">
-            <ShieldCheck className="w-5.5 h-5.5 text-white" />
+      {/* ═══ HEADER ═══ */}
+      <motion.div variants={fadeUp} className="mb-8">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap gap-1.5 mb-3"><Badge variant="gold" dot>Pending Review</Badge></div>
+            <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight leading-tight">Review & Approve Plan</h1>
+            <div className="flex items-center gap-2 mt-2 text-[12px] text-gray-400">
+              <span>{plan.title}</span>
+              <span className="w-1 h-1 rounded-full bg-gray-300" />
+              <span>v{plan.version}</span>
+            </div>
           </div>
-          <div className="flex-1">
-            <h1 className="text-[20px] font-bold text-brown-900 tracking-[-0.02em]">
-              Review & Approve Plan
-            </h1>
-            <p className="text-[12px] text-beige-500 mt-0.5">
-              {plan.title}{" "}
-              <span className="text-beige-400 mx-1">*</span>
-              <span className="text-teal-600 font-medium">v{plan.version}</span>
-            </p>
-          </div>
-          {/* Validation summary badges in header */}
           <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-forest-50 border border-forest-200/50">
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-forest-50">
               <CheckCircle2 className="w-3 h-3 text-forest-500" />
-              <span className="text-[11px] font-semibold text-forest-700">
-                {passed}
-              </span>
+              <span className="text-[11px] font-semibold text-forest-700">{passed}</span>
             </div>
             {warnings > 0 && (
-              <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gold-50 border border-gold-200/50">
-                <AlertTriangle className="w-3 h-3 text-gold-600" />
-                <span className="text-[11px] font-semibold text-gold-700">
-                  {warnings}
-                </span>
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gold-50">
+                <AlertTriangle className="w-3 h-3 text-gold-500" />
+                <span className="text-[11px] font-semibold text-gold-700">{warnings}</span>
               </div>
             )}
             {errors > 0 && (
-              <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 border border-red-200/50">
-                <XCircle className="w-3 h-3 text-red-600" />
-                <span className="text-[11px] font-semibold text-red-700">
-                  {errors}
-                </span>
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50">
+                <XCircle className="w-3 h-3 text-red-500" />
+                <span className="text-[11px] font-semibold text-red-600">{errors}</span>
               </div>
             )}
           </div>
         </div>
       </motion.div>
 
-      {/* ══ SECTION 1: Pre-Approval Validation ══ */}
-      <motion.div variants={fadeUp}>
-        <GlassCard padding="none" className="overflow-hidden">
-          <div className="px-6 pt-5 pb-4">
-            <div className="flex items-center gap-2.5 mb-1">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-forest-500 to-teal-500 flex items-center justify-center">
-                <ShieldCheck className="w-3.5 h-3.5 text-white" />
+      {/* ═══ PRE-APPROVAL VALIDATION ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-6">
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+          <span className="text-sm font-semibold text-gray-800">Pre-Approval Validation</span>
+          <span className="text-[11px] text-gray-400">{passed}/{validations.length} passed</span>
+        </div>
+        <div className="py-2">
+          {validations.map((v, i) => {
+            const vc = valIcon[v.status];
+            const VIcon = vc.icon;
+            return (
+              <div key={i} className="flex items-center gap-3 px-5 py-3"
+                style={{ borderBottom: i < validations.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
+                <VIcon className={cn("w-4 h-4 shrink-0", vc.color)} />
+                <div className="flex-1 min-w-0">
+                  <span className="text-[13px] font-medium text-gray-700">{v.field}</span>
+                  <span className="text-[11px] text-gray-400 ml-2 hidden sm:inline">{v.message}</span>
+                </div>
+                <Badge variant={v.status === "passed" ? "forest" : v.status === "warning" ? "gold" : "danger"}>{v.status}</Badge>
               </div>
-              <h2 className="text-[14px] font-bold text-brown-900 tracking-tight">
-                Pre-Approval Validation
-              </h2>
-            </div>
-            <p className="text-[11px] text-beige-500 ml-[34px]">
-              System checks for plan completeness and readiness
+            );
+          })}
+        </div>
+        {hasErrors && (
+          <div className="px-5 py-3 flex items-center gap-2.5" style={{ borderTop: "1px solid var(--border-soft)", background: "color-mix(in srgb, var(--danger-light) 50%, white)" }}>
+            <XCircle className="w-4 h-4 shrink-0" style={{ color: "var(--danger)" }} />
+            <p className="text-[12px] font-medium flex-1" style={{ color: "var(--danger)" }}>
+              {errors} validation error{errors > 1 ? "s" : ""} must be resolved before approval
             </p>
+            <Link href={`/enterprise/decomposition/${plan.id}/edit`}>
+              <button className="text-[11px] font-medium px-3 py-1.5 rounded-lg border hover:bg-gray-50" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>Fix Issues</button>
+            </Link>
           </div>
+        )}
+      </motion.div>
 
-          <div className="px-6 pb-5 space-y-2">
-            {validations.map((v, i) => (
-              <ValidationRow key={i} result={v} />
+      {/* ═══ PLAN SUMMARY ═══ */}
+      <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Milestones", value: plan.totalMilestones, icon: Target, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
+          { label: "Tasks", value: plan.totalTasks, icon: Layers, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
+          { label: "Subtasks", value: plan.totalSubtasks, icon: ListChecks, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
+          { label: "Est. Hours", value: plan.estimatedHours.toLocaleString() + "h", icon: Clock, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
+          { label: "Est. Cost", value: formatCost(plan.estimatedCost), icon: DollarSign, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
+          { label: "Critical Path", value: plan.criticalPathDuration.toLocaleString() + "h", icon: Zap, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
+          { label: "AI Confidence", value: plan.aiConfidence + "%", icon: Sparkles, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
+          { label: "Dependencies", value: plan.dependencyCount, icon: GitBranch, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
+        ].map((kpi) => {
+          const KpiIcon = kpi.icon;
+          return (
+            <motion.div key={kpi.label} variants={scaleIn} className="card-parchment flex items-center gap-4 px-4 py-4">
+              <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", kpi.iconBg)}><KpiIcon className="w-4 h-4 text-white" /></div>
+              <div>
+                <div className="text-[10px] font-medium text-gray-400">{kpi.label}</div>
+                <div className="num-display text-[20px] text-gray-900 leading-none mt-0.5">{kpi.value}</div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </motion.div>
+
+      {/* ═══ SOW COMPARISON ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-6">
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+          <span className="text-sm font-semibold text-gray-800">SOW Comparison</span>
+          {sow && <span className="text-[11px] text-gray-400">{sow.title}</span>}
+        </div>
+        <div className="hidden lg:grid items-center px-5 py-2.5"
+          style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr", borderBottom: "1px solid var(--border-soft)", background: "color-mix(in srgb, var(--color-gray-100) 40%, white)", fontSize: 10, color: "var(--color-gray-400)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <span>Metric</span><span className="text-center">SOW Scope</span><span className="text-center">Plan Estimate</span><span className="text-center">Variance</span>
+        </div>
+        {[
+          { metric: "Budget", sow: formatCost(sowBudget), plan: formatCost(planCost), variance: budgetVarianceStr, color: budgetVariance <= 0 ? "forest" : "gold" },
+          { metric: "Duration", sow: sow?.estimatedDuration ?? "6 months", plan: plan.criticalPathDuration.toLocaleString() + "h path", variance: "On track", color: "teal" },
+          { metric: "Scope Coverage", sow: `${sow?.totalSections ?? 12} sections`, plan: `${plan.totalMilestones} milestones`, variance: "Mapped", color: "forest" },
+          { metric: "Confidentiality", sow: sow?.confidentiality ? sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1) : "Internal", plan: "Matched", variance: "Verified", color: "forest" },
+          { metric: "Stakeholders", sow: `${sow?.stakeholders.length ?? 3} people`, plan: "Notified", variance: "Ready", color: "forest" },
+        ].map((row, i, arr) => (
+          <div key={row.metric} className="grid grid-cols-4 items-center px-5 py-3"
+            style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
+            <span className="text-[12px] font-medium text-gray-700">{row.metric}</span>
+            <span className="text-[12px] text-gray-400 text-center">{row.sow}</span>
+            <span className="text-[12px] text-gray-700 text-center font-medium">{row.plan}</span>
+            <span className={cn("text-[11px] font-medium text-center", varianceTextColor[row.color])}>{row.variance}</span>
+          </div>
+        ))}
+        <div className="px-5 py-4" style={{ borderTop: "1px solid var(--border-soft)" }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] text-gray-500">Budget Utilization</span>
+            <span className="text-[11px] font-semibold text-gray-700">{formatCost(planCost)} / {formatCost(sowBudget)}</span>
+          </div>
+          <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+            <div className={cn("h-full rounded-full transition-all duration-700", planCost <= sowBudget ? "bg-gradient-to-r from-forest-400 to-forest-500" : "bg-gradient-to-r from-gold-400 to-gold-500")}
+              style={{ width: `${Math.min(100, (planCost / sowBudget) * 100)}%` }} />
+          </div>
+          <div className="flex items-center justify-end mt-1.5 gap-1">
+            {planCost <= sowBudget ? <TrendingDown className="w-3 h-3 text-forest-500" /> : <TrendingUp className="w-3 h-3 text-gold-500" />}
+            <span className={cn("text-[10px] font-semibold", planCost <= sowBudget ? "text-forest-600" : "text-gold-600")}>{budgetVarianceStr} vs SOW ceiling</span>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ═══ REQUIRED SKILLS ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-6">
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+          <span className="text-sm font-semibold text-gray-800">Required Skills</span>
+          <span className="text-[11px] text-gray-400">{uniqueSkills.length} skills</span>
+        </div>
+        <div className="px-5 py-4">
+          <div className="flex flex-wrap gap-2">
+            {skillData.map((sd) => (
+              <div key={sd.name} className={cn(
+                "inline-flex items-center gap-2 text-[11px] font-medium px-3 py-2 rounded-xl border",
+                sd.contributors <= 3 ? "bg-gold-50 border-gold-200 text-gold-700" : "bg-gray-50 border-gray-200 text-gray-700"
+              )}>
+                <span>{sd.name}</span>
+                <span className="text-[9px] font-mono bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">{sd.taskCount} tasks</span>
+                <span className={cn("text-[9px] px-1.5 py-0.5 rounded", sd.contributors <= 3 ? "bg-gold-100 text-gold-700" : "bg-forest-50 text-forest-700")}>{sd.contributors} avail.</span>
+              </div>
             ))}
           </div>
-
-          {/* Validation summary bar */}
-          <div className="px-6 py-3.5 bg-beige-50/50 border-t border-beige-200/40 flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-forest-100/80">
-              <CheckCircle2 className="w-3.5 h-3.5 text-forest-500" />
-              <span className="text-[11px] font-semibold text-forest-700">
-                {passed} passed
-              </span>
+          {skillData.some((sd) => sd.contributors <= 3) && (
+            <div className="mt-4 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-gold-50">
+              <AlertTriangle className="w-3.5 h-3.5 text-gold-500 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-gold-700">
+                <span className="font-semibold">Limited availability:</span> {skillData.filter((sd) => sd.contributors <= 3).map((sd) => sd.name).join(", ")} skills have fewer than 4 matching contributors.
+              </p>
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold-100/80">
-              <AlertTriangle className="w-3.5 h-3.5 text-gold-600" />
-              <span className="text-[11px] font-semibold text-gold-700">
-                {warnings} warnings
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-100/80">
-              <XCircle className="w-3.5 h-3.5 text-red-600" />
-              <span className="text-[11px] font-semibold text-red-700">
-                {errors} errors
-              </span>
-            </div>
-            <div className="flex-1" />
-            <Progress
-              value={(passed / validations.length) * 100}
-              variant="gradient-forest"
-              size="sm"
-              className="w-32"
-            />
-          </div>
-
-          {/* Error banner */}
-          <AnimatePresence>
-            {hasErrors && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="px-6 py-3 bg-red-50 border-t border-red-200/40 flex items-center gap-2.5">
-                  <XCircle className="w-4 h-4 text-red-500 shrink-0" />
-                  <p className="text-[12px] font-semibold text-red-700">
-                    {errors} validation error{errors > 1 ? "s" : ""} must be
-                    resolved before approval
-                  </p>
-                  <div className="flex-1" />
-                  <Link href={`/enterprise/decomposition/${plan.id}/edit`}>
-                    <Button variant="outline" size="sm" className="h-7 text-[11px] border-red-300 text-red-600 hover:bg-red-50">
-                      Fix Issues
-                    </Button>
-                  </Link>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </GlassCard>
+          )}
+        </div>
       </motion.div>
 
-      {/* ══ SECTION 2: Plan Summary Stats ══ */}
-      <motion.div variants={fadeUp}>
-        <div className="flex items-center gap-2 mb-3">
-          <BarChart3 className="w-4 h-4 text-beige-400" />
-          <h2 className="text-[14px] font-bold text-brown-900">
-            Plan Summary
-          </h2>
+      {/* ═══ APPROVAL CHECKLIST ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-6">
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+          <span className="text-sm font-semibold text-gray-800">Approval Checklist</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-gray-600">{checkedCount}/{checklistKeys.length}</span>
+            <div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+              <div className={cn("h-full rounded-full transition-all duration-300", allChecked ? "bg-forest-500" : "bg-brown-400")} style={{ width: `${(checkedCount / checklistKeys.length) * 100}%` }} />
+            </div>
+          </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {stats.map((stat, i) => (
-            <motion.div
-              key={stat.label}
-              variants={scaleIn}
-              className="rounded-xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-4 text-center hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group"
-            >
-              <div
-                className={cn(
-                  "w-9 h-9 rounded-lg mx-auto flex items-center justify-center mb-2.5 transition-transform group-hover:scale-110",
-                  stat.iconBg
-                )}
-              >
-                <stat.icon className="w-4 h-4" />
+        <div className="py-2">
+          {[
+            { key: "breakdown", label: "Task breakdown verified", desc: "All SOW requirements are covered by the decomposed tasks with no gaps." },
+            { key: "dependencies", label: "Dependencies validated", desc: "Task dependency chains are logically correct and do not contain circular references." },
+            { key: "estimates", label: "Estimates reviewed", desc: "Hour estimates are realistic and align with historical delivery data." },
+            { key: "budget", label: "Budget within SOW limits", desc: "Total estimated cost does not exceed the SOW-approved budget ceiling." },
+            { key: "skills", label: "Skills requirements confirmed", desc: "All required skills have sufficient contributors in the platform talent pool." },
+          ].map((item, i, arr) => (
+            <div key={item.key}
+              className={cn("flex items-start gap-3 px-5 py-3.5 cursor-pointer transition-colors hover:bg-black/[0.02]", checklist[item.key] && "bg-forest-50/30")}
+              style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--border-hair)" : undefined }}
+              onClick={() => toggleChecklist(item.key)}>
+              <Checkbox checked={checklist[item.key]} onCheckedChange={() => toggleChecklist(item.key)} className="mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className={cn("text-[13px] font-medium", checklist[item.key] ? "text-forest-700" : "text-gray-700")}>{item.label}</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">{item.desc}</p>
               </div>
-              <p className="text-[17px] font-bold text-brown-900 tracking-tight leading-none">
-                {stat.value}
-              </p>
-              <p className="text-[10px] text-beige-500 mt-1 font-medium uppercase tracking-wider">
-                {stat.label}
-              </p>
-            </motion.div>
+              {checklist[item.key] && <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0 mt-0.5" />}
+            </div>
           ))}
         </div>
       </motion.div>
 
-      {/* ══ SECTION 3: SOW Comparison ══ */}
-      <motion.div variants={fadeUp}>
-        <GlassCard padding="none" className="overflow-hidden">
-          <div className="px-6 pt-5 pb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-brown-500 to-gold-500 flex items-center justify-center">
-                <Scale className="w-3.5 h-3.5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-[14px] font-bold text-brown-900 tracking-tight">
-                  SOW Comparison
-                </h2>
-                <p className="text-[11px] text-beige-500">
-                  Plan estimates vs. original SOW scope
-                </p>
-              </div>
-            </div>
-            {sow && (
-              <Badge
-                variant="beige"
-                size="sm"
-                className="text-[10px]"
-              >
-                {sow.title}
-              </Badge>
-            )}
+      {/* ═══ TEAM FORMATION PREVIEW ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-8">
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+          <span className="text-sm font-semibold text-gray-800">Team Formation Preview</span>
+        </div>
+        <div className="px-5 py-4">
+          <p className="text-[12px] text-gray-500 leading-relaxed">
+            Approving this plan will trigger the AI-powered team formation engine. The system will match <span className="font-semibold text-gray-700">{uniqueSkills.length} required skills</span> against the contributor pool to form an optimal delivery team.
+          </p>
+          <div className="flex items-center gap-3 mt-4 flex-wrap">
+            {[
+              { icon: Sparkles, label: "AI-optimized matching" },
+              { icon: ShieldCheck, label: "Privacy-first assignment" },
+              { icon: Network, label: "Skill coverage analysis" },
+            ].map((f) => {
+              const FIcon = f.icon;
+              return (
+                <div key={f.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
+                  <FIcon className="w-3.5 h-3.5 text-gray-500" /><span className="text-[11px] text-gray-600 font-medium">{f.label}</span>
+                </div>
+              );
+            })}
           </div>
-
-          <div className="px-6 pb-5">
-            {/* Column headers */}
-            <div className="grid grid-cols-4 gap-3 pb-2.5 border-b border-beige-200/50 mb-1">
-              <p className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider">
-                Metric
-              </p>
-              <p className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider text-center">
-                SOW Scope
-              </p>
-              <p className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider text-center">
-                Plan Estimate
-              </p>
-              <p className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider text-center">
-                Variance
-              </p>
-            </div>
-
-            <ComparisonRow
-              metric="Budget"
-              sowValue={fmt.format(sowBudget)}
-              planValue={fmt.format(planCost)}
-              variance={budgetVarianceStr}
-              status={budgetVariance <= 0 ? "good" : "warning"}
-            />
-            <ComparisonRow
-              metric="Duration"
-              sowValue={sow?.estimatedDuration ?? "6 months"}
-              planValue={plan.criticalPathDuration.toLocaleString() + "h path"}
-              variance="On track"
-              status="neutral"
-            />
-            <ComparisonRow
-              metric="Scope Coverage"
-              sowValue={`${sow?.totalSections ?? 12} sections`}
-              planValue={`${plan.totalMilestones} milestones`}
-              variance="Mapped"
-              status="good"
-            />
-            <ComparisonRow
-              metric="Confidentiality"
-              sowValue={
-                sow?.confidentiality
-                  ? sow.confidentiality.charAt(0).toUpperCase() +
-                    sow.confidentiality.slice(1)
-                  : "Internal"
-              }
-              planValue="Matched"
-              variance="Verified"
-              status="good"
-            />
-            <ComparisonRow
-              metric="Stakeholders"
-              sowValue={`${sow?.stakeholders.length ?? 3} people`}
-              planValue="Notified"
-              variance="Ready"
-              status="good"
-            />
-          </div>
-
-          {/* Budget comparison visual bar */}
-          <div className="px-6 py-4 bg-beige-50/50 border-t border-beige-200/40">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-medium text-beige-600">
-                Budget Utilization
-              </span>
-              <span className="text-[11px] font-semibold text-brown-700">
-                {fmt.format(planCost)} / {fmt.format(sowBudget)}
-              </span>
-            </div>
-            <div className="relative h-3 rounded-full bg-beige-200/60 overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${(planCost / sowBudget) * 100}%` }}
-                transition={{ duration: 1, ease: "easeOut", delay: 0.3 }}
-                className={cn(
-                  "absolute inset-y-0 left-0 rounded-full",
-                  planCost <= sowBudget
-                    ? "bg-gradient-to-r from-forest-400 to-forest-500"
-                    : "bg-gradient-to-r from-gold-400 to-gold-500"
-                )}
-              />
-              {/* SOW budget line marker */}
-              <div className="absolute inset-y-0 right-0 w-px bg-brown-400/60" />
-            </div>
-            <div className="flex items-center justify-between mt-1.5">
-              <span className="text-[10px] text-beige-400">$0</span>
-              <div className="flex items-center gap-1">
-                {planCost <= sowBudget ? (
-                  <TrendingDown className="w-3 h-3 text-forest-500" />
-                ) : (
-                  <TrendingUp className="w-3 h-3 text-gold-500" />
-                )}
-                <span
-                  className={cn(
-                    "text-[10px] font-semibold",
-                    planCost <= sowBudget ? "text-forest-600" : "text-gold-600"
-                  )}
-                >
-                  {budgetVarianceStr} vs SOW ceiling
-                </span>
-              </div>
-              <span className="text-[10px] text-beige-400">
-                {fmt.format(sowBudget)}
-              </span>
-            </div>
-          </div>
-        </GlassCard>
-      </motion.div>
-
-      {/* ══ SECTION 4: Required Skills ══ */}
-      <motion.div variants={fadeUp}>
-        <GlassCard padding="md">
-          <GlassCardHeader className="mb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-teal-500 to-forest-500 flex items-center justify-center">
-                <GitBranch className="w-3.5 h-3.5 text-white" />
-              </div>
-              <div>
-                <GlassCardTitle className="text-[14px]">
-                  Required Skills ({uniqueSkills.length})
-                </GlassCardTitle>
-                <p className="text-[11px] text-beige-500">
-                  Skill coverage and contributor availability
-                </p>
-              </div>
-            </div>
-          </GlassCardHeader>
-          <GlassCardContent>
-            <div className="flex flex-wrap gap-2.5">
-              {skillData.map((sd) => (
-                <SkillBadge
-                  key={sd.name}
-                  skill={sd.name}
-                  taskCount={sd.taskCount}
-                  contributors={sd.contributors}
-                />
-              ))}
-            </div>
-            {/* Warning for limited skills */}
-            {skillData.some((sd) => sd.contributors <= 3) && (
-              <div className="mt-4 flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl bg-gold-50/60 border border-gold-200/40">
-                <AlertTriangle className="w-3.5 h-3.5 text-gold-600 mt-0.5 shrink-0" />
-                <p className="text-[11px] text-gold-700 leading-relaxed">
-                  <span className="font-semibold">Limited availability:</span>{" "}
-                  {skillData
-                    .filter((sd) => sd.contributors <= 3)
-                    .map((sd) => sd.name)
-                    .join(", ")}{" "}
-                  skills have fewer than 4 matching contributors in the talent
-                  pool.
-                </p>
-              </div>
-            )}
-          </GlassCardContent>
-        </GlassCard>
-      </motion.div>
-
-      {/* ══ SECTION 5: Approval Checklist ══ */}
-      <motion.div variants={fadeUp}>
-        <GlassCard padding="md">
-          <GlassCardHeader className="mb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-forest-500 to-forest-600 flex items-center justify-center">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                </div>
-                <div>
-                  <GlassCardTitle className="text-[14px]">
-                    Approval Checklist
-                  </GlassCardTitle>
-                  <p className="text-[11px] text-beige-500">
-                    Complete all items below before approving this plan
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-brown-700">
-                  {checkedCount}/{checklistKeys.length}
-                </span>
-                <div className="w-16">
-                  <Progress
-                    value={(checkedCount / checklistKeys.length) * 100}
-                    variant={allChecked ? "gradient-forest" : "gradient-brown"}
-                    size="sm"
-                  />
-                </div>
-              </div>
-            </div>
-          </GlassCardHeader>
-          <GlassCardContent>
-            <div className="space-y-2.5">
-              <ChecklistItem
-                label="Task breakdown verified"
-                description="All SOW requirements are covered by the decomposed tasks with no gaps."
-                checked={checklist.breakdown}
-                onToggle={() => toggleChecklist("breakdown")}
-              />
-              <ChecklistItem
-                label="Dependencies validated"
-                description="Task dependency chains are logically correct and do not contain circular references."
-                checked={checklist.dependencies}
-                onToggle={() => toggleChecklist("dependencies")}
-              />
-              <ChecklistItem
-                label="Estimates reviewed"
-                description="Hour estimates are realistic and align with historical delivery data."
-                checked={checklist.estimates}
-                onToggle={() => toggleChecklist("estimates")}
-              />
-              <ChecklistItem
-                label="Budget within SOW limits"
-                description="Total estimated cost does not exceed the SOW-approved budget ceiling."
-                checked={checklist.budget}
-                onToggle={() => toggleChecklist("budget")}
-              />
-              <ChecklistItem
-                label="Skills requirements confirmed"
-                description="All required skills have sufficient contributors in the platform talent pool."
-                checked={checklist.skills}
-                onToggle={() => toggleChecklist("skills")}
-              />
-            </div>
-          </GlassCardContent>
-        </GlassCard>
-      </motion.div>
-
-      {/* ══ SECTION 6: Team Formation Preview ══ */}
-      <motion.div variants={scaleIn}>
-        <div className="rounded-2xl border-2 border-dashed border-teal-200/70 bg-gradient-to-br from-teal-50/50 via-white/50 to-beige-50/50 p-6 relative overflow-hidden">
-          {/* Decorative gradient orb */}
-          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-teal-400/5 blur-3xl pointer-events-none" />
-
-          <div className="flex items-start gap-4 relative">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-forest-500 flex items-center justify-center shrink-0 shadow-lg shadow-teal-500/20">
-              <Users className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-[15px] font-bold text-brown-900">
-                Team Formation Preview
-              </h3>
-              <p className="text-[12px] text-beige-600 mt-1 leading-relaxed">
-                Approving this plan will trigger the AI-powered team formation
-                engine. The system will match{" "}
-                <span className="font-semibold text-teal-700">
-                  {uniqueSkills.length} required skills
-                </span>{" "}
-                against the contributor pool to form an optimal delivery team.
-              </p>
-
-              {/* Formation steps preview */}
-              <div className="flex items-center gap-3 mt-4">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/70 border border-teal-200/40">
-                  <Sparkles className="w-3.5 h-3.5 text-gold-500" />
-                  <span className="text-[11px] text-brown-700 font-medium">
-                    AI-optimized matching
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/70 border border-teal-200/40">
-                  <ShieldCheck className="w-3.5 h-3.5 text-forest-500" />
-                  <span className="text-[11px] text-brown-700 font-medium">
-                    Privacy-first assignment
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/70 border border-teal-200/40">
-                  <Network className="w-3.5 h-3.5 text-teal-500" />
-                  <span className="text-[11px] text-brown-700 font-medium">
-                    Skill coverage analysis
-                  </span>
-                </div>
-              </div>
-
-              {/* Expected outcome */}
-              <div className="mt-3 flex items-center gap-2">
-                <ArrowRight className="w-3.5 h-3.5 text-teal-500" />
-                <span className="text-[11px] text-teal-600 font-medium">
-                  Expected: {Math.ceil(plan.totalTasks * 0.7)}-
-                  {plan.totalTasks} contributors matched within 24 hours
-                </span>
-              </div>
-            </div>
+          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-gray-500">
+            <ArrowRight className="w-3 h-3" />
+            Expected: {Math.ceil(plan.totalTasks * 0.7)}-{plan.totalTasks} contributors matched within 24 hours
           </div>
         </div>
       </motion.div>
 
-      {/* ══ SECTION 7: CTAs ══ */}
+      {/* ═══ ACTIONS ═══ */}
       <motion.div variants={fadeUp}>
-        <Separator className="mb-6" />
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          {/* Left: Edit link */}
+        <div className="border-t border-gray-200 pt-5 flex items-center justify-end gap-2">
           <Link href={`/enterprise/decomposition/${plan.id}/edit`}>
-            <Button variant="outline" size="md" className="w-full sm:w-auto">
-              <Undo2 className="w-4 h-4" />
-              Request Revisions
-            </Button>
+            <button className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
+              <Undo2 className="w-3.5 h-3.5" /> Request Revisions
+            </button>
           </Link>
 
-          <div className="flex items-center gap-3">
-            {/* Reject button */}
-            <Dialog open={rejectionOpen} onOpenChange={setRejectionOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="md"
-                  className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
-                >
-                  <Ban className="w-4 h-4" />
-                  Reject with Reasons
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
-                      <Ban className="w-4 h-4 text-red-600" />
-                    </div>
-                    Request Changes
-                  </DialogTitle>
-                  <DialogDescription>
-                    Provide specific feedback for the decomposition team. The
-                    plan status will return to Draft.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[12px] font-semibold text-brown-800 mb-1.5 block">
-                      Rejection Reason
-                    </label>
-                    <Textarea
-                      placeholder="Provide specific feedback about what needs to change..."
-                      value={rejectionReason}
-                      onChange={(e) => setRejectionReason(e.target.value)}
-                      className="min-h-[140px]"
-                    />
-                    <p className="text-[10px] text-beige-400 mt-1.5">
-                      {rejectionReason.length}/500 characters
-                    </p>
-                  </div>
-
-                  {/* Quick reason chips */}
-                  <div>
-                    <p className="text-[11px] font-medium text-beige-500 mb-2">
-                      Quick suggestions
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        "Budget exceeds limits",
-                        "Timeline too aggressive",
-                        "Missing requirements",
-                        "Skill gaps unresolved",
-                        "Dependencies unclear",
-                      ].map((reason) => (
-                        <button
-                          key={reason}
-                          type="button"
-                          onClick={() =>
-                            setRejectionReason((prev) =>
-                              prev
-                                ? `${prev}\n- ${reason}`
-                                : `- ${reason}`
-                            )
-                          }
-                          className="text-[10px] px-2.5 py-1 rounded-lg bg-beige-100 text-beige-600 hover:bg-beige-200 hover:text-brown-700 transition-colors border border-beige-200/50"
-                        >
-                          {reason}
-                        </button>
-                      ))}
-                    </div>
+          <Dialog open={rejectionOpen} onOpenChange={setRejectionOpen}>
+            <button onClick={() => setRejectionOpen(true)}
+              className="flex items-center gap-1.5 text-[12px] font-medium px-4 py-2 rounded-xl border transition-all"
+              style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+              <Ban className="w-3.5 h-3.5" /> Reject
+            </button>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Request Changes</DialogTitle>
+                <DialogDescription>Provide specific feedback. The plan status will return to Draft.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[12px] font-semibold text-gray-800 mb-1.5 block">Rejection Reason</label>
+                  <Textarea placeholder="Provide specific feedback about what needs to change..." value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} className="min-h-[120px]" />
+                  <p className="text-[10px] text-gray-400 mt-1.5">{rejectionReason.length}/500 characters</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-gray-500 mb-2">Quick suggestions</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["Budget exceeds limits", "Timeline too aggressive", "Missing requirements", "Skill gaps unresolved", "Dependencies unclear"].map((reason) => (
+                      <button key={reason} type="button"
+                        onClick={() => setRejectionReason((prev) => prev ? `${prev}\n- ${reason}` : `- ${reason}`)}
+                        className="text-[10px] px-2.5 py-1 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-colors border border-gray-200">
+                        {reason}
+                      </button>
+                    ))}
                   </div>
                 </div>
+              </div>
+              <DialogFooter>
+                <button onClick={() => { setRejectionOpen(false); setRejectionReason(""); }}
+                  className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50">Cancel</button>
+                <button disabled={rejectionReason.trim().length === 0}
+                  onClick={() => { setSubmitted(true); setRejectionOpen(false); setRejectionReason(""); }}
+                  className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 px-4 py-2 rounded-xl disabled:opacity-50">
+                  <Send className="w-3.5 h-3.5" /> Submit
+                </button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setRejectionOpen(false);
-                      setRejectionReason("");
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    disabled={rejectionReason.trim().length === 0}
-                    onClick={() => {
-                      setSubmitted(true);
-                      setRejectionOpen(false);
-                      setRejectionReason("");
-                    }}
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    Submit Rejection
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            {/* Approve button */}
-            <Link
-              href="/enterprise/team"
-              className={cn(!canApprove && "pointer-events-none")}
-            >
-              <Button
-                variant="gradient-forest"
-                size="md"
-                disabled={!canApprove}
-                className={cn(
-                  "px-8 relative overflow-hidden",
-                  canApprove &&
-                    "shadow-lg shadow-forest-500/25 hover:shadow-xl hover:shadow-forest-500/30"
-                )}
-              >
-                {/* Pulse glow effect when ready */}
-                {canApprove && (
-                  <span className="absolute inset-0 rounded-xl animate-pulse bg-white/10 pointer-events-none" />
-                )}
-                <ShieldCheck className="w-4 h-4" />
-                Approve & Form Team
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-          </div>
+          <Link href="/enterprise/team" className={cn(!canApprove && "pointer-events-none")}>
+            <button disabled={!canApprove}
+              className={cn("flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2 rounded-xl transition-all disabled:opacity-50", canApprove && "shadow-md")}>
+              <ShieldCheck className="w-3.5 h-3.5" /> Approve & Form Team <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </Link>
         </div>
 
-        {/* Disabled approval helper text */}
-        <AnimatePresence>
-          {!canApprove && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              className="mt-3 flex items-center justify-end gap-2"
-            >
-              <Lock className="w-3 h-3 text-beige-400" />
-              <p className="text-[11px] text-beige-400">
-                {hasErrors
-                  ? "Resolve validation errors to unlock approval"
-                  : `Complete ${checklistKeys.length - checkedCount} remaining checklist item${checklistKeys.length - checkedCount > 1 ? "s" : ""} to unlock approval`}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {!canApprove && (
+          <div className="mt-3 flex items-center justify-end gap-1.5">
+            <Lock className="w-3 h-3 text-gray-400" />
+            <p className="text-[11px] text-gray-400">
+              {hasErrors ? "Resolve validation errors to unlock approval" : `Complete ${checklistKeys.length - checkedCount} remaining checklist item${checklistKeys.length - checkedCount > 1 ? "s" : ""} to unlock`}
+            </p>
+          </div>
+        )}
       </motion.div>
 
-      {/* ── Post-submit confirmation toast (simple inline) ── */}
+      {/* Post-submit toast */}
       <AnimatePresence>
         {submitted && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
-          >
-            <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-brown-900 text-white shadow-2xl shadow-brown-900/30">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+            <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-gray-900 text-white shadow-2xl">
               <CheckCircle2 className="w-4 h-4 text-gold-400" />
-              <span className="text-[13px] font-medium">
-                Plan rejected. Status returned to Draft.
-              </span>
-              <button
-                onClick={() => setSubmitted(false)}
-                className="text-[11px] text-beige-300 hover:text-white ml-2 transition-colors"
-              >
-                Dismiss
-              </button>
+              <span className="text-[13px] font-medium">Plan rejected. Status returned to Draft.</span>
+              <button onClick={() => setSubmitted(false)} className="text-[11px] text-gray-400 hover:text-white ml-2">Dismiss</button>
             </div>
           </motion.div>
         )}

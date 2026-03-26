@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glimmora — The Editorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --brown: #A67763;
+    --brown-dark: #8B5E4B;
+    --brown-light: #C49A86;
+    --teal: #5B9BA2;
+    --forest: #4D5741;
+    --gold: #D0B060;
+    --gold-muted: #C5A94F;
+    --bg: #FAF8F6;
+    --ink: #1A1A1A;
+    --ink-secondary: #555555;
+    --ink-tertiary: #888888;
+    --ink-quaternary: #AAAAAA;
+    --rule: #D5D0CB;
+    --rule-dark: #1A1A1A;
+    --serif: 'Playfair Display', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 240px;
+    height: 100vh;
+    background: var(--bg);
+    border-right: 1px solid var(--rule);
+    padding: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar-brand {
+    padding: 20px 28px 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .sidebar-brand h1 {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+  }
+
+  .sidebar-brand span {
+    display: block;
+    font-family: var(--sans);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: var(--ink-tertiary);
+    margin-top: 2px;
+  }
+
+  .sidebar-section {
+    padding: 20px 0 4px;
+  }
+
+  .sidebar-section-label {
+    font-family: var(--sans);
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--gold-muted);
+    padding: 0 28px;
+    margin-bottom: 8px;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 28px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--ink-secondary);
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.15s ease;
+    text-decoration: none;
+  }
+
+  .sidebar-item:hover {
+    color: var(--ink);
+    background: rgba(166,119,99,0.04);
+  }
+
+  .sidebar-item.active {
+    color: var(--brown);
+    font-weight: 500;
+    border-left-color: var(--brown);
+    background: transparent;
+  }
+
+  .sidebar-item svg {
+    width: 16px;
+    height: 16px;
+    opacity: 0.55;
+    flex-shrink: 0;
+  }
+
+  .sidebar-item.active svg {
+    opacity: 1;
+    color: var(--brown);
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px 28px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .sidebar-footer-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sidebar-footer-avatar {
+    width: 30px;
+    height: 30px;
+    background: var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--serif);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-secondary);
+  }
+
+  .sidebar-footer-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .sidebar-footer-role {
+    font-size: 10px;
+    color: var(--ink-tertiary);
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    position: fixed;
+    top: 0;
+    left: 240px;
+    right: 0;
+    height: 56px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+    z-index: 99;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  .topbar-date {
+    font-family: var(--sans);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--ink-tertiary);
+  }
+
+  .topbar-edition {
+    font-family: var(--serif);
+    font-size: 11px;
+    font-style: italic;
+    color: var(--ink-quaternary);
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .topbar-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--ink-tertiary);
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+
+  .topbar-icon:hover {
+    color: var(--ink);
+  }
+
+  .topbar-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border: 1px solid var(--rule);
+    font-size: 12px;
+    color: var(--ink-tertiary);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .topbar-search:hover {
+    border-color: var(--ink-quaternary);
+  }
+
+  .topbar-search kbd {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 1px 5px;
+    background: rgba(0,0,0,0.04);
+    border: 1px solid var(--rule);
+  }
+
+  /* ── MAIN CONTENT ── */
+  .main {
+    margin-left: 240px;
+    margin-top: 56px;
+    padding: 48px 48px 64px;
+    max-width: 1100px;
+  }
+
+  /* ── GREETING / MASTHEAD ── */
+  .masthead {
+    margin-bottom: 48px;
+  }
+
+  .masthead-greeting {
+    font-family: var(--sans);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: var(--ink-tertiary);
+    margin-bottom: 6px;
+  }
+
+  .masthead-headline {
+    font-family: var(--serif);
+    font-size: 96px;
+    font-weight: 700;
+    color: var(--brown);
+    line-height: 0.9;
+    letter-spacing: -3px;
+  }
+
+  .masthead-caption {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-style: italic;
+    color: var(--ink-secondary);
+    margin-top: 8px;
+  }
+
+  .masthead-sub {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-tertiary);
+    margin-top: 4px;
+  }
+
+  /* ── SECTION DIVIDER ── */
+  .section-rule {
+    position: relative;
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 40px 0;
+  }
+
+  .section-rule::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 5px;
+    height: 5px;
+    background: var(--gold);
+    border-radius: 50%;
+  }
+
+  /* ── KPI HERO AREA ── */
+  .kpi-hero-row {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+    margin-bottom: 0;
+  }
+
+  .kpi-hero-main {
+    flex: 0 0 58%;
+    padding-right: 40px;
+    border-right: 1px solid var(--rule);
+  }
+
+  .kpi-hero-number {
+    font-family: var(--serif);
+    font-size: 72px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+
+  .kpi-hero-label {
+    font-family: var(--serif);
+    font-size: 15px;
+    font-style: italic;
+    color: var(--ink-secondary);
+    margin-top: 4px;
+  }
+
+  .kpi-hero-detail {
+    font-family: var(--sans);
+    font-size: 11px;
+    color: var(--ink-tertiary);
+    margin-top: 2px;
+  }
+
+  .kpi-hero-stack {
+    flex: 1;
+    padding-left: 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 24px;
+  }
+
+  .kpi-hero-stack-item {}
+
+  .kpi-hero-stack-number {
+    font-family: var(--serif);
+    font-size: 36px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+
+  .kpi-hero-stack-label {
+    font-family: var(--sans);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--ink-tertiary);
+    margin-top: 2px;
+  }
+
+  /* ── SECONDARY KPI STRIP ── */
+  .kpi-strip {
+    display: flex;
+    align-items: stretch;
+  }
+
+  .kpi-strip-item {
+    flex: 1;
+    padding: 0 24px;
+    text-align: center;
+  }
+
+  .kpi-strip-item:not(:last-child) {
+    border-right: 1px solid var(--rule);
+  }
+
+  .kpi-strip-item:first-child {
+    padding-left: 0;
+    text-align: left;
+  }
+
+  .kpi-strip-item:last-child {
+    padding-right: 0;
+    text-align: right;
+  }
+
+  .kpi-strip-number {
+    font-family: var(--serif);
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  .kpi-strip-label {
+    font-family: var(--sans);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--ink-tertiary);
+    margin-top: 4px;
+  }
+
+  .kpi-strip-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--forest);
+    margin-top: 2px;
+  }
+
+  /* ── CHART AREA ── */
+  .chart-section {
+    margin-bottom: 0;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .section-meta {
+    font-family: var(--sans);
+    font-size: 11px;
+    color: var(--ink-tertiary);
+  }
+
+  .chart-placeholder {
+    width: 100%;
+    height: 220px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .chart-grid-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  .chart-grid-label {
+    position: absolute;
+    left: 0;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--ink-quaternary);
+    transform: translateY(-50%);
+  }
+
+  .chart-bar-group {
+    position: absolute;
+    bottom: 0;
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+  }
+
+  .chart-bar {
+    width: 20px;
+    background: var(--ink);
+    opacity: 0.12;
+    transition: opacity 0.2s;
+  }
+
+  .chart-bar.accent {
+    background: var(--brown);
+    opacity: 0.7;
+  }
+
+  .chart-bar:hover {
+    opacity: 0.9;
+  }
+
+  .chart-month-label {
+    position: absolute;
+    bottom: -20px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--ink-quaternary);
+    text-align: center;
+    width: 43px;
+  }
+
+  /* ── DATA TABLE ── */
+  .data-table-wrap {
+    margin-bottom: 0;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-top: 2px solid var(--rule-dark);
+  }
+
+  .data-table thead th {
+    font-family: var(--sans);
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--ink-tertiary);
+    padding: 12px 0;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .data-table thead th:last-child {
+    text-align: right;
+  }
+
+  .data-table tbody td {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr:hover {
+    background: rgba(166,119,99,0.02);
+  }
+
+  .table-project-name {
+    font-family: var(--serif);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .table-project-id {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-quaternary);
+    margin-top: 1px;
+  }
+
+  .table-mono {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-secondary);
+  }
+
+  .table-status {
+    display: inline-block;
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 10px;
+    border: 1px solid;
+  }
+
+  .table-status.active {
+    color: var(--forest);
+    border-color: var(--forest);
+  }
+
+  .table-status.review {
+    color: var(--gold-muted);
+    border-color: var(--gold-muted);
+  }
+
+  .table-status.draft {
+    color: var(--ink-tertiary);
+    border-color: var(--ink-quaternary);
+  }
+
+  .table-progress-bar {
+    width: 80px;
+    height: 3px;
+    background: var(--rule);
+    margin-left: auto;
+  }
+
+  .table-progress-fill {
+    height: 100%;
+    background: var(--ink);
+  }
+
+  .table-progress-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-tertiary);
+    text-align: right;
+    margin-top: 3px;
+  }
+
+  /* ── BOTTOM TRIPTYCH ── */
+  .triptych {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+  }
+
+  .triptych-panel {
+    padding: 0 28px;
+  }
+
+  .triptych-panel:first-child {
+    padding-left: 0;
+  }
+
+  .triptych-panel:last-child {
+    padding-right: 0;
+  }
+
+  .triptych-panel:not(:last-child) {
+    border-right: 1px solid var(--rule);
+  }
+
+  .triptych-title {
+    font-family: var(--serif);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 16px;
+  }
+
+  .triptych-big-number {
+    font-family: var(--serif);
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  .triptych-label {
+    font-family: var(--sans);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--ink-tertiary);
+    margin-top: 3px;
+    margin-bottom: 16px;
+  }
+
+  .triptych-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+
+  .triptych-row-label {
+    font-size: 12px;
+    color: var(--ink-secondary);
+  }
+
+  .triptych-row-value {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .triptych-row-value.green { color: var(--forest); }
+  .triptych-row-value.brown { color: var(--brown); }
+  .triptych-row-value.gold { color: var(--gold-muted); }
+
+  /* Pipeline bar */
+  .pipeline-bar {
+    display: flex;
+    height: 6px;
+    margin-top: 12px;
+    gap: 2px;
+  }
+
+  .pipeline-segment {
+    height: 100%;
+  }
+
+  .pipeline-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+  }
+
+  .pipeline-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: var(--ink-tertiary);
+  }
+
+  .pipeline-legend-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  /* Team list */
+  .team-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+  }
+
+  .team-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .team-name {
+    font-size: 12px;
+    color: var(--ink-secondary);
+    flex: 1;
+  }
+
+  .team-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-tertiary);
+  }
+
+  /* AI Governance */
+  .gov-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+
+  .gov-metric-label {
+    font-size: 12px;
+    color: var(--ink-secondary);
+  }
+
+  .gov-metric-value {
+    font-family: var(--serif);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .gov-metric-unit {
+    font-family: var(--sans);
+    font-size: 10px;
+    color: var(--ink-tertiary);
+    margin-left: 2px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══ -->
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <h1>Glimmora</h1>
+    <span>Enterprise</span>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Overview</div>
+    <a class="sidebar-item active" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/></svg>
+      Dashboard
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h8"/></svg>
+      SOW Pipeline
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13V6l5-3 5 3v7"/><path d="M6 13V9h4v4"/></svg>
+      Projects
+    </a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Governance</div>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>
+      Reviews
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v12M2 8h12"/></svg>
+      Escalations
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12l4-4 3 3 5-7"/></svg>
+      Analytics
+    </a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Workforce</div>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5"/></svg>
+      Teams
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h8v8H4z"/><path d="M6 4V2M10 4V2M6 12v2M10 12v2"/></svg>
+      AI Governor
+    </a>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-user">
+      <div class="sidebar-footer-avatar">PN</div>
+      <div>
+        <div class="sidebar-footer-name">Priya Nair</div>
+        <div class="sidebar-footer-role">Enterprise Lead</div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══ TOPBAR ═══ -->
+<header class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-date">Wednesday, March 19, 2026</span>
+    <span class="topbar-edition">Morning Edition</span>
+  </div>
+  <div class="topbar-right">
+    <div class="topbar-search">
+      <svg class="topbar-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/></svg>
+      Search&hellip;
+      <kbd>&thinsp;/&thinsp;</kbd>
+    </div>
+    <svg class="topbar-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2v12l4-3 4 3V2z"/></svg>
+    <svg class="topbar-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 10c0 3-4 4-4 4s-4-1-4-4V5a4 4 0 018 0z"/><path d="M6 14h4"/></svg>
+  </div>
+</header>
+
+<!-- ═══ MAIN ═══ -->
+<main class="main">
+
+  <!-- MASTHEAD -->
+  <section class="masthead">
+    <p class="masthead-greeting">Good morning, Priya</p>
+    <div class="masthead-headline">12</div>
+    <p class="masthead-caption">Active Statements of Work across your portfolio</p>
+    <p class="masthead-sub">4 projects in delivery &middot; 3 escalations require attention &middot; 5 reviews pending</p>
+  </section>
+
+  <hr class="section-rule">
+
+  <!-- KPI HERO -->
+  <section class="kpi-hero-row">
+    <div class="kpi-hero-main">
+      <div class="kpi-hero-number">$189k</div>
+      <div class="kpi-hero-label">Total budget committed this quarter</div>
+      <div class="kpi-hero-detail">67% utilization rate &middot; $126.6k deployed</div>
+    </div>
+    <div class="kpi-hero-stack">
+      <div class="kpi-hero-stack-item">
+        <div class="kpi-hero-stack-number">87%</div>
+        <div class="kpi-hero-stack-label">On-Time Delivery</div>
+      </div>
+      <div class="kpi-hero-stack-item">
+        <div class="kpi-hero-stack-number">4</div>
+        <div class="kpi-hero-stack-label">Active Projects</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="section-rule">
+
+  <!-- SECONDARY KPI STRIP -->
+  <section class="kpi-strip">
+    <div class="kpi-strip-item">
+      <div class="kpi-strip-number">12</div>
+      <div class="kpi-strip-label">SOWs Ingested</div>
+      <div class="kpi-strip-sub">+3 this week</div>
+    </div>
+    <div class="kpi-strip-item">
+      <div class="kpi-strip-number">3</div>
+      <div class="kpi-strip-label">Escalations</div>
+      <div class="kpi-strip-sub" style="color:var(--gold-muted);">Action needed</div>
+    </div>
+    <div class="kpi-strip-item">
+      <div class="kpi-strip-number">5</div>
+      <div class="kpi-strip-label">Pending Reviews</div>
+      <div class="kpi-strip-sub">2 high priority</div>
+    </div>
+  </section>
+
+  <hr class="section-rule">
+
+  <!-- CHART -->
+  <section class="chart-section">
+    <div class="section-header">
+      <span class="section-title">Delivery Performance</span>
+      <span class="section-meta">Last 6 months &middot; Tasks completed vs planned</span>
+    </div>
+    <div class="chart-placeholder">
+      <!-- Horizontal grid lines -->
+      <div class="chart-grid-line" style="top:0%"><span class="chart-grid-label" style="top:0">40</span></div>
+      <div class="chart-grid-line" style="top:25%"><span class="chart-grid-label" style="top:0">30</span></div>
+      <div class="chart-grid-line" style="top:50%"><span class="chart-grid-label" style="top:0">20</span></div>
+      <div class="chart-grid-line" style="top:75%"><span class="chart-grid-label" style="top:0">10</span></div>
+
+      <!-- Bar groups -->
+      <div class="chart-bar-group" style="left:50px;">
+        <div class="chart-bar" style="height:130px;"></div>
+        <div class="chart-bar accent" style="height:110px;"></div>
+        <span class="chart-month-label">Oct</span>
+      </div>
+      <div class="chart-bar-group" style="left:130px;">
+        <div class="chart-bar" style="height:155px;"></div>
+        <div class="chart-bar accent" style="height:140px;"></div>
+        <span class="chart-month-label">Nov</span>
+      </div>
+      <div class="chart-bar-group" style="left:210px;">
+        <div class="chart-bar" style="height:120px;"></div>
+        <div class="chart-bar accent" style="height:105px;"></div>
+        <span class="chart-month-label">Dec</span>
+      </div>
+      <div class="chart-bar-group" style="left:290px;">
+        <div class="chart-bar" style="height:170px;"></div>
+        <div class="chart-bar accent" style="height:160px;"></div>
+        <span class="chart-month-label">Jan</span>
+      </div>
+      <div class="chart-bar-group" style="left:370px;">
+        <div class="chart-bar" style="height:180px;"></div>
+        <div class="chart-bar accent" style="height:150px;"></div>
+        <span class="chart-month-label">Feb</span>
+      </div>
+      <div class="chart-bar-group" style="left:450px;">
+        <div class="chart-bar" style="height:190px;"></div>
+        <div class="chart-bar accent" style="height:185px;"></div>
+        <span class="chart-month-label">Mar</span>
+      </div>
+    </div>
+  </section>
+
+  <hr class="section-rule">
+
+  <!-- DATA TABLE -->
+  <section class="data-table-wrap">
+    <div class="section-header">
+      <span class="section-title">Project Register</span>
+      <span class="section-meta">4 active projects</span>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Project</th>
+          <th>Status</th>
+          <th>Budget</th>
+          <th>Timeline</th>
+          <th style="text-align:right">Progress</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div class="table-project-name">Cloud Migration Platform</div>
+            <div class="table-project-id">SOW-2026-001</div>
+          </td>
+          <td><span class="table-status active">Active</span></td>
+          <td class="table-mono">$48,200</td>
+          <td class="table-mono">Mar 1 &ndash; Jun 15</td>
+          <td>
+            <div class="table-progress-bar"><div class="table-progress-fill" style="width:72%"></div></div>
+            <div class="table-progress-label">72%</div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="table-project-name">API Gateway Redesign</div>
+            <div class="table-project-id">SOW-2026-003</div>
+          </td>
+          <td><span class="table-status active">Active</span></td>
+          <td class="table-mono">$35,800</td>
+          <td class="table-mono">Feb 15 &ndash; May 30</td>
+          <td>
+            <div class="table-progress-bar"><div class="table-progress-fill" style="width:58%"></div></div>
+            <div class="table-progress-label">58%</div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="table-project-name">Data Pipeline Modernization</div>
+            <div class="table-project-id">SOW-2026-007</div>
+          </td>
+          <td><span class="table-status review">Review</span></td>
+          <td class="table-mono">$62,400</td>
+          <td class="table-mono">Apr 1 &ndash; Aug 20</td>
+          <td>
+            <div class="table-progress-bar"><div class="table-progress-fill" style="width:25%"></div></div>
+            <div class="table-progress-label">25%</div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="table-project-name">Mobile SDK Integration</div>
+            <div class="table-project-id">SOW-2026-009</div>
+          </td>
+          <td><span class="table-status draft">Draft</span></td>
+          <td class="table-mono">$42,600</td>
+          <td class="table-mono">Apr 15 &ndash; Jul 10</td>
+          <td>
+            <div class="table-progress-bar"><div class="table-progress-fill" style="width:10%"></div></div>
+            <div class="table-progress-label">10%</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <hr class="section-rule">
+
+  <!-- BOTTOM TRIPTYCH -->
+  <section class="triptych">
+    <!-- SOW Pipeline -->
+    <div class="triptych-panel">
+      <div class="triptych-title">SOW Pipeline</div>
+      <div class="triptych-big-number">9</div>
+      <div class="triptych-label">Total in Pipeline</div>
+
+      <div class="pipeline-bar">
+        <div class="pipeline-segment" style="flex:3;background:var(--brown);"></div>
+        <div class="pipeline-segment" style="flex:2;background:var(--gold);"></div>
+        <div class="pipeline-segment" style="flex:4;background:var(--rule);"></div>
+      </div>
+      <div class="pipeline-legend">
+        <div class="pipeline-legend-item">
+          <div class="pipeline-legend-dot" style="background:var(--brown);"></div>
+          Draft (3)
+        </div>
+        <div class="pipeline-legend-item">
+          <div class="pipeline-legend-dot" style="background:var(--gold);"></div>
+          Review (2)
+        </div>
+        <div class="pipeline-legend-item">
+          <div class="pipeline-legend-dot" style="background:var(--rule);"></div>
+          Approved (4)
+        </div>
+      </div>
+    </div>
+
+    <!-- Teams -->
+    <div class="triptych-panel">
+      <div class="triptych-title">Workforce</div>
+      <div class="triptych-big-number">42</div>
+      <div class="triptych-label">People &middot; 5 Teams</div>
+
+      <div class="team-row">
+        <div class="team-dot" style="background:var(--brown);"></div>
+        <span class="team-name">Cloud Engineering</span>
+        <span class="team-count">12</span>
+      </div>
+      <div class="team-row">
+        <div class="team-dot" style="background:var(--teal);"></div>
+        <span class="team-name">API Platform</span>
+        <span class="team-count">9</span>
+      </div>
+      <div class="team-row">
+        <div class="team-dot" style="background:var(--forest);"></div>
+        <span class="team-name">Data Systems</span>
+        <span class="team-count">8</span>
+      </div>
+      <div class="team-row">
+        <div class="team-dot" style="background:var(--gold);"></div>
+        <span class="team-name">Mobile Dev</span>
+        <span class="team-count">7</span>
+      </div>
+      <div class="team-row">
+        <div class="team-dot" style="background:var(--ink-tertiary);"></div>
+        <span class="team-name">QA & Review</span>
+        <span class="team-count">6</span>
+      </div>
+    </div>
+
+    <!-- AI Governance -->
+    <div class="triptych-panel">
+      <div class="triptych-title">AI Governance</div>
+      <div class="triptych-big-number">82</div>
+      <div class="triptych-label">APG Score</div>
+
+      <div class="gov-metric">
+        <span class="gov-metric-label">On-Time Rate</span>
+        <span class="gov-metric-value">87<span class="gov-metric-unit">%</span></span>
+      </div>
+      <div class="gov-metric">
+        <span class="gov-metric-label">First-Pass Approval</span>
+        <span class="gov-metric-value">92<span class="gov-metric-unit">%</span></span>
+      </div>
+      <div class="gov-metric">
+        <span class="gov-metric-label">Escalation Resolution</span>
+        <span class="gov-metric-value">4.2<span class="gov-metric-unit">hrs</span></span>
+      </div>
+      <div class="gov-metric">
+        <span class="gov-metric-label">Quality Threshold</span>
+        <span class="gov-metric-value">96<span class="gov-metric-unit">%</span></span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+</body>
+</html>

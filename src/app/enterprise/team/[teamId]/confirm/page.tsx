@@ -70,9 +70,9 @@ const trackConfig: Record<
   general: {
     label: "General",
     gradient: "from-beige-400 to-beige-500",
-    bg: "bg-beige-200",
-    text: "text-beige-700",
-    ring: "ring-beige-300",
+    bg: "bg-gray-200",
+    text: "text-gray-600",
+    ring: "ring-gray-300",
   },
 };
 
@@ -143,7 +143,7 @@ function AvatarStack({
         );
       })}
       {remaining > 0 && (
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold text-brown-600 ring-2 ring-white bg-beige-200">
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold text-brown-600 ring-2 ring-white bg-gray-200">
           +{remaining}
         </div>
       )}
@@ -159,7 +159,7 @@ function CompactMemberRow({ member }: { member: TeamMember }) {
   return (
     <motion.div
       variants={fadeUp}
-      className="flex items-center gap-3 rounded-xl border border-beige-200/50 bg-white/70 backdrop-blur-sm px-4 py-3 hover:bg-white/80 hover:shadow-sm transition-all duration-200"
+      className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 hover:bg-white hover:shadow-sm transition-all duration-200"
     >
       {/* Avatar */}
       <Avatar size="sm">
@@ -176,22 +176,22 @@ function CompactMemberRow({ member }: { member: TeamMember }) {
       {/* Name + anonymity */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <p className="text-[12px] font-semibold text-brown-900 truncate">
+          <p className="text-[12px] font-semibold text-gray-900 truncate">
             {member.displayName}
           </p>
-          <Fingerprint className="w-2.5 h-2.5 text-beige-400 shrink-0" />
+          <Fingerprint className="w-2.5 h-2.5 text-gray-400 shrink-0" />
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {member.skills.slice(0, 3).map((s) => (
             <span
               key={s}
-              className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-beige-100 text-beige-600"
+              className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500"
             >
               {s}
             </span>
           ))}
           {member.skills.length > 3 && (
-            <span className="text-[8px] text-beige-500">
+            <span className="text-[8px] text-gray-400">
               +{member.skills.length - 3}
             </span>
           )}
@@ -239,7 +239,7 @@ function ConfirmationSuccess({ team }: { team: TeamPool }) {
           stiffness: 200,
           damping: 15,
         }}
-        className="w-20 h-20 rounded-full bg-gradient-to-br from-forest-400 to-forest-600 mx-auto mb-6 flex items-center justify-center shadow-lg shadow-forest-500/25"
+        className="w-20 h-20 rounded-full bg-gradient-to-br from-forest-400 to-forest-600 mx-auto mb-6 flex items-center justify-center shadow-md"
       >
         <CircleCheck className="w-10 h-10 text-white" />
       </motion.div>
@@ -248,7 +248,7 @@ function ConfirmationSuccess({ team }: { team: TeamPool }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="text-[22px] font-bold text-brown-900 tracking-[-0.02em] mb-2"
+        className="text-[22px] font-bold text-gray-900 tracking-[-0.02em] mb-2"
       >
         Contributors Have Been Notified
       </motion.h2>
@@ -257,10 +257,10 @@ function ConfirmationSuccess({ team }: { team: TeamPool }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
-        className="text-[13px] text-beige-600 max-w-[420px] mx-auto mb-2"
+        className="text-[13px] text-gray-500 max-w-[420px] mx-auto mb-2"
       >
         {team.totalMembers} contributors across the{" "}
-        <span className="font-semibold text-brown-700">{team.name}</span> have
+        <span className="font-semibold text-gray-700">{team.name}</span> have
         been notified of their assignments. SLA response timers are now active.
       </motion.p>
 
@@ -268,7 +268,7 @@ function ConfirmationSuccess({ team }: { team: TeamPool }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
-        className="flex items-center justify-center gap-2 text-[11px] text-beige-500 mb-8"
+        className="flex items-center justify-center gap-2 text-[11px] text-gray-400 mb-8"
       >
         <Clock className="w-3.5 h-3.5" />
         <span>
@@ -281,9 +281,9 @@ function ConfirmationSuccess({ team }: { team: TeamPool }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.7 }}
-        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 mb-8 text-left"
+        className="card-parchment p-5 mb-8 text-left"
       >
-        <h4 className="text-[12px] font-bold text-brown-900 mb-3 flex items-center gap-2">
+        <h4 className="text-[12px] font-bold text-gray-900 mb-3 flex items-center gap-2">
           <Sparkles className="w-3.5 h-3.5 text-gold-500" />
           What Happens Next
         </h4>
@@ -300,7 +300,7 @@ function ConfirmationSuccess({ team }: { team: TeamPool }) {
                   {i + 1}
                 </span>
               </div>
-              <p className="text-[11px] text-brown-700 leading-relaxed">
+              <p className="text-[11px] text-gray-700 leading-relaxed">
                 {item}
               </p>
             </div>
@@ -349,7 +349,7 @@ function AlreadyConfirmedState({ team }: { team: TeamPool }) {
           "w-16 h-16 rounded-full mx-auto mb-5 flex items-center justify-center",
           isActive
             ? "bg-forest-100 text-forest-600"
-            : "bg-beige-200 text-beige-500"
+            : "bg-gray-200 text-gray-400"
         )}
       >
         {isActive ? (
@@ -361,14 +361,14 @@ function AlreadyConfirmedState({ team }: { team: TeamPool }) {
 
       <motion.h2
         variants={fadeUp}
-        className="text-[20px] font-bold text-brown-900 tracking-[-0.02em] mb-2"
+        className="text-[20px] font-bold text-gray-900 tracking-[-0.02em] mb-2"
       >
         {isActive ? "Team Already Confirmed" : "Team Has Been Disbanded"}
       </motion.h2>
 
       <motion.p
         variants={fadeUp}
-        className="text-[13px] text-beige-600 max-w-[400px] mx-auto mb-6"
+        className="text-[13px] text-gray-500 max-w-[400px] mx-auto mb-6"
       >
         {isActive
           ? `The ${team.name} is already active and contributors have been notified. You can view the project or manage the team.`
@@ -407,13 +407,13 @@ function NotFoundState() {
       transition={{ duration: 0.4 }}
       className="max-w-[480px] mx-auto text-center py-20"
     >
-      <div className="w-14 h-14 rounded-full bg-beige-200 text-beige-500 mx-auto mb-5 flex items-center justify-center">
+      <div className="w-14 h-14 rounded-full bg-gray-200 text-gray-400 mx-auto mb-5 flex items-center justify-center">
         <Users className="w-7 h-7" />
       </div>
-      <h2 className="text-[18px] font-bold text-brown-900 mb-2">
+      <h2 className="text-[18px] font-bold text-gray-900 mb-2">
         Team Not Found
       </h2>
-      <p className="text-[13px] text-beige-500 mb-6">
+      <p className="text-[13px] text-gray-400 mb-6">
         The team you are looking for does not exist or has been removed.
       </p>
       <Link href="/enterprise/team">
@@ -501,40 +501,32 @@ export default function ConfirmTeamPage() {
       animate="show"
       className="max-w-[920px] mx-auto space-y-6"
     >
-      {/* ── Back link ── */}
-      <motion.div variants={fadeUp}>
-        <Link
-          href={`/enterprise/team/${team.id}`}
-          className="inline-flex items-center gap-1.5 text-[12px] text-beige-500 hover:text-brown-600 transition-colors mb-3"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          {team.name}
-        </Link>
-      </motion.div>
-
       {/* ── Header ── */}
-      <motion.div variants={fadeUp}>
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brown-500 to-brown-600 flex items-center justify-center shrink-0 shadow-md shadow-brown-500/20">
-            <Send className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-[22px] font-bold text-brown-900 tracking-[-0.02em]">
+      <motion.div variants={fadeUp} className="mb-2">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              <span className="inline-flex items-center gap-1.5 text-[9px] font-medium tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-gold-50 text-gold-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />
+                Confirmation
+              </span>
+            </div>
+            <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight leading-tight">
               Confirm Team Formation
             </h1>
-            <p className="text-[12px] text-beige-500 mt-0.5">
+            <p className="text-[12px] text-gray-400 mt-2">
               Review the team composition and confirm to notify all contributors.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 mt-3 ml-14">
-          <span className="text-[11px] font-semibold text-brown-700">
+          <span className="text-[11px] font-semibold text-gray-700">
             {team.name}
           </span>
           {plan && (
             <>
-              <span className="text-[10px] text-beige-400">/</span>
-              <span className="text-[11px] text-beige-500">{plan.title}</span>
+              <span className="text-[10px] text-gray-400">/</span>
+              <span className="text-[11px] text-gray-400">{plan.title}</span>
             </>
           )}
         </div>
@@ -543,23 +535,23 @@ export default function ConfirmTeamPage() {
       {/* ── Summary cards row ── */}
       <motion.div variants={fadeUp} className="grid grid-cols-3 gap-4">
         {/* Members */}
-        <div className="rounded-xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5">
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="w-9 h-9 rounded-lg bg-brown-100 text-brown-600 flex items-center justify-center">
               <Users className="w-4 h-4" />
             </div>
             <AvatarStack members={team.members} max={4} />
           </div>
-          <p className="text-[24px] font-bold text-brown-900 tracking-tight">
+          <p className="text-[24px] font-bold text-gray-900 tracking-tight">
             {team.totalMembers}
           </p>
-          <p className="text-[10px] text-beige-500 font-medium mt-0.5">
+          <p className="text-[10px] text-gray-400 font-medium mt-0.5">
             Team Members
           </p>
         </div>
 
         {/* Match score */}
-        <div className="rounded-xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 flex flex-col items-center justify-center">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 flex flex-col items-center justify-center">
           <MetricRing
             value={team.matchScore}
             size={68}
@@ -582,18 +574,18 @@ export default function ConfirmTeamPage() {
         </div>
 
         {/* Skill coverage */}
-        <div className="rounded-xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5">
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
           <div className="w-9 h-9 rounded-lg bg-teal-100 text-teal-600 flex items-center justify-center mb-3">
             <Target className="w-4 h-4" />
           </div>
-          <p className="text-[24px] font-bold text-brown-900 tracking-tight">
+          <p className="text-[24px] font-bold text-gray-900 tracking-tight">
             {coverageCount}
-            <span className="text-[14px] text-beige-400 font-medium">
+            <span className="text-[14px] text-gray-400 font-medium">
               {" "}
               / {totalRequired}
             </span>
           </p>
-          <p className="text-[10px] text-beige-500 font-medium mt-0.5">
+          <p className="text-[10px] text-gray-400 font-medium mt-0.5">
             Required Skills Covered
           </p>
           <Progress
@@ -609,10 +601,10 @@ export default function ConfirmTeamPage() {
       {plan && (
         <motion.div
           variants={fadeUp}
-          className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6"
+          className="card-parchment p-6"
         >
-          <h3 className="text-[14px] font-bold text-brown-900 mb-4 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-beige-400" />
+          <h3 className="text-[14px] font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-gray-400" />
             Cost & Timeline Overview
           </h3>
 
@@ -621,11 +613,11 @@ export default function ConfirmTeamPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
                 <DollarSign className="w-3 h-3 text-forest-500" />
-                <span className="text-[10px] text-beige-500 font-medium">
+                <span className="text-[10px] text-gray-400 font-medium">
                   Est. Cost
                 </span>
               </div>
-              <p className="text-[15px] font-bold text-brown-900">
+              <p className="text-[15px] font-bold text-gray-900">
                 {formatCurrency(plan.estimatedCost)}
               </p>
             </div>
@@ -634,11 +626,11 @@ export default function ConfirmTeamPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
                 <CalendarClock className="w-3 h-3 text-teal-500" />
-                <span className="text-[10px] text-beige-500 font-medium">
+                <span className="text-[10px] text-gray-400 font-medium">
                   Est. Hours
                 </span>
               </div>
-              <p className="text-[15px] font-bold text-brown-900">
+              <p className="text-[15px] font-bold text-gray-900">
                 {formatHours(plan.estimatedHours)}
               </p>
             </div>
@@ -647,11 +639,11 @@ export default function ConfirmTeamPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
                 <Layers className="w-3 h-3 text-gold-500" />
-                <span className="text-[10px] text-beige-500 font-medium">
+                <span className="text-[10px] text-gray-400 font-medium">
                   Milestones
                 </span>
               </div>
-              <p className="text-[15px] font-bold text-brown-900">
+              <p className="text-[15px] font-bold text-gray-900">
                 {plan.totalMilestones}
               </p>
             </div>
@@ -660,11 +652,11 @@ export default function ConfirmTeamPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
                 <ListChecks className="w-3 h-3 text-brown-500" />
-                <span className="text-[10px] text-beige-500 font-medium">
+                <span className="text-[10px] text-gray-400 font-medium">
                   Tasks
                 </span>
               </div>
-              <p className="text-[15px] font-bold text-brown-900">
+              <p className="text-[15px] font-bold text-gray-900">
                 {plan.totalTasks}
               </p>
             </div>
@@ -673,7 +665,7 @@ export default function ConfirmTeamPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
                 <BrainCircuit className="w-3 h-3 text-brown-400" />
-                <span className="text-[10px] text-beige-500 font-medium">
+                <span className="text-[10px] text-gray-400 font-medium">
                   Complexity
                 </span>
               </div>
@@ -688,7 +680,7 @@ export default function ConfirmTeamPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
                 <Sparkles className="w-3 h-3 text-gold-500" />
-                <span className="text-[10px] text-beige-500 font-medium">
+                <span className="text-[10px] text-gray-400 font-medium">
                   AI Confidence
                 </span>
               </div>
@@ -705,7 +697,7 @@ export default function ConfirmTeamPage() {
                   }
                   className="flex-1"
                 />
-                <span className="text-[11px] font-bold text-brown-800 tabular-nums">
+                <span className="text-[11px] font-bold text-gray-800 tabular-nums">
                   {plan.aiConfidence}%
                 </span>
               </div>
@@ -717,12 +709,12 @@ export default function ConfirmTeamPage() {
       {/* ── Compact team roster ── */}
       <motion.div
         variants={fadeUp}
-        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5"
+        className="card-parchment p-5"
       >
-        <h3 className="text-[14px] font-bold text-brown-900 mb-4 flex items-center gap-2">
-          <Users className="w-4 h-4 text-beige-400" />
+        <h3 className="text-[14px] font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <Users className="w-4 h-4 text-gray-400" />
           Team Roster
-          <span className="text-[11px] font-normal text-beige-500">
+          <span className="text-[11px] font-normal text-gray-400">
             (Anonymized)
           </span>
         </h3>
@@ -742,9 +734,9 @@ export default function ConfirmTeamPage() {
       {/* ── Skill coverage analysis ── */}
       <motion.div
         variants={fadeUp}
-        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5"
+        className="card-parchment p-5"
       >
-        <h3 className="text-[14px] font-bold text-brown-900 mb-4 flex items-center gap-2">
+        <h3 className="text-[14px] font-bold text-gray-900 mb-4 flex items-center gap-2">
           <Award className="w-4 h-4 text-gold-500" />
           Skill Coverage Analysis
         </h3>
@@ -761,18 +753,18 @@ export default function ConfirmTeamPage() {
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 border",
                   covered
                     ? "bg-forest-50/50 border-forest-200/50"
-                    : "bg-beige-50/50 border-beige-200 border-dashed"
+                    : "bg-gray-50/50 border-gray-200 border-dashed"
                 )}
               >
                 {covered ? (
                   <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" />
                 ) : (
-                  <XCircle className="w-4 h-4 text-beige-400 shrink-0" />
+                  <XCircle className="w-4 h-4 text-gray-400 shrink-0" />
                 )}
                 <span
                   className={cn(
                     "text-[12px] font-semibold min-w-[100px]",
-                    covered ? "text-forest-700" : "text-beige-500"
+                    covered ? "text-forest-700" : "text-gray-400"
                   )}
                 >
                   {skill}
@@ -788,7 +780,7 @@ export default function ConfirmTeamPage() {
                       </span>
                     ))
                   ) : (
-                    <span className="text-[10px] text-beige-400 italic">
+                    <span className="text-[10px] text-gray-400 italic">
                       No coverage
                     </span>
                   )}
@@ -816,12 +808,12 @@ export default function ConfirmTeamPage() {
       {/* ── Confirmation notes ── */}
       <motion.div
         variants={fadeUp}
-        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5"
+        className="card-parchment p-5"
       >
-        <h3 className="text-[14px] font-bold text-brown-900 mb-2">
+        <h3 className="text-[14px] font-bold text-gray-900 mb-2">
           Confirmation Notes
         </h3>
-        <p className="text-[12px] text-beige-500 mb-3">
+        <p className="text-[12px] text-gray-400 mb-3">
           Add notes for the team formation record. These will be included in the
           audit trail.
         </p>
@@ -872,8 +864,8 @@ export default function ConfirmTeamPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-xl bg-beige-50/80 border border-beige-200/50 p-4 my-2">
-            <h4 className="text-[11px] font-bold text-brown-900 mb-3 uppercase tracking-wider">
+          <div className="rounded-xl bg-gray-50/80 border border-gray-200 p-4 my-2">
+            <h4 className="text-[11px] font-bold text-gray-900 mb-3 uppercase tracking-wider">
               What will happen
             </h4>
             <div className="space-y-2.5">
@@ -899,17 +891,17 @@ export default function ConfirmTeamPage() {
                   <div className="w-6 h-6 rounded-md bg-brown-100 flex items-center justify-center shrink-0">
                     <item.icon className="w-3 h-3 text-brown-600" />
                   </div>
-                  <span className="text-[11px] text-brown-700">{item.text}</span>
+                  <span className="text-[11px] text-gray-700">{item.text}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Team summary in dialog */}
-          <div className="flex items-center justify-between rounded-lg bg-white/80 border border-beige-200/30 px-3 py-2.5 my-1">
+          <div className="flex items-center justify-between rounded-lg bg-white border border-gray-200/30 px-3 py-2.5 my-1">
             <div className="flex items-center gap-2">
               <AvatarStack members={team.members} max={3} />
-              <span className="text-[11px] font-semibold text-brown-800">
+              <span className="text-[11px] font-semibold text-gray-800">
                 {team.name}
               </span>
             </div>

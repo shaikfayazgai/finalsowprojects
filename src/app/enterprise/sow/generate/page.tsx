@@ -6,68 +6,52 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft,
-  ArrowRight,
-  Sparkles,
-  CheckCircle2,
-  Lightbulb,
-  Target,
-  Code2,
-  Link2,
-  Calendar,
-  DollarSign,
-  ShieldCheck,
-  Scale,
-  Gavel,
-  ClipboardCheck,
-  Plus,
-  X,
-  Zap,
-  SkipForward,
-  AlertTriangle,
-  Loader2,
-  Check,
-  Circle,
+  ArrowLeft, ArrowRight, Sparkles, CheckCircle2, FileText, Target, Code2,
+  Calendar, DollarSign, Users, ShieldCheck, Lock, AlertTriangle,
+  ClipboardCheck, Plus, X, Zap, Check, Loader2, SkipForward, Circle, Lightbulb,
+  Link2, Scale, Gavel,
 } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import {
-  Input,
-  Textarea,
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
+  Button, Input, Textarea, Label, Select, SelectTrigger, SelectContent,
+  SelectItem, SelectValue,
 } from "@/components/ui";
 
+/* ══════════════════════════════════════════ Steps ══════════════════════════════════════════ */
 
-/* ══════════════════════════════════════════
-   Step definitions (FSD 7.3)
-   ══════════════════════════════════════════ */
 const STEPS = [
-  { label: "Context & Discovery", icon: Lightbulb, short: "Context", mandatory: true, skippable: false },
-  { label: "Project & Scope", icon: Target, short: "Scope", mandatory: true, skippable: false },
-  { label: "Delivery & Technical", icon: Code2, short: "Delivery", mandatory: true, skippable: false },
-  { label: "Integrations & User Mgmt", icon: Link2, short: "Integrations", mandatory: false, skippable: true },
-  { label: "Timeline, Team & Testing", icon: Calendar, short: "Timeline", mandatory: false, skippable: true },
-  { label: "Budget & Risk", icon: DollarSign, short: "Budget", mandatory: true, skippable: false },
-  { label: "Quality Standards", icon: ShieldCheck, short: "Quality", mandatory: false, skippable: true },
-  { label: "Governance & Compliance", icon: Scale, short: "Governance", mandatory: true, skippable: false },
-  { label: "Commercial & Legal", icon: Gavel, short: "Commercial", mandatory: true, skippable: false },
-  { label: "Review & Generate", icon: ClipboardCheck, short: "Review", mandatory: true, skippable: false },
+  { label: "Project Overview",       icon: FileText,      short: "Overview",  skippable: false, mandatory: true  },
+  { label: "Scope Definition",       icon: Target,        short: "Scope",     skippable: false, mandatory: true  },
+  { label: "Technical Requirements", icon: Code2,         short: "Technical", skippable: false, mandatory: true  },
+  { label: "Integrations",           icon: Link2,         short: "Integrations", skippable: true, mandatory: false },
+  { label: "Timeline & Team",        icon: Calendar,      short: "Timeline",  skippable: true,  mandatory: false },
+  { label: "Budget & Risk",          icon: DollarSign,    short: "Budget",    skippable: false, mandatory: true  },
+  { label: "Quality Standards",      icon: ShieldCheck,   short: "Quality",   skippable: true,  mandatory: false },
+  { label: "Governance",             icon: Gavel,         short: "Governance",skippable: false, mandatory: true  },
+  { label: "Commercial & Legal",     icon: Scale,         short: "Commercial",skippable: false, mandatory: true  },
+  { label: "Review & Generate",      icon: ClipboardCheck,short: "Review",    skippable: false, mandatory: true  },
 ] as const;
 
+const HALLUCINATION_LAYERS = [
+  "Input Validation", "Template Locking", "Clause Library", "Completeness Checks",
+  "Confidence Scoring", "Pattern Matching", "Human Approval", "Audit Logging",
+];
 
-/* ══════════════════════════════════════════
-   Form data interface — ALL fields per FSD
-   ══════════════════════════════════════════ */
+const GENERATION_STAGES = [
+  "Applying template", "Anchoring to business context", "Generating clauses",
+  "Hallucination checks", "Risk scoring", "Finalising",
+];
+
+/* ══════════════════════════════════════════ Form data ══════════════════════════════════════════ */
+
 interface FormData {
-  /* Step 0 — Context & Discovery */
+  // Section 1: Strategic Context & Vision
   projectVision: string;
   businessObjectives: string[];
   painPoints: string[];
-  strategicContext: string;
   businessCriticality: string;
+  strategicContext: string;
   currentState: string;
   currentStateType: string;
   desiredFutureState: string;
@@ -78,7 +62,8 @@ interface FormData {
   successMetrics: string[];
   enterpriseExpectations: string;
   definitionOfSuccess: string;
-  /* Step 1 — Project & Scope */
+
+  // Section 2: Project Identity & Scope
   title: string;
   client: string;
   industry: string;
@@ -95,7 +80,8 @@ interface FormData {
   constraints: string[];
   dataMigrationScope: string;
   dataMigrationDetails: string;
-  /* Step 2 — Delivery & Technical */
+
+  // Section 3: Delivery Scope & Technical Architecture
   developmentScope: string[];
   uiuxDesignScope: string;
   uiuxDesignDetails: string;
@@ -108,7 +94,6 @@ interface FormData {
   etlApproach: string;
   transformationComplexity: string;
   dataValidationMethod: string;
-  /* Step 3 — Integrations & User Mgmt */
   integrations: string[];
   ssoRequired: string;
   ssoDetails: string;
@@ -119,7 +104,8 @@ interface FormData {
   approvalWorkflows: string;
   notifications: string;
   scheduledJobs: string[];
-  /* Step 4 — Timeline, Team & Testing */
+
+  // Section 4: Timeline, Team & Budget
   startDate: string;
   endDate: string;
   phasingStrategy: string;
@@ -130,6 +116,8 @@ interface FormData {
   roles: string[];
   skillPriorities: string;
   knowledgeTransfer: string;
+
+  // Section 5: Quality Assurance & Testing
   sitScope: string;
   uatOwnership: string;
   uatDuration: string;
@@ -138,7 +126,8 @@ interface FormData {
   performanceTesting: string;
   securityTesting: string;
   defectSLA: string;
-  /* Step 5 — Budget & Risk */
+
+  // Section 6: Budget & Risk
   budgetMin: string;
   budgetMax: string;
   currency: string;
@@ -148,7 +137,8 @@ interface FormData {
   projectConstraints: string;
   contingencyBudget: string;
   escalationProcess: string;
-  /* Step 6 — Quality Standards */
+
+  // Section 7: Acceptance & SLA
   acceptanceCriteria: string;
   slaUptime: string;
   codeReviewPolicy: string;
@@ -158,7 +148,8 @@ interface FormData {
   reportingScope: string;
   offlineSupport: string;
   localisation: string;
-  /* Step 7 — Governance & Compliance */
+
+  // Section 8: Governance & Ethics
   nonDiscriminationConfirm: boolean;
   labourStandards: string;
   accessibilityRequirements: string;
@@ -172,7 +163,8 @@ interface FormData {
   regulatoryFrameworks: string[];
   dataResidency: string;
   accessControl: string;
-  /* Step 8 — Commercial & Legal */
+
+  // Section 9: Commercial & IP
   ipOwnership: string;
   sourceCodeOwnership: string;
   referenceRights: string;
@@ -183,7 +175,8 @@ interface FormData {
   changeRequestProcess: string;
   changeRequestApprover: string;
   environmentCosts: string;
-  /* Step 9 — Review & Generate */
+
+  // Section 10: Sign-off
   businessOwnerApprover: string;
   finalApprover: string;
   legalReviewer: string;
@@ -191,94 +184,153 @@ interface FormData {
 }
 
 const initialFormData: FormData = {
-  /* Step 0 */
-  projectVision: "", businessObjectives: [""], painPoints: [""], strategicContext: "",
-  businessCriticality: "", currentState: "", currentStateType: "", desiredFutureState: "",
-  previousAttempts: "", endUserProfiles: [""], languageRequirements: [],
-  userExpectations: [""], successMetrics: [""], enterpriseExpectations: "", definitionOfSuccess: "",
-  /* Step 1 */
-  title: "", client: "", industry: "", projectCategory: "", platformType: "",
-  existingTechLandscape: "", featureModules: ["", ""], userRoles: [""],
-  businessWorkflows: [""], estimatedScreenCount: "", criticalBusinessRules: [""],
-  outOfScope: [""], assumptions: [""], constraints: [""],
-  dataMigrationScope: "", dataMigrationDetails: "",
-  /* Step 2 */
-  developmentScope: [], uiuxDesignScope: "", uiuxDesignDetails: "",
-  deploymentScope: "", deploymentDetails: "", goLiveScope: "", goLiveDetails: "",
-  techStack: "", scalabilityRequirements: "", etlApproach: "", transformationComplexity: "",
+  // Section 1: Strategic Context & Vision
+  projectVision: "",
+  businessObjectives: [""],
+  painPoints: [""],
+  businessCriticality: "",
+  strategicContext: "",
+  currentState: "",
+  currentStateType: "",
+  desiredFutureState: "",
+  previousAttempts: "",
+  endUserProfiles: [""],
+  languageRequirements: [""],
+  userExpectations: [""],
+  successMetrics: [""],
+  enterpriseExpectations: "",
+  definitionOfSuccess: "",
+
+  // Section 2: Project Identity & Scope
+  title: "",
+  client: "",
+  industry: "",
+  projectCategory: "",
+  platformType: "",
+  existingTechLandscape: "",
+  featureModules: [""],
+  userRoles: [""],
+  businessWorkflows: [""],
+  estimatedScreenCount: "",
+  criticalBusinessRules: [""],
+  outOfScope: [""],
+  assumptions: [""],
+  constraints: [""],
+  dataMigrationScope: "",
+  dataMigrationDetails: "",
+
+  // Section 3: Delivery Scope & Technical Architecture
+  developmentScope: [""],
+  uiuxDesignScope: "",
+  uiuxDesignDetails: "",
+  deploymentScope: "",
+  deploymentDetails: "",
+  goLiveScope: "",
+  goLiveDetails: "",
+  techStack: "",
+  scalabilityRequirements: "",
+  etlApproach: "",
+  transformationComplexity: "",
   dataValidationMethod: "",
-  /* Step 3 */
-  integrations: [""], ssoRequired: "", ssoDetails: "", userRegistrationModel: "",
-  passwordPolicy: "", passwordPolicyDetails: "", auditLogging: "", approvalWorkflows: "",
-  notifications: "", scheduledJobs: [""],
-  /* Step 4 */
-  startDate: "", endDate: "", phasingStrategy: "", milestones: [""],
-  clientDependencies: [""], teamSize: "", workModel: "", roles: [""],
-  skillPriorities: "", knowledgeTransfer: "", sitScope: "", uatOwnership: "Client",
-  uatDuration: "", uatSignoffAuthority: "", preProductionTesting: "",
-  performanceTesting: "", securityTesting: "", defectSLA: "",
-  /* Step 5 */
-  budgetMin: "", budgetMax: "", currency: "USD", pricingModel: "",
-  breakdownPreference: "", knownRisks: [""], projectConstraints: "",
-  contingencyBudget: "", escalationProcess: "",
-  /* Step 6 */
-  acceptanceCriteria: "", slaUptime: "", codeReviewPolicy: "",
-  documentationRequirements: [], browserCompatibility: [], deviceCompatibility: [],
-  reportingScope: "", offlineSupport: "", localisation: "",
-  /* Step 7 */
-  nonDiscriminationConfirm: false, labourStandards: "", accessibilityRequirements: "",
-  prohibitedCategories: [], personalDataInvolved: "", privacyLaws: [], dpaRequired: "",
-  privacyImpactStatus: "", dataSensitivity: "", encryptionRequirements: "",
-  regulatoryFrameworks: [""], dataResidency: "", accessControl: "",
-  /* Step 8 */
-  ipOwnership: "", sourceCodeOwnership: "", referenceRights: "", openSourcePolicy: "",
-  thirdPartyCosts: "", warrantyPeriod: "", postWarrantySupport: "",
-  changeRequestProcess: "", changeRequestApprover: "", environmentCosts: "",
-  /* Step 9 */
-  businessOwnerApprover: "", finalApprover: "", legalReviewer: "", securityReviewer: "",
+  integrations: [""],
+  ssoRequired: "",
+  ssoDetails: "",
+  userRegistrationModel: "",
+  passwordPolicy: "",
+  passwordPolicyDetails: "",
+  auditLogging: "",
+  approvalWorkflows: "",
+  notifications: "",
+  scheduledJobs: [""],
+
+  // Section 4: Timeline, Team & Budget
+  startDate: "",
+  endDate: "",
+  phasingStrategy: "",
+  milestones: [""],
+  clientDependencies: [""],
+  teamSize: "",
+  workModel: "",
+  roles: [""],
+  skillPriorities: "",
+  knowledgeTransfer: "",
+
+  // Section 5: Quality Assurance & Testing
+  sitScope: "",
+  uatOwnership: "",
+  uatDuration: "",
+  uatSignoffAuthority: "",
+  preProductionTesting: "",
+  performanceTesting: "",
+  securityTesting: "",
+  defectSLA: "",
+
+  // Section 6: Budget & Risk
+  budgetMin: "",
+  budgetMax: "",
+  currency: "USD",
+  pricingModel: "",
+  breakdownPreference: "",
+  knownRisks: [""],
+  projectConstraints: "",
+  contingencyBudget: "",
+  escalationProcess: "",
+
+  // Section 7: Acceptance & SLA
+  acceptanceCriteria: "",
+  slaUptime: "",
+  codeReviewPolicy: "",
+  documentationRequirements: [""],
+  browserCompatibility: [""],
+  deviceCompatibility: [""],
+  reportingScope: "",
+  offlineSupport: "",
+  localisation: "",
+
+  // Section 8: Governance & Ethics
+  nonDiscriminationConfirm: false,
+  labourStandards: "",
+  accessibilityRequirements: "",
+  prohibitedCategories: [""],
+  personalDataInvolved: "",
+  privacyLaws: [""],
+  dpaRequired: "",
+  privacyImpactStatus: "",
+  dataSensitivity: "",
+  encryptionRequirements: "",
+  regulatoryFrameworks: [""],
+  dataResidency: "",
+  accessControl: "",
+
+  // Section 9: Commercial & IP
+  ipOwnership: "",
+  sourceCodeOwnership: "",
+  referenceRights: "",
+  openSourcePolicy: "",
+  thirdPartyCosts: "",
+  warrantyPeriod: "",
+  postWarrantySupport: "",
+  changeRequestProcess: "",
+  changeRequestApprover: "",
+  environmentCosts: "",
+
+  // Section 10: Sign-off
+  businessOwnerApprover: "",
+  finalApprover: "",
+  legalReviewer: "",
+  securityReviewer: "",
 };
 
+/* ══════════════════════════════════════════ Step transition ══════════════════════════════════════════ */
 
-/* ══════════════════════════════════════════
-   Step transition
-   ══════════════════════════════════════════ */
 const stepTransition = {
-  initial: { opacity: 0, x: 40, scale: 0.98 },
-  animate: { opacity: 1, x: 0, scale: 1, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] as const } },
-  exit: { opacity: 0, x: -40, scale: 0.98, transition: { duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] as const } },
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] as const } },
+  exit: { opacity: 0, y: -12, transition: { duration: 0.2 } },
 };
 
+/* ══════════════════════════════════════════ Date picker ══════════════════════════════════════════ */
 
-/* ══════════════════════════════════════════
-   Hallucination prevention layers
-   ══════════════════════════════════════════ */
-const HALLUCINATION_LAYERS = [
-  "Scope boundary verification",
-  "Budget-timeline feasibility",
-  "Regulatory compliance check",
-  "Technical stack validation",
-  "Risk-mitigation alignment",
-  "Role-deliverable mapping",
-  "SLA-quality gate coherence",
-  "IP & commercial term check",
-];
-
-
-/* ══════════════════════════════════════════
-   Generation overlay stages
-   ══════════════════════════════════════════ */
-const GENERATION_STAGES = [
-  "Validating Inputs",
-  "Compiling Parameters",
-  "AI Generation",
-  "Hallucination Prevention",
-  "Formatting Document",
-];
-
-
-/* ══════════════════════════════════════════
-   Custom date picker (no native widget)
-   ══════════════════════════════════════════ */
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
@@ -303,8 +355,7 @@ function DateInput({ value, onChange, placeholder }: { value: string; onChange: 
   React.useEffect(() => {
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (triggerRef.current?.contains(target)) return;
-      if (dropdownRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
       setOpen(false);
     };
     document.addEventListener('mousedown', handler);
@@ -314,8 +365,7 @@ function DateInput({ value, onChange, placeholder }: { value: string; onChange: 
   const formatDisplay = (v: string) => {
     if (!v) return '';
     const d = new Date(v + 'T00:00:00');
-    if (isNaN(d.getTime())) return v;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return isNaN(d.getTime()) ? v : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -323,97 +373,48 @@ function DateInput({ value, onChange, placeholder }: { value: string; onChange: 
   const days: (number | null)[] = Array(firstDayOfWeek).fill(null);
   for (let d = 1; d <= daysInMonth; d++) days.push(d);
 
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
-    else setViewMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
-    else setViewMonth(m => m + 1);
-  };
-  const selectDay = (day: number) => {
-    const mm = String(viewMonth + 1).padStart(2, '0');
-    const dd = String(day).padStart(2, '0');
-    onChange(`${viewYear}-${mm}-${dd}`);
-    setOpen(false);
-  };
-
-  const isSelected = (day: number) =>
-    parsed && parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth && parsed.getDate() === day;
-  const isToday = (day: number) =>
-    today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === day;
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
+  const selectDay = (day: number) => { onChange(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`); setOpen(false); };
+  const isSelected = (day: number) => parsed && parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth && parsed.getDate() === day;
+  const isToday = (day: number) => today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === day;
 
   return (
     <div className="relative w-full">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="flex h-10 w-full items-center rounded-lg border bg-white/80 px-3.5 py-2 pr-10 font-body text-sm transition-all duration-200 cursor-pointer text-left"
-        style={{ color: value ? 'var(--ink)' : 'var(--ink-faint)', borderColor: open ? 'rgba(166,119,99,0.35)' : 'var(--border-soft)', boxShadow: open ? '0 0 0 2px rgba(166,119,99,0.08)' : 'none' }}
-      >
+      <button ref={triggerRef} type="button" onClick={() => setOpen(o => !o)}
+        className={cn("flex h-10 w-full items-center rounded-xl border bg-white px-3.5 py-2 text-[13px] transition-all duration-200",
+          open ? "border-brown-300 ring-2 ring-brown-100" : "border-gray-200 hover:border-gray-300",
+          value ? "text-gray-900" : "text-gray-400"
+        )}>
         {formatDisplay(value) || placeholder || 'Select date'}
       </button>
-      <Calendar
-        className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
-        style={{ width: 15, height: 15, color: 'var(--ink-faint)' }}
-      />
+      <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
 
       {open && ReactDOM.createPortal(
-        <div
-          ref={dropdownRef}
-          className="fixed rounded-lg bg-white"
-          style={{
-            top: pos.top, left: pos.left,
-            zIndex: 9999,
-            width: 280, padding: 16,
-            border: '1px solid var(--border-soft)',
-            boxShadow: '0 8px 24px rgba(77,55,46,0.10), 0 2px 6px rgba(77,55,46,0.06)',
-          }}
-        >
-          {/* Month/year nav */}
-          <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
-            <button type="button" onClick={prevMonth} className="flex items-center justify-center rounded-md transition-colors" style={{ width: 28, height: 28, color: 'var(--ink-muted)' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(166,119,99,0.06)'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-              <ArrowLeft style={{ width: 14, height: 14 }} />
+        <div ref={dropdownRef} className="fixed rounded-xl bg-white border border-gray-200 p-4 z-[9999]"
+          style={{ top: pos.top, left: pos.left, width: 280, boxShadow: "0 8px 24px var(--border-hair), 0 2px 6px var(--border-hair)" }}>
+          <div className="flex items-center justify-between mb-3">
+            <button type="button" onClick={prevMonth} className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
+              <ArrowLeft className="w-3.5 h-3.5" />
             </button>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
-              {MONTH_NAMES[viewMonth]} {viewYear}
-            </span>
-            <button type="button" onClick={nextMonth} className="flex items-center justify-center rounded-md transition-colors" style={{ width: 28, height: 28, color: 'var(--ink-muted)' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(166,119,99,0.06)'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-              <ArrowRight style={{ width: 14, height: 14 }} />
+            <span className="text-[13px] font-semibold text-gray-900">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+            <button type="button" onClick={nextMonth} className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
-
-          {/* Day headers */}
-          <div className="grid grid-cols-7 gap-0" style={{ marginBottom: 4 }}>
-            {DAY_LABELS.map(d => (
-              <div key={d} className="flex items-center justify-center" style={{ height: 28, fontSize: 10, fontWeight: 600, color: 'var(--ink-faint)', letterSpacing: '0.03em' }}>
-                {d}
-              </div>
-            ))}
+          <div className="grid grid-cols-7 gap-0 mb-1">
+            {DAY_LABELS.map(d => <div key={d} className="flex items-center justify-center h-7 text-[10px] font-semibold text-gray-400">{d}</div>)}
           </div>
-
-          {/* Day grid */}
           <div className="grid grid-cols-7 gap-0">
             {days.map((day, i) => (
-              <div key={i} className="flex items-center justify-center" style={{ height: 32 }}>
+              <div key={i} className="flex items-center justify-center h-8">
                 {day && (
-                  <button
-                    type="button"
-                    onClick={() => selectDay(day)}
-                    className="flex items-center justify-center rounded-md transition-all duration-150"
-                    style={{
-                      width: 30, height: 30, fontSize: 12, fontWeight: isSelected(day) ? 600 : 400,
-                      background: isSelected(day) ? 'linear-gradient(135deg, #A67763, #886151)' : 'transparent',
-                      color: isSelected(day) ? '#FFFFFF' : isToday(day) ? '#A67763' : 'var(--ink)',
-                      border: isToday(day) && !isSelected(day) ? '1px solid rgba(166,119,99,0.30)' : '1px solid transparent',
-                      cursor: 'pointer',
-                    }}
-                    onMouseEnter={e => { if (!isSelected(day)) e.currentTarget.style.background = 'rgba(166,119,99,0.06)'; }}
-                    onMouseLeave={e => { if (!isSelected(day)) e.currentTarget.style.background = 'transparent'; }}
-                  >
+                  <button type="button" onClick={() => selectDay(day)}
+                    className={cn("w-7 h-7 rounded-md text-[12px] flex items-center justify-center transition-all",
+                      isSelected(day) ? "bg-gradient-to-r from-brown-400 to-brown-600 text-white font-semibold" :
+                      isToday(day) ? "border border-brown-300 text-brown-600 font-medium" :
+                      "text-gray-700 hover:bg-gray-50"
+                    )}>
                     {day}
                   </button>
                 )}
@@ -428,9 +429,9 @@ function DateInput({ value, onChange, placeholder }: { value: string; onChange: 
 }
 
 
+
 /* ════════════════════════════════════════════════════════════════
-   SHARED HELPERS — TipBox, ListField, SectionHeading, FieldLabel,
-                    RadioGroup, CheckboxGroup
+   SHARED HELPERS
    ════════════════════════════════════════════════════════════════ */
 
 interface StepListProps {
@@ -441,22 +442,20 @@ interface StepListProps {
   updateListItem: (key: keyof FormData, idx: number, value: string) => void;
 }
 
-const tipColors = {
-  teal:   { bg: 'rgba(91,155,162,0.06)', border: 'rgba(91,155,162,0.16)', icon: '#3A6368', text: '#2A6068' },
-  brown:  { bg: 'rgba(166,119,99,0.05)', border: 'rgba(166,119,99,0.14)', icon: '#A67763', text: 'var(--ink-mid)' },
-  gold:   { bg: 'rgba(208,176,96,0.06)', border: 'rgba(208,176,96,0.16)', icon: '#86713D', text: '#7A6030' },
-  forest: { bg: 'rgba(77,87,65,0.06)',    border: 'rgba(77,87,65,0.14)',    icon: '#4D5741', text: '#3F4735' },
+const tipVariants = {
+  teal: { bg: "bg-teal-50", text: "text-teal-700", icon: "text-teal-500" },
+  brown: { bg: "bg-brown-50", text: "text-brown-700", icon: "text-brown-500" },
+  gold: { bg: "bg-gold-50", text: "text-gold-700", icon: "text-gold-500" },
+  forest: { bg: "bg-forest-50", text: "text-forest-700", icon: "text-forest-500" },
 };
 
-function TipBox({ icon: Icon, color, title, children }: {
-  icon: React.ElementType; color: keyof typeof tipColors; title: string; children: React.ReactNode;
-}) {
-  const c = tipColors[color];
+function TipBox({ icon: Icon, variant, title, children }: { icon: React.ElementType; variant: keyof typeof tipVariants; title: string; children: React.ReactNode }) {
+  const v = tipVariants[variant];
   return (
-    <div className="rounded-xl" style={{ padding: 16, background: c.bg, border: `1px solid ${c.border}` }}>
+    <div className={cn("rounded-xl px-4 py-3.5", v.bg)}>
       <div className="flex items-start gap-2.5">
-        <Icon className="w-4 h-4 shrink-0 mt-0.5" style={{ color: c.icon }} />
-        <p style={{ fontSize: 12, color: c.text, lineHeight: 1.65 }}>
+        <Icon className={cn("w-4 h-4 shrink-0 mt-0.5", v.icon)} />
+        <p className={cn("text-[12px] leading-relaxed", v.text)}>
           <span className="font-semibold">{title}</span> {children}
         </p>
       </div>
@@ -464,7 +463,7 @@ function TipBox({ icon: Icon, color, title, children }: {
   );
 }
 
-function ListField({ label, items, fieldKey, placeholder, addListItem, removeListItem, updateListItem, addLabel = "Add", icon: Icon, prefix }: {
+function ListField({ label, items, fieldKey, placeholder, addListItem, removeListItem, updateListItem, addLabel = "Add", icon: Icon, numbered, prefix }: {
   label: string; items: string[]; fieldKey: keyof FormData; placeholder: string;
   addListItem: (key: keyof FormData) => void; removeListItem: (key: keyof FormData, idx: number) => void;
   updateListItem: (key: keyof FormData, idx: number, value: string) => void;
@@ -473,22 +472,22 @@ function ListField({ label, items, fieldKey, placeholder, addListItem, removeLis
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-mid)' }}>{label}</label>
-        <button onClick={() => addListItem(fieldKey)} className="inline-flex items-center gap-1 transition-colors" style={{ fontSize: 12, fontWeight: 600, color: '#3A6368' }}>
+        <label className="text-[13px] font-semibold text-gray-800">{label}</label>
+        <button onClick={() => addListItem(fieldKey)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors">
           <Plus className="w-3.5 h-3.5" /> {addLabel}
         </button>
       </div>
       <div className="space-y-2">
         {items.map((item, idx) => (
           <div key={idx} className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'rgba(166,119,99,0.06)' }}>
-              {Icon ? <Icon className="w-3 h-3" style={{ color: 'var(--ink-faint)' }} /> : (
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--ink-faint)' }}>{prefix ? `${prefix}${idx + 1}` : idx + 1}</span>
+            <div className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center shrink-0">
+              {Icon ? <Icon className="w-3 h-3 text-gray-400" /> : (
+                <span className="text-[10px] font-bold text-gray-400">{prefix ? `${prefix}${idx + 1}` : idx + 1}</span>
               )}
             </div>
-            <Input placeholder={placeholder} value={item} onChange={(e) => updateListItem(fieldKey, idx, e.target.value)} className="h-9 text-[13px]" />
+            <Input placeholder={placeholder} value={item} onChange={(e) => updateListItem(fieldKey, idx, e.target.value)} />
             {items.length > 1 && (
-              <button onClick={() => removeListItem(fieldKey, idx)} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0" style={{ color: 'var(--ink-faint)' }}>
+              <button onClick={() => removeListItem(fieldKey, idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all shrink-0">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -687,14 +686,17 @@ export default function SOWGenerateWizardPage() {
             && formData.deploymentScope.length > 0
             && formData.goLiveScope.length > 0
             && formData.techStack.trim().length >= 10;
-        case 3: return true;
-        case 4: return true;
+        case 3: // Integrations — skippable, complete if user has set at least one value
+          return formData.ssoRequired.length > 0 || formData.integrations.some(x => x.trim().length > 0);
+        case 4: // Timeline & Team — skippable, complete if dates are set
+          return formData.startDate.length > 0 && formData.endDate.length > 0 && formData.teamSize.length > 0;
         case 5:
           return parseFloat(formData.budgetMin) > 0
             && parseFloat(formData.budgetMax) >= parseFloat(formData.budgetMin)
             && formData.pricingModel.length > 0
             && formData.knownRisks.some(x => x.trim().length > 0);
-        case 6: return true;
+        case 6: // Quality — skippable, complete if at least acceptance criteria is set
+          return formData.acceptanceCriteria.trim().length > 0 || formData.sitScope.length > 0;
         case 7:
           return formData.nonDiscriminationConfirm === true
             && formData.dataSensitivity.length > 0
@@ -716,10 +718,9 @@ export default function SOWGenerateWizardPage() {
     [formData, aiConfidence]
   );
 
-  /* ── canAdvance: skippable steps always pass ── */
+  /* ── canAdvance: must complete current step before moving forward ── */
   const canAdvance = React.useCallback(
     (step: number): boolean => {
-      if (STEPS[step].skippable) return true;
       return isStepComplete(step);
     },
     [isStepComplete]
@@ -837,21 +838,24 @@ export default function SOWGenerateWizardPage() {
             const isActive = idx === currentStep;
             const isDone = isStepComplete(idx) && idx !== currentStep;
             const isSkipped = skippedSteps.has(idx) && !isDone;
+            const isReachable = idx <= currentStep || isStepComplete(idx - 1);
             const StepIcon = step.icon;
 
             return (
               <React.Fragment key={idx}>
+                {/* Step node — fixed width so connectors get the remaining space */}
                 <button
-                  onClick={() => setCurrentStep(idx)}
+                  onClick={() => { if (isReachable) setCurrentStep(idx); }}
+                  spellCheck={false}
                   className="flex flex-col items-center transition-all duration-200"
-                  style={{ flex: 1, minWidth: 0, cursor: 'pointer', gap: 6 }}
+                  style={{ width: 52, flexShrink: 0, cursor: isReachable ? 'pointer' : 'default', gap: 6, padding: 0 }}
                 >
                   {/* Dot */}
                   <div
                     className="flex items-center justify-center shrink-0 transition-all duration-300"
                     style={{
-                      width: isActive ? 32 : 24,
-                      height: isActive ? 32 : 24,
+                      width: isActive ? 32 : 26,
+                      height: isActive ? 32 : 26,
                       borderRadius: '50%',
                       background: isActive
                         ? 'linear-gradient(135deg, #A67763, #C4956E)'
@@ -867,7 +871,7 @@ export default function SOWGenerateWizardPage() {
                             ? 'rgba(77,87,65,0.25)'
                             : isSkipped
                               ? 'rgba(208,176,96,0.30)'
-                              : 'rgba(166,119,99,0.12)'
+                              : 'rgba(166,119,99,0.18)'
                       }`,
                       boxShadow: isActive ? '0 2px 10px rgba(166,119,99,0.25)' : 'none',
                     }}
@@ -892,21 +896,23 @@ export default function SOWGenerateWizardPage() {
                     letterSpacing: '0.01em',
                     lineHeight: 1.2,
                     textAlign: 'center',
+                    whiteSpace: 'nowrap',
                   }}>
                     {step.short}
                   </span>
                 </button>
-                {/* Connector line */}
+
+                {/* Connector line — flex:1 so it fills all remaining space */}
                 {idx < arr.length - 1 && (
-                  <div className="flex items-center shrink-0" style={{ height: isActive || idx + 1 === currentStep ? 32 : 24, paddingTop: 0 }}>
+                  <div style={{ flex: 1, paddingTop: 13, minWidth: 8 }}>
                     <div style={{
-                      width: '100%',
-                      minWidth: 8,
-                      height: 1.5,
-                      borderRadius: 1,
+                      height: 2,
+                      borderRadius: 2,
                       background: idx < currentStep
-                        ? 'rgba(166,119,99,0.28)'
-                        : 'rgba(166,119,99,0.08)',
+                        ? 'linear-gradient(90deg, rgba(166,119,99,0.55), rgba(166,119,99,0.30))'
+                        : idx === currentStep
+                          ? 'linear-gradient(90deg, rgba(166,119,99,0.30), rgba(166,119,99,0.10))'
+                          : 'rgba(166,119,99,0.12)',
                     }} />
                   </div>
                 )}
@@ -1386,7 +1392,7 @@ function Step0ContextDiscovery({ formData, updateField, addListItem, removeListI
         </div>
       </div>
 
-      <TipBox icon={Lightbulb} color="teal" title="Why this matters:">
+      <TipBox icon={Lightbulb} variant="teal" title="Why this matters:">
         Specifying strategic context and business criticality enables the AI to prioritize deliverables, calibrate timelines, and apply domain-specific compliance requirements.
       </TipBox>
     </div>
@@ -1524,7 +1530,7 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
         </div>
       )}
 
-      <TipBox icon={Sparkles} color="teal" title="Why this matters:">
+      <TipBox icon={Sparkles} variant="teal" title="Why this matters:">
         Specifying industry, platform type, and clear scope boundaries enables the AI to apply domain-specific templates and prevent scope creep.
       </TipBox>
     </div>
@@ -1678,7 +1684,7 @@ function Step2DeliveryTechnical({ formData, updateField }: StepListProps) {
         </>
       )}
 
-      <TipBox icon={Code2} color="brown" title="AI Hint:">
+      <TipBox icon={Code2} variant="brown" title="AI Hint:">
         Specifying your tech stack and deployment approach helps the AI generate accurate task breakdowns, skill requirements, and realistic effort estimates.
       </TipBox>
     </div>
@@ -1795,7 +1801,7 @@ function Step3IntegrationsUserMgmt({ formData, updateField, addListItem, removeL
         <ListField label="Scheduled Jobs" items={formData.scheduledJobs} fieldKey="scheduledJobs" placeholder="e.g., Daily report generation at 6am UTC" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Job" />
       )}
 
-      <TipBox icon={Link2} color="teal" title="Integration tip:">
+      <TipBox icon={Link2} variant="teal" title="Integration tip:">
         Even if you skip this step, the AI will still generate basic integration placeholders. Completing it produces more accurate API-level deliverables.
       </TipBox>
     </div>
@@ -2122,7 +2128,7 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
         </div>
       </div>
 
-      <TipBox icon={DollarSign} color="gold" title="Budget AI:">
+      <TipBox icon={DollarSign} variant="gold" title="Budget AI:">
         Providing a range instead of a fixed number allows the AI to optimize scope across high/medium/low priority deliverables and flag budget-risk items.
       </TipBox>
     </div>
@@ -2261,7 +2267,7 @@ function Step6QualityStandards({ formData, updateField }: { formData: FormData; 
         </div>
       </div>
 
-      <TipBox icon={ShieldCheck} color="forest" title="Quality Gates:">
+      <TipBox icon={ShieldCheck} variant="forest" title="Quality Gates:">
         These criteria will be embedded as automated quality gates in the APG, ensuring every deliverable meets your standards before acceptance.
       </TipBox>
     </div>
@@ -2491,7 +2497,7 @@ function Step7GovernanceCompliance({ formData, updateField, addListItem, removeL
         </Select>
       </div>
 
-      <TipBox icon={Scale} color="forest" title="Compliance:">
+      <TipBox icon={Scale} variant="forest" title="Compliance:">
         The non-discrimination confirmation is a hard gate. SOW generation cannot proceed without it. All governance fields are embedded as compliance clauses.
       </TipBox>
     </div>
@@ -2654,7 +2660,7 @@ function Step8CommercialLegal({ formData, updateField }: { formData: FormData; u
         />
       </div>
 
-      <TipBox icon={Gavel} color="brown" title="Legal note:">
+      <TipBox icon={Gavel} variant="brown" title="Legal note:">
         IP ownership and change request clauses are critical for contract enforceability. The AI will structure these as formal contract sections.
       </TipBox>
     </div>
