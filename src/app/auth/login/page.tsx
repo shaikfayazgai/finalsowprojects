@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import {
   Sparkles,
   ArrowRight,
@@ -36,8 +36,17 @@ function LoginPageContent() {
   const isOnboardingComplete = useAuthStore((s) => s.isOnboardingComplete);
 
   const callbackUrl = searchParams.get("callbackUrl") || undefined;
-  const enterpriseDest = isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding";
-  const redirectTo = callbackUrl || enterpriseDest;
+
+  const getRoleDest = useCallback(async () => {
+    if (callbackUrl) return callbackUrl;
+    const session = await getSession();
+    const role = (session?.user as { role?: string })?.role;
+    if (role === "contributor") return "/contributor/dashboard";
+    if (role === "mentor") return "/mentor/dashboard";
+    return isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding";
+  }, [callbackUrl, isOnboardingComplete]);
+
+  const redirectTo = callbackUrl || (isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding");
 
   const [step, setStep] = useState<Step>("credentials");
   const [email, setEmail] = useState("");
@@ -90,9 +99,10 @@ function LoginPageContent() {
     setError("");
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
+    const dest = await getRoleDest();
     setIsLoading(false);
-    router.push(redirectTo);
-  }, [router, redirectTo]);
+    router.push(dest);
+  }, [router, getRoleDest]);
 
   useEffect(() => {
     if (step === "mfa" && mfaCode.length === 6 && !isLoading) {
@@ -173,8 +183,9 @@ function LoginPageContent() {
     setError("");
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
+    const dest = await getRoleDest();
     setIsLoading(false);
-    router.push(redirectTo);
+    router.push(dest);
   };
 
   /* ── Google / Microsoft SSO via NextAuth ── */
@@ -456,14 +467,14 @@ function LoginPageContent() {
                 variant="primary"
                 size="lg"
                 className="w-full"
-                onClick={() => router.push(`/auth/mfa-setup?redirect=${redirectTo}`)}
+                onClick={async () => { const dest = await getRoleDest(); router.push(`/auth/mfa-setup?redirect=${dest}`); }}
               >
                 <Shield className="w-4 h-4" /> Set Up MFA Now
               </Button>
 
               <button
                 type="button"
-                onClick={() => router.push(redirectTo)}
+                onClick={async () => { const dest = await getRoleDest(); router.push(dest); }}
                 className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
               >
                 Skip for now
