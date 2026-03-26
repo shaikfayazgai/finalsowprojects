@@ -21,16 +21,16 @@ import {
 /* ══════════════════════════════════════════ Steps ══════════════════════════════════════════ */
 
 const STEPS = [
-  { label: "Project Overview", icon: FileText, short: "Overview", skippable: false, mandatory: true },
-  { label: "Scope Definition", icon: Target, short: "Scope", skippable: false, mandatory: true },
-  { label: "Technical Requirements", icon: Code2, short: "Technical", skippable: false, mandatory: true },
-  { label: "Timeline & Milestones", icon: Calendar, short: "Timeline", skippable: true, mandatory: false },
-  { label: "Budget Parameters", icon: DollarSign, short: "Budget", skippable: false, mandatory: true },
-  { label: "Team Requirements", icon: Users, short: "Team", skippable: true, mandatory: false },
-  { label: "Quality Standards", icon: ShieldCheck, short: "Quality", skippable: true, mandatory: false },
-  { label: "Security & Compliance", icon: Lock, short: "Security", skippable: false, mandatory: true },
-  { label: "Risk Parameters", icon: AlertTriangle, short: "Risk", skippable: true, mandatory: false },
-  { label: "Review & Generate", icon: ClipboardCheck, short: "Review", skippable: false, mandatory: true },
+  { label: "Project Overview",       icon: FileText,      short: "Overview",  skippable: false, mandatory: true  },
+  { label: "Scope Definition",       icon: Target,        short: "Scope",     skippable: false, mandatory: true  },
+  { label: "Technical Requirements", icon: Code2,         short: "Technical", skippable: false, mandatory: true  },
+  { label: "Integrations",           icon: Link2,         short: "Integrations", skippable: true, mandatory: false },
+  { label: "Timeline & Team",        icon: Calendar,      short: "Timeline",  skippable: true,  mandatory: false },
+  { label: "Budget & Risk",          icon: DollarSign,    short: "Budget",    skippable: false, mandatory: true  },
+  { label: "Quality Standards",      icon: ShieldCheck,   short: "Quality",   skippable: true,  mandatory: false },
+  { label: "Governance",             icon: Gavel,         short: "Governance",skippable: false, mandatory: true  },
+  { label: "Commercial & Legal",     icon: Scale,         short: "Commercial",skippable: false, mandatory: true  },
+  { label: "Review & Generate",      icon: ClipboardCheck,short: "Review",    skippable: false, mandatory: true  },
 ] as const;
 
 const HALLUCINATION_LAYERS = [
@@ -686,14 +686,17 @@ export default function SOWGenerateWizardPage() {
             && formData.deploymentScope.length > 0
             && formData.goLiveScope.length > 0
             && formData.techStack.trim().length >= 10;
-        case 3: return true;
-        case 4: return true;
+        case 3: // Integrations — skippable, complete if user has set at least one value
+          return formData.ssoRequired.length > 0 || formData.integrations.some(x => x.trim().length > 0);
+        case 4: // Timeline & Team — skippable, complete if dates are set
+          return formData.startDate.length > 0 && formData.endDate.length > 0 && formData.teamSize.length > 0;
         case 5:
           return parseFloat(formData.budgetMin) > 0
             && parseFloat(formData.budgetMax) >= parseFloat(formData.budgetMin)
             && formData.pricingModel.length > 0
             && formData.knownRisks.some(x => x.trim().length > 0);
-        case 6: return true;
+        case 6: // Quality — skippable, complete if at least acceptance criteria is set
+          return formData.acceptanceCriteria.trim().length > 0 || formData.sitScope.length > 0;
         case 7:
           return formData.nonDiscriminationConfirm === true
             && formData.dataSensitivity.length > 0
@@ -715,10 +718,9 @@ export default function SOWGenerateWizardPage() {
     [formData, aiConfidence]
   );
 
-  /* ── canAdvance: skippable steps always pass ── */
+  /* ── canAdvance: must complete current step before moving forward ── */
   const canAdvance = React.useCallback(
     (step: number): boolean => {
-      if (STEPS[step].skippable) return true;
       return isStepComplete(step);
     },
     [isStepComplete]
@@ -836,21 +838,24 @@ export default function SOWGenerateWizardPage() {
             const isActive = idx === currentStep;
             const isDone = isStepComplete(idx) && idx !== currentStep;
             const isSkipped = skippedSteps.has(idx) && !isDone;
+            const isReachable = idx <= currentStep || isStepComplete(idx - 1);
             const StepIcon = step.icon;
 
             return (
               <React.Fragment key={idx}>
+                {/* Step node — fixed width so connectors get the remaining space */}
                 <button
-                  onClick={() => setCurrentStep(idx)}
+                  onClick={() => { if (isReachable) setCurrentStep(idx); }}
+                  spellCheck={false}
                   className="flex flex-col items-center transition-all duration-200"
-                  style={{ flex: 1, minWidth: 0, cursor: 'pointer', gap: 6 }}
+                  style={{ width: 52, flexShrink: 0, cursor: isReachable ? 'pointer' : 'default', gap: 6, padding: 0 }}
                 >
                   {/* Dot */}
                   <div
                     className="flex items-center justify-center shrink-0 transition-all duration-300"
                     style={{
-                      width: isActive ? 32 : 24,
-                      height: isActive ? 32 : 24,
+                      width: isActive ? 32 : 26,
+                      height: isActive ? 32 : 26,
                       borderRadius: '50%',
                       background: isActive
                         ? 'linear-gradient(135deg, #A67763, #C4956E)'
@@ -866,7 +871,7 @@ export default function SOWGenerateWizardPage() {
                             ? 'rgba(77,87,65,0.25)'
                             : isSkipped
                               ? 'rgba(208,176,96,0.30)'
-                              : 'rgba(166,119,99,0.12)'
+                              : 'rgba(166,119,99,0.18)'
                       }`,
                       boxShadow: isActive ? '0 2px 10px rgba(166,119,99,0.25)' : 'none',
                     }}
@@ -891,21 +896,23 @@ export default function SOWGenerateWizardPage() {
                     letterSpacing: '0.01em',
                     lineHeight: 1.2,
                     textAlign: 'center',
+                    whiteSpace: 'nowrap',
                   }}>
                     {step.short}
                   </span>
                 </button>
-                {/* Connector line */}
+
+                {/* Connector line — flex:1 so it fills all remaining space */}
                 {idx < arr.length - 1 && (
-                  <div className="flex items-center shrink-0" style={{ height: isActive || idx + 1 === currentStep ? 32 : 24, paddingTop: 0 }}>
+                  <div style={{ flex: 1, paddingTop: 13, minWidth: 8 }}>
                     <div style={{
-                      width: '100%',
-                      minWidth: 8,
-                      height: 1.5,
-                      borderRadius: 1,
+                      height: 2,
+                      borderRadius: 2,
                       background: idx < currentStep
-                        ? 'rgba(166,119,99,0.28)'
-                        : 'rgba(166,119,99,0.08)',
+                        ? 'linear-gradient(90deg, rgba(166,119,99,0.55), rgba(166,119,99,0.30))'
+                        : idx === currentStep
+                          ? 'linear-gradient(90deg, rgba(166,119,99,0.30), rgba(166,119,99,0.10))'
+                          : 'rgba(166,119,99,0.12)',
                     }} />
                   </div>
                 )}
