@@ -10,6 +10,7 @@ import type {
   PlanVersion,
   TeamPool,
   TeamMember,
+  Assignment,
   Project,
   Milestone,
   Deliverable,
@@ -802,7 +803,8 @@ const makeMember = (
   track: TeamMember["track"],
   completed: number,
   rating: number,
-  avail: TeamMember["availability"] = "full_time"
+  avail: TeamMember["availability"] = "full_time",
+  whyMatched?: string
 ): TeamMember => ({
   id,
   anonymousId: `anon-${id}`,
@@ -814,48 +816,54 @@ const makeMember = (
   track,
   tasksCompleted: completed,
   rating,
+  whyMatched,
 });
 
 export const mockTeams: TeamPool[] = [
   {
     id: "team-001",
     planId: "plan-001",
+    projectId: "proj-001",
     name: "ERP Delivery Squad",
     status: "active",
     createdAt: "2026-02-18T10:00:00Z",
     matchScore: 92,
     totalMembers: 7,
     requiredSkills: ["Full-Stack", "Backend", "DevOps", "Finance", "QA", "Design"],
+    taskAssignments: { "task-001": "m-003", "task-002": "m-002", "task-003": "m-002", "task-004": "m-004", "task-005": "m-004", "task-006": "m-005", "task-007": "m-006", "task-008": "m-007", "task-009": "m-001", "task-010": "m-006" },
     members: [
-      makeMember("m-001", "Contributor A-7X", "A7", ["Full-Stack", "TypeScript", "React"], 95, "women", 34, 4.8),
-      makeMember("m-002", "Contributor B-3K", "B3", ["Backend", "NestJS", "PostgreSQL"], 93, "student", 28, 4.7),
-      makeMember("m-003", "Contributor C-9R", "C9", ["DevOps", "AWS", "Terraform"], 90, "general", 45, 4.9),
-      makeMember("m-004", "Contributor D-2M", "D2", ["Backend", "Finance", "API"], 88, "women", 22, 4.6),
-      makeMember("m-005", "Contributor E-5L", "E5", ["Full-Stack", "HR", "React"], 91, "student", 19, 4.5),
-      makeMember("m-006", "Contributor F-8W", "F8", ["QA", "Playwright", "k6"], 87, "general", 31, 4.7),
-      makeMember("m-007", "Contributor G-1N", "G1", ["Design", "Figma", "CSS"], 94, "women", 26, 4.8, "part_time"),
+      makeMember("m-001", "Contributor A-7X", "A7", ["Full-Stack", "TypeScript", "React"], 95, "women", 34, 4.8, "full_time", "95% skills overlap on TypeScript + React. 34 completed deliveries with 4.8 avg rating. Full-time availability aligns with sprint cadence."),
+      makeMember("m-002", "Contributor B-3K", "B3", ["Backend", "NestJS", "PostgreSQL"], 93, "student", 28, 4.7, "full_time", "Strong NestJS + PostgreSQL match (93%). 28 past deliveries in backend domain. On-time delivery rate: 96%."),
+      makeMember("m-003", "Contributor C-9R", "C9", ["DevOps", "AWS", "Terraform"], 90, "general", 45, 4.9, "full_time", "Top-ranked DevOps contributor. 45 completed tasks with 4.9 rating. AWS + Terraform exact match for infrastructure requirements."),
+      makeMember("m-004", "Contributor D-2M", "D2", ["Backend", "Finance", "API"], 88, "women", 22, 4.6, "full_time", "Rare finance-domain backend skills. 88% match on API design. 22 deliveries in fintech projects specifically."),
+      makeMember("m-005", "Contributor E-5L", "E5", ["Full-Stack", "HR", "React"], 91, "student", 19, 4.5, "full_time", "Full-stack + HR module expertise. 91% skills match. Learning-track contributor with rapid skill growth trajectory."),
+      makeMember("m-006", "Contributor F-8W", "F8", ["QA", "Playwright", "k6"], 87, "general", 31, 4.7, "full_time", "QA specialist with Playwright + k6 automation. 87% match. 31 test-focused deliveries with zero escaped defects."),
+      makeMember("m-007", "Contributor G-1N", "G1", ["Design", "Figma", "CSS"], 94, "women", 26, 4.8, "part_time", "Design-system specialist. 94% match for UI/CSS tasks. Part-time but high-output: 26 accepted deliveries."),
     ],
   },
   {
     id: "team-002",
     planId: "plan-002",
+    projectId: "proj-002",
     name: "Mobile Banking Team",
-    status: "approved",
+    status: "ready",
     createdAt: "2026-02-24T09:00:00Z",
     matchScore: 89,
     totalMembers: 5,
     requiredSkills: ["Mobile", "React Native", "Backend", "Security", "UX"],
+    taskAssignments: { "task-mb-001": "m-008", "task-mb-002": "m-009", "task-mb-003": "m-010", "task-mb-004": "m-011", "task-mb-005": "m-012" },
     members: [
-      makeMember("m-008", "Contributor H-4P", "H4", ["Mobile", "React Native"], 92, "student", 15, 4.6),
-      makeMember("m-009", "Contributor I-6T", "I6", ["Backend", "Security", "Node.js"], 90, "women", 37, 4.8),
-      makeMember("m-010", "Contributor J-2Y", "J2", ["UX", "Figma", "Prototype"], 88, "general", 23, 4.5),
-      makeMember("m-011", "Contributor K-7Q", "K7", ["Mobile", "iOS", "Android"], 86, "student", 12, 4.4),
-      makeMember("m-012", "Contributor L-3V", "L3", ["QA", "Mobile Testing"], 85, "women", 29, 4.6),
+      makeMember("m-008", "Contributor H-4P", "H4", ["Mobile", "React Native"], 92, "student", 15, 4.6, "full_time", "React Native specialist with 92% skills overlap. 15 mobile-app deliveries. Fast learner — completed security module certification."),
+      makeMember("m-009", "Contributor I-6T", "I6", ["Backend", "Security", "Node.js"], 90, "women", 37, 4.8, "full_time", "Security-first backend engineer. PCI-DSS experience from 3 fintech projects. 90% match with 37 deliveries."),
+      makeMember("m-010", "Contributor J-2Y", "J2", ["UX", "Figma", "Prototype"], 88, "general", 23, 4.5, "full_time", "UX researcher + designer. 88% match. 23 deliveries including 5 mobile banking prototypes."),
+      makeMember("m-011", "Contributor K-7Q", "K7", ["Mobile", "iOS", "Android"], 86, "student", 12, 4.4, "full_time", "Cross-platform mobile dev. iOS + Android native experience. 86% skills match. Growing contributor with strong reviews."),
+      makeMember("m-012", "Contributor L-3V", "L3", ["QA", "Mobile Testing"], 85, "women", 29, 4.6, "full_time", "Mobile QA specialist. Appium + Detox experience. 85% match. 29 test deliveries with regression-zero record."),
     ],
   },
   {
     id: "team-003",
     planId: "plan-003",
+    projectId: "proj-003",
     name: "E-Commerce Migration Crew",
     status: "disbanded",
     createdAt: "2025-11-20T10:00:00Z",
@@ -863,11 +871,47 @@ export const mockTeams: TeamPool[] = [
     totalMembers: 9,
     requiredSkills: ["Full-Stack", "AWS", "Migration", "E-Commerce", "DevOps", "Data"],
     members: [
-      makeMember("m-013", "Contributor M-5Z", "M5", ["Full-Stack", "E-Commerce"], 96, "general", 52, 4.9),
-      makeMember("m-014", "Contributor N-8A", "N8", ["AWS", "Migration", "Data"], 94, "women", 41, 4.8),
-      makeMember("m-015", "Contributor O-1B", "O1", ["Backend", "Node.js", "GraphQL"], 91, "student", 33, 4.7),
+      makeMember("m-013", "Contributor M-5Z", "M5", ["Full-Stack", "E-Commerce"], 96, "general", 52, 4.9, "full_time", "Top 5% contributor. 96% match. Led 3 prior e-commerce migrations."),
+      makeMember("m-014", "Contributor N-8A", "N8", ["AWS", "Migration", "Data"], 94, "women", 41, 4.8, "full_time", "AWS migration specialist. 94% match. 41 deliveries in data pipeline domain."),
+      makeMember("m-015", "Contributor O-1B", "O1", ["Backend", "Node.js", "GraphQL"], 91, "student", 33, 4.7, "full_time", "GraphQL API expert. 91% match. Contributed to 2 prior migration projects."),
     ],
   },
+  {
+    id: "team-004",
+    planId: "plan-005",
+    name: "Healthcare Portal Team",
+    status: "forming",
+    createdAt: "2026-03-08T11:00:00Z",
+    matchScore: 86,
+    totalMembers: 5,
+    requiredSkills: ["React", "Backend", "HIPAA", "Data", "DevOps"],
+    taskAssignments: { "task-hp-001": "m-016", "task-hp-002": "m-017", "task-hp-003": "m-018", "task-hp-004": "m-019", "task-hp-005": "m-020" },
+    members: [
+      makeMember("m-016", "Contributor P-4R", "P4", ["React", "TypeScript", "A11y"], 91, "women", 27, 4.7, "full_time", "Accessibility-first frontend dev. 91% match. 27 deliveries including 4 healthcare UIs meeting WCAG AAA."),
+      makeMember("m-017", "Contributor Q-6N", "Q6", ["Backend", "HIPAA", "Node.js"], 89, "general", 38, 4.8, "full_time", "HIPAA-certified backend engineer. 89% match. 38 deliveries in healthcare/compliance domain."),
+      makeMember("m-018", "Contributor R-2W", "R2", ["Data", "PostgreSQL", "ETL"], 85, "student", 14, 4.5, "full_time", "Data pipeline engineer. 85% match. 14 deliveries. Completed healthcare data governance course."),
+      makeMember("m-019", "Contributor S-8J", "S8", ["DevOps", "Docker", "AWS"], 84, "women", 31, 4.6, "full_time", "Cloud infra specialist. 84% match. HIPAA-compliant AWS deployments in 2 prior projects."),
+      makeMember("m-020", "Contributor T-1F", "T1", ["QA", "Security Testing", "OWASP"], 82, "general", 20, 4.4, "part_time", "Security QA with OWASP expertise. 82% match. Part-time but consistent 4.4 rating across 20 deliveries."),
+    ],
+  },
+];
+
+/* ══════════════════════════════════════════════════════════════
+   ASSIGNMENTS — pending contributor responses with SLA timers
+   Dates are relative to "now" so SLA timers always show realistic values.
+   ══════════════════════════════════════════════════════════════ */
+const _now = Date.now();
+const _h = 3600000; // 1 hour in ms
+function _ago(hours: number): string { return new Date(_now - hours * _h).toISOString(); }
+function _ahead(hours: number): string { return new Date(_now + hours * _h).toISOString(); }
+
+export const mockAssignments: Assignment[] = [
+  { id: "asgn-001", teamId: "team-002", teamName: "Mobile Banking Team", memberId: "m-008", memberDisplayName: "Contributor H-4P", memberAvatar: "H4", taskId: "task-mb-001", taskTitle: "React Native App Shell", projectName: "Mobile Banking App Redesign", status: "pending_response", sentAt: _ago(44), respondBy: _ahead(28) },
+  { id: "asgn-002", teamId: "team-002", teamName: "Mobile Banking Team", memberId: "m-009", memberDisplayName: "Contributor I-6T", memberAvatar: "I6", taskId: "task-mb-002", taskTitle: "Payment Gateway Integration", projectName: "Mobile Banking App Redesign", status: "accepted", sentAt: _ago(44), respondBy: _ahead(28), respondedAt: _ago(19) },
+  { id: "asgn-003", teamId: "team-002", teamName: "Mobile Banking Team", memberId: "m-010", memberDisplayName: "Contributor J-2Y", memberAvatar: "J2", taskId: "task-mb-003", taskTitle: "UX Prototype & Usability Tests", projectName: "Mobile Banking App Redesign", status: "pending_response", sentAt: _ago(44), respondBy: _ahead(10) },
+  { id: "asgn-004", teamId: "team-004", teamName: "Healthcare Portal Team", memberId: "m-016", memberDisplayName: "Contributor P-4R", memberAvatar: "P4", taskId: "task-hp-001", taskTitle: "Patient Portal UI", projectName: "Healthcare Portal", status: "pending_response", sentAt: _ago(23), respondBy: _ahead(49) },
+  { id: "asgn-005", teamId: "team-004", teamName: "Healthcare Portal Team", memberId: "m-017", memberDisplayName: "Contributor Q-6N", memberAvatar: "Q6", taskId: "task-hp-002", taskTitle: "HIPAA-Compliant API Layer", projectName: "Healthcare Portal", status: "pending_response", sentAt: _ago(23), respondBy: _ahead(49) },
+  { id: "asgn-006", teamId: "team-002", teamName: "Mobile Banking Team", memberId: "m-011", memberDisplayName: "Contributor K-7Q", memberAvatar: "K7", taskId: "task-mb-004", taskTitle: "Biometric Auth Module", projectName: "Mobile Banking App Redesign", status: "declined", sentAt: _ago(44), respondBy: _ahead(28), respondedAt: _ago(14), declineReason: "Scheduling conflict with existing commitment through end of March. Available from April onwards." },
 ];
 
 /* ══════════════════════════════════════════════════════════════

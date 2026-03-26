@@ -5,166 +5,102 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  FileText,
-  Search,
-  Plus,
-  DollarSign,
-  Shield,
-  Upload,
-  Calendar,
-  Bot,
-  AlertTriangle,
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUp,
-  ArrowDown,
+  FileText, Search, Plus, DollarSign, Shield, Upload, Bot, AlertTriangle,
+  ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ClipboardCheck, Eye,
+  CheckCircle2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
-import {
-  Badge,
-  Input,
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-  Button,
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 
-/* ── Status badge config ── */
-const statusVariantMap: Record<string, "beige" | "forest" | "teal" | "gold" | "brown"> = {
-  draft: "beige",
-  parsing: "teal",
-  review: "teal",
-  approval: "gold",
-  approved: "forest",
-  rejected: "brown",
-  changes_requested: "gold",
-  archived: "beige",
+/* ══════════════════════════════════════════ Status config ══════════════════════════════════════════ */
+
+const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
+  draft:             { label: "Draft",        color: "var(--color-gray-600)",   bg: "var(--color-gray-100)",   icon: FileText },
+  parsing:           { label: "Parsing",      color: "var(--color-teal-700)",   bg: "var(--color-teal-50)",    icon: Bot },
+  review:            { label: "In Review",    color: "var(--color-teal-700)",   bg: "var(--color-teal-50)",    icon: Eye },
+  approval:          { label: "In Approval",  color: "var(--color-gold-700)",   bg: "var(--color-gold-50)",    icon: ClipboardCheck },
+  approved:          { label: "Approved",     color: "var(--color-forest-700)", bg: "var(--color-forest-50)",  icon: CheckCircle2 },
+  rejected:          { label: "Rejected",     color: "var(--danger)",           bg: "var(--danger-light)",     icon: AlertTriangle },
+  changes_requested: { label: "Changes Req.", color: "var(--color-gold-700)",   bg: "var(--color-gold-50)",    icon: AlertTriangle },
+  archived:          { label: "Archived",     color: "var(--color-gray-600)",   bg: "var(--color-gray-100)",   icon: FileText },
 };
 
-const statusLabel: Record<string, string> = {
-  draft: "Draft",
-  parsing: "Parsing",
-  review: "In Review",
-  approval: "In Approval",
-  approved: "Approved",
-  rejected: "Rejected",
-  changes_requested: "Changes Requested",
-  archived: "Archived",
+const sensitivityConfig: Record<string, { label: string; color: string; bg: string }> = {
+  public:       { label: "Public",       color: "var(--color-teal-700)",   bg: "var(--color-teal-50)" },
+  internal:     { label: "Internal",     color: "var(--color-gray-600)",   bg: "var(--color-gray-100)" },
+  confidential: { label: "Confidential", color: "var(--color-gold-700)",   bg: "var(--color-gold-50)" },
+  restricted:   { label: "Restricted",   color: "var(--danger)",           bg: "var(--danger-light)" },
 };
 
-/* ── Data sensitivity badge config ── */
-const sensitivityVariant: Record<string, "teal" | "beige" | "gold" | "brown"> = {
-  public: "teal",
-  internal: "beige",
-  confidential: "gold",
-  restricted: "brown",
-};
-
-const sensitivityLabel: Record<string, string> = {
-  public: "Public",
-  internal: "Internal",
-  confidential: "Confidential",
-  restricted: "Restricted",
-};
-
-/* ── Risk tier (B1 spec: Low 0-25, Medium 26-50, High 51-75, Critical 76-100) ── */
 function riskColor(score: number): string {
-  if (score <= 25) return "text-forest-600";
-  if (score <= 50) return "text-gold-600";
-  return "text-brown-700";
+  if (score <= 25) return "var(--color-forest-700)";
+  if (score <= 50) return "var(--color-gold-700)";
+  return "var(--danger)";
 }
-
+function riskBg(score: number): string {
+  if (score <= 25) return "var(--color-forest-50)";
+  if (score <= 50) return "var(--color-gold-50)";
+  return "var(--danger-light)";
+}
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-/* ── Sort types ── */
 type SortField = "title" | "client" | "intake" | "status" | "sensitivity" | "risk" | "version" | "modified";
 type SortDir = "asc" | "desc";
+
+const statusChips = [
+  { value: "all", label: "All", statuses: [] as string[] },
+  { value: "draft", label: "Draft", statuses: ["draft"] },
+  { value: "in_progress", label: "In Progress", statuses: ["parsing", "review", "approval", "changes_requested"] },
+  { value: "approved", label: "Approved", statuses: ["approved"] },
+  { value: "rejected", label: "Rejected", statuses: ["rejected"] },
+  { value: "archived", label: "Archived", statuses: ["archived"] },
+];
+
+/* ══════════════════════════════════════════ Pill helper ══════════════════════════════════════════ */
+
+function Pill({ bg, color, children, className }: { bg: string; color: string; children: React.ReactNode; className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 text-[9px] font-medium tracking-wide uppercase px-2.5 py-0.5 rounded-full ${className || ""}`}
+      style={{ background: bg, color }}>
+      {children}
+    </span>
+  );
+}
+
+/* ══════════════════════════════════════════ SOW REPOSITORY PAGE ══════════════════════════════════════════ */
 
 export default function SOWListPage() {
   const router = useRouter();
 
-  /* Filter state */
   const [statusFilter, setStatusFilter] = React.useState("all");
-  const [intakeFilter, setIntakeFilter] = React.useState("all");
-  const [riskFilter, setRiskFilter] = React.useState("all");
-  const [sensitivityFilter, setSensitivityFilter] = React.useState("all");
   const [dateFilter, setDateFilter] = React.useState("all");
   const [clientFilter, setClientFilter] = React.useState("all");
   const [search, setSearch] = React.useState("");
+  const [searchFocused, setSearchFocused] = React.useState(false);
 
-  /* Unique clients for filter dropdown */
-  const uniqueClients = React.useMemo(
-    () => [...new Set(mockSOWs.map((s) => s.client))].sort(),
-    []
-  );
+  const uniqueClients = React.useMemo(() => [...new Set(mockSOWs.map((s) => s.client))].sort(), []);
 
-  /* Sort state — default: last modified descending */
   const [sortField, setSortField] = React.useState<SortField>("modified");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
-
-  /* Pagination state */
   const [pageSize, setPageSize] = React.useState(10);
   const [currentPage, setCurrentPage] = React.useState(1);
 
   function handleSort(field: SortField) {
-    if (sortField === field) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortField(field);
-      setSortDir("desc");
-    }
+    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(field); setSortDir("desc"); }
   }
 
-  /* ── Filtered + sorted list ── */
   const filtered = React.useMemo(() => {
     let list = [...mockSOWs];
-
     if (statusFilter !== "all") {
-      list = list.filter((s) => s.status === statusFilter);
+      const chip = statusChips.find((c) => c.value === statusFilter);
+      if (chip) list = list.filter((s) => chip.statuses.includes(s.status));
     }
-
-    if (intakeFilter !== "all") {
-      list = list.filter((s) => s.intakeMode === intakeFilter);
-    }
-
-    if (riskFilter !== "all") {
-      list = list.filter((s) => {
-        const score = s.riskScore.overall;
-        switch (riskFilter) {
-          case "low": return score > 0 && score <= 25;
-          case "medium": return score > 25 && score <= 50;
-          case "high": return score > 50 && score <= 75;
-          case "critical": return score > 75;
-          default: return true;
-        }
-      });
-    }
-
-    if (sensitivityFilter !== "all") {
-      list = list.filter((s) => s.dataSensitivity === sensitivityFilter);
-    }
-
-    if (clientFilter !== "all") {
-      list = list.filter((s) => s.client === clientFilter);
-    }
-
+    if (clientFilter !== "all") list = list.filter((s) => s.client === clientFilter);
     if (dateFilter !== "all") {
       const now = new Date("2026-03-09T00:00:00Z");
       const cutoff = new Date(now);
@@ -175,23 +111,14 @@ export default function SOWListPage() {
       }
       list = list.filter((s) => new Date(s.updatedAt) >= cutoff);
     }
-
-    /* Search: title, client, SOW ID, stakeholder names, deliverables text (per B1 spec) */
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(
-        (s) =>
-          s.title.toLowerCase().includes(q) ||
-          s.client.toLowerCase().includes(q) ||
-          s.id.toLowerCase().includes(q) ||
-          s.stakeholders.some((st) => st.toLowerCase().includes(q)) ||
-          mockSOWSections
-            .filter((sec) => sec.sowId === s.id)
-            .some((sec) => sec.content.toLowerCase().includes(q))
+      list = list.filter((s) =>
+        s.title.toLowerCase().includes(q) || s.client.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) ||
+        s.stakeholders.some((st) => st.toLowerCase().includes(q)) ||
+        mockSOWSections.filter((sec) => sec.sowId === s.id).some((sec) => sec.content.toLowerCase().includes(q))
       );
     }
-
-    /* Sort */
     list.sort((a, b) => {
       let cmp = 0;
       switch (sortField) {
@@ -206,421 +133,281 @@ export default function SOWListPage() {
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
-
     return list;
-  }, [statusFilter, intakeFilter, riskFilter, sensitivityFilter, clientFilter, dateFilter, search, sortField, sortDir]);
+  }, [statusFilter, clientFilter, dateFilter, search, sortField, sortDir]);
 
-  /* Reset to page 1 when any filter changes */
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [statusFilter, intakeFilter, riskFilter, sensitivityFilter, clientFilter, dateFilter, search]);
+  React.useEffect(() => { setCurrentPage(1); }, [statusFilter, clientFilter, dateFilter, search]);
 
-  /* Pagination */
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const activeFilterCount = [statusFilter, dateFilter, clientFilter].filter((v) => v !== "all").length;
 
-  /* ── Summary stats ── */
+  function clearAllFilters() { setStatusFilter("all"); setDateFilter("all"); setClientFilter("all"); setSearch(""); }
+
   const totalSOWs = mockSOWs.length;
   const pendingCount = mockSOWs.filter((s) => ["approval", "review", "parsing"].includes(s.status)).length;
   const approvedCount = mockSOWs.filter((s) => s.status === "approved").length;
   const scoredSOWs = mockSOWs.filter((s) => s.riskScore.overall > 0);
-  const avgRisk = scoredSOWs.length > 0
-    ? Math.round(scoredSOWs.reduce((sum, s) => sum + s.riskScore.overall, 0) / scoredSOWs.length)
-    : 0;
+  const avgRisk = scoredSOWs.length > 0 ? Math.round(scoredSOWs.reduce((sum, s) => sum + s.riskScore.overall, 0) / scoredSOWs.length) : 0;
   const totalBudget = mockSOWs.reduce((sum, s) => sum + s.estimatedBudget, 0);
 
-  /* ── Sortable column header ── */
-  function SortHeader({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) {
-    const active = sortField === field;
-    return (
-      <TableHead
-        className={cn("cursor-pointer select-none group/sort hover:text-brown-700 transition-colors", className)}
-        onClick={() => handleSort(field)}
-      >
-        <div className="flex items-center gap-1">
-          <span>{children}</span>
-          <span className={cn("transition-opacity", active ? "opacity-100" : "opacity-0 group-hover/sort:opacity-40")}>
-            {active && sortDir === "asc" ? (
-              <ArrowUp className="w-3 h-3" />
-            ) : (
-              <ArrowDown className="w-3 h-3" />
-            )}
-          </span>
-        </div>
-      </TableHead>
-    );
-  }
+  const columns = [
+    { field: "title" as SortField, label: "Title", align: "left" },
+    { field: "client" as SortField, label: "Client", align: "left" },
+    { field: "intake" as SortField, label: "Intake", align: "left" },
+    { field: "status" as SortField, label: "Status", align: "left" },
+    { field: "sensitivity" as SortField, label: "Sensitivity", align: "left" },
+    { field: "risk" as SortField, label: "Risk", align: "center" },
+    { field: "version" as SortField, label: "Ver.", align: "center" },
+    { field: "modified" as SortField, label: "Modified", align: "left" },
+  ];
 
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      animate="show"
-      className="max-w-[1400px] mx-auto space-y-6"
-    >
-      {/* ── Page Header ── */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4"
-      >
-        <div>
-          <h1 className="text-2xl font-bold text-brown-900 tracking-tight font-heading">
-            SOW Repository
-          </h1>
-          <p className="text-sm text-beige-600 mt-1">
-            Manage all Statements of Work — upload, track, and approve across projects.
-          </p>
-        </div>
-        <Link href="/enterprise/sow/intake">
-          <Button variant="gradient-primary" size="md">
-            <Plus className="w-4 h-4" />
-            New SOW
-          </Button>
-        </Link>
-      </motion.div>
+    <motion.div variants={stagger} initial="hidden" animate="show">
 
-      {/* ── Summary Cards ── */}
-      <motion.div
-        variants={fadeUp}
-        className="grid grid-cols-2 md:grid-cols-5 gap-3"
-      >
-        {[
-          { label: "Total SOWs", value: totalSOWs.toString(), icon: FileText, accent: "text-brown-500", bg: "bg-brown-50" },
-          { label: "Pending Action", value: pendingCount.toString(), icon: AlertTriangle, accent: "text-gold-600", bg: "bg-gold-50" },
-          { label: "Approved", value: approvedCount.toString(), icon: Shield, accent: "text-forest-600", bg: "bg-forest-50" },
-          { label: "Avg Risk Score", value: avgRisk.toString(), icon: AlertTriangle, accent: avgRisk <= 25 ? "text-forest-600" : "text-gold-600", bg: avgRisk <= 25 ? "bg-forest-50" : "bg-gold-50" },
-          { label: "Total Budget", value: `$${(totalBudget / 1000).toFixed(0)}K`, icon: DollarSign, accent: "text-teal-600", bg: "bg-teal-50" },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-4 hover:shadow-md transition-all"
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center", stat.bg)}>
-                <stat.icon className={cn("w-3.5 h-3.5", stat.accent)} />
-              </div>
-              <span className="text-[11px] font-semibold text-beige-500 uppercase tracking-wider">
-                {stat.label}
-              </span>
-            </div>
-            <p className="text-2xl font-bold text-brown-900 tracking-tight">
-              {stat.value}
+      {/* ═══ HERO ═══ */}
+      <motion.div variants={fadeUp} className="mb-7">
+        <div className="flex items-end justify-between gap-6">
+          <div>
+            <h1 className="font-heading leading-tight text-gray-900" style={{ fontSize: "1.75rem", fontWeight: 600, letterSpacing: "-0.02em" }}>
+              SOW Repository
+            </h1>
+            <p className="mt-1.5 text-[13px] text-gray-500">
+              Manage all Statements of Work — upload, track, and approve across projects.
             </p>
           </div>
-        ))}
-      </motion.div>
-
-      {/* ── Filter Bar ── */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-wrap items-center gap-3"
-      >
-        {/* Status */}
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-9 text-sm w-full sm:w-[140px]">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="parsing">Parsing</SelectItem>
-            <SelectItem value="review">In Review</SelectItem>
-            <SelectItem value="approval">In Approval</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-            <SelectItem value="changes_requested">Changes Requested</SelectItem>
-            <SelectItem value="archived">Archived</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Intake Mode */}
-        <Select value={intakeFilter} onValueChange={setIntakeFilter}>
-          <SelectTrigger className="h-9 text-sm w-full sm:w-[152px]">
-            <SelectValue placeholder="All Intake Modes" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Intake Modes</SelectItem>
-            <SelectItem value="ai_generated">AI-Generated</SelectItem>
-            <SelectItem value="manual_upload">Manual Upload</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Risk Level */}
-        <Select value={riskFilter} onValueChange={setRiskFilter}>
-          <SelectTrigger className="h-9 text-sm w-full sm:w-[140px]">
-            <SelectValue placeholder="All Risk Levels" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Risk Levels</SelectItem>
-            <SelectItem value="low">Low (0–25)</SelectItem>
-            <SelectItem value="medium">Medium (26–50)</SelectItem>
-            <SelectItem value="high">High (51–75)</SelectItem>
-            <SelectItem value="critical">Critical (76–100)</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Data Sensitivity */}
-        <Select value={sensitivityFilter} onValueChange={setSensitivityFilter}>
-          <SelectTrigger className="h-9 text-sm w-full sm:w-[148px]">
-            <Shield className="w-3.5 h-3.5 mr-1 text-beige-400 shrink-0" />
-            <SelectValue placeholder="All Sensitivity" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Sensitivity</SelectItem>
-            <SelectItem value="public">Public</SelectItem>
-            <SelectItem value="internal">Internal</SelectItem>
-            <SelectItem value="confidential">Confidential</SelectItem>
-            <SelectItem value="restricted">Restricted</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Date Range */}
-        <Select value={dateFilter} onValueChange={setDateFilter}>
-          <SelectTrigger className="h-9 text-sm w-full sm:w-[138px]">
-            <Calendar className="w-3.5 h-3.5 mr-1 text-beige-400 shrink-0" />
-            <SelectValue placeholder="All Time" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Time</SelectItem>
-            <SelectItem value="7d">Last 7 Days</SelectItem>
-            <SelectItem value="30d">Last 30 Days</SelectItem>
-            <SelectItem value="90d">Last 90 Days</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Client / Stakeholder */}
-        <Select value={clientFilter} onValueChange={setClientFilter}>
-          <SelectTrigger className="h-9 text-sm w-full sm:w-[168px]">
-            <Building2 className="w-3.5 h-3.5 mr-1 text-beige-400 shrink-0" />
-            <SelectValue placeholder="All Clients" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Clients</SelectItem>
-            {uniqueClients.map((client) => (
-              <SelectItem key={client} value={client}>
-                {client}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* Search (covers title, client, SOW ID, stakeholders, deliverables per B1) */}
-        <div className="flex-1 min-w-[200px]">
-          <Input
-            icon={<Search className="w-4 h-4" />}
-            placeholder="Search title, client, ID, deliverables..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-9"
-          />
+          <Link href="/enterprise/sow/intake">
+            <button className="flex items-center gap-1.5 rounded-xl text-white text-xs font-medium px-4 py-2.5 shrink-0 transition-all hover:-translate-y-0.5 bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700"
+              style={{ boxShadow: "0 2px 8px color-mix(in srgb, var(--color-brown-500) 30%, transparent)" }}>
+              <Plus className="w-3 h-3" /> New SOW
+            </button>
+          </Link>
         </div>
       </motion.div>
 
-      {/* ── Zero-SOW empty state: "Create your first SOW" CTA ── */}
+      {/* ═══ KPI ROW ═══ */}
+      <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-7">
+        {[
+          { label: "Total SOWs", value: totalSOWs, icon: FileText, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
+          { label: "Pending Action", value: pendingCount, icon: AlertTriangle, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
+          { label: "Approved", value: approvedCount, icon: Shield, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
+          { label: "Avg Risk", value: avgRisk, icon: AlertTriangle, iconBg: "bg-gradient-to-br from-brown-500 to-brown-700" },
+          { label: "Total Budget", value: `$${(totalBudget / 1000).toFixed(0)}K`, icon: DollarSign, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
+        ].map((kpi) => {
+          const KpiIcon = kpi.icon;
+          return (
+            <motion.div key={kpi.label} variants={scaleIn} className="card-parchment flex items-center gap-5 px-5 py-5">
+              <div className={`w-12 h-12 rounded-2xl ${kpi.iconBg} flex items-center justify-center shrink-0`}>
+                <KpiIcon className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-medium text-gray-400">{kpi.label}</div>
+                <div className="num-display text-[28px] text-gray-900 leading-none mt-1">{kpi.value}</div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </motion.div>
+
+      {/* ═══ TABLE CARD ═══ */}
       {mockSOWs.length === 0 ? (
-        <motion.div
-          variants={fadeUp}
-          className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm"
-        >
-          <div className="flex flex-col items-center justify-center py-24 text-center px-6">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brown-100 to-beige-100 flex items-center justify-center mb-5">
-              <FileText className="w-8 h-8 text-brown-400" />
+        <motion.div variants={fadeUp} className="card-parchment">
+          <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center mb-4">
+              <FileText className="w-5 h-5 text-white" />
             </div>
-            <h2 className="text-lg font-bold text-brown-900 mb-2 font-heading">
-              Create your first SOW
-            </h2>
-            <p className="text-sm text-beige-600 max-w-sm mb-6">
-              Upload or generate a Statement of Work to kick off your first project.
-              Our AI will parse, analyze risk, and prepare it for approval.
-            </p>
+            <h2 className="text-[15px] font-semibold text-gray-800 mb-1.5">Create your first SOW</h2>
+            <p className="text-xs text-gray-500 max-w-[320px] mb-5">Upload or generate a Statement of Work to kick off your first project.</p>
             <Link href="/enterprise/sow/intake">
-              <Button variant="gradient-primary" size="md">
-                <Plus className="w-4 h-4" />
-                New SOW
-              </Button>
+              <button className="flex items-center gap-1.5 rounded-xl text-white text-xs font-medium px-4 py-2.5 bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 transition-all"
+                style={{ boxShadow: "0 2px 8px color-mix(in srgb, var(--color-brown-500) 30%, transparent)" }}>
+                <Plus className="w-3 h-3" /> New SOW
+              </button>
             </Link>
           </div>
         </motion.div>
       ) : (
-        <>
-          {/* ── SOW Table ── */}
-          <motion.div
-            variants={fadeUp}
-            className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-x-auto"
-          >
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <SortHeader field="title">Title</SortHeader>
-                  <SortHeader field="client">Client</SortHeader>
-                  <SortHeader field="intake">Intake</SortHeader>
-                  <SortHeader field="status">Status</SortHeader>
-                  <SortHeader field="sensitivity">Sensitivity</SortHeader>
-                  <SortHeader field="risk" className="text-center">Risk</SortHeader>
-                  <SortHeader field="version" className="text-center">Version</SortHeader>
-                  <SortHeader field="modified">Modified</SortHeader>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginated.map((sow) => (
-                  <motion.tr
-                    key={sow.id}
-                    variants={scaleIn}
-                    onClick={() => router.push(`/enterprise/sow/${sow.id}`)}
-                    className="border-b border-beige-100 transition-colors hover:bg-brown-50/50 cursor-pointer group"
-                  >
-                    {/* Title + SOW ID (spec: SOW ID column — combined with title for space efficiency) */}
-                    <TableCell className="max-w-[260px]">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brown-100 to-beige-100 flex items-center justify-center shrink-0">
-                          <FileText className="w-4 h-4 text-brown-500" />
+        <motion.div variants={fadeUp} className="card-parchment mb-5">
+
+          {/* Card header */}
+          <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+            <span className="text-sm font-semibold text-gray-800">All Statements of Work</span>
+          </div>
+
+          {/* Search + Filters */}
+          <div className="flex items-center justify-between gap-3 px-6 py-3" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+            {/* Search */}
+            <div className={cn("flex items-center gap-2 rounded-lg transition-all duration-200 shrink-0", searchFocused ? "w-64" : "w-[220px]")}
+              style={{
+                background: searchFocused ? "white" : "var(--color-gray-50)",
+                border: searchFocused ? "1px solid var(--color-brown-300)" : "1px solid var(--border-soft)",
+                padding: "7px 12px",
+                boxShadow: searchFocused ? "0 0 0 3px color-mix(in srgb, var(--color-brown-500) 8%, transparent)" : undefined,
+              }}
+            >
+              <Search className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+              <input type="text" placeholder="Search SOWs…" value={search} onChange={(e) => setSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)}
+                className="border-none outline-none bg-transparent w-full text-[12.5px] text-gray-700 placeholder:text-gray-400" />
+              {search ? (
+                <button onClick={() => setSearch("")} className="shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600"><X className="w-3 h-3" /></button>
+              ) : !searchFocused ? (
+                <kbd className="font-mono whitespace-nowrap shrink-0 text-[9px] text-gray-400 bg-gray-100 border border-gray-200 px-1.5 py-px rounded">⌘F</kbd>
+              ) : null}
+            </div>
+
+            {/* Filters */}
+            <div className="flex items-center gap-2">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-8 rounded-lg bg-white border border-gray-200 px-3 text-[12px] text-gray-600 hover:border-gray-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 110 }}><SelectValue placeholder="All Status" /></SelectTrigger>
+                <SelectContent>{statusChips.map((chip) => <SelectItem key={chip.value} value={chip.value}>{chip.label}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={clientFilter} onValueChange={setClientFilter}>
+                <SelectTrigger className="h-8 rounded-lg bg-white border border-gray-200 px-3 text-[12px] text-gray-600 hover:border-gray-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 120 }}><SelectValue placeholder="All Clients" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Clients</SelectItem>
+                  {uniqueClients.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger className="h-8 rounded-lg bg-white border border-gray-200 px-3 text-[12px] text-gray-600 hover:border-gray-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 100 }}><SelectValue placeholder="All Time" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="7d">Last 7 Days</SelectItem>
+                  <SelectItem value="30d">Last 30 Days</SelectItem>
+                  <SelectItem value="90d">Last 90 Days</SelectItem>
+                </SelectContent>
+              </Select>
+              {activeFilterCount > 0 && (
+                <button onClick={clearAllFilters} className="flex items-center gap-1.5 text-[11px] font-medium text-brown-500 px-2.5 py-1 rounded-lg hover:bg-brown-50 transition-all">
+                  <X className="w-3 h-3" /> Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border-hair)" }}>
+                  {columns.map((col) => {
+                    const active = sortField === col.field;
+                    return (
+                      <th key={col.field} onClick={() => handleSort(col.field)}
+                        className="cursor-pointer select-none transition-colors"
+                        style={{
+                          padding: "11px 16px", textAlign: col.align as "left" | "center",
+                          fontSize: 10, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase",
+                          color: active ? "var(--ink-mid)" : "var(--color-gray-400)",
+                          background: "color-mix(in srgb, var(--color-gray-100) 40%, white)",
+                        }}>
+                        <div className="flex items-center gap-1" style={{ justifyContent: col.align === "center" ? "center" : "flex-start" }}>
+                          <span>{col.label}</span>
+                          <span style={{ opacity: active ? 1 : 0, transition: "opacity 0.15s" }}>
+                            {active && sortDir === "asc" ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                          </span>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-semibold text-brown-900 truncate group-hover:text-brown-700 transition-colors">
-                            {sow.title}
-                          </p>
-                          <p className="text-[11px] text-beige-500 font-mono">
-                            {sow.id.toUpperCase()} · {sow.pages} pg
-                          </p>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map((sow) => {
+                  const sc = statusConfig[sow.status] || statusConfig.draft;
+                  const sens = sensitivityConfig[sow.dataSensitivity] || sensitivityConfig.internal;
+                  return (
+                    <tr key={sow.id} onClick={() => router.push(`/enterprise/sow/${sow.id}`)}
+                      className="group cursor-pointer transition-colors hover:bg-black/[0.02]"
+                      style={{ borderBottom: "1px solid var(--border-hair)" }}>
+                      <td style={{ padding: "13px 16px" }}>
+                        <div className="flex items-center gap-3">
+                          <sc.icon className={`w-4 h-4 shrink-0`} style={{ color: sc.color }} />
+                          <div>
+                            <div className="text-[13px] font-medium text-gray-800 truncate max-w-[240px]">{sow.title}</div>
+                            <div className="font-mono text-[10px] text-gray-400 mt-0.5">{sow.id.toUpperCase()} · {sow.pages} pg</div>
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-
-                    {/* Client */}
-                    <TableCell>
-                      <span className="text-[13px] text-brown-800">{sow.client}</span>
-                    </TableCell>
-
-                    {/* Intake Mode */}
-                    <TableCell>
-                      <Badge
-                        variant={sow.intakeMode === "ai_generated" ? "teal" : "beige"}
-                        size="sm"
-                      >
-                        {sow.intakeMode === "ai_generated" ? (
-                          <><Bot className="w-2.5 h-2.5" /> AI-Generated</>
-                        ) : (
-                          <><Upload className="w-2.5 h-2.5" /> Manual Upload</>
-                        )}
-                      </Badge>
-                    </TableCell>
-
-                    {/* Status */}
-                    <TableCell>
-                      <Badge variant={statusVariantMap[sow.status]} size="sm" dot>
-                        {statusLabel[sow.status]}
-                      </Badge>
-                    </TableCell>
-
-                    {/* Data Sensitivity */}
-                    <TableCell>
-                      <Badge variant={sensitivityVariant[sow.dataSensitivity]} size="sm">
-                        {sensitivityLabel[sow.dataSensitivity]}
-                      </Badge>
-                    </TableCell>
-
-                    {/* Risk Score */}
-                    <TableCell className="text-center">
-                      {sow.riskScore.overall > 0 ? (
-                        <div className="flex items-center justify-center gap-1.5">
-                          <span className={cn("text-[12px] font-mono font-bold", riskColor(sow.riskScore.overall))}>
+                      </td>
+                      <td className="text-[12.5px] text-gray-600" style={{ padding: "13px 16px" }}>{sow.client}</td>
+                      <td style={{ padding: "13px 16px" }}>
+                        <Pill bg={sow.intakeMode === "ai_generated" ? "var(--color-teal-50)" : "var(--color-gray-100)"} color={sow.intakeMode === "ai_generated" ? "var(--color-teal-700)" : "var(--color-gray-600)"}>
+                          {sow.intakeMode === "ai_generated" ? <><Bot className="w-2.5 h-2.5" /> AI</> : <><Upload className="w-2.5 h-2.5" /> Manual</>}
+                        </Pill>
+                      </td>
+                      <td style={{ padding: "13px 16px" }}>
+                        <Pill bg={sc.bg} color={sc.color}>{sc.label}</Pill>
+                      </td>
+                      <td style={{ padding: "13px 16px" }}>
+                        <Pill bg={sens.bg} color={sens.color}>{sens.label}</Pill>
+                      </td>
+                      <td style={{ padding: "13px 16px", textAlign: "center" }}>
+                        {sow.riskScore.overall > 0 ? (
+                          <span className="font-mono text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
+                            style={{ color: riskColor(sow.riskScore.overall), background: riskBg(sow.riskScore.overall) }}>
                             {sow.riskScore.overall}
                           </span>
-                          {sow.riskScore.overall > 25 && (
-                            <AlertTriangle className="w-3 h-3 text-gold-500" />
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-beige-400">—</span>
-                      )}
-                    </TableCell>
+                        ) : <span className="text-[11px] text-gray-300">—</span>}
+                      </td>
+                      <td style={{ padding: "13px 16px", textAlign: "center" }}>
+                        <span className="font-mono text-[12px] font-medium text-gray-600">v{sow.version}</span>
+                      </td>
+                      <td style={{ padding: "13px 16px" }}>
+                        <span className="text-[11.5px] text-gray-500">{formatDate(sow.updatedAt)}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
 
-                    {/* Version */}
-                    <TableCell className="text-center">
-                      <span className="text-[13px] font-mono font-semibold text-brown-700">
-                        v{sow.version}
-                      </span>
-                    </TableCell>
-
-                    {/* Last Modified */}
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3 h-3 text-beige-400" />
-                        <span className="text-[12px] text-beige-600">
-                          {formatDate(sow.updatedAt)}
-                        </span>
-                      </div>
-                    </TableCell>
-                  </motion.tr>
-                ))}
-              </TableBody>
-            </Table>
-
-            {/* Filter-no-results empty state */}
             {filtered.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-beige-100 flex items-center justify-center mb-4">
-                  <FileText className="w-7 h-7 text-beige-400" />
+              <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brown-300 to-brown-500 flex items-center justify-center mb-4">
+                  <Search className="w-5 h-5 text-white" />
                 </div>
-                <p className="text-sm font-semibold text-brown-800 mb-1">
-                  No SOWs match your filters
-                </p>
-                <p className="text-xs text-beige-500 max-w-xs">
-                  Try different keywords or clear filters to see all SOWs.
-                </p>
+                <p className="text-sm font-semibold text-gray-800 mb-1">No SOWs match your filters</p>
+                <p className="text-xs text-gray-500 max-w-[280px] mb-4">Try different keywords or clear filters to see all SOWs.</p>
+                <button onClick={clearAllFilters}
+                  className="flex items-center gap-1.5 rounded-xl text-xs font-medium text-brown-500 px-3.5 py-1.5 border border-brown-200 hover:bg-brown-50 transition-all">
+                  <X className="w-3 h-3" /> Clear all filters
+                </button>
               </div>
             )}
-          </motion.div>
+          </div>
 
-          {/* ── Pagination — only show controls when items exceed page size ── */}
-          <motion.div variants={fadeUp} className="flex items-center justify-between">
-            {filtered.length > pageSize ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="text-[12px] text-beige-500">Rows per page</span>
-                  <Select
-                    value={pageSize.toString()}
-                    onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}
-                  >
-                    <SelectTrigger className="h-8 text-xs w-[70px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="25">25</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[12px] text-beige-500">
-                    {`${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filtered.length)} of ${filtered.length}`}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage <= 1}
-                      className="w-8 h-8 rounded-lg border border-beige-200 flex items-center justify-center text-beige-500 hover:bg-beige-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage >= totalPages}
-                      className="w-8 h-8 rounded-lg border border-beige-200 flex items-center justify-center text-beige-500 hover:bg-beige-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p className="text-[12px] text-beige-500">
-                {filtered.length === 0 ? "No results" : `Showing ${filtered.length} SOW${filtered.length !== 1 ? "s" : ""}`}
-              </p>
-            )}
-          </motion.div>
-        </>
+          {/* Pagination — only when more than one page */}
+          {totalPages > 1 && <div className="flex items-center justify-between px-6 py-3" style={{ borderTop: "1px solid var(--border-hair)" }}>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-400">Rows per page</span>
+              <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                <SelectTrigger className="h-7 rounded-lg bg-white border border-gray-200 px-2.5 text-[11px] text-gray-600 hover:border-gray-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 52 }}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-[11px] text-gray-400">
+                {filtered.length > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filtered.length)} of ${filtered.length}` : "0 results"}
+              </span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage <= 1}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>}
+
+        </motion.div>
       )}
     </motion.div>
   );

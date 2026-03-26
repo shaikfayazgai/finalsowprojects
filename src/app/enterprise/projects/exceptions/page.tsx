@@ -17,8 +17,13 @@ import {
   CheckCircle2,
   ArrowLeft,
   FileText,
+  Search,
+  ArrowUpDown,
+  ArrowUpRight,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { toast } from "@/lib/stores/toast-store";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import {
   Badge,
@@ -227,33 +232,107 @@ function fmtDate(d: string) {
 /* ================================================================
    EXCEPTION MANAGEMENT PAGE
    ================================================================ */
+type SortKey = "type" | "project" | "task" | "severity" | "status" | "assignedTo" | "reportedDate";
+
+const severityOrder: Record<Severity, number> = { critical: 0, high: 1, warning: 2 };
+const statusOrder: Record<ExceptionStatus, number> = { open: 0, investigating: 1, resolved: 2 };
+
 export default function ExceptionsPage() {
   const [activeFilter, setActiveFilter] = React.useState("all");
   const [viewMode, setViewMode] = React.useState<"card" | "table">("table");
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [sortKey, setSortKey] = React.useState<SortKey>("reportedDate");
+  const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
+  const [exceptionStatuses, setExceptionStatuses] = React.useState<
+    Record<string, ExceptionStatus>
+  >({});
 
-  const filtered =
-    activeFilter === "all"
-      ? mockExceptions
-      : mockExceptions.filter((e) => e.type === activeFilter);
+  /* Helper: effective status respecting overrides */
+  const getStatus = (exc: ExceptionItem): ExceptionStatus =>
+    exceptionStatuses[exc.id] || exc.status;
 
-  /* Tab counts */
+  /* Action handlers */
+  const handleInvestigate = (exc: ExceptionItem) => {
+    setExceptionStatuses((prev) => ({ ...prev, [exc.id]: "investigating" }));
+    toast.info("Investigation started", `Now investigating: ${exc.taskName}`);
+  };
+
+  const handleResolve = (exc: ExceptionItem) => {
+    setExceptionStatuses((prev) => ({ ...prev, [exc.id]: "resolved" }));
+    toast.success("Exception resolved", `${exc.taskName} marked as resolved`);
+  };
+
+  const handleEscalate = (exc: ExceptionItem) => {
+    toast.info("Escalated", `${exc.taskName} escalated for governance review`);
+  };
+
+  /* Search-filtered base (before type filter) for accurate tab counts */
+  const searchFiltered = React.useMemo(() => {
+    if (!searchQuery.trim()) return mockExceptions;
+    const q = searchQuery.toLowerCase();
+    return mockExceptions.filter(
+      (e) =>
+        e.projectName.toLowerCase().includes(q) ||
+        e.taskName.toLowerCase().includes(q) ||
+        e.description.toLowerCase().includes(q) ||
+        e.assignedTo.toLowerCase().includes(q)
+    );
+  }, [searchQuery]);
+
+  /* Filter by type (search already applied in searchFiltered) */
+  const filtered = React.useMemo(() => {
+    return activeFilter === "all"
+      ? searchFiltered
+      : searchFiltered.filter((e) => e.type === activeFilter);
+  }, [activeFilter, searchFiltered]);
+
+  /* Sort */
+  const sorted = React.useMemo(() => {
+    const arr = [...filtered];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      switch (sortKey) {
+        case "type": return dir * a.type.localeCompare(b.type);
+        case "project": return dir * a.projectName.localeCompare(b.projectName);
+        case "task": return dir * a.taskName.localeCompare(b.taskName);
+        case "severity": return dir * (severityOrder[a.severity] - severityOrder[b.severity]);
+        case "status": return dir * (statusOrder[getStatus(a)] - statusOrder[getStatus(b)]);
+        case "assignedTo": return dir * a.assignedTo.localeCompare(b.assignedTo);
+        case "reportedDate": return dir * (new Date(a.reportedDate).getTime() - new Date(b.reportedDate).getTime());
+        default: return 0;
+      }
+    });
+    return arr;
+  }, [filtered, sortKey, sortDir, exceptionStatuses]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  /* Tab counts reflect search */
   const tabCounts: Record<string, number> = {
-    all: mockExceptions.length,
-    escalation: mockExceptions.filter((e) => e.type === "escalation").length,
-    sla_breach: mockExceptions.filter((e) => e.type === "sla_breach").length,
-    quality_issue: mockExceptions.filter((e) => e.type === "quality_issue")
-      .length,
-    overdue: mockExceptions.filter((e) => e.type === "overdue").length,
+    all: searchFiltered.length,
+    escalation: searchFiltered.filter((e) => e.type === "escalation").length,
+    sla_breach: searchFiltered.filter((e) => e.type === "sla_breach").length,
+    quality_issue: searchFiltered.filter((e) => e.type === "quality_issue").length,
+    overdue: searchFiltered.filter((e) => e.type === "overdue").length,
   };
 
   /* KPIs */
   const totalExceptions = mockExceptions.length;
-  const openCount = mockExceptions.filter((e) => e.status === "open").length;
+  const openCount = mockExceptions.filter(
+    (e) => getStatus(e) === "open"
+  ).length;
   const criticalCount = mockExceptions.filter(
     (e) => e.severity === "critical"
   ).length;
   const resolvedCount = mockExceptions.filter(
-    (e) => e.status === "resolved"
+    (e) => getStatus(e) === "resolved"
   ).length;
 
   return (
@@ -350,11 +429,22 @@ export default function ExceptionsPage() {
         ))}
       </motion.div>
 
-      {/* Filter Tabs */}
-      <motion.div
-        variants={fadeUp}
-        className="flex items-center gap-0 border-b border-beige-200/60"
-      >
+      {/* Search + Filter */}
+      <motion.div variants={fadeUp} className="space-y-0">
+        {/* Search bar */}
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-beige-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search exceptions by project, task, description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-10 rounded-xl bg-white/60 border border-beige-200/60 pl-10 pr-4 text-[13px] text-brown-800 placeholder:text-beige-400 transition-all focus:outline-none focus:ring-2 focus:ring-brown-200/40 focus:border-brown-200/60 focus:bg-white/80"
+          />
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-0 border-b border-beige-200/60">
         {filterTabs.map((tab) => (
           <button
             key={tab.key}
@@ -379,31 +469,71 @@ export default function ExceptionsPage() {
             </span>
           </button>
         ))}
+        </div>
       </motion.div>
 
+      {/* Empty State */}
+      {filtered.length === 0 && (
+        <motion.div
+          variants={fadeUp}
+          className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-12 flex flex-col items-center text-center"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-forest-50 flex items-center justify-center mb-4">
+            <Zap className="w-7 h-7 text-forest-400" />
+          </div>
+          <h3 className="text-[15px] font-bold text-brown-800">
+            {searchQuery.trim() ? "No exceptions found" : "No active exceptions"}
+          </h3>
+          <p className="text-[13px] text-beige-500 mt-1 max-w-sm">
+            {searchQuery.trim()
+              ? `No exceptions match "${searchQuery}". Try adjusting your search or filters.`
+              : "All projects on track. No escalations, breaches, or overdue tasks."}
+          </p>
+        </motion.div>
+      )}
+
       {/* Exceptions Table */}
+      {filtered.length > 0 && (
       <motion.div
         variants={fadeUp}
-        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden"
+        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-x-auto"
       >
-        <Table>
+        <Table className="min-w-[860px]">
           <TableHeader>
             <TableRow>
-              <TableHead>Type</TableHead>
-              <TableHead>Project</TableHead>
-              <TableHead>Task</TableHead>
-              <TableHead>Severity</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Assigned To</TableHead>
-              <TableHead>Reported</TableHead>
+              {([
+                ["type", "Type", ""],
+                ["project", "Project", ""],
+                ["task", "Task", ""],
+                ["severity", "Severity", ""],
+                ["status", "Status", ""],
+                ["assignedTo", "Assigned To", "hidden xl:table-cell"],
+                ["reportedDate", "Reported", "hidden xl:table-cell"],
+              ] as [SortKey, string, string][]).map(([key, label, responsive]) => (
+                <TableHead key={key} className={responsive}>
+                  <button
+                    onClick={() => toggleSort(key)}
+                    className="flex items-center gap-1 hover:text-brown-700 transition-colors group"
+                  >
+                    {label}
+                    <ArrowUpDown
+                      className={cn(
+                        "w-3 h-3 transition-colors",
+                        sortKey === key ? "text-brown-600" : "text-beige-300 group-hover:text-beige-500"
+                      )}
+                    />
+                  </button>
+                </TableHead>
+              ))}
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((exception) => {
+            {sorted.map((exception) => {
               const tc = typeConfig[exception.type];
               const sc = severityConfig[exception.severity];
-              const st = statusConfig[exception.status];
+              const effectiveStatus = getStatus(exception);
+              const st = statusConfig[effectiveStatus];
               const TypeIcon = tc.icon;
 
               return (
@@ -475,7 +605,7 @@ export default function ExceptionsPage() {
                   </TableCell>
 
                   {/* Assigned To */}
-                  <TableCell>
+                  <TableCell className="hidden xl:table-cell">
                     <span className="text-[11px] text-beige-600 flex items-center gap-1">
                       <User className="w-3 h-3 text-beige-400" />
                       {exception.assignedTo}
@@ -483,7 +613,7 @@ export default function ExceptionsPage() {
                   </TableCell>
 
                   {/* Reported */}
-                  <TableCell>
+                  <TableCell className="hidden xl:table-cell">
                     <span className="text-[11px] text-beige-500">
                       {fmtDate(exception.reportedDate)}
                     </span>
@@ -492,19 +622,41 @@ export default function ExceptionsPage() {
                   {/* Actions */}
                   <TableCell>
                     <div className="flex items-center gap-1.5">
-                      {exception.status !== "resolved" && (
+                      {effectiveStatus !== "resolved" && (
                         <>
-                          <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-brown-600 hover:bg-brown-700 text-white text-[10px] font-semibold shadow-sm hover:shadow-md transition-all">
-                            <Eye className="w-3 h-3" />
-                            Investigate
+                          {effectiveStatus === "open" && (
+                            <button
+                              onClick={() => handleInvestigate(exception)}
+                              title="Investigate"
+                              className="p-1.5 rounded-lg bg-brown-600 hover:bg-brown-700 text-white shadow-sm hover:shadow-md transition-all"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {effectiveStatus === "investigating" && (
+                            <span className="p-1.5 rounded-lg bg-teal-50 text-teal-600" title="Investigating">
+                              <Eye className="w-3.5 h-3.5" />
+                            </span>
+                          )}
+                          <button
+                            onClick={() => handleResolve(exception)}
+                            title="Resolve"
+                            className="p-1.5 rounded-lg border border-beige-200 bg-white text-brown-700 hover:bg-beige-50 transition-all"
+                          >
+                            <Wrench className="w-3.5 h-3.5" />
                           </button>
-                          <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-beige-200 bg-white text-brown-700 text-[10px] font-semibold hover:bg-beige-50 transition-all">
-                            <Wrench className="w-3 h-3" />
-                            Resolve
-                          </button>
+                          {exception.severity === "critical" && (
+                            <button
+                              onClick={() => handleEscalate(exception)}
+                              title="Escalate"
+                              className="p-1.5 rounded-lg border border-gold-200 bg-gold-50 text-gold-700 hover:bg-gold-100 transition-all"
+                            >
+                              <ArrowUpRight className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </>
                       )}
-                      {exception.status === "resolved" && (
+                      {effectiveStatus === "resolved" && (
                         <span className="flex items-center gap-1 text-[10px] text-forest-600 font-semibold">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           Resolved
@@ -518,30 +670,18 @@ export default function ExceptionsPage() {
           </TableBody>
         </Table>
 
-        {filtered.length === 0 && (
-          <div className="py-16 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-forest-50 flex items-center justify-center mx-auto mb-4">
-              <Zap className="w-7 h-7 text-forest-400" />
-            </div>
-            <h3 className="text-[16px] font-bold text-brown-900">
-              No Exceptions Found
-            </h3>
-            <p className="text-[13px] text-beige-500 mt-1">
-              All clear -- no items match the selected filter.
-            </p>
-          </div>
-        )}
       </motion.div>
+      )}
 
       {/* Detail cards below the table for expanded descriptions */}
       <motion.div variants={stagger} className="space-y-3">
         {filtered
-          .filter((e) => e.status !== "resolved")
+          .filter((e) => getStatus(e) !== "resolved")
           .slice(0, 3)
           .map((exception) => {
             const tc = typeConfig[exception.type];
             const sc = severityConfig[exception.severity];
-            const st = statusConfig[exception.status];
+            const st = statusConfig[getStatus(exception)];
             const TypeIcon = tc.icon;
 
             return (

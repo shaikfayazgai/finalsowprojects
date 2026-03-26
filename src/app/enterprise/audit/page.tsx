@@ -20,6 +20,7 @@ import {
   Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { toast } from "@/lib/stores/toast-store";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Badge, Button, Input } from "@/components/ui";
 import { mockAuditLog } from "@/mocks/data/enterprise-analytics";
@@ -212,7 +213,7 @@ export default function AuditTrailPage() {
             <Download className="w-3.5 h-3.5" />
             Export CSV
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={() => toast.info("Export PDF", "PDF export requires backend integration.")}>
             <Download className="w-3.5 h-3.5" />
             Export PDF
           </Button>

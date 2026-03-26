@@ -28,6 +28,7 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui";
+import { toast } from "@/lib/stores/toast-store";
 import { mockInvoices } from "@/mocks/data/enterprise-billing";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
 
@@ -128,7 +129,11 @@ export default function InvoiceListPage() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => toast.info("Export CSV", "CSV export requires backend integration.")}
+        >
           <Download className="w-3.5 h-3.5" />
           Export CSV
         </Button>

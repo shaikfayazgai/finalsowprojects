@@ -3,7 +3,6 @@ import {
   FileText,
   FolderKanban,
   Users,
-  CreditCard,
   BarChart3,
   Shield,
   ScrollText,
@@ -33,7 +32,6 @@ import {
   Network,
   BookCheck,
   DollarSign,
-  BadgeDollarSign,
   Building2,
   ShieldCheck,
   Plug,
@@ -86,28 +84,10 @@ export const enterpriseNav: ModuleConfig = {
       ],
     },
     {
-      title: "SOW Management",
       items: [
-        // #1: Removed "New SOW" — it's an action, not a destination.
-        //     SOW Repository page has a "New SOW" CTA button instead.
         { label: "SOW Repository", href: "/enterprise/sow", icon: FileText },
-      ],
-    },
-    {
-      title: "Task Planning",
-      items: [
-        // #3: Removed "Plan Approval" — it's a filtered view of Decomposition,
-        //     not a separate destination. Accessible via tab/filter on the page.
         { label: "Decomposition", href: "/enterprise/decomposition", icon: Boxes },
-      ],
-    },
-    {
-      title: "Team Formation",
-      items: [
-        { label: "Matching Results", href: "/enterprise/team", icon: UsersRound },
-        // #4: Removed "Team Confirmation" — was mislabeled (linked to /configure
-        //     instead of team approval). Confirmation is a drill-down from Matching.
-        { label: "Assignment Monitor", href: "/enterprise/team/monitor", icon: Activity },
+        { label: "Teams", href: "/enterprise/team", icon: UsersRound },
       ],
     },
     {
@@ -126,28 +106,18 @@ export const enterpriseNav: ModuleConfig = {
       ],
     },
     {
-      title: "Billing",
       items: [
-        // #6: Consolidated from 4 items to 2. Rate Cards + Task Pricing
-        //     merged under "Pricing". Invoices accessible from Billing page.
-        { label: "Pricing", href: "/enterprise/billing/rate-cards", icon: BadgeDollarSign },
-        { label: "Billing & Invoices", href: "/enterprise/billing", icon: CreditCard },
+        { label: "Billing", href: "/enterprise/billing", icon: Wallet },
       ],
     },
     {
-      // #5: Split Admin into two sections to reduce cognitive load (was 9 items)
-      title: "Administration",
+      title: "Organization",
       items: [
-        { label: "Tenant Setup", href: "/enterprise/admin/config", icon: Building2 },
+        { label: "General", href: "/enterprise/admin/config", icon: Building2 },
         { label: "Roles & Access", href: "/enterprise/admin/roles", icon: KeyRound },
         { label: "Policies", href: "/enterprise/admin/config/apg", icon: ShieldCheck },
         { label: "Integrations", href: "/enterprise/admin/config/integrations", icon: Plug },
         { label: "Contributors", href: "/enterprise/admin/users", icon: UserCog },
-      ],
-    },
-    {
-      title: "Configuration",
-      items: [
         { label: "SOW Intake Forms", href: "/enterprise/admin/config/sow-forms", icon: FormInput },
         { label: "Clause Library", href: "/enterprise/admin/config/clause-library", icon: BookMarked },
         { label: "SOW Templates", href: "/enterprise/admin/config/templates", icon: FileStack },
@@ -158,8 +128,8 @@ export const enterpriseNav: ModuleConfig = {
       title: "Analytics & Intelligence",
       items: [
         { label: "Workforce", href: "/enterprise/analytics", icon: BarChart3 },
-        { label: "Economic", href: "/enterprise/analytics/cost", icon: TrendingUp },
-        { label: "Governance & Risk", href: "/enterprise/analytics/quality", icon: Shield },
+        { label: "Economic", href: "/enterprise/analytics/economic", icon: TrendingUp },
+        { label: "Governance & Risk", href: "/enterprise/analytics/governance", icon: Shield },
         { label: "Self-service", href: "/enterprise/analytics/reports", icon: PieChart },
       ],
     },

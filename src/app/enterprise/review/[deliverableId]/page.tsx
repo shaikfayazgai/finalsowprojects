@@ -33,6 +33,7 @@ import { stagger, fadeUp, slideInRight } from "@/lib/utils/motion-variants";
 import { Badge, Button, Textarea } from "@/components/ui";
 import { StatusTimeline } from "@/components/enterprise/status-timeline";
 import { mockDeliverables, mockProjects, mockMilestones } from "@/mocks/data/enterprise-projects";
+import { toast } from "@/lib/stores/toast-store";
 
 /* ══════════════════════════════════════════
    F1 — Review Evidence Pack
@@ -123,6 +124,61 @@ export default function ReviewDetailPage() {
   const [selectedFile, setSelectedFile] = React.useState(0);
   const [activeAction, setActiveAction] = React.useState<"approve" | "rework" | "reject" | null>(null);
   const [actionNotes, setActionNotes] = React.useState("");
+  /* Derive initial decision state from mock data (already-decided deliverables) */
+  const initialDecision = deliverable.decidedAt
+    ? deliverable.decision === "approved"
+      ? "approve" as const
+      : deliverable.decision === "rework_requested"
+        ? "rework" as const
+        : deliverable.decision === "rejected"
+          ? "reject" as const
+          : null
+    : null;
+
+  const [confirmedDecision, setConfirmedDecision] = React.useState<"approve" | "rework" | "reject" | null>(initialDecision);
+
+  /* Sync decision state when navigating between deliverables */
+  React.useEffect(() => {
+    setConfirmedDecision(initialDecision);
+    setActiveAction(null);
+    setActionNotes("");
+    setSelectedFile(0);
+  }, [deliverableId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleConfirmDecision = () => {
+    if (!activeAction) return;
+    if ((activeAction === "rework" || activeAction === "reject") && !actionNotes.trim()) {
+      toast.error("Required", activeAction === "rework" ? "Please provide rework instructions." : "Please provide a rejection reason.");
+      return;
+    }
+    setConfirmedDecision(activeAction);
+    setActiveAction(null);
+    if (activeAction === "approve") {
+      toast.success("Deliverable Approved", "Payout eligibility triggered. Contributor has been notified.");
+    } else if (activeAction === "rework") {
+      toast.success("Rework Requested", "Contributor has been notified with your feedback.");
+    } else {
+      toast.success("Deliverable Rejected", "Decision recorded. Task may need reassignment.");
+    }
+    setActionNotes("");
+  };
+
+  /* Effective status reflects local confirmed decision */
+  const effectiveStatus = confirmedDecision
+    ? confirmedDecision === "approve" ? "approved" : confirmedDecision === "rework" ? "rework" : "rejected"
+    : deliverable.status;
+
+  const effectiveDecisionLabel = confirmedDecision
+    ? confirmedDecision === "approve" ? "Approved" : confirmedDecision === "rework" ? "Rework Requested" : "Rejected"
+    : deliverable.decision === "approved"
+      ? "Approved"
+      : deliverable.decision === "rework_requested"
+        ? "Rework Requested"
+        : deliverable.decision === "rejected"
+          ? "Rejected"
+          : "Pending review";
+
+  const isDecided = !!confirmedDecision || !!deliverable.decidedAt;
 
   const timelineSteps = [
     {
@@ -133,7 +189,7 @@ export default function ReviewDetailPage() {
     },
     {
       label: "Evidence Uploaded",
-      description: `${deliverable.evidenceFiles} files attached`,
+      description: `${mockEvidenceFiles.length} files attached`,
       status: "completed" as const,
     },
     {
@@ -144,21 +200,14 @@ export default function ReviewDetailPage() {
     },
     {
       label: "Enterprise Review",
-      description: deliverable.status === "pending" ? "Awaiting your decision" : "Review completed",
-      status: deliverable.status === "pending" ? ("current" as const) : ("completed" as const),
+      description: isDecided ? "Review completed" : "Awaiting your decision",
+      status: isDecided ? ("completed" as const) : ("current" as const),
     },
     {
       label: "Decision",
-      description:
-        deliverable.decision === "approved"
-          ? "Approved"
-          : deliverable.decision === "rework_requested"
-            ? "Rework Requested"
-            : deliverable.decision === "rejected"
-              ? "Rejected"
-              : "Pending review",
-      timestamp: deliverable.decidedAt ? formatDate(deliverable.decidedAt) : undefined,
-      status: deliverable.decidedAt ? ("completed" as const) : ("upcoming" as const),
+      description: effectiveDecisionLabel,
+      timestamp: deliverable.decidedAt ? formatDate(deliverable.decidedAt) : confirmedDecision ? "Just now" : undefined,
+      status: isDecided ? ("completed" as const) : ("upcoming" as const),
     },
   ];
 
@@ -194,12 +243,15 @@ export default function ReviewDetailPage() {
             <h1 className="text-xl font-bold text-brown-900 tracking-tight font-heading">
               {deliverable.title}
             </h1>
-            <Badge variant={statusBadgeMap[deliverable.status]} size="md" dot>
-              {deliverable.status.charAt(0).toUpperCase() + deliverable.status.slice(1)}
+            <Badge variant={statusBadgeMap[effectiveStatus] ?? "gold"} size="md" dot>
+              {effectiveStatus.charAt(0).toUpperCase() + effectiveStatus.slice(1)}
             </Badge>
           </div>
           <p className="text-sm text-beige-600">
-            {project?.title ?? "Project"} &middot; {milestone?.title ?? "Milestone"}
+            <Link href={`/enterprise/projects/${deliverable.projectId}`} className="text-teal-600 hover:text-teal-700 transition-colors">
+              {project?.title ?? "Project"}
+            </Link>
+            {" "}&middot; {milestone?.title ?? "Milestone"}
           </p>
         </div>
       </motion.div>
@@ -220,7 +272,10 @@ export default function ReviewDetailPage() {
                   {mockEvidenceFiles.filter((f) => f.status === "verified").length}/{mockEvidenceFiles.length} verified
                 </Badge>
               </div>
-              <button className="text-[11px] text-teal-600 font-medium hover:text-teal-700 transition-colors flex items-center gap-1">
+              <button
+                onClick={() => toast.info("Download All", "Batch download requires backend integration.")}
+                className="text-[11px] text-teal-600 font-medium hover:text-teal-700 transition-colors flex items-center gap-1"
+              >
                 <Download className="w-3 h-3" />
                 Download All
               </button>
@@ -285,7 +340,10 @@ export default function ReviewDetailPage() {
                   &mdash; {mockEvidenceFiles[selectedFile].name}
                 </span>
               </div>
-              <button className="text-[11px] text-teal-600 font-medium hover:text-teal-700 flex items-center gap-1 transition-colors">
+              <button
+                onClick={() => toast.info("Download File", "File download requires backend integration.")}
+                className="text-[11px] text-teal-600 font-medium hover:text-teal-700 flex items-center gap-1 transition-colors"
+              >
                 <Download className="w-3 h-3" />
                 Download
               </button>
@@ -310,7 +368,10 @@ export default function ReviewDetailPage() {
                     {mockEvidenceFiles[selectedFile].type.toUpperCase()} file
                   </p>
                 </div>
-                <button className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white border border-beige-200 text-[12px] font-medium text-brown-700 hover:border-brown-300 transition-colors shadow-sm">
+                <button
+                  onClick={() => toast.success("Opening Preview", `${mockEvidenceFiles[selectedFile].name} opened in viewer.`)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white border border-beige-200 text-[12px] font-medium text-brown-700 hover:border-brown-300 transition-colors shadow-sm"
+                >
                   <Eye className="w-3.5 h-3.5" />
                   Open Full Preview
                 </button>
@@ -445,7 +506,7 @@ export default function ReviewDetailPage() {
                 },
                 {
                   label: "Evidence",
-                  value: `${deliverable.evidenceFiles} files`,
+                  value: `${mockEvidenceFiles.length} files`,
                   icon: Layers,
                 },
               ].map((item) => (
@@ -507,83 +568,116 @@ export default function ReviewDetailPage() {
               </h2>
             </div>
 
-            <div className="space-y-3">
-              <Button
-                variant="gradient-forest"
-                size="md"
-                className="w-full justify-center"
-                onClick={() => setActiveAction(activeAction === "approve" ? null : "approve")}
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Approve Deliverable
-              </Button>
-
-              <Button
-                variant="gold"
-                size="md"
-                className="w-full justify-center border-[1.5px] border-gold-400 bg-transparent text-gold-700 hover:bg-gold-50 shadow-none hover:shadow-none hover:translate-y-0"
-                onClick={() => setActiveAction(activeAction === "rework" ? null : "rework")}
-              >
-                <RotateCcw className="w-4 h-4" />
-                Request Rework
-              </Button>
-
-              <Button
-                variant="danger"
-                size="md"
-                className="w-full justify-center bg-transparent text-[var(--danger)] border-[1.5px] border-[var(--danger)] hover:bg-[var(--danger-light)] shadow-none hover:shadow-none hover:translate-y-0"
-                onClick={() => setActiveAction(activeAction === "reject" ? null : "reject")}
-              >
-                <XCircle className="w-4 h-4" />
-                Reject
-              </Button>
-            </div>
-
-            {/* Expandable action form */}
-            {activeAction && (
-              <div className="mt-4 pt-3 border-t border-beige-200/50 space-y-3">
-                <h4 className="text-[12px] font-semibold text-brown-800 capitalize">
-                  {activeAction === "approve"
-                    ? "Approval Notes (optional)"
-                    : activeAction === "rework"
-                      ? "Rework Instructions (required)"
-                      : "Rejection Reason (required)"}
-                </h4>
-                <Textarea
-                  placeholder={
-                    activeAction === "approve"
-                      ? "Add optional notes for the contributor..."
-                      : activeAction === "rework"
-                        ? "Describe what needs to be changed or improved..."
-                        : "Explain why this deliverable is being rejected..."
-                  }
-                  value={actionNotes}
-                  onChange={(e) => setActionNotes(e.target.value)}
-                  className="min-h-[80px]"
-                />
-                <div className="flex items-center gap-2">
+            {confirmedDecision ? (
+              <div className="text-center space-y-3">
+                <div className={cn(
+                  "w-12 h-12 rounded-2xl flex items-center justify-center mx-auto",
+                  confirmedDecision === "approve" ? "bg-forest-100" : confirmedDecision === "rework" ? "bg-gold-100" : "bg-brown-100"
+                )}>
+                  {confirmedDecision === "approve" ? (
+                    <CheckCircle2 className="w-6 h-6 text-forest-600" />
+                  ) : confirmedDecision === "rework" ? (
+                    <RotateCcw className="w-6 h-6 text-gold-600" />
+                  ) : (
+                    <XCircle className="w-6 h-6 text-brown-600" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-[14px] font-semibold text-brown-900">
+                    {confirmedDecision === "approve" ? "Deliverable Approved" : confirmedDecision === "rework" ? "Rework Requested" : "Deliverable Rejected"}
+                  </p>
+                  <p className="text-[11px] text-beige-500 mt-0.5">Decision recorded &middot; Contributor notified</p>
+                </div>
+                <Link
+                  href="/enterprise/review"
+                  className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-teal-600 hover:text-teal-700 transition-colors"
+                >
+                  Back to Review Queue
+                  <ChevronRight className="w-3 h-3" />
+                </Link>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3">
                   <Button
-                    variant={activeAction === "approve" ? "gradient-forest" : activeAction === "rework" ? "gold" : "danger"}
-                    size="sm"
-                    className="flex-1 justify-center"
+                    variant="gradient-forest"
+                    size="md"
+                    className="w-full justify-center"
+                    onClick={() => setActiveAction(activeAction === "approve" ? null : "approve")}
                   >
-                    Confirm {activeAction === "approve" ? "Approval" : activeAction === "rework" ? "Rework Request" : "Rejection"}
+                    <CheckCircle2 className="w-4 h-4" />
+                    Approve Deliverable
                   </Button>
+
                   <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setActiveAction(null);
-                      setActionNotes("");
-                    }}
+                    variant="gold"
+                    size="md"
+                    className="w-full justify-center border-[1.5px] border-gold-400 bg-transparent text-gold-700 hover:bg-gold-50 shadow-none hover:shadow-none hover:translate-y-0"
+                    onClick={() => setActiveAction(activeAction === "rework" ? null : "rework")}
                   >
-                    Cancel
+                    <RotateCcw className="w-4 h-4" />
+                    Request Rework
+                  </Button>
+
+                  <Button
+                    variant="danger"
+                    size="md"
+                    className="w-full justify-center bg-transparent text-[var(--danger)] border-[1.5px] border-[var(--danger)] hover:bg-[var(--danger-light)] shadow-none hover:shadow-none hover:translate-y-0"
+                    onClick={() => setActiveAction(activeAction === "reject" ? null : "reject")}
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Reject
                   </Button>
                 </div>
-              </div>
+
+                {/* Expandable action form */}
+                {activeAction && (
+                  <div className="mt-4 pt-3 border-t border-beige-200/50 space-y-3">
+                    <h4 className="text-[12px] font-semibold text-brown-800 capitalize">
+                      {activeAction === "approve"
+                        ? "Approval Notes (optional)"
+                        : activeAction === "rework"
+                          ? "Rework Instructions (required)"
+                          : "Rejection Reason (required)"}
+                    </h4>
+                    <Textarea
+                      placeholder={
+                        activeAction === "approve"
+                          ? "Add optional notes for the contributor..."
+                          : activeAction === "rework"
+                            ? "Describe what needs to be changed or improved..."
+                            : "Explain why this deliverable is being rejected..."
+                      }
+                      value={actionNotes}
+                      onChange={(e) => setActionNotes(e.target.value)}
+                      className="min-h-[80px]"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={activeAction === "approve" ? "gradient-forest" : activeAction === "rework" ? "gold" : "danger"}
+                        size="sm"
+                        className="flex-1 justify-center"
+                        onClick={handleConfirmDecision}
+                      >
+                        Confirm {activeAction === "approve" ? "Approval" : activeAction === "rework" ? "Rework Request" : "Rejection"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setActiveAction(null);
+                          setActionNotes("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
-            {!activeAction && (
+            {!confirmedDecision && !activeAction && (
               <div className="mt-4 pt-3 border-t border-beige-200/50">
                 <Link
                   href={`/enterprise/review/${deliverableId}/feedback`}

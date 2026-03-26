@@ -18,8 +18,12 @@ import {
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { toast } from "@/lib/stores/toast-store";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
-import { Badge, Button, Input, Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
+import {
+  Badge, Button, Input, Select, SelectTrigger, SelectContent, SelectItem, SelectValue,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui";
 
 /* ── Mock notification rules ── */
 const mockRules = [
@@ -109,6 +113,45 @@ type Channel = keyof typeof channelConfig;
 export default function NotificationsConfigPage() {
   const [rules, setRules] = React.useState(mockRules);
 
+  /* Add Rule dialog state */
+  const [addRuleOpen, setAddRuleOpen] = React.useState(false);
+  const [newRuleName, setNewRuleName] = React.useState("");
+  const [newRuleEvent, setNewRuleEvent] = React.useState("milestone.completed");
+  const [newRuleChannel, setNewRuleChannel] = React.useState<Channel>("email");
+
+  const eventTypes = [
+    "milestone.completed",
+    "sow.upload.complete",
+    "deliverable.submitted",
+    "sla.breach.warning",
+    "payment.released",
+    "exception.escalated",
+    "team.formation.complete",
+    "digest.weekly",
+  ];
+
+  const handleAddRule = () => {
+    if (!newRuleName.trim()) {
+      toast.info("Name Required", "Please enter a rule name.");
+      return;
+    }
+    const newRule = {
+      id: `nr-${Date.now()}`,
+      name: newRuleName.trim(),
+      event: newRuleEvent,
+      channels: [newRuleChannel as string],
+      recipients: "Owner",
+      enabled: true,
+      delay: "Immediate",
+    };
+    setRules((prev) => [...prev, newRule]);
+    toast.success("Rule Added", `"${newRuleName.trim()}" is now active.`);
+    setNewRuleName("");
+    setNewRuleEvent("milestone.completed");
+    setNewRuleChannel("email");
+    setAddRuleOpen(false);
+  };
+
   const toggleRule = (id: string) => {
     setRules((prev) =>
       prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
@@ -160,7 +203,7 @@ export default function NotificationsConfigPage() {
             Configure when and how notifications are sent for platform events.
           </p>
         </div>
-        <Button variant="gradient-primary" size="sm">
+        <Button variant="gradient-primary" size="sm" onClick={() => setAddRuleOpen(true)}>
           <Plus className="w-3.5 h-3.5" />
           Add Rule
         </Button>
@@ -302,6 +345,79 @@ export default function NotificationsConfigPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* Add Rule Dialog */}
+      <Dialog open={addRuleOpen} onOpenChange={setAddRuleOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Notification Rule</DialogTitle>
+            <DialogDescription>
+              Create a new rule to send notifications when platform events occur.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] font-semibold text-brown-700 uppercase tracking-wider mb-1 block">
+                Rule Name
+              </label>
+              <Input
+                placeholder="e.g. Budget Threshold Alert"
+                value={newRuleName}
+                onChange={(e) => setNewRuleName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-brown-700 uppercase tracking-wider mb-1.5 block">
+                Event Type
+              </label>
+              <select
+                value={newRuleEvent}
+                onChange={(e) => setNewRuleEvent(e.target.value)}
+                className="h-9 w-full rounded-xl border border-beige-200 bg-white/80 px-3 text-[12px] text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-200/30 focus:border-brown-200/50"
+              >
+                {eventTypes.map((evt) => (
+                  <option key={evt} value={evt}>{evt}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-brown-700 uppercase tracking-wider mb-1.5 block">
+                Channel
+              </label>
+              <div className="flex items-center gap-2">
+                {(Object.entries(channelConfig) as [Channel, (typeof channelConfig)[Channel]][]).map(([key, ch]) => {
+                  const Icon = ch.icon;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setNewRuleChannel(key)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[11px] font-medium transition-all",
+                        newRuleChannel === key
+                          ? "border-brown-300 bg-brown-50 text-brown-800 shadow-sm"
+                          : "border-beige-200 bg-white/60 text-beige-500 hover:border-beige-300"
+                      )}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {ch.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setAddRuleOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="gradient-primary" size="sm" onClick={handleAddRule}>
+              <Plus className="w-3 h-3" />
+              Add Rule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }
