@@ -20,7 +20,7 @@ export async function proxy(req: NextRequest) {
     const secureCookie = req.nextUrl.protocol === "https:";
     const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
     isLoggedIn = !!token?.email;
-    if (token?.role) userRole = token.role as string;
+    userRole = (token?.role as string) || "enterprise";
   } catch {
     isLoggedIn = false;
   }
@@ -38,12 +38,15 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Redirect authenticated users away from auth routes based on their role
+  // Redirect authenticated users away from auth routes (role-based)
   if (isAuthRoute && isLoggedIn) {
-    const dest =
-      userRole === "contributor" ? "/contributor/dashboard" :
-      userRole === "mentor" ? "/mentor/dashboard" :
-      "/enterprise/dashboard";
+    const dashboardMap: Record<string, string> = {
+      contributor: "/contributor/dashboard",
+      mentor: "/mentor/dashboard",
+      admin: "/enterprise/dashboard",
+      enterprise: "/enterprise/dashboard",
+    };
+    const dest = dashboardMap[userRole] || "/enterprise/dashboard";
     return NextResponse.redirect(new URL(dest, req.nextUrl.origin));
   }
 
