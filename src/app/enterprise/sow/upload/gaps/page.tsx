@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
+  ArrowLeft,
   CheckCircle2,
   AlertTriangle,
   Ban,
@@ -437,8 +438,14 @@ export default function GapAnalysisPage() {
       {/* Actions */}
       <motion.div
         variants={fadeUp}
-        className="flex items-center justify-end mt-4"
+        className="flex items-center justify-between mt-4"
       >
+        <button
+          onClick={() => router.push("/enterprise/sow/upload/review")}
+          className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Review
+        </button>
         <button
           onClick={handleContinue}
           disabled={!canProceed}

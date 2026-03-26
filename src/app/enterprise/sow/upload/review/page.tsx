@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  ArrowRight, CheckCircle2, Edit3, Eye, RotateCcw, X, ChevronDown,
+  ArrowRight, ArrowLeft, CheckCircle2, Edit3, Eye, RotateCcw, X, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
@@ -208,7 +208,11 @@ export default function ParsedSOWReviewPage() {
       </motion.div>
 
       {/* Actions */}
-      <motion.div variants={fadeUp} className="flex items-center justify-end">
+      <motion.div variants={fadeUp} className="flex items-center justify-between">
+        <button onClick={() => router.push("/enterprise/sow/upload/report")}
+          className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Report
+        </button>
         <button onClick={handleContinue}
           className="flex items-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all">
           Continue to Gap Analysis <ArrowRight className="w-3.5 h-3.5" />

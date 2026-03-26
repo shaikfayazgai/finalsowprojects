@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, ArrowLeft, RefreshCw, Save } from "lucide-react";
+import { ArrowRight, ArrowLeft, Save } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
@@ -23,7 +23,7 @@ import { Section5BudgetRisk } from "./components/Section5BudgetRisk";
 import { Section6GovernanceCompliance } from "./components/Section6GovernanceCompliance";
 import { Section7CommercialLegal } from "./components/Section7CommercialLegal";
 
-const SECTION_COMPONENTS: Record<CommercialSectionKey, React.ComponentType<{ onComplete: () => void }>> = {
+const SECTION_COMPONENTS: Record<CommercialSectionKey, React.ComponentType<{ onComplete: () => void; onBack?: () => void }>> = {
   businessContext: Section1BusinessContext,
   deliveryScope: Section2DeliveryScope,
   techIntegrations: Section3TechIntegrations,
@@ -45,8 +45,6 @@ export default function CommercialDetailsPage() {
   const store = useSOWUploadStore();
 
   const [activeSection, setActiveSection] = React.useState<CommercialSectionKey>("businessContext");
-  const [showPrePopulated, setShowPrePopulated] = React.useState<CommercialSectionKey | null>(null);
-
   /* Initialize with pre-populated data on first visit */
   React.useEffect(() => {
     if (store.commercialSectionStatus.businessContext === "not_started") {
@@ -75,25 +73,18 @@ export default function CommercialDetailsPage() {
     return () => clearInterval(interval);
   }, [store]);
 
-  const isPrePopulated = mockPrePopulatedSectionStatus[activeSection] === "pre_populated" &&
-    store.commercialSectionStatus[activeSection] !== "complete";
-
   const handleSectionClick = (key: CommercialSectionKey) => {
-    if (isPrePopulated && activeSection !== key) {
-      setShowPrePopulated(null);
-    }
     setActiveSection(key);
   };
 
-  const handleSectionComplete = () => {
-    store.markSectionComplete(activeSection);
+  const handleSectionBack = () => {
     const idx = SECTION_ORDER.indexOf(activeSection);
-    if (idx < SECTION_ORDER.length - 1) {
-      setActiveSection(SECTION_ORDER[idx + 1]);
+    if (idx > 0) {
+      setActiveSection(SECTION_ORDER[idx - 1]);
     }
   };
 
-  const handleAcceptPrePopulated = () => {
+  const handleSectionComplete = () => {
     store.markSectionComplete(activeSection);
     const idx = SECTION_ORDER.indexOf(activeSection);
     if (idx < SECTION_ORDER.length - 1) {
@@ -148,33 +139,7 @@ export default function CommercialDetailsPage() {
 
         {/* Right: Section Content */}
         <div>
-          {/* Pre-populated state */}
-          {isPrePopulated && showPrePopulated !== activeSection && (
-            <div className="card-parchment px-8 py-12 text-center mb-6">
-              <div className="w-12 h-12 rounded-2xl bg-teal-50 flex items-center justify-center mx-auto mb-4">
-                <RefreshCw className="w-5 h-5 text-teal-500" />
-              </div>
-              <h3 className="text-[16px] font-semibold text-gray-900 mb-1">Section Pre-Populated</h3>
-              <p className="text-[13px] text-gray-400 mb-6 max-w-md mx-auto">
-                AI has extracted all required information for this section. Review and continue to the next step.
-              </p>
-              <div className="flex items-center justify-center gap-3">
-                <button onClick={() => setShowPrePopulated(activeSection)}
-                  className="text-[12px] font-medium text-gray-600 px-5 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
-                  Review Fields
-                </button>
-                <button onClick={handleAcceptPrePopulated}
-                  className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-forest-400 to-forest-600 px-6 py-2.5 rounded-xl transition-all">
-                  Continue <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Section form */}
-          {(!isPrePopulated || showPrePopulated === activeSection) && (
-            <ActiveSectionComponent onComplete={handleSectionComplete} />
-          )}
+          <ActiveSectionComponent onComplete={handleSectionComplete} onBack={SECTION_ORDER.indexOf(activeSection) > 0 ? handleSectionBack : undefined} />
         </div>
       </motion.div>
 

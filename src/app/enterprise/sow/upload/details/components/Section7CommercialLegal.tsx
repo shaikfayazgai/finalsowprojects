@@ -1,11 +1,11 @@
 "use client";
 
-import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 
-interface Props { onComplete: () => void }
+interface Props { onComplete: () => void; onBack?: () => void }
 
-export function Section7CommercialLegal({ onComplete }: Props) {
+export function Section7CommercialLegal({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.commercialLegal;
   const auth = store.approvalAuthorities;
@@ -113,10 +113,18 @@ export function Section7CommercialLegal({ onComplete }: Props) {
         </div>
       </div>
 
-      <button onClick={onComplete}
-        className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all ml-auto">
-        <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete
-      </button>
+      <div className="flex items-center justify-between">
+        {onBack ? (
+          <button onClick={onBack}
+            className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
+            <ArrowLeft className="w-3.5 h-3.5" /> Back
+          </button>
+        ) : <span />}
+        <button onClick={onComplete}
+          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
+          <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ChevronRight, Circle } from "lucide-react";
+import { CheckCircle2, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { CommercialSectionKey, CommercialSectionStatus } from "@/types/enterprise";
 
@@ -45,12 +45,6 @@ export function SectionNavigator({ activeSection, sectionStatus, onSectionClick,
             {/* Status icon */}
             {isComplete ? (
               <CheckCircle2 className="w-4.5 h-4.5 text-forest-500 shrink-0" />
-            ) : isPrePopulated ? (
-              <div className="w-4.5 h-4.5 rounded-full bg-teal-100 flex items-center justify-center shrink-0">
-                <span className="text-[8px] font-bold text-teal-600">AI</span>
-              </div>
-            ) : isInProgress ? (
-              <Circle className="w-4.5 h-4.5 text-gold-400 shrink-0" />
             ) : (
               <span className={cn(
                 "w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0",
