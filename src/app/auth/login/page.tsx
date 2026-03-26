@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { signIn, getSession } from "next-auth/react";
 import {
   Sparkles,
@@ -30,7 +30,6 @@ const STATS = [
 ];
 
 function LoginPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const isMfaEnabled = useAuthStore((s) => s.isMfaEnabled);
   const isOnboardingComplete = useAuthStore((s) => s.isOnboardingComplete);
@@ -101,8 +100,8 @@ function LoginPageContent() {
     await new Promise((r) => setTimeout(r, 800));
     const dest = await getRoleDest();
     setIsLoading(false);
-    router.push(dest);
-  }, [router, getRoleDest]);
+    window.location.href = dest;
+  }, [getRoleDest]);
 
   useEffect(() => {
     if (step === "mfa" && mfaCode.length === 6 && !isLoading) {
@@ -185,7 +184,7 @@ function LoginPageContent() {
     await new Promise((r) => setTimeout(r, 800));
     const dest = await getRoleDest();
     setIsLoading(false);
-    router.push(dest);
+    window.location.href = dest;
   };
 
   /* ── Google / Microsoft SSO via NextAuth ── */
@@ -467,14 +466,14 @@ function LoginPageContent() {
                 variant="primary"
                 size="lg"
                 className="w-full"
-                onClick={async () => { const dest = await getRoleDest(); router.push(`/auth/mfa-setup?redirect=${dest}`); }}
+                onClick={async () => { const dest = await getRoleDest(); window.location.href = `/auth/mfa-setup?redirect=${dest}`; }}
               >
                 <Shield className="w-4 h-4" /> Set Up MFA Now
               </Button>
 
               <button
                 type="button"
-                onClick={async () => { const dest = await getRoleDest(); router.push(dest); }}
+                onClick={async () => { const dest = await getRoleDest(); window.location.href = dest; }}
                 className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
               >
                 Skip for now
