@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "flag-icons/css/flag-icons.min.css";
+@import "flag-icons/css/flag-icons.min.css" layer(base);
 
 /* ══════════════════════════════════════════════════════════════
    GLIMMORA DESIGN SYSTEM — WARM PARCHMENT THEME

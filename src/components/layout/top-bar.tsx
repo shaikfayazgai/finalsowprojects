@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import {
   Menu,
   Search,
@@ -149,12 +149,20 @@ interface TopBarProps { config: ModuleConfig; }
 
 export function TopBar({ config }: TopBarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session } = useSession();
   const { openMobile } = useSidebarStore();
   const [searchFocused, setSearchFocused] = React.useState(false);
 
+  const userName = session?.user?.name || "User";
+  const userEmail = session?.user?.email || "";
+  const userInitials = (session?.user as any)?.initials || userName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+
   const breadcrumbs = React.useMemo(() => {
     const allSegments = pathname.split("/").filter(Boolean);
-    const hiddenPrefixes = ["enterprise"];
+    const moduleRoots = ["enterprise", "contributor", "mentor", "analytics"];
+    const moduleRoot = allSegments.find((seg) => moduleRoots.includes(seg)) || allSegments[0];
+    const hiddenPrefixes = moduleRoots;
     const crumbs = allSegments
       .map((seg, i) => ({
         seg,
@@ -164,7 +172,7 @@ export function TopBar({ config }: TopBarProps) {
         hidden: hiddenPrefixes.includes(seg),
       }))
       .filter((crumb) => !crumb.hidden);
-    const dashboardHref = "/" + allSegments.slice(0, allSegments.indexOf("enterprise") + 1).join("/") + "/dashboard";
+    const dashboardHref = "/" + moduleRoot + "/dashboard";
     const isOnDashboard = crumbs.length === 1 && crumbs[0].seg === "dashboard";
     if (!isOnDashboard) crumbs.unshift({ seg: "dashboard", label: "Dashboard", href: dashboardHref, hidden: false });
     return crumbs.map((c, i) => ({ ...c, isLast: i === crumbs.length - 1 }));
@@ -246,45 +254,33 @@ export function TopBar({ config }: TopBarProps) {
                     boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
                   }}
                 >
-                  PN
+                  {userInitials}
                 </div>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-semibold bg-gradient-to-br from-brown-400 to-brown-600">PN</div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">
-                        Priya Nair
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        priya@enterprise.com
-                      </p>
-                    </div>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-semibold"
+                    style={{ background: "linear-gradient(135deg, #5B9BA2, #4D5741)" }}>{userInitials}</div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{userName}</p>
+                    <p className="text-xs text-gray-400">{userEmail}</p>
                   </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/enterprise/profile">
-                    <User className="w-4 h-4" /> <span>Profile</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/enterprise/settings">
-                    <Settings className="w-4 h-4" /> <span>Settings</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-[var(--danger)] focus:text-[var(--danger-hover)] focus:bg-[var(--danger-light)]"
-                  onClick={() => signOut({ callbackUrl: "/auth/login" })}
-                >
-                  <LogOut className="w-4 h-4" /> <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => router.push(config.basePath + "/profile")}><User className="w-4 h-4" /> <span>Profile</span></DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push(config.basePath + "/settings")}><Settings className="w-4 h-4" /> <span>Settings</span></DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-[var(--danger)] focus:text-[var(--danger-hover)] focus:bg-[var(--danger-light)]"
+                onClick={() => signOut({ callbackUrl: "/auth/login" })}
+              >
+                <LogOut className="w-4 h-4" /> <span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
     </header>
   );

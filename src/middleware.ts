@@ -1,50 +1,59 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { auth } from "@/auth";
 
-// Routes that require authentication
-const protectedRoutes = ["/enterprise", "/contributor", "/mentor"];
+/* Role → allowed route prefixes */
+const roleRoutes: Record<string, string[]> = {
+  enterprise: ["/enterprise"],
+  contributor: ["/contributor"],
+  mentor: ["/mentor"],
+  analytics: ["/analytics", "/enterprise/analytics"],
+};
 
-// Routes that should redirect to dashboard if already authenticated
-const authRoutes = ["/auth/login", "/auth/register"];
-
-export async function middleware(req: NextRequest) {
+export default auth((req) => {
   const { pathname } = req.nextUrl;
 
-  // Use getToken (Edge-compatible) instead of importing auth (which pulls in bcryptjs)
-  let isLoggedIn = false;
-  try {
-    const token = await getToken({ req, secret: process.env.AUTH_SECRET });
-    isLoggedIn = !!token?.email;
-  } catch {
-    isLoggedIn = false;
+  // Public routes — no auth required
+  const publicPaths = ["/auth", "/api/auth", "/onboarding"];
+  const isPublic = publicPaths.some((p) => pathname.startsWith(p));
+  if (isPublic) return;
+
+  // Root path is handled by page.tsx (server redirect)
+  if (pathname === "/") return;
+
+  // If not authenticated, redirect to login
+  if (!req.auth) {
+    const loginUrl = new URL("/auth/login", req.url);
+    // Validate callbackUrl is a relative path (prevent open redirect)
+    if (pathname.startsWith("/") && !pathname.startsWith("//")) {
+      loginUrl.searchParams.set("callbackUrl", pathname);
+    }
+    return Response.redirect(loginUrl);
   }
 
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-
-  const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
-
-  // Redirect unauthenticated users away from protected routes
-  if (isProtectedRoute && !isLoggedIn) {
-    const loginUrl = new URL("/auth/login", req.nextUrl.origin);
-    loginUrl.searchParams.set("callbackUrl", pathname);
-    return NextResponse.redirect(loginUrl);
+  // Role-based route protection
+  const role = (req.auth.user as any)?.role as string | undefined;
+  if (role) {
+    const allowedPrefixes = roleRoutes[role];
+    if (allowedPrefixes) {
+      const isProtectedModule = Object.values(roleRoutes).flat().some((prefix) => pathname.startsWith(prefix));
+      if (isProtectedModule) {
+        const hasAccess = allowedPrefixes.some((prefix) => pathname.startsWith(prefix));
+        if (!hasAccess) {
+          // Redirect to their own dashboard
+          const dashboards: Record<string, string> = {
+            enterprise: "/enterprise/dashboard",
+            contributor: "/contributor/dashboard",
+            mentor: "/mentor/dashboard",
+            analytics: "/analytics/overview",
+          };
+          return Response.redirect(new URL(dashboards[role] || "/", req.url));
+        }
+      }
+    }
   }
-
-  // Redirect authenticated users away from auth routes
-  if (isAuthRoute && isLoggedIn) {
-    return NextResponse.redirect(
-      new URL("/enterprise/dashboard", req.nextUrl.origin)
-    );
-  }
-
-  return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|public/).*)",
   ],
 };

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   ClipboardCheck,
   Clock,
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui";
 
 export default function MentorDashboardPage() {
+  const router = useRouter();
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -81,7 +83,7 @@ export default function MentorDashboardPage() {
           <GlassCardHeader>
             <div className="flex items-center justify-between">
               <GlassCardTitle>Review Queue</GlassCardTitle>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={() => router.push("/mentor/queue")}>
                 View Full Queue <ArrowUpRight className="w-3.5 h-3.5" />
               </Button>
             </div>
@@ -129,6 +131,7 @@ export default function MentorDashboardPage() {
                 <div
                   key={item.task}
                   className="group flex items-center gap-4 p-4 rounded-xl border border-beige-100 hover:border-forest-200 hover:bg-forest-50/30 transition-all cursor-pointer"
+                  onClick={() => router.push("/mentor/queue")}
                 >
                   <Avatar size="sm">
                     <AvatarFallback>{item.contributor}</AvatarFallback>

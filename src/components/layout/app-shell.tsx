@@ -6,6 +6,7 @@ import { useSidebarStore } from "@/lib/stores/sidebar-store";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
 import { Toaster } from "@/components/ui/toaster";
+import { AIChatWidget } from "./ai-chat-widget";
 import type { ModuleConfig } from "@/lib/config/navigation";
 
 interface AppShellProps {
@@ -34,7 +35,7 @@ export function AppShell({ config, children }: AppShellProps) {
       <motion.div
         animate={{ marginLeft: isCollapsed ? 64 : 220 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="relative z-10 min-h-screen lg:ml-[220px] ml-0"
+        className="min-h-screen lg:ml-[220px] ml-0"
       >
         <TopBar config={config} />
         <main className="px-8 py-8 pb-20" style={{ maxWidth: 1380 }}>
@@ -42,6 +43,7 @@ export function AppShell({ config, children }: AppShellProps) {
         </main>
       </motion.div>
 
+      {config.basePath === "/contributor" && <AIChatWidget />}
       <Toaster />
     </div>
   );

@@ -178,14 +178,9 @@ export const contributorNav: ModuleConfig = {
     {
       title: "Connect",
       items: [
+        { label: "Community", href: "/contributor/community", icon: UsersRound },
         { label: "Support", href: "/contributor/support", icon: HeartHandshake },
         { label: "Messages", href: "/contributor/messages", icon: MessageSquare },
-      ],
-    },
-    {
-      items: [
-        { label: "Profile", href: "/contributor/profile", icon: Users },
-        { label: "Settings", href: "/contributor/settings", icon: Settings },
       ],
     },
   ],
@@ -207,7 +202,6 @@ export const mentorNav: ModuleConfig = {
       title: "Reviews",
       items: [
         { label: "Review Queue", href: "/mentor/queue", icon: ListChecks },
-        { label: "Active Review", href: "/mentor/review", icon: ClipboardCheck },
         { label: "History", href: "/mentor/history", icon: History },
       ],
     },
@@ -216,11 +210,6 @@ export const mentorNav: ModuleConfig = {
       items: [
         { label: "Escalations", href: "/mentor/escalation", icon: AlertTriangle },
         { label: "Mentorship", href: "/mentor/mentorship", icon: GraduationCap },
-      ],
-    },
-    {
-      items: [
-        { label: "Settings", href: "/mentor/settings", icon: Settings },
       ],
     },
   ],
