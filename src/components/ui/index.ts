@@ -23,7 +23,6 @@ export { Label } from "./label";
 export { Separator } from "./separator";
 export { ScrollArea, ScrollBar } from "./scroll-area";
 export { EmptyState } from "./empty-state";
-export { SkillsTagInput } from "./skills-tag-input";
 export { MeshBackground } from "./mesh-background";
 export { Toast } from "./toast";
 export { Toaster } from "./toaster";
@@ -103,12 +102,3 @@ export {
   TableCell,
   TableCaption,
 } from "./data-table";
-
-export {
-  SelectDropdown,
-  CountrySelect,
-  countriesToOptions,
-  COUNTRIES_LIST,
-  COUNTRY_OPTIONS,
-} from "./select-dropdown";
-export type { SelectOption, SelectDropdownProps, CountrySelectProps } from "./select-dropdown";
