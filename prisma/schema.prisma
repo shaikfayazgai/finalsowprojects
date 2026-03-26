@@ -10,10 +10,10 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  
 }
-
+//example
 model User {
   id   Int    @id @default(autoincrement())
   name String
 }
-

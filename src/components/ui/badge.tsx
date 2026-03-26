@@ -12,6 +12,7 @@ const badgeVariants = cva(
         brown: "bg-brown-100 text-brown-700",
         forest: "bg-forest-100 text-forest-700",
         teal: "bg-teal-100 text-teal-700",
+        blue: "bg-blue-100 text-blue-700",
         gold: "bg-gold-100 text-gold-800",
         beige: "bg-beige-200 text-beige-800",
         danger: "bg-red-100 text-red-700",

@@ -100,6 +100,13 @@ export default function ProjectDetailPage() {
   const deliverables = mockDeliverables.filter((d) => d.projectId === project.id);
   const hc = healthCfg[project.health];
   const [resolvedExceptions, setResolvedExceptions] = React.useState<Set<string>>(new Set());
+  const [otpDialog, setOtpDialog] = React.useState<{
+    isOpen: boolean;
+    type: "payment" | "uat" | null;
+    itemId: string | null;
+  }>({ isOpen: false, type: null, itemId: null });
+  const [releasedPayments, setReleasedPayments] = React.useState<Set<string>>(new Set());
+  const [uatSigned, setUatSigned] = React.useState(false);
 
   const daysLeft = Math.max(0, Math.ceil((new Date(project.endDate).getTime() - Date.now()) / 86400000));
   const completedTasks = tasks.filter((t) => t.status === "accepted").length;
@@ -110,6 +117,36 @@ export default function ProjectDetailPage() {
     ...(project.slaCompliance < 90 ? [{ id: "pe-2", type: "sla_breach", description: "SLA compliance dropped below 90% target. Evidence packs pending review beyond 48h window.", severity: "warning" as const, date: "6 hours ago", status: "investigating" as const }] : []),
     ...(project.health === "behind" ? [{ id: "pe-3", type: "quality_issue", description: "Review pass rate dropped to 58% over last 5 submissions. APG quality threshold is 75%.", severity: "warning" as const, date: "1 day ago", status: "open" as const }] : []),
   ];
+
+  const handleReleasePayment = (paymentId: string) => {
+    setOtpDialog({ isOpen: true, type: "payment", itemId: paymentId });
+  };
+
+  const handleUATSignOff = () => {
+    setOtpDialog({ isOpen: true, type: "uat", itemId: "m3" });
+  };
+
+  const handleOtpConfirm = () => {
+    if (otpDialog.type === "payment" && otpDialog.itemId) {
+      setReleasedPayments((prev) => new Set(prev).add(otpDialog.itemId!));
+      toast.success("Payment Released", "Payment has been released to contributor");
+    } else if (otpDialog.type === "uat") {
+      setUatSigned(true);
+      toast.success("UAT Signed Off", "M3 billing milestone has been triggered");
+    }
+  };
+
+  const handleDownloadReport = () => {
+    toast.success("Report Downloaded", `Project report for "${project.title}" has been downloaded.`);
+  };
+
+  const handlePutOnHold = () => {
+    toast.info("Project On Hold", `"${project.title}" has been put on hold.`);
+  };
+
+  const handleResume = () => {
+    toast.success("Project Resumed", `"${project.title}" is now back on track.`);
+  };
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">

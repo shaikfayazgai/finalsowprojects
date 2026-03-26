@@ -1006,16 +1006,85 @@ export const mockProjects: Project[] = [
     slaCompliance: 71,
     sowTitle: "Enterprise Resource Planning Platform",
   },
+  {
+    id: "proj-005",
+    planId: "plan-002",
+    sowId: "sow-002",
+    teamId: "team-002",
+    title: "Payment Gateway Overhaul",
+    client: "FinServe Global",
+    health: "escalated",
+    progress: 12,
+    startDate: "2026-03-10",
+    endDate: "2026-07-15",
+    budget: 220000,
+    spent: 18500,
+    teamSize: 6,
+    milestones: [],
+    tasksTotal: 35,
+    tasksCompleted: 3,
+    apgScore: 58,
+    escalations: 5,
+    slaCompliance: 65,
+    sowTitle: "Mobile Banking App Redesign",
+  },
+  {
+    id: "proj-006",
+    planId: "plan-004",
+    sowId: "sow-003",
+    teamId: "team-004",
+    title: "Healthcare Portal - Phase 1",
+    client: "MediCare Systems",
+    health: "on_hold",
+    progress: 28,
+    startDate: "2026-02-15",
+    endDate: "2026-07-30",
+    budget: 340000,
+    spent: 87500,
+    teamSize: 8,
+    milestones: [],
+    tasksTotal: 48,
+    tasksCompleted: 12,
+    apgScore: 78,
+    escalations: 0,
+    slaCompliance: 88,
+    sowTitle: "Healthcare Portal Decomposition",
+  },
 ];
 
 /* ══════════════════════════════════════════════════════════════
-   MILESTONES (for proj-001)
+   MILESTONES (for all projects)
    ══════════════════════════════════════════════════════════════ */
 export const mockMilestones: Milestone[] = [
   { id: "ms-001", projectId: "proj-001", title: "Infrastructure & Auth", status: "completed", dueDate: "2026-03-20", progress: 100, tasksTotal: 8, tasksCompleted: 8, deliverables: 4, budget: 55000 },
   { id: "ms-002", projectId: "proj-001", title: "Finance Module", status: "in_progress", dueDate: "2026-04-30", progress: 62, tasksTotal: 12, tasksCompleted: 6, deliverables: 6, budget: 85000 },
   { id: "ms-003", projectId: "proj-001", title: "HR Module", status: "upcoming", dueDate: "2026-06-15", progress: 0, tasksTotal: 10, tasksCompleted: 0, deliverables: 5, budget: 75000 },
   { id: "ms-004", projectId: "proj-001", title: "Reporting & Integration", status: "upcoming", dueDate: "2026-08-10", progress: 0, tasksTotal: 12, tasksCompleted: 0, deliverables: 4, budget: 70000 },
+  
+  /* proj-002: Mobile Banking */
+  { id: "ms-005", projectId: "proj-002", title: "Core Banking APIs", status: "in_progress", dueDate: "2026-04-15", progress: 45, tasksTotal: 10, tasksCompleted: 4, deliverables: 5, budget: 60000 },
+  { id: "ms-006", projectId: "proj-002", title: "Mobile UI & UX", status: "upcoming", dueDate: "2026-05-30", progress: 15, tasksTotal: 8, tasksCompleted: 1, deliverables: 4, budget: 55000 },
+  { id: "ms-007", projectId: "proj-002", title: "Security & Compliance", status: "upcoming", dueDate: "2026-06-20", progress: 0, tasksTotal: 10, tasksCompleted: 0, deliverables: 6, budget: 65000 },
+  
+  /* proj-003: E-Commerce (completed) */
+  { id: "ms-008", projectId: "proj-003", title: "Data Migration", status: "completed", dueDate: "2025-12-15", progress: 100, tasksTotal: 6, tasksCompleted: 6, deliverables: 3, budget: 120000 },
+  { id: "ms-009", projectId: "proj-003", title: "Catalog & Product Engine", status: "completed", dueDate: "2026-01-05", progress: 100, tasksTotal: 12, tasksCompleted: 12, deliverables: 8, budget: 150000 },
+  { id: "ms-010", projectId: "proj-003", title: "Launch & QA", status: "completed", dueDate: "2026-01-20", progress: 100, tasksTotal: 8, tasksCompleted: 8, deliverables: 5, budget: 100000 },
+  
+  /* proj-004: CRM Module */
+  { id: "ms-011", projectId: "proj-004", title: "CRM Foundation", status: "in_progress", dueDate: "2026-04-10", progress: 25, tasksTotal: 6, tasksCompleted: 1, deliverables: 3, budget: 35000 },
+  { id: "ms-012", projectId: "proj-004", title: "Contact Management", status: "upcoming", dueDate: "2026-05-15", progress: 0, tasksTotal: 5, tasksCompleted: 0, deliverables: 3, budget: 30000 },
+  { id: "ms-013", projectId: "proj-004", title: "Sales Pipeline", status: "upcoming", dueDate: "2026-05-30", progress: 0, tasksTotal: 4, tasksCompleted: 0, deliverables: 2, budget: 30000 },
+  
+  /* proj-005: Payment Gateway (escalated) */
+  { id: "ms-014", projectId: "proj-005", title: "Gateway Architecture", status: "in_progress", dueDate: "2026-04-01", progress: 30, tasksTotal: 8, tasksCompleted: 2, deliverables: 4, budget: 70000 },
+  { id: "ms-015", projectId: "proj-005", title: "Integration Layer", status: "upcoming", dueDate: "2026-05-15", progress: 0, tasksTotal: 12, tasksCompleted: 0, deliverables: 6, budget: 80000 },
+  { id: "ms-016", projectId: "proj-005", title: "Security Audit", status: "upcoming", dueDate: "2026-06-30", progress: 0, tasksTotal: 10, tasksCompleted: 0, deliverables: 5, budget: 70000 },
+  
+  /* proj-006: Healthcare Portal (on hold) */
+  { id: "ms-017", projectId: "proj-006", title: "HIPAA Compliance Setup", status: "in_progress", dueDate: "2026-04-20", progress: 40, tasksTotal: 10, tasksCompleted: 4, deliverables: 5, budget: 85000 },
+  { id: "ms-018", projectId: "proj-006", title: "Patient Portal", status: "upcoming", dueDate: "2026-06-15", progress: 15, tasksTotal: 12, tasksCompleted: 1, deliverables: 6, budget: 100000 },
+  { id: "ms-019", projectId: "proj-006", title: "Provider Interface", status: "upcoming", dueDate: "2026-07-30", progress: 0, tasksTotal: 8, tasksCompleted: 0, deliverables: 4, budget: 85000 },
 ];
 
 /* ══════════════════════════════════════════════════════════════
@@ -1026,6 +1095,19 @@ export const mockDeliverables: Deliverable[] = [
   { id: "del-002", projectId: "proj-001", milestoneId: "ms-002", taskId: "task-005", title: "Accounts Payable UI Components", submittedAt: "2026-03-02T10:30:00Z", submittedBy: "Contributor A-7X", status: "pending", evidenceFiles: 5 },
   { id: "del-003", projectId: "proj-001", milestoneId: "ms-001", taskId: "task-001", title: "Monorepo Infrastructure", submittedAt: "2026-02-28T16:00:00Z", submittedBy: "Contributor C-9R", status: "approved", evidenceFiles: 2, decision: "approved", decidedAt: "2026-03-01T09:00:00Z", reviewerNotes: "Excellent setup with comprehensive CI/CD." },
   { id: "del-004", projectId: "proj-001", milestoneId: "ms-001", taskId: "task-002", title: "Authentication Service", submittedAt: "2026-03-05T11:00:00Z", submittedBy: "Contributor B-3K", status: "rework", evidenceFiles: 4, decision: "rework_requested", decidedAt: "2026-03-05T15:00:00Z", reviewerNotes: "MFA flow needs refinement for edge cases." },
-  { id: "del-005", projectId: "proj-002", milestoneId: "ms-002", taskId: "task-008", title: "Design System Components", submittedAt: "2026-03-01T13:00:00Z", submittedBy: "Contributor G-1N", status: "approved", evidenceFiles: 8, decision: "approved", decidedAt: "2026-03-02T10:00:00Z", reviewerNotes: "Beautiful and accessible components." },
+  { id: "del-005", projectId: "proj-002", milestoneId: "ms-005", taskId: "task-008", title: "Design System Components", submittedAt: "2026-03-01T13:00:00Z", submittedBy: "Contributor G-1N", status: "approved", evidenceFiles: 8, decision: "approved", decidedAt: "2026-03-02T10:00:00Z", reviewerNotes: "Beautiful and accessible components." },
   { id: "del-006", projectId: "proj-001", milestoneId: "ms-002", taskId: "task-003", title: "Database Schema v2", submittedAt: "2026-03-04T09:00:00Z", submittedBy: "Contributor B-3K", status: "pending", evidenceFiles: 2 },
+  
+  /* proj-003: E-Commerce (completed) */
+  { id: "del-007", projectId: "proj-003", milestoneId: "ms-008", taskId: "task-019", title: "Legacy Data Extraction Scripts", submittedAt: "2025-12-10T10:00:00Z", submittedBy: "Contributor M-5Z", status: "approved", evidenceFiles: 5, decision: "approved", decidedAt: "2025-12-12T14:00:00Z", reviewerNotes: "Complete extraction with validation." },
+  { id: "del-008", projectId: "proj-003", milestoneId: "ms-009", taskId: "task-022", title: "Product Catalog API", submittedAt: "2025-12-28T16:00:00Z", submittedBy: "Contributor O-1B", status: "approved", evidenceFiles: 6, decision: "approved", decidedAt: "2025-12-30T09:00:00Z", reviewerNotes: "Well documented and tested." },
+  
+  /* proj-004: CRM Module */
+  { id: "del-009", projectId: "proj-004", milestoneId: "ms-011", taskId: "task-033", title: "CRM Data Models", submittedAt: "2026-03-15T11:00:00Z", submittedBy: "Contributor P-4R", status: "pending", evidenceFiles: 3 },
+  
+  /* proj-005: Payment Gateway (escalated) */
+  { id: "del-010", projectId: "proj-005", milestoneId: "ms-014", taskId: "task-012", title: "Payment Gateway Adapter", submittedAt: "2026-03-20T14:00:00Z", submittedBy: "Contributor I-6T", status: "rework", evidenceFiles: 4, decision: "rework_requested", decidedAt: "2026-03-21T10:00:00Z", reviewerNotes: "Security review failed - encryption implementation needs overhaul." },
+  
+  /* proj-006: Healthcare (on hold) */
+  { id: "del-011", projectId: "proj-006", milestoneId: "ms-017", taskId: "task-016", title: "HIPAA Compliance Documentation", submittedAt: "2026-03-18T09:30:00Z", submittedBy: "Contributor Q-6N", status: "approved", evidenceFiles: 12, decision: "approved", decidedAt: "2026-03-20T11:00:00Z", reviewerNotes: "Comprehensive compliance documentation." },
 ];

@@ -2,132 +2,66 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  UsersRound,
-  Layers,
-  Clock,
-  Target,
-  ArrowRight,
-  Sparkles,
-  Brain,
-  ShieldCheck,
-  AlertTriangle,
-  RefreshCw,
-  Send,
-  UserCheck,
-  Timer,
-  X,
-  Search,
-  Wand2,
-  UserCog,
+  Users,
   CheckCircle2,
-  ExternalLink,
+  Clock,
+  AlertTriangle,
+  Loader2,
+  ArrowRight,
+  ShieldCheck,
+  Target,
+  RefreshCw,
+  ChevronDown,
+  Filter,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { stagger, fadeUp, fadeIn, scaleIn } from "@/lib/utils/motion-variants";
-import {
-  Badge,
-  Progress,
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  Button,
-} from "@/components/ui";
-import { MetricRing } from "@/components/enterprise/metric-ring";
-import {
-  mockTeams,
-  mockPlans,
-  mockAssignments,
-} from "@/mocks/data/enterprise-projects";
-import type {
-  TeamPool,
-  Assignment,
-  DecompositionPlan,
-  TeamStatus,
-  AssignmentStatus,
-} from "@/types/enterprise";
+import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
+import { Badge, Progress } from "@/components/ui";
+import { mockTeams, mockProjects } from "@/mocks/data/enterprise-projects";
+import type { TeamPool } from "@/types/enterprise";
 
-/* ══════════════════════════════════════════════════════════════
-   CONSTANTS & CONFIGS
-   ══════════════════════════════════════════════════════════════ */
+/* ── FSD §8.2.1: Team Status Badge Definitions ── */
+type StaffingStatus = "staffing_in_progress" | "fully_staffed" | "partially_staffed" | "matching_issue";
 
-const NOW = new Date();
-
-const teamStatusConfig: Record<
-  TeamStatus,
-  { variant: "gold" | "teal" | "forest" | "brown" | "beige"; label: string }
+const staffingConfig: Record<
+  StaffingStatus,
+  { label: string; variant: "blue" | "forest" | "gold" | "danger"; icon: React.ElementType; description: string }
 > = {
-  forming: { variant: "gold", label: "Forming" },
-  ready: { variant: "teal", label: "Ready" },
-  approved: { variant: "forest", label: "Approved" },
-  active: { variant: "brown", label: "Active" },
-  disbanded: { variant: "beige", label: "Disbanded" },
+  staffing_in_progress: {
+    label: "Staffing In Progress",
+    variant: "blue",
+    icon: Loader2,
+    description: "GlimmoraTeam is matching contributors. No action needed.",
+  },
+  fully_staffed: {
+    label: "Fully Staffed",
+    variant: "forest",
+    icon: CheckCircle2,
+    description: "All tasks have confirmed contributors. Delivery underway.",
+  },
+  partially_staffed: {
+    label: "Partially Staffed",
+    variant: "gold",
+    icon: Clock,
+    description: "Some tasks staffed. Remaining are being matched by GlimmoraTeam.",
+  },
+  matching_issue: {
+    label: "Matching Issue",
+    variant: "danger",
+    icon: AlertTriangle,
+    description: "Task(s) could not be matched. GlimmoraTeam Admin notified.",
+  },
 };
 
-const assignmentStatusConfig: Record<
-  AssignmentStatus,
-  { variant: "gold" | "forest" | "brown" | "beige"; label: string }
-> = {
-  pending_response: { variant: "gold", label: "Pending" },
-  accepted: { variant: "forest", label: "Accepted" },
-  declined: { variant: "brown", label: "Declined" },
-  timed_out: { variant: "beige", label: "Timed Out" },
-};
-
-const complexityConfig: Record<
-  string,
-  { variant: "forest" | "teal" | "gold" | "brown"; label: string }
-> = {
-  low: { variant: "forest", label: "Low" },
-  medium: { variant: "teal", label: "Medium" },
-  high: { variant: "gold", label: "High" },
-  critical: { variant: "brown", label: "Critical" },
-};
-
-/* ── Derived data ── */
-function getFormationQueueItems(): {
-  plan: DecompositionPlan;
-  team?: TeamPool;
-}[] {
-  const items: { plan: DecompositionPlan; team?: TeamPool }[] = [];
-
-  /* Plans with status "approved" that need team formation */
-  const approvedPlans = mockPlans.filter((p) => p.status === "approved");
-  for (const plan of approvedPlans) {
-    const team = mockTeams.find((t) => t.planId === plan.id);
-    if (!team || team.status === "forming" || team.status === "ready") {
-      items.push({ plan, team });
-    }
-  }
-
-  /* Teams that are forming/ready but whose plan isn't "approved" (catch-all) */
-  const formingTeams = mockTeams.filter(
-    (t) =>
-      (t.status === "forming" || t.status === "ready") &&
-      !items.some((i) => i.team?.id === t.id)
-  );
-  for (const team of formingTeams) {
-    const plan = mockPlans.find((p) => p.id === team.planId);
-    if (plan) items.push({ plan, team });
-  }
-
-  return items;
-}
-
-function getActiveTeams(): TeamPool[] {
-  return mockTeams.filter((t) => t.status === "active");
-}
-
-function getPendingAssignments(): Assignment[] {
-  return mockAssignments;
+/* ── Derive staffing status from team data ── */
+function getStaffingStatus(team: TeamPool): StaffingStatus {
+  if (team.status === "active") return "fully_staffed";
+  if (team.status === "disbanded") return "matching_issue";
+  if (team.status === "ready" || team.status === "approved") return "partially_staffed";
+  return "staffing_in_progress";
 }
 
 function getHoursLeft(respondBy: string): number {
@@ -363,7 +297,7 @@ function FormationQueueCard({
 }
 
 /* ══════════════════════════════════════════════════════════════
-   ACTIVE TEAM CARD
+   TEAMS LANDING — FSD §8.2.1
    ══════════════════════════════════════════════════════════════ */
 function ActiveTeamCard({ team }: { team: TeamPool }) {
   const plan = mockPlans.find((p) => p.id === team.planId);
@@ -686,59 +620,54 @@ const mockRerunCandidates = [
   { id: "m-027", avatar: "P9", displayName: "Contributor P-9J", matchScore: 78, skills: ["Mobile", "React Native"] },
 ];
 
-const mockSearchResults = [
-  { id: "m-028", avatar: "R1", displayName: "Contributor R-1X", matchScore: 76, skills: ["Mobile", "Flutter"] },
-  { id: "m-029", avatar: "S4", displayName: "Contributor S-4B", matchScore: 72, skills: ["iOS", "Objective-C"] },
-  { id: "m-025", avatar: "N3", displayName: "Contributor N-3W", matchScore: 84, skills: ["Mobile", "iOS", "Swift"] },
-];
-
-type ReassignMethod = (typeof reassignMethods)[number]["id"];
-type ReassignStep = "select_method" | "method_detail" | "processing" | "success";
-
-function ReassignDialog({
-  open,
-  onOpenChange,
-  assignment,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  assignment: Assignment;
-}) {
-  const [method, setMethod] = React.useState<ReassignMethod | null>(null);
-  const [step, setStep] = React.useState<ReassignStep>("select_method");
-  const [overrideReason, setOverrideReason] = React.useState("");
+export default function TeamsPage() {
+  const [activeFilter, setActiveFilter] = React.useState<MetricFilter>("all");
+  const [selectedStatus, setSelectedStatus] = React.useState<StatusFilter>("All");
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedCandidate, setSelectedCandidate] = React.useState<string | null>(null);
 
-  const handleMethodContinue = () => {
-    if (!method) return;
-    setStep("method_detail");
-  };
+  /* Compute summary metrics — FSD: Total tasks, Assigned, Offers pending, Re-matching, Unmatched */
+  const teamData = mockTeams.map((t) => ({
+    team: t,
+    project: getProjectForTeam(t),
+    status: getStaffingStatus(t),
+    counts: getStaffedCount(t),
+  }));
 
-  const handleAssign = () => {
-    if (method === "override" && !overrideReason.trim()) return;
-    setStep("processing");
-    setTimeout(() => setStep("success"), 1500);
-  };
+  const totalTasks = teamData.reduce((s, d) => s + d.counts.total, 0);
+  const assignedTasks = teamData.reduce((s, d) => s + d.counts.staffed, 0);
+  const offersPending = teamData.filter((d) => d.status === "staffing_in_progress" || d.status === "partially_staffed").reduce((s, d) => s + (d.counts.total - d.counts.staffed), 0);
+  const reMatching = teamData.filter((d) => d.status === "partially_staffed").reduce((s, d) => s + Math.max(0, d.counts.total - d.counts.staffed - 1), 0);
+  const unmatchedAdmin = teamData.filter((d) => d.status === "matching_issue").reduce((s, d) => s + (d.counts.total - d.counts.staffed), 0);
 
-  const handleClose = () => {
-    onOpenChange(false);
-    setTimeout(() => {
-      setMethod(null);
-      setStep("select_method");
-      setOverrideReason("");
-      setSearchQuery("");
-      setSelectedCandidate(null);
-    }, 200);
-  };
+  /* Filter: apply search, status dropdown, and metric filter */
+  const filteredTeamData = teamData.filter((d) => {
+    /* Search filter — FSD §8.2.1: search by project name or SOW ID, min 3 chars */
+    if (searchQuery.length >= 3) {
+      const q = searchQuery.toLowerCase();
+      const projectName = (d.project?.title ?? d.team.name).toLowerCase();
+      const sowRef = (d.project?.sowTitle ?? d.team.planId).toLowerCase();
+      if (!projectName.includes(q) && !sowRef.includes(q)) return false;
+    }
+    /* Status dropdown filter */
+    if (selectedStatus !== "All" && d.status !== selectedStatus) return false;
+    /* Metric card filter */
+    if (activeFilter === "all") return true;
+    if (activeFilter === "assigned") return d.counts.staffed > 0;
+    if (activeFilter === "offers_pending") return d.status === "staffing_in_progress" || d.status === "partially_staffed";
+    if (activeFilter === "re_matching") return d.status === "partially_staffed";
+    if (activeFilter === "unmatched") return d.status === "matching_issue";
+    return true;
+  });
 
-  const filteredSearchResults = searchQuery.trim()
-    ? mockSearchResults.filter(
-        (c) =>
-          c.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : mockSearchResults;
+  const hasActiveFilters = activeFilter !== "all" || selectedStatus !== "All" || searchQuery.length >= 3;
+
+  const metrics: { key: MetricFilter; label: string; value: number; icon: React.ElementType; color: string }[] = [
+    { key: "all", label: "Total Tasks", value: totalTasks, icon: Target, color: "from-brown-400 to-brown-600" },
+    { key: "assigned", label: "Assigned", value: assignedTasks, icon: CheckCircle2, color: "from-forest-400 to-forest-600" },
+    { key: "offers_pending", label: "Offers Pending", value: offersPending, icon: Clock, color: "from-gold-400 to-gold-600" },
+    { key: "re_matching", label: "Re-matching", value: reMatching, icon: RefreshCw, color: "from-blue-400 to-blue-600" },
+    { key: "unmatched", label: "Unmatched — Admin Alerted", value: unmatchedAdmin, icon: AlertTriangle, color: "from-danger to-danger-dark" },
+  ];
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -1021,14 +950,13 @@ function ReassignDialog({
               </DialogDescription>
             </DialogHeader>
 
-            {/* Audit warning (SOW D3 Step 2) */}
-            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gold-50/70 border border-gold-200/50 mt-1">
-              <AlertTriangle className="w-4 h-4 text-gold-600 shrink-0 mt-0.5" />
-              <p className="text-[10px] text-gold-700 leading-relaxed">
-                This action overrides the matching engine recommendation and will
-                be logged in the audit trail with an <strong>ADMIN_OVERRIDE</strong> tag.
-              </p>
-            </div>
+      {/* Anonymisation notice — FSD §8.2 governance rule */}
+      <motion.div variants={fadeUp} className="rounded-xl bg-teal-50 border border-teal-200/60 p-3 flex items-start gap-2.5">
+        <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+        <p className="text-[11px] text-teal-700">
+          Contributor identities are anonymised. You see assignment outcomes and skill match quality — not personal details. This is an immutable platform governance rule.
+        </p>
+      </motion.div>
 
             {/* Contributor selection */}
             <div className="relative my-3">
@@ -1065,6 +993,9 @@ function ReassignDialog({
                 </button>
               ))}
             </div>
+          </motion.button>
+        ))}
+      </motion.div>
 
             {/* Mandatory reason (SOW D3 Step 2) */}
             <div className="mt-3">
@@ -1206,7 +1137,6 @@ function PendingResponseRow({ assignment }: { assignment: Assignment }) {
               {assignment.teamName}
             </p>
           </div>
-        </Link>
 
         {/* Task */}
         <div className="flex-1 min-w-0">
@@ -1231,47 +1161,43 @@ function PendingResponseRow({ assignment }: { assignment: Assignment }) {
           {assignment.status === "pending_response" ? (
             <div
               className={cn(
-                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ring-1",
-                sla.bg,
-                sla.ring
+                "appearance-none rounded-xl border bg-white/80 backdrop-blur-sm pl-3 pr-8 py-2 text-[12px] font-medium text-brown-800 transition-all cursor-pointer",
+                "focus:outline-none focus:ring-2 focus:ring-brown-200/50 focus:border-brown-300",
+                selectedStatus !== "All"
+                  ? "border-brown-300 shadow-sm"
+                  : "border-beige-200/60 hover:border-beige-300"
               )}
             >
-              <span
-                className={cn(
-                  "w-1.5 h-1.5 rounded-full animate-pulse",
-                  sla.dot
-                )}
-              />
-              <Timer className={cn("w-3 h-3", sla.text)} />
-              <span className={cn("text-[11px] font-bold tabular-nums", sla.text)}>
-                {formatHoursLeft(hoursLeft)}
-              </span>
-            </div>
-          ) : assignment.status === "accepted" ? (
-            <p className="text-[11px] font-semibold text-forest-600">
-              Responded {formatDate(assignment.respondedAt!)}
-            </p>
-          ) : (
-            <p className="text-[11px] font-semibold text-brown-600">
-              {assignment.respondedAt
-                ? formatDate(assignment.respondedAt)
-                : "---"}
-            </p>
-          )}
+              {statusFilterOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.value === "All" ? "Status: All" : opt.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400 pointer-events-none" />
+          </div>
         </div>
 
-        {/* Status + Action */}
-        <div className="flex items-center gap-2 min-w-[140px] justify-end">
-          <Badge variant={statusCfg.variant} size="sm" dot>
-            {statusCfg.label}
-          </Badge>
-          {assignment.status === "declined" && (
+        {/* Active filter indicator */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-2">
+            <Filter className="w-3.5 h-3.5 text-beige-400" />
+            <span className="text-[11px] text-beige-500">
+              {searchQuery.length >= 3 && (
+                <>Search: <span className="font-semibold text-brown-700">&ldquo;{searchQuery}&rdquo;</span></>
+              )}
+              {searchQuery.length >= 3 && (activeFilter !== "all" || selectedStatus !== "All") && <span className="mx-1 text-beige-300">·</span>}
+              {activeFilter !== "all" && (
+                <>Metric: <span className="font-semibold text-brown-700">{metrics.find((m) => m.key === activeFilter)?.label}</span></>
+              )}
+              {activeFilter !== "all" && selectedStatus !== "All" && <span className="mx-1 text-beige-300">·</span>}
+              {selectedStatus !== "All" && (
+                <>Status: <span className="font-semibold text-brown-700">{staffingConfig[selectedStatus].label}</span></>
+              )}
+            </span>
             <button
-              onClick={() => setReassignOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-brown-500 to-brown-600 text-white text-[10px] font-semibold shadow-sm hover:shadow-md hover:from-brown-600 hover:to-brown-700 transition-all"
+              onClick={() => { setActiveFilter("all"); setSelectedStatus("All"); setSearchQuery(""); }}
+              className="text-[11px] text-teal-600 hover:text-teal-700 font-medium underline underline-offset-2"
             >
-              <RefreshCw className="w-3 h-3" />
-              Reassign
+              Clear all
             </button>
           )}
         </div>
@@ -1500,8 +1426,6 @@ export default function TeamsPage() {
                   why they were selected. No resumes, no bidding.
                 </p>
               </div>
-              <ShieldCheck className="w-5 h-5 text-forest-400 shrink-0" />
-            </motion.div>
 
             {formationQueue.length === 0 ? (
               <motion.div
@@ -1559,21 +1483,12 @@ export default function TeamsPage() {
                   <ActiveTeamCard key={team.id} team={team} />
                 ))}
               </div>
-            )}
-          </motion.div>
-        )}
 
-        {activeTab === "pending" && (
-          <motion.div
-            key="pending"
-            variants={stagger}
-            initial="hidden"
-            animate="show"
-            exit="hidden"
-            className="space-y-4"
-          >
-            {/* SLA Legend */}
-            <SlaLegend />
+              {/* Staffed — FSD: count + progress bar */}
+              <div className="space-y-1">
+                <span className="text-[13px] font-semibold text-brown-800">{counts.staffed}</span>
+                <Progress value={pct} className="h-1.5" />
+              </div>
 
             {/* Column headers */}
             <div className="flex items-center gap-4 px-5 py-2">
@@ -1593,6 +1508,8 @@ export default function TeamsPage() {
                 Status
               </span>
             </div>
+          );
+        })}
 
             {allAssignments.length === 0 ? (
               <motion.div
@@ -1620,7 +1537,7 @@ export default function TeamsPage() {
             )}
           </motion.div>
         )}
-      </AnimatePresence>
+      </motion.div>
     </motion.div>
   );
 }

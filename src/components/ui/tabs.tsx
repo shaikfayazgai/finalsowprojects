@@ -27,6 +27,7 @@ const TabsTrigger = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Trigger
     ref={ref}
+    suppressHydrationWarning
     className={cn(
       "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-4 py-2 font-body text-sm font-medium text-beige-600 transition-all duration-200",
       "hover:text-brown-700",
@@ -46,6 +47,7 @@ const TabsContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
+    suppressHydrationWarning
     className={cn(
       "mt-4 animate-fade-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown-500 focus-visible:ring-offset-2",
       className
