@@ -36,16 +36,10 @@ function LoginPageContent() {
 
   const callbackUrl = searchParams.get("callbackUrl") || undefined;
 
-  const getRoleDest = useCallback(async () => {
-    if (callbackUrl) return callbackUrl;
-    const session = await getSession();
-    const role = (session?.user as { role?: string })?.role;
-    if (role === "contributor") return "/contributor/dashboard";
-    if (role === "mentor") return "/mentor/dashboard";
-    return isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding";
-  }, [callbackUrl, isOnboardingComplete]);
-
   const redirectTo = callbackUrl || (isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding");
+
+  // Destination computed once after successful login and stored for sync use
+  const [loginDest, setLoginDest] = useState<string>("");
 
   const [step, setStep] = useState<Step>("credentials");
   const [email, setEmail] = useState("");
@@ -98,10 +92,9 @@ function LoginPageContent() {
     setError("");
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
-    const dest = await getRoleDest();
     setIsLoading(false);
-    window.location.href = dest;
-  }, [getRoleDest]);
+    window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
+  }, [loginDest, callbackUrl]);
 
   useEffect(() => {
     if (step === "mfa" && mfaCode.length === 6 && !isLoading) {
@@ -155,6 +148,17 @@ function LoginPageContent() {
       }
 
       if (result?.ok) {
+        // Compute destination now while session is fresh
+        let dest = callbackUrl || "";
+        if (!dest) {
+          const session = await getSession();
+          const role = (session?.user as { role?: string })?.role;
+          if (role === "contributor") dest = "/contributor/dashboard";
+          else if (role === "mentor") dest = "/mentor/dashboard";
+          else dest = isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding";
+        }
+        setLoginDest(dest);
+
         // Credentials verified - check MFA
         if (isMfaEnabled) {
           setStep("mfa");
@@ -182,9 +186,8 @@ function LoginPageContent() {
     setError("");
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
-    const dest = await getRoleDest();
     setIsLoading(false);
-    window.location.href = dest;
+    window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
   };
 
   /* ── Google / Microsoft SSO via NextAuth ── */
@@ -466,14 +469,14 @@ function LoginPageContent() {
                 variant="primary"
                 size="lg"
                 className="w-full"
-                onClick={async () => { const dest = await getRoleDest(); window.location.href = `/auth/mfa-setup?redirect=${dest}`; }}
+                onClick={() => { const dest = loginDest || callbackUrl || "/enterprise/dashboard"; window.location.href = `/auth/mfa-setup?redirect=${dest}`; }}
               >
                 <Shield className="w-4 h-4" /> Set Up MFA Now
               </Button>
 
               <button
                 type="button"
-                onClick={async () => { const dest = await getRoleDest(); window.location.href = dest; }}
+                onClick={() => { window.location.href = loginDest || callbackUrl || "/enterprise/dashboard"; }}
                 className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
               >
                 Skip for now
