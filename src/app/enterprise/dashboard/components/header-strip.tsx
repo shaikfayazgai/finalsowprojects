@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { fadeUp } from "@/lib/utils/motion-variants";
 import type { PortfolioCounts, ProjectHealth } from "@/types/enterprise";
@@ -26,6 +27,8 @@ const pills: { key: ProjectHealth; label: string; dotColor: string; bgActive: st
 ];
 
 export function HeaderStrip({ attentionCount, portfolio, avgSla, healthFilter, onFilterChange }: HeaderStripProps) {
+  const { data: session } = useSession();
+  const firstName = session?.user?.name?.split(" ")[0] ?? "there";
   const greeting = getGreeting();
   const dateString = new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
@@ -42,7 +45,7 @@ export function HeaderStrip({ attentionCount, portfolio, avgSla, healthFilter, o
       <div>
         <div className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1.5">Enterprise Console</div>
         <h1 className="font-heading text-[26px] font-semibold tracking-tight text-gray-900 leading-tight">
-          {greeting}, <span className="text-brown-500">Priya.</span>
+          {greeting}, <span className="text-brown-500">{firstName}.</span>
         </h1>
         <p className="mt-1 text-[13px] text-gray-500">
           {attentionCount > 0

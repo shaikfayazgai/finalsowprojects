@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import {
   ClipboardCheck,
   Clock,
@@ -24,6 +25,9 @@ import {
 } from "@/components/ui";
 
 export default function MentorDashboardPage() {
+  const { data: session } = useSession();
+  const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -32,7 +36,7 @@ export default function MentorDashboardPage() {
           Reviewer Dashboard
         </h1>
         <p className="text-sm text-beige-600 mt-1">
-          Welcome back, Rajesh. You have 6 items in your review queue.
+          Welcome back, {firstName}. You have 6 items in your review queue.
         </p>
       </div>
 

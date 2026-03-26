@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import {
   ListChecks,
   Wallet,
@@ -21,7 +22,18 @@ import {
   Progress,
 } from "@/components/ui";
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return "Good morning";
+  if (h >= 12 && h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 export default function ContributorDashboardPage() {
+  const { data: session } = useSession();
+  const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+  const greeting = getGreeting();
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Welcome header */}
@@ -30,10 +42,10 @@ export default function ContributorDashboardPage() {
         <div className="absolute bottom-4 right-8 w-24 h-24 rounded-full bg-gold-400/15 blur-xl" />
         <div className="relative z-10">
           <Badge variant="glass" size="sm" className="text-white/80 border-white/20 bg-white/15 mb-3">
-            <Sparkles className="w-3 h-3" /> Good afternoon
+            <Sparkles className="w-3 h-3" /> {greeting}
           </Badge>
           <h1 className="font-heading text-2xl font-semibold mb-1">
-            Welcome back, Fatima
+            Welcome back, {firstName}
           </h1>
           <p className="text-teal-100 text-sm max-w-md">
             You have 3 active tasks and 1 pending review. Your skill genome grew 12% this month.
