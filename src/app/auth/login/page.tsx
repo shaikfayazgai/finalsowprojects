@@ -33,15 +33,25 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const isMfaEnabled = useAuthStore((s) => s.isMfaEnabled);
   const isOnboardingComplete = useAuthStore((s) => s.isOnboardingComplete);
+  const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
 
   const callbackUrl = searchParams.get("callbackUrl") || undefined;
-
-  const redirectTo = callbackUrl || (isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding");
 
   // Destination computed once after successful login and stored for sync use
   const [loginDest, setLoginDest] = useState<string>("");
 
   const [step, setStep] = useState<Step>("credentials");
+  const [userRole, setUserRole] = useState<string>("");
+
+  // Route based on user role
+  const getRoleDest = () => {
+    if (userRole === "contributor") return "/contributor/dashboard";
+    if (userRole === "mentor") return "/mentor/dashboard";
+    if (userRole === "admin") return "/enterprise/dashboard";
+    // enterprise role — show onboarding if not complete
+    return isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding";
+  };
+  const redirectTo = callbackUrl || getRoleDest();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -148,15 +158,28 @@ function LoginPageContent() {
       }
 
       if (result?.ok) {
-        // Compute destination now while session is fresh
-        let dest = callbackUrl || "";
-        if (!dest) {
-          const session = await getSession();
-          const role = (session?.user as { role?: string })?.role;
-          if (role === "contributor") dest = "/contributor/dashboard";
-          else if (role === "mentor") dest = "/mentor/dashboard";
-          else dest = isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding";
+        // Fetch session to get user role
+        const session = await getSession();
+        const role = (session?.user as { role?: string })?.role;
+
+        // Reset onboarding so the modal shows after login (enterprise only)
+        if (role === "enterprise") {
+          setOnboardingComplete(false);
+        } else {
+          // For contributor/admin/mentor, mark onboarding as complete so modal doesn't show
+          setOnboardingComplete(true);
         }
+
+        // Store role for redirect after MFA
+        setUserRole(role || "enterprise");
+
+        // Compute destination now while session is fresh
+        const dest = callbackUrl || (
+          role === "contributor" ? "/contributor/dashboard" :
+          role === "mentor" ? "/mentor/dashboard" :
+          role === "admin" ? "/enterprise/dashboard" :
+          isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding"
+        );
         setLoginDest(dest);
 
         // Credentials verified - check MFA

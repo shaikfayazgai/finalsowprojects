@@ -26,6 +26,11 @@ import {
   ShieldCheck,
   Plug,
   UsersRound,
+  FormInput,
+  BookMarked,
+  FileStack,
+  Scale,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 
@@ -116,6 +121,19 @@ export const enterpriseNav: ModuleConfig = {
         { label: "Policies", href: "/enterprise/admin/config/apg", icon: ShieldCheck },
         { label: "Integrations", href: "/enterprise/admin/config/integrations", icon: Plug },
         { label: "Contributors", href: "/enterprise/admin/users", icon: UserCog },
+        { label: "SOW Intake Forms", href: "/enterprise/admin/config/sow-forms", icon: FormInput },
+        { label: "Clause Library", href: "/enterprise/admin/config/clause-library", icon: BookMarked },
+        { label: "SOW Templates", href: "/enterprise/admin/config/templates", icon: FileStack },
+        { label: "Review Rubrics", href: "/enterprise/admin/config/review-rubrics", icon: Scale },
+      ],
+    },
+    {
+      title: "Analytics & Intelligence",
+      items: [
+        { label: "Workforce", href: "/enterprise/analytics", icon: BarChart3 },
+        { label: "Economic", href: "/enterprise/analytics/economic", icon: TrendingUp },
+        { label: "Governance & Risk", href: "/enterprise/analytics/governance", icon: Shield },
+        { label: "Self-service", href: "/enterprise/analytics/reports", icon: PieChart },
       ],
     },
     /* ─── Audit ─── */

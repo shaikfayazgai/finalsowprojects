@@ -25,6 +25,7 @@ import {
   PenLine,
 } from "lucide-react";
 import { GlassCard, GlassCardContent } from "@/components/ui";
+import { useAuthStore } from "@/lib/stores/auth-store";
 
 import { useRegistration } from "./hooks/useRegistration";
 import { StepProgress } from "./components/StepProgress";
@@ -482,13 +483,19 @@ function ContributorRegisterContent() {
     }, 150);
   };
 
+  const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
+
   const handleSSO = async (provider: SSOProvider) => {
     setSsoLoading(provider);
     try {
       const providerId = provider === "microsoft" ? "microsoft-entra-id" : "google";
+      if (selectedRole === "enterprise") {
+        // Reset onboarding so the modal shows after OAuth login
+        setOnboardingComplete(false);
+      }
       await signIn(providerId, {
         callbackUrl: selectedRole === "enterprise"
-          ? "/enterprise/dashboard"
+          ? "/enterprise/onboarding"
           : "/contributor/dashboard",
       });
     } catch {
