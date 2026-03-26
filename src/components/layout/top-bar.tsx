@@ -264,7 +264,7 @@ export function TopBar({ config }: TopBarProps) {
           {/* User avatar dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="rounded-full focus:outline-none focus:ring-2 focus:ring-gold-200/40 focus:ring-offset-1">
+              <button suppressHydrationWarning className="rounded-full focus:outline-none focus:ring-2 focus:ring-gold-200/40 focus:ring-offset-1">
                 <div
                   className="rounded-full flex items-center justify-center cursor-pointer transition-shadow duration-200"
                   style={{

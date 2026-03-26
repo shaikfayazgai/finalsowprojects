@@ -12,7 +12,7 @@ export type DependencyType = "blocks" | "related";
 export type SkillSource = "ai" | "manual";
 export type DecompositionItemStatus = "proposed" | "accepted" | "modified" | "deleted";
 export type TeamStatus = "forming" | "ready" | "approved" | "active" | "disbanded";
-export type ProjectHealth = "on_track" | "at_risk" | "behind" | "completed";
+export type ProjectHealth = "on_track" | "at_risk" | "behind" | "on_hold" | "escalated" | "completed";
 export type TaskStatus = "backlog" | "in_progress" | "in_review" | "rework" | "accepted" | "rejected";
 export type MilestoneStatus = "upcoming" | "in_progress" | "completed" | "overdue";
 export type ReviewDecision = "approved" | "rejected" | "rework_requested";
@@ -476,4 +476,66 @@ export interface ActivityEvent {
   target: string;
   type: "task" | "review" | "payment" | "escalation" | "milestone" | "sow" | "team";
   color: string;
+}
+
+/* ── Exceptions Module (FSD §9.2) ── */
+export type ExceptionSeverity = "critical" | "high" | "medium";
+export type ExceptionType =
+  | "task_sla_breach"
+  | "milestone_breach"
+  | "rework_deadline_missed"
+  | "payment_overdue"
+  | "quality_concern"
+  | "capacity_flag"
+  | "matching_issue"
+  | "evidence_dispute"
+  | "scope_concern"
+  | "admin_decision_pending";
+export type ExceptionStatus = "open" | "pending_admin_review" | "pending_enterprise_response" | "resolved";
+export type ExceptionRaisedBy = "enterprise" | "admin" | "agi";
+
+export interface ExceptionItem {
+  id: string;
+  type: ExceptionType;
+  severity: ExceptionSeverity;
+  status: ExceptionStatus;
+  projectId: string;
+  projectName: string;
+  milestoneId?: string;
+  milestoneName?: string;
+  taskId?: string;
+  taskName: string;
+  description: string;
+  raisedBy: ExceptionRaisedBy;
+  raisedByName: string;
+  reportedDate: string;
+  assignedTo: string;
+  slaDeadline: string;
+  resolvedAt?: string;
+  resolutionNotes?: string;
+  resolvedBy?: string;
+  adminNotes?: string;
+  enterpriseResponse?: string;
+  history: ExceptionHistoryEntry[];
+}
+
+export interface ExceptionHistoryEntry {
+  id: string;
+  timestamp: string;
+  actor: string;
+  action: string;
+  fromStatus?: ExceptionStatus;
+  toStatus?: ExceptionStatus;
+  notes?: string;
+}
+
+export interface RaiseEscalationPayload {
+  type: ExceptionType;
+  severity: ExceptionSeverity;
+  projectId: string;
+  milestoneId: string;
+  taskId?: string;
+  description: string; // min 50, max 2000 chars
+  supportingFiles?: string[]; // up to 5 files, PDF/DOCX/PNG/JPG/XLSX, max 20MB each
+  preferredResolution?: string; // max 500 chars
 }

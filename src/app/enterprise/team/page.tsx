@@ -2,1660 +2,339 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  UsersRound,
-  Layers,
-  Clock,
-  Target,
-  ArrowRight,
-  Sparkles,
-  Brain,
-  ShieldCheck,
-  AlertTriangle,
-  RefreshCw,
-  Send,
-  UserCheck,
-  Timer,
-  X,
-  Search,
-  Wand2,
-  UserCog,
+  Users,
   CheckCircle2,
-  ExternalLink,
+  Clock,
+  AlertTriangle,
+  Loader2,
+  ArrowRight,
+  ShieldCheck,
+  Target,
+  RefreshCw,
+  ChevronDown,
+  Filter,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { stagger, fadeUp, fadeIn, scaleIn } from "@/lib/utils/motion-variants";
-import {
-  Badge,
-  Progress,
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  Button,
-} from "@/components/ui";
-import { MetricRing } from "@/components/enterprise/metric-ring";
-import {
-  mockTeams,
-  mockPlans,
-  mockAssignments,
-} from "@/mocks/data/enterprise-projects";
-import type {
-  TeamPool,
-  Assignment,
-  DecompositionPlan,
-  TeamStatus,
-  AssignmentStatus,
-} from "@/types/enterprise";
+import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
+import { Badge, Progress } from "@/components/ui";
+import { mockTeams, mockProjects } from "@/mocks/data/enterprise-projects";
+import type { TeamPool } from "@/types/enterprise";
 
-/* ══════════════════════════════════════════════════════════════
-   CONSTANTS & CONFIGS
-   ══════════════════════════════════════════════════════════════ */
+/* ── FSD §8.2.1: Team Status Badge Definitions ── */
+type StaffingStatus = "staffing_in_progress" | "fully_staffed" | "partially_staffed" | "matching_issue";
 
-const NOW = new Date();
-
-const teamStatusConfig: Record<
-  TeamStatus,
-  { variant: "gold" | "teal" | "forest" | "brown" | "beige"; label: string }
+const staffingConfig: Record<
+  StaffingStatus,
+  { label: string; variant: "blue" | "forest" | "gold" | "danger"; icon: React.ElementType; description: string }
 > = {
-  forming: { variant: "gold", label: "Forming" },
-  ready: { variant: "teal", label: "Ready" },
-  approved: { variant: "forest", label: "Approved" },
-  active: { variant: "brown", label: "Active" },
-  disbanded: { variant: "beige", label: "Disbanded" },
+  staffing_in_progress: {
+    label: "Staffing In Progress",
+    variant: "blue",
+    icon: Loader2,
+    description: "GlimmoraTeam is matching contributors. No action needed.",
+  },
+  fully_staffed: {
+    label: "Fully Staffed",
+    variant: "forest",
+    icon: CheckCircle2,
+    description: "All tasks have confirmed contributors. Delivery underway.",
+  },
+  partially_staffed: {
+    label: "Partially Staffed",
+    variant: "gold",
+    icon: Clock,
+    description: "Some tasks staffed. Remaining are being matched by GlimmoraTeam.",
+  },
+  matching_issue: {
+    label: "Matching Issue",
+    variant: "danger",
+    icon: AlertTriangle,
+    description: "Task(s) could not be matched. GlimmoraTeam Admin notified.",
+  },
 };
 
-const assignmentStatusConfig: Record<
-  AssignmentStatus,
-  { variant: "gold" | "forest" | "brown" | "beige"; label: string }
-> = {
-  pending_response: { variant: "gold", label: "Pending" },
-  accepted: { variant: "forest", label: "Accepted" },
-  declined: { variant: "brown", label: "Declined" },
-  timed_out: { variant: "beige", label: "Timed Out" },
-};
-
-const complexityConfig: Record<
-  string,
-  { variant: "forest" | "teal" | "gold" | "brown"; label: string }
-> = {
-  low: { variant: "forest", label: "Low" },
-  medium: { variant: "teal", label: "Medium" },
-  high: { variant: "gold", label: "High" },
-  critical: { variant: "brown", label: "Critical" },
-};
-
-/* ── Derived data ── */
-function getFormationQueueItems(): {
-  plan: DecompositionPlan;
-  team?: TeamPool;
-}[] {
-  const items: { plan: DecompositionPlan; team?: TeamPool }[] = [];
-
-  /* Plans with status "approved" that need team formation */
-  const approvedPlans = mockPlans.filter((p) => p.status === "approved");
-  for (const plan of approvedPlans) {
-    const team = mockTeams.find((t) => t.planId === plan.id);
-    if (!team || team.status === "forming" || team.status === "ready") {
-      items.push({ plan, team });
-    }
-  }
-
-  /* Teams that are forming/ready but whose plan isn't "approved" (catch-all) */
-  const formingTeams = mockTeams.filter(
-    (t) =>
-      (t.status === "forming" || t.status === "ready") &&
-      !items.some((i) => i.team?.id === t.id)
-  );
-  for (const team of formingTeams) {
-    const plan = mockPlans.find((p) => p.id === team.planId);
-    if (plan) items.push({ plan, team });
-  }
-
-  return items;
+/* ── Derive staffing status from team data ── */
+function getStaffingStatus(team: TeamPool): StaffingStatus {
+  if (team.status === "active") return "fully_staffed";
+  if (team.status === "disbanded") return "matching_issue";
+  if (team.status === "ready" || team.status === "approved") return "partially_staffed";
+  return "staffing_in_progress";
 }
 
-function getActiveTeams(): TeamPool[] {
-  return mockTeams.filter((t) => t.status === "active");
+/* ── Get total/staffed task counts ── */
+function getStaffedCount(team: TeamPool): { total: number; staffed: number } {
+  const total = team.requiredSkills.length > 0 ? Math.max(team.totalMembers + 2, 8) : team.totalMembers;
+  const staffed = team.status === "active" ? total : Math.min(team.totalMembers, total);
+  return { total, staffed };
 }
 
-function getPendingAssignments(): Assignment[] {
-  return mockAssignments;
-}
-
-function getHoursLeft(respondBy: string): number {
-  const deadline = new Date(respondBy);
-  return (deadline.getTime() - NOW.getTime()) / (1000 * 60 * 60);
-}
-
-function getSlaColor(hoursLeft: number): {
-  label: string;
-  text: string;
-  bg: string;
-  dot: string;
-  ring: string;
-} {
-  if (hoursLeft > 48)
-    return {
-      label: "Safe",
-      text: "text-forest-700",
-      bg: "bg-forest-50",
-      dot: "bg-forest-500",
-      ring: "ring-forest-200",
-    };
-  if (hoursLeft > 24)
-    return {
-      label: "Normal",
-      text: "text-teal-700",
-      bg: "bg-teal-50",
-      dot: "bg-teal-500",
-      ring: "ring-teal-200",
-    };
-  if (hoursLeft > 12)
-    return {
-      label: "Approaching",
-      text: "text-gold-700",
-      bg: "bg-gold-50",
-      dot: "bg-gold-500",
-      ring: "ring-gold-200",
-    };
-  return {
-    label: "Critical",
-    text: "text-brown-700",
-    bg: "bg-brown-50",
-    dot: "bg-brown-600",
-    ring: "ring-brown-200",
-  };
-}
-
-function formatHoursLeft(hoursLeft: number): string {
-  if (hoursLeft <= 0) return "Expired";
-  if (hoursLeft < 1) return `${Math.round(hoursLeft * 60)}m`;
-  if (hoursLeft < 24) return `${Math.round(hoursLeft)}h`;
-  const days = Math.floor(hoursLeft / 24);
-  const hrs = Math.round(hoursLeft % 24);
-  return `${days}d ${hrs}h`;
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function getProjectForTeam(team: TeamPool) {
+  return mockProjects.find((p) => p.id === team.projectId);
 }
 
 /* ══════════════════════════════════════════════════════════════
-   MINI STAT CARD
+   TEAMS LANDING — FSD §8.2.1
    ══════════════════════════════════════════════════════════════ */
-function MiniStat({
-  label,
-  value,
-  icon: Icon,
-  accent,
-  subtext,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ElementType;
-  accent: string;
-  subtext?: string;
-}) {
-  return (
-    <motion.div
-      variants={scaleIn}
-      className="relative overflow-hidden rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 hover:shadow-lg transition-all group"
-    >
-      <div
-        className={cn(
-          "absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity",
-          accent.includes("brown")
-            ? "bg-brown-500"
-            : accent.includes("teal")
-              ? "bg-teal-500"
-              : accent.includes("forest")
-                ? "bg-forest-500"
-                : "bg-gold-500"
-        )}
-      />
-      <div
-        className={cn(
-          "w-10 h-10 rounded-xl flex items-center justify-center mb-3",
-          accent
-        )}
-      >
-        <Icon className="w-5 h-5" />
-      </div>
-      <p className="text-[24px] font-bold text-brown-900 tracking-tight leading-none">
-        {value}
-      </p>
-      <p className="text-[11px] text-beige-500 font-medium mt-1.5">{label}</p>
-      {subtext && (
-        <p className="text-[10px] text-beige-400 mt-0.5">{subtext}</p>
-      )}
-    </motion.div>
-  );
-}
+/* ── FSD §8.2.1: Metric filter type ── */
+type MetricFilter = "all" | "assigned" | "offers_pending" | "re_matching" | "unmatched";
 
-/* ══════════════════════════════════════════════════════════════
-   FORMATION QUEUE CARD
-   ══════════════════════════════════════════════════════════════ */
-function FormationQueueCard({
-  plan,
-  team,
-}: {
-  plan: DecompositionPlan;
-  team?: TeamPool;
-}) {
-  const [formTeamOpen, setFormTeamOpen] = React.useState(false);
-  const complexity = complexityConfig[plan.complexity];
-  const matchColor = team
-    ? team.matchScore >= 90
-      ? "forest"
-      : team.matchScore >= 80
-        ? "teal"
-        : "gold"
-    : "brown";
+/* ── Status dropdown filter options ── */
+type StatusFilter = "All" | StaffingStatus;
 
-  return (
-    <motion.div variants={fadeUp}>
-      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden hover:shadow-xl hover:shadow-brown-100/20 transition-all duration-300">
-        <div className="p-5">
-          {/* Top row: Plan info */}
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-[14px] font-bold text-brown-900 truncate">
-                {plan.title}
-              </h3>
-              <p className="text-[11px] text-beige-500 mt-0.5">
-                SOW: {plan.sowId} &middot; {plan.totalTasks} tasks &middot;{" "}
-                {plan.estimatedHours.toLocaleString()}h estimated
-              </p>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0 ml-3">
-              <Badge variant={complexity.variant} size="sm">
-                {complexity.label}
-              </Badge>
-              {team && (
-                <Badge variant={teamStatusConfig[team.status].variant} size="sm" dot>
-                  {teamStatusConfig[team.status].label}
-                </Badge>
-              )}
-            </div>
-          </div>
-
-          {/* Required skills */}
-          <div className="flex items-center gap-1.5 flex-wrap mb-4">
-            {(team?.requiredSkills ?? []).slice(0, 5).map((skill) => (
-              <span
-                key={skill}
-                className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-100/50"
-              >
-                {skill}
-              </span>
-            ))}
-            {(team?.requiredSkills?.length ?? 0) > 5 && (
-              <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-beige-200 text-beige-500">
-                +{(team?.requiredSkills?.length ?? 0) - 5}
-              </span>
-            )}
-          </div>
-
-          {/* Bottom row: Action area */}
-          <div className="flex items-center justify-between pt-3 border-t border-beige-100">
-            {team ? (
-              <>
-                {/* Team exists - show match score + members + action */}
-                <div className="flex items-center gap-4">
-                  <MetricRing
-                    value={team.matchScore}
-                    size={52}
-                    strokeWidth={4}
-                    color={matchColor}
-                    label="Match"
-                  />
-                  <div>
-                    <p className="text-[12px] font-semibold text-brown-800">
-                      {team.totalMembers} contributors matched
-                    </p>
-                    <div className="flex -space-x-1.5 mt-1">
-                      {team.members.slice(0, 4).map((m) => (
-                        <div
-                          key={m.id}
-                          className="w-6 h-6 rounded-full bg-gradient-to-br from-brown-300 to-brown-400 border-2 border-white flex items-center justify-center text-[8px] font-bold text-white"
-                        >
-                          {m.avatar}
-                        </div>
-                      ))}
-                      {team.totalMembers > 4 && (
-                        <div className="w-6 h-6 rounded-full bg-beige-200 border-2 border-white flex items-center justify-center text-[8px] font-bold text-beige-600">
-                          +{team.totalMembers - 4}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <Link
-                  href={`/enterprise/team/${team.id}`}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gradient-to-r from-brown-500 to-brown-600 text-white text-[11px] font-semibold shadow-sm hover:shadow-md hover:from-brown-600 hover:to-brown-700 transition-all group/btn"
-                >
-                  Review Matches
-                  <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
-                </Link>
-              </>
-            ) : (
-              <>
-                {/* No team yet — trigger matching engine */}
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-gold-100 flex items-center justify-center">
-                    <Brain className="w-4 h-4 text-gold-500" />
-                  </div>
-                  <p className="text-[11px] text-beige-500">
-                    Ready for AI matching
-                  </p>
-                </div>
-                <button
-                  onClick={() => setFormTeamOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gradient-to-r from-gold-500 to-gold-600 text-white text-[11px] font-semibold shadow-sm hover:shadow-md hover:from-gold-600 hover:to-gold-700 transition-all group/btn"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Form Team
-                  <ArrowRight className="w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform" />
-                </button>
-                <FormTeamDialog
-                  open={formTeamOpen}
-                  onOpenChange={setFormTeamOpen}
-                  plan={plan}
-                />
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════
-   ACTIVE TEAM CARD
-   ══════════════════════════════════════════════════════════════ */
-function ActiveTeamCard({ team }: { team: TeamPool }) {
-  const plan = mockPlans.find((p) => p.id === team.planId);
-  const matchColor =
-    team.matchScore >= 90
-      ? "forest"
-      : team.matchScore >= 80
-        ? "teal"
-        : "gold";
-
-  return (
-    <motion.div variants={fadeUp}>
-      <Link
-        href={`/enterprise/team/${team.id}`}
-        className="group block"
-      >
-        <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5 hover:shadow-xl hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
-          {/* Header */}
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-[14px] font-bold text-brown-900 group-hover:text-brown-700 transition-colors truncate">
-                {team.name}
-              </h3>
-              <p className="text-[11px] text-beige-500 mt-0.5">
-                {plan?.title ?? team.planId}
-              </p>
-            </div>
-            <Badge variant={teamStatusConfig[team.status].variant} size="sm" dot>
-              {teamStatusConfig[team.status].label}
-            </Badge>
-          </div>
-
-          {/* Middle: Match ring + avatar stack */}
-          <div className="flex items-center gap-5">
-            <MetricRing
-              value={team.matchScore}
-              size={64}
-              strokeWidth={5}
-              color={matchColor}
-              label="Match"
-            />
-            <div className="flex-1 space-y-3">
-              {/* Avatar stack */}
-              <div>
-                <p className="text-[10px] text-beige-500 mb-1.5">Team</p>
-                <div className="flex -space-x-2">
-                  {team.members.slice(0, 4).map((m) => (
-                    <TooltipProvider key={m.id} delayDuration={200}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brown-300 to-brown-500 border-2 border-white flex items-center justify-center text-[9px] font-bold text-white cursor-default hover:scale-110 hover:z-10 transition-transform">
-                            {m.avatar}
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          <p className="text-[11px]">{m.displayName}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ))}
-                  {team.totalMembers > 4 && (
-                    <div className="w-8 h-8 rounded-full bg-beige-200 border-2 border-white flex items-center justify-center text-[9px] font-bold text-beige-600">
-                      +{team.totalMembers - 4}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Stats row */}
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1">
-                  <UsersRound className="w-3 h-3 text-beige-400" />
-                  <span className="text-[11px] font-semibold text-brown-800">
-                    {team.totalMembers}
-                  </span>
-                  <span className="text-[10px] text-beige-500">members</span>
-                </div>
-                <div className="w-px h-4 bg-beige-200" />
-                <div className="flex items-center gap-1">
-                  <Layers className="w-3 h-3 text-beige-400" />
-                  <span className="text-[11px] font-semibold text-brown-800">
-                    {team.requiredSkills.length}
-                  </span>
-                  <span className="text-[10px] text-beige-500">skills</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Skills */}
-          <div className="flex items-center gap-1.5 mt-4 flex-wrap">
-            {team.requiredSkills.slice(0, 4).map((skill) => (
-              <span
-                key={skill}
-                className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-beige-100 text-beige-600"
-              >
-                {skill}
-              </span>
-            ))}
-            {team.requiredSkills.length > 4 && (
-              <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-beige-200 text-beige-500">
-                +{team.requiredSkills.length - 4}
-              </span>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-beige-100">
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-forest-400" />
-              <span className="text-[10px] text-beige-500">
-                Anonymized &middot; AI-governed
-              </span>
-            </div>
-            <ArrowRight className="w-4 h-4 text-beige-300 group-hover:text-brown-500 group-hover:translate-x-1 transition-all" />
-          </div>
-        </div>
-      </Link>
-    </motion.div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════
-   FORM TEAM DIALOG (SOW Flow D1 — Trigger Matching Engine)
-   ══════════════════════════════════════════════════════════════ */
-type FormTeamStep = "confirm" | "matching" | "success";
-
-function FormTeamDialog({
-  open,
-  onOpenChange,
-  plan,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  plan: DecompositionPlan;
-}) {
-  const [step, setStep] = React.useState<FormTeamStep>("confirm");
-
-  const handleStart = () => {
-    setStep("matching");
-    /* Simulate AI matching engine */
-    setTimeout(() => setStep("success"), 2200);
-  };
-
-  const handleClose = () => {
-    onOpenChange(false);
-    setTimeout(() => setStep("confirm"), 200);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[480px]">
-        {step === "confirm" && (
-          <>
-            <DialogHeader>
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-gold-400 to-gold-500 flex items-center justify-center mx-auto mb-3 shadow-md shadow-gold-500/20">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <DialogTitle className="text-center text-[17px]">
-                Start Team Formation
-              </DialogTitle>
-              <DialogDescription className="text-center text-[12px]">
-                The AI Matching Engine will analyze the Skill Genome to find the
-                best contributors for &ldquo;{plan.title}&rdquo;.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="my-4 rounded-xl border border-beige-200/50 bg-beige-50/50 p-4 space-y-2">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-beige-500">Tasks to staff</span>
-                <span className="font-semibold text-brown-800">{plan.totalTasks}</span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-beige-500">Estimated hours</span>
-                <span className="font-semibold text-brown-800">{plan.estimatedHours.toLocaleString()}h</span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-beige-500">Complexity</span>
-                <Badge variant={complexityConfig[plan.complexity].variant} size="sm">
-                  {complexityConfig[plan.complexity].label}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-teal-50/60 border border-teal-100/50 mb-2">
-              <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
-              <p className="text-[10px] text-teal-700 leading-relaxed">
-                Contributors are matched anonymously based on verified skills.
-                No resumes, no bidding, no bias. Each match includes an
-                AI-generated explanation.
-              </p>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" size="md" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button variant="gradient-primary" size="md" onClick={handleStart}>
-                <Brain className="w-3.5 h-3.5" />
-                Run Matching Engine
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {step === "matching" && (
-          <div className="py-12 text-center">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 mx-auto mb-5 flex items-center justify-center shadow-lg shadow-gold-500/20"
-            >
-              <Brain className="w-8 h-8 text-white" />
-            </motion.div>
-            <p className="text-[14px] font-semibold text-brown-900">
-              Matching Engine Running...
-            </p>
-            <p className="text-[11px] text-beige-500 mt-1 max-w-[280px] mx-auto">
-              Analyzing Skill Genome data across contributor pool for{" "}
-              {plan.totalTasks} tasks
-            </p>
-            <div className="mt-4 max-w-[200px] mx-auto">
-              <Progress value={65} className="h-1.5" />
-            </div>
-          </div>
-        )}
-
-        {step === "success" && (
-          <div className="py-8 text-center">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 200, damping: 15 }}
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-forest-400 to-forest-600 mx-auto mb-5 flex items-center justify-center shadow-lg shadow-forest-500/20"
-            >
-              <CheckCircle2 className="w-7 h-7 text-white" />
-            </motion.div>
-            <h3 className="text-[16px] font-bold text-brown-900 mb-1">
-              Team Matched Successfully
-            </h3>
-            <p className="text-[12px] text-beige-600 max-w-[320px] mx-auto mb-1">
-              Found optimal contributors for all {plan.totalTasks} tasks with
-              a 92% average match score.
-            </p>
-            <p className="text-[11px] text-beige-400 mb-6">
-              Review the proposed team composition before sending invitations
-            </p>
-
-            <div className="flex items-center justify-center gap-3">
-              <Button variant="outline" size="sm" onClick={handleClose}>
-                Close
-              </Button>
-              <Link href={`/enterprise/team/team-001`}>
-                <Button variant="gradient-primary" size="sm">
-                  <ArrowRight className="w-3 h-3" />
-                  Review Matches
-                </Button>
-              </Link>
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════
-   REASSIGNMENT DIALOG (SOW Flows D3 + D5)
-   — Shows decline reason (D5 Step 1)
-   — Method-specific sub-flows (D5 Steps 3a-3c)
-   — Admin Override with mandatory reason + audit warning (D3)
-   ══════════════════════════════════════════════════════════════ */
-const reassignMethods = [
-  {
-    id: "next_best" as const,
-    label: "Next Best Match",
-    description: "Auto-select next ranked candidate from matching results",
-    icon: Wand2,
-    accent: "bg-forest-100 text-forest-600",
-  },
-  {
-    id: "rerun" as const,
-    label: "Re-run Matching",
-    description: "Fresh matching run excluding the previous contributor",
-    icon: RefreshCw,
-    accent: "bg-teal-100 text-teal-600",
-  },
-  {
-    id: "manual" as const,
-    label: "Manual Selection",
-    description: "Search and pick a contributor directly",
-    icon: Search,
-    accent: "bg-gold-100 text-gold-600",
-  },
-  {
-    id: "override" as const,
-    label: "Admin Override",
-    description: "Assign any contributor with mandatory reason (audit logged)",
-    icon: UserCog,
-    accent: "bg-brown-100 text-brown-600",
-  },
+const statusFilterOptions: { value: StatusFilter; label: string }[] = [
+  { value: "All", label: "All" },
+  { value: "fully_staffed", label: "Fully Staffed" },
+  { value: "partially_staffed", label: "Partially Staffed" },
+  { value: "matching_issue", label: "Matching Issue" },
+  { value: "staffing_in_progress", label: "Staffing In Progress" },
 ];
 
-/* Mock candidates for sub-flow steps */
-const mockNextCandidate = {
-  id: "m-025",
-  avatar: "N3",
-  displayName: "Contributor N-3W",
-  matchScore: 84,
-  skills: ["Mobile", "iOS", "Swift"],
-  deliveries: 18,
-  rating: 4.5,
-  whyMatched:
-    "84% skills overlap on Mobile + iOS. 18 completed deliveries with 4.5 avg rating. Available immediately with full-time capacity.",
-};
-
-const mockRerunCandidates = [
-  { id: "m-025", avatar: "N3", displayName: "Contributor N-3W", matchScore: 84, skills: ["Mobile", "iOS", "Swift"] },
-  { id: "m-026", avatar: "O5", displayName: "Contributor O-5K", matchScore: 81, skills: ["Mobile", "Android", "Kotlin"] },
-  { id: "m-027", avatar: "P9", displayName: "Contributor P-9J", matchScore: 78, skills: ["Mobile", "React Native"] },
-];
-
-const mockSearchResults = [
-  { id: "m-028", avatar: "R1", displayName: "Contributor R-1X", matchScore: 76, skills: ["Mobile", "Flutter"] },
-  { id: "m-029", avatar: "S4", displayName: "Contributor S-4B", matchScore: 72, skills: ["iOS", "Objective-C"] },
-  { id: "m-025", avatar: "N3", displayName: "Contributor N-3W", matchScore: 84, skills: ["Mobile", "iOS", "Swift"] },
-];
-
-type ReassignMethod = (typeof reassignMethods)[number]["id"];
-type ReassignStep = "select_method" | "method_detail" | "processing" | "success";
-
-function ReassignDialog({
-  open,
-  onOpenChange,
-  assignment,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  assignment: Assignment;
-}) {
-  const [method, setMethod] = React.useState<ReassignMethod | null>(null);
-  const [step, setStep] = React.useState<ReassignStep>("select_method");
-  const [overrideReason, setOverrideReason] = React.useState("");
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedCandidate, setSelectedCandidate] = React.useState<string | null>(null);
-
-  const handleMethodContinue = () => {
-    if (!method) return;
-    setStep("method_detail");
-  };
-
-  const handleAssign = () => {
-    if (method === "override" && !overrideReason.trim()) return;
-    setStep("processing");
-    setTimeout(() => setStep("success"), 1500);
-  };
-
-  const handleClose = () => {
-    onOpenChange(false);
-    setTimeout(() => {
-      setMethod(null);
-      setStep("select_method");
-      setOverrideReason("");
-      setSearchQuery("");
-      setSelectedCandidate(null);
-    }, 200);
-  };
-
-  const filteredSearchResults = searchQuery.trim()
-    ? mockSearchResults.filter(
-        (c) =>
-          c.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : mockSearchResults;
-
-  return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[540px]">
-        {/* ── Step 1: Method selection + decline reason ── */}
-        {step === "select_method" && (
-          <>
-            <DialogHeader>
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brown-500 to-brown-600 flex items-center justify-center mx-auto mb-3 shadow-md shadow-brown-500/20">
-                <RefreshCw className="w-5 h-5 text-white" />
-              </div>
-              <DialogTitle className="text-center text-[17px]">
-                Reassign Task
-              </DialogTitle>
-              <DialogDescription className="text-center text-[12px]">
-                &ldquo;{assignment.taskTitle}&rdquo; was declined by{" "}
-                {assignment.memberDisplayName}. Choose a reassignment method.
-              </DialogDescription>
-            </DialogHeader>
-
-            {/* Decline reason (SOW D5 Step 1) */}
-            {assignment.declineReason && (
-              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-brown-50/60 border border-brown-200/40 mt-1">
-                <AlertTriangle className="w-4 h-4 text-brown-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[10px] font-semibold text-brown-700 mb-0.5">
-                    Decline Reason
-                  </p>
-                  <p className="text-[11px] text-brown-600 leading-relaxed">
-                    {assignment.declineReason}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2 my-4">
-              {reassignMethods.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setMethod(m.id)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left",
-                    method === m.id
-                      ? "border-brown-300 bg-brown-50/60 ring-1 ring-brown-200"
-                      : "border-beige-200/50 bg-white/70 hover:border-beige-300 hover:bg-white/90"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
-                      m.accent
-                    )}
-                  >
-                    <m.icon className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-semibold text-brown-900">
-                      {m.label}
-                    </p>
-                    <p className="text-[10px] text-beige-500 mt-0.5">
-                      {m.description}
-                    </p>
-                  </div>
-                  {method === m.id && (
-                    <CheckCircle2 className="w-4 h-4 text-brown-600 shrink-0" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" size="md" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button
-                variant="gradient-primary"
-                size="md"
-                onClick={handleMethodContinue}
-                disabled={!method}
-              >
-                Continue
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {/* ── Step 2: Method-specific sub-flow ── */}
-        {step === "method_detail" && method === "next_best" && (
-          <>
-            <DialogHeader>
-              <DialogTitle className="text-[15px]">
-                Next Best Match
-              </DialogTitle>
-              <DialogDescription className="text-[11px]">
-                Next ranked candidate from the original matching results.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="rounded-xl border border-beige-200/50 bg-white/70 p-4 my-3">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-forest-300 to-forest-500 flex items-center justify-center text-[11px] font-bold text-white">
-                  {mockNextCandidate.avatar}
-                </div>
-                <div className="flex-1">
-                  <p className="text-[13px] font-semibold text-brown-900">
-                    {mockNextCandidate.displayName}
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    {mockNextCandidate.skills.map((s) => (
-                      <span key={s} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700">
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="text-center">
-                  <p className="text-[18px] font-bold text-forest-600">{mockNextCandidate.matchScore}%</p>
-                  <p className="text-[9px] text-beige-500">Match</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 text-[10px] text-beige-500 mb-3">
-                <span>{mockNextCandidate.deliveries} deliveries</span>
-                <span>{mockNextCandidate.rating}/5.0 rating</span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-forest-50/60 border border-forest-100/50">
-                <p className="text-[10px] font-semibold text-forest-700 mb-0.5">Why Matched</p>
-                <p className="text-[10px] text-forest-600 leading-relaxed">
-                  {mockNextCandidate.whyMatched}
-                </p>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" size="md" onClick={() => setStep("select_method")}>
-                Back
-              </Button>
-              <Button variant="gradient-primary" size="md" onClick={handleAssign}>
-                <UserCheck className="w-3.5 h-3.5" />
-                Assign Contributor
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {step === "method_detail" && method === "rerun" && (
-          <>
-            <DialogHeader>
-              <DialogTitle className="text-[15px]">
-                Re-run Matching Results
-              </DialogTitle>
-              <DialogDescription className="text-[11px]">
-                Fresh matching excluding {assignment.memberDisplayName}. Select a contributor.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-2 my-3">
-              {mockRerunCandidates.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedCandidate(c.id)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border transition-all text-left",
-                    selectedCandidate === c.id
-                      ? "border-teal-300 bg-teal-50/60 ring-1 ring-teal-200"
-                      : "border-beige-200/50 bg-white/70 hover:border-beige-300"
-                  )}
-                >
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-300 to-teal-500 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
-                    {c.avatar}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-semibold text-brown-900">{c.displayName}</p>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      {c.skills.map((s) => (
-                        <span key={s} className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-beige-100 text-beige-600">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-[14px] font-bold text-teal-600">{c.matchScore}%</p>
-                    <p className="text-[9px] text-beige-500">Match</p>
-                  </div>
-                  {selectedCandidate === c.id && (
-                    <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" size="md" onClick={() => { setStep("select_method"); setSelectedCandidate(null); }}>
-                Back
-              </Button>
-              <Button variant="gradient-primary" size="md" onClick={handleAssign} disabled={!selectedCandidate}>
-                <UserCheck className="w-3.5 h-3.5" />
-                Assign Selected
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {step === "method_detail" && method === "manual" && (
-          <>
-            <DialogHeader>
-              <DialogTitle className="text-[15px]">
-                Manual Selection
-              </DialogTitle>
-              <DialogDescription className="text-[11px]">
-                Search all contributors. No matching engine ranking applied.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="relative my-3">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search by name or skill..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-9 rounded-xl bg-white/80 border border-beige-200/50 pl-9 pr-4 text-[12px] text-brown-800 placeholder:text-beige-400 focus:outline-none focus:ring-2 focus:ring-brown-200/30 focus:border-brown-200/50"
-              />
-            </div>
-
-            <div className="space-y-2 max-h-[200px] overflow-y-auto">
-              {filteredSearchResults.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedCandidate(c.id)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border transition-all text-left",
-                    selectedCandidate === c.id
-                      ? "border-gold-300 bg-gold-50/60 ring-1 ring-gold-200"
-                      : "border-beige-200/50 bg-white/70 hover:border-beige-300"
-                  )}
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold-300 to-gold-500 flex items-center justify-center text-[9px] font-bold text-white shrink-0">
-                    {c.avatar}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-semibold text-brown-900">{c.displayName}</p>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      {c.skills.map((s) => (
-                        <span key={s} className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-beige-100 text-beige-600">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <span className="text-[12px] font-bold text-gold-600 shrink-0">{c.matchScore}%</span>
-                  {selectedCandidate === c.id && (
-                    <CheckCircle2 className="w-4 h-4 text-gold-600 shrink-0" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <DialogFooter className="mt-3">
-              <Button variant="outline" size="md" onClick={() => { setStep("select_method"); setSelectedCandidate(null); setSearchQuery(""); }}>
-                Back
-              </Button>
-              <Button variant="gradient-primary" size="md" onClick={handleAssign} disabled={!selectedCandidate}>
-                <UserCheck className="w-3.5 h-3.5" />
-                Assign Selected
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {step === "method_detail" && method === "override" && (
-          <>
-            <DialogHeader>
-              <DialogTitle className="text-[15px]">
-                Admin Override
-              </DialogTitle>
-              <DialogDescription className="text-[11px]">
-                Assign any contributor directly. A mandatory reason is required.
-              </DialogDescription>
-            </DialogHeader>
-
-            {/* Audit warning (SOW D3 Step 2) */}
-            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gold-50/70 border border-gold-200/50 mt-1">
-              <AlertTriangle className="w-4 h-4 text-gold-600 shrink-0 mt-0.5" />
-              <p className="text-[10px] text-gold-700 leading-relaxed">
-                This action overrides the matching engine recommendation and will
-                be logged in the audit trail with an <strong>ADMIN_OVERRIDE</strong> tag.
-              </p>
-            </div>
-
-            {/* Contributor selection */}
-            <div className="relative my-3">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search contributor..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-9 rounded-xl bg-white/80 border border-beige-200/50 pl-9 pr-4 text-[12px] text-brown-800 placeholder:text-beige-400 focus:outline-none focus:ring-2 focus:ring-brown-200/30 focus:border-brown-200/50"
-              />
-            </div>
-
-            <div className="space-y-1.5 max-h-[140px] overflow-y-auto">
-              {filteredSearchResults.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedCandidate(c.id)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3.5 py-2 rounded-lg border transition-all text-left",
-                    selectedCandidate === c.id
-                      ? "border-brown-300 bg-brown-50/60 ring-1 ring-brown-200"
-                      : "border-beige-200/50 bg-white/70 hover:border-beige-300"
-                  )}
-                >
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brown-300 to-brown-500 flex items-center justify-center text-[9px] font-bold text-white shrink-0">
-                    {c.avatar}
-                  </div>
-                  <p className="text-[11px] font-semibold text-brown-900 flex-1">{c.displayName}</p>
-                  <span className="text-[11px] font-bold text-brown-600 shrink-0">{c.matchScore}%</span>
-                  {selectedCandidate === c.id && (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-brown-600 shrink-0" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* Mandatory reason (SOW D3 Step 2) */}
-            <div className="mt-3">
-              <label className="text-[11px] font-semibold text-brown-800 mb-1.5 block">
-                Override Reason <span className="text-brown-500">*</span>
-              </label>
-              <textarea
-                value={overrideReason}
-                onChange={(e) => setOverrideReason(e.target.value)}
-                placeholder="Provide a reason for overriding the matching engine recommendation..."
-                rows={3}
-                className="w-full rounded-xl bg-white/80 border border-beige-200/50 px-3.5 py-2.5 text-[12px] text-brown-800 placeholder:text-beige-400 focus:outline-none focus:ring-2 focus:ring-brown-200/30 focus:border-brown-200/50 resize-none"
-              />
-              {!overrideReason.trim() && selectedCandidate && (
-                <p className="text-[10px] text-brown-500 mt-1">
-                  A reason is required to proceed with an admin override.
-                </p>
-              )}
-            </div>
-
-            <DialogFooter className="mt-3">
-              <Button variant="outline" size="md" onClick={() => { setStep("select_method"); setSelectedCandidate(null); setOverrideReason(""); setSearchQuery(""); }}>
-                Back
-              </Button>
-              <Button
-                variant="gradient-primary"
-                size="md"
-                onClick={handleAssign}
-                disabled={!selectedCandidate || !overrideReason.trim()}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Override & Assign
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {/* ── Step 3: Processing ── */}
-        {step === "processing" && (
-          <div className="py-12 text-center">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-brown-400 to-brown-600 mx-auto mb-5 flex items-center justify-center shadow-lg shadow-brown-500/20"
-            >
-              <Brain className="w-7 h-7 text-white" />
-            </motion.div>
-            <p className="text-[14px] font-semibold text-brown-900">
-              {method === "next_best"
-                ? "Assigning next best contributor..."
-                : method === "rerun"
-                  ? "Creating new assignment..."
-                  : method === "manual"
-                    ? "Processing manual assignment..."
-                    : "Applying admin override..."}
-            </p>
-            <p className="text-[11px] text-beige-500 mt-1">
-              {method === "override"
-                ? "Override will be flagged in the audit trail"
-                : "Matching engine is updating assignments"}
-            </p>
-          </div>
-        )}
-
-        {/* ── Step 4: Success ── */}
-        {step === "success" && (
-          <div className="py-8 text-center">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 200, damping: 15 }}
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-forest-400 to-forest-600 mx-auto mb-5 flex items-center justify-center shadow-lg shadow-forest-500/20"
-            >
-              <CheckCircle2 className="w-7 h-7 text-white" />
-            </motion.div>
-            <h3 className="text-[16px] font-bold text-brown-900 mb-1">
-              Reassignment Complete
-            </h3>
-            <p className="text-[12px] text-beige-600 max-w-[320px] mx-auto mb-1">
-              A new contributor has been matched to &ldquo;
-              {assignment.taskTitle}&rdquo; and notified.
-            </p>
-            <p className="text-[11px] text-beige-400 mb-1">
-              SLA response timer has been restarted (72 hours)
-            </p>
-            {method === "override" && (
-              <p className="text-[10px] text-gold-600 font-medium mb-4">
-                ADMIN_OVERRIDE logged in audit trail
-              </p>
-            )}
-            {method !== "override" && <div className="mb-4" />}
-
-            <div className="flex items-center justify-center gap-3">
-              <Link href={`/enterprise/team/${assignment.teamId}`}>
-                <Button variant="outline" size="sm">
-                  <ExternalLink className="w-3 h-3" />
-                  View Team
-                </Button>
-              </Link>
-              <Button variant="gradient-primary" size="sm" onClick={handleClose}>
-                Done
-              </Button>
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════
-   PENDING RESPONSE ROW
-   ══════════════════════════════════════════════════════════════ */
-function PendingResponseRow({ assignment }: { assignment: Assignment }) {
-  const [reassignOpen, setReassignOpen] = React.useState(false);
-  const hoursLeft = getHoursLeft(assignment.respondBy);
-  const sla = getSlaColor(hoursLeft);
-  const statusCfg = assignmentStatusConfig[assignment.status];
-
-  return (
-    <>
-      <motion.div
-        variants={fadeUp}
-        className="group flex items-center gap-4 px-5 py-4 rounded-xl border border-beige-200/30 bg-white/50 backdrop-blur-sm hover:bg-white/70 hover:shadow-md transition-all"
-      >
-        {/* Avatar + Name — clickable to team detail */}
-        <Link
-          href={`/enterprise/team/${assignment.teamId}`}
-          className="flex items-center gap-3 min-w-[180px] hover:opacity-80 transition-opacity"
-        >
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brown-300 to-brown-500 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
-            {assignment.memberAvatar}
-          </div>
-          <div className="min-w-0">
-            <p className="text-[12px] font-semibold text-brown-900 truncate group-hover:text-brown-700 transition-colors">
-              {assignment.memberDisplayName}
-            </p>
-            <p className="text-[10px] text-beige-500 truncate">
-              {assignment.teamName}
-            </p>
-          </div>
-        </Link>
-
-        {/* Task */}
-        <div className="flex-1 min-w-0">
-          <p className="text-[12px] font-medium text-brown-800 truncate">
-            {assignment.taskTitle}
-          </p>
-          <p className="text-[10px] text-beige-500 truncate">
-            {assignment.projectName}
-          </p>
-        </div>
-
-        {/* Sent at */}
-        <div className="hidden lg:block min-w-[120px]">
-          <p className="text-[10px] text-beige-500">Sent</p>
-          <p className="text-[11px] font-medium text-brown-700">
-            {formatDate(assignment.sentAt)}
-          </p>
-        </div>
-
-        {/* SLA Timer */}
-        <div className="min-w-[100px] text-right">
-          {assignment.status === "pending_response" ? (
-            <div
-              className={cn(
-                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ring-1",
-                sla.bg,
-                sla.ring
-              )}
-            >
-              <span
-                className={cn(
-                  "w-1.5 h-1.5 rounded-full animate-pulse",
-                  sla.dot
-                )}
-              />
-              <Timer className={cn("w-3 h-3", sla.text)} />
-              <span className={cn("text-[11px] font-bold tabular-nums", sla.text)}>
-                {formatHoursLeft(hoursLeft)}
-              </span>
-            </div>
-          ) : assignment.status === "accepted" ? (
-            <p className="text-[11px] font-semibold text-forest-600">
-              Responded {formatDate(assignment.respondedAt!)}
-            </p>
-          ) : (
-            <p className="text-[11px] font-semibold text-brown-600">
-              {assignment.respondedAt
-                ? formatDate(assignment.respondedAt)
-                : "---"}
-            </p>
-          )}
-        </div>
-
-        {/* Status + Action */}
-        <div className="flex items-center gap-2 min-w-[140px] justify-end">
-          <Badge variant={statusCfg.variant} size="sm" dot>
-            {statusCfg.label}
-          </Badge>
-          {assignment.status === "declined" && (
-            <button
-              onClick={() => setReassignOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-brown-500 to-brown-600 text-white text-[10px] font-semibold shadow-sm hover:shadow-md hover:from-brown-600 hover:to-brown-700 transition-all"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Reassign
-            </button>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Reassignment Dialog (SOW D5) */}
-      <ReassignDialog
-        open={reassignOpen}
-        onOpenChange={setReassignOpen}
-        assignment={assignment}
-      />
-    </>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════
-   SLA LEGEND BAR
-   ══════════════════════════════════════════════════════════════ */
-function SlaLegend() {
-  const items = [
-    { label: "> 48h — Safe", dot: "bg-forest-500", text: "text-forest-700" },
-    { label: "24-48h — Normal", dot: "bg-teal-500", text: "text-teal-700" },
-    {
-      label: "12-24h — Approaching",
-      dot: "bg-gold-500",
-      text: "text-gold-700",
-    },
-    {
-      label: "< 12h — Critical",
-      dot: "bg-brown-600",
-      text: "text-brown-700",
-    },
-  ];
-
-  return (
-    <motion.div
-      variants={fadeIn}
-      className="flex items-center gap-5 px-5 py-3 rounded-xl bg-gradient-to-r from-beige-50/80 to-brown-50/50 border border-beige-200/40"
-    >
-      <div className="flex items-center gap-1.5">
-        <Timer className="w-3.5 h-3.5 text-beige-400" />
-        <span className="text-[10px] font-semibold text-brown-700">
-          SLA Response Window
-        </span>
-      </div>
-      <div className="w-px h-4 bg-beige-200" />
-      {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-1.5">
-          <span className={cn("w-2 h-2 rounded-full", item.dot)} />
-          <span className={cn("text-[10px] font-medium", item.text)}>
-            {item.label}
-          </span>
-        </div>
-      ))}
-    </motion.div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════
-   MAIN TEAMS PAGE
-   ══════════════════════════════════════════════════════════════ */
 export default function TeamsPage() {
-  const [activeTab, setActiveTab] = React.useState<
-    "formation" | "active" | "pending"
-  >("formation");
+  const [activeFilter, setActiveFilter] = React.useState<MetricFilter>("all");
+  const [selectedStatus, setSelectedStatus] = React.useState<StatusFilter>("All");
+  const [searchQuery, setSearchQuery] = React.useState("");
 
-  /* Derived data */
-  const formationQueue = getFormationQueueItems();
-  const activeTeams = getActiveTeams();
-  const allAssignments = getPendingAssignments();
-  const pendingAssignments = allAssignments.filter(
-    (a) => a.status === "pending_response"
-  );
-  const nonDisbandedTeams = mockTeams.filter((t) => t.status !== "disbanded");
-  const avgMatchScore =
-    nonDisbandedTeams.length > 0
-      ? Math.round(
-          nonDisbandedTeams.reduce((s, t) => s + t.matchScore, 0) /
-            nonDisbandedTeams.length
-        )
-      : 0;
+  /* Compute summary metrics — FSD: Total tasks, Assigned, Offers pending, Re-matching, Unmatched */
+  const teamData = mockTeams.map((t) => ({
+    team: t,
+    project: getProjectForTeam(t),
+    status: getStaffingStatus(t),
+    counts: getStaffedCount(t),
+  }));
 
-  /* Check if any pending response has SLA < 24h for urgency badge */
-  const hasUrgent = pendingAssignments.some((a) => {
-    const hrs = getHoursLeft(a.respondBy);
-    return hrs < 24;
+  const totalTasks = teamData.reduce((s, d) => s + d.counts.total, 0);
+  const assignedTasks = teamData.reduce((s, d) => s + d.counts.staffed, 0);
+  const offersPending = teamData.filter((d) => d.status === "staffing_in_progress" || d.status === "partially_staffed").reduce((s, d) => s + (d.counts.total - d.counts.staffed), 0);
+  const reMatching = teamData.filter((d) => d.status === "partially_staffed").reduce((s, d) => s + Math.max(0, d.counts.total - d.counts.staffed - 1), 0);
+  const unmatchedAdmin = teamData.filter((d) => d.status === "matching_issue").reduce((s, d) => s + (d.counts.total - d.counts.staffed), 0);
+
+  /* Filter: apply search, status dropdown, and metric filter */
+  const filteredTeamData = teamData.filter((d) => {
+    /* Search filter — FSD §8.2.1: search by project name or SOW ID, min 3 chars */
+    if (searchQuery.length >= 3) {
+      const q = searchQuery.toLowerCase();
+      const projectName = (d.project?.title ?? d.team.name).toLowerCase();
+      const sowRef = (d.project?.sowTitle ?? d.team.planId).toLowerCase();
+      if (!projectName.includes(q) && !sowRef.includes(q)) return false;
+    }
+    /* Status dropdown filter */
+    if (selectedStatus !== "All" && d.status !== selectedStatus) return false;
+    /* Metric card filter */
+    if (activeFilter === "all") return true;
+    if (activeFilter === "assigned") return d.counts.staffed > 0;
+    if (activeFilter === "offers_pending") return d.status === "staffing_in_progress" || d.status === "partially_staffed";
+    if (activeFilter === "re_matching") return d.status === "partially_staffed";
+    if (activeFilter === "unmatched") return d.status === "matching_issue";
+    return true;
   });
 
-  /* Tab definitions */
-  const tabs = [
-    {
-      key: "formation" as const,
-      label: "Formation Queue",
-      count: formationQueue.length,
-      urgent: false,
-    },
-    {
-      key: "active" as const,
-      label: "Active Teams",
-      count: activeTeams.length,
-      urgent: false,
-    },
-    {
-      key: "pending" as const,
-      label: "Pending Responses",
-      count: pendingAssignments.length,
-      urgent: hasUrgent,
-    },
+  const hasActiveFilters = activeFilter !== "all" || selectedStatus !== "All" || searchQuery.length >= 3;
+
+  const metrics: { key: MetricFilter; label: string; value: number; icon: React.ElementType; color: string }[] = [
+    { key: "all", label: "Total Tasks", value: totalTasks, icon: Target, color: "from-brown-400 to-brown-600" },
+    { key: "assigned", label: "Assigned", value: assignedTasks, icon: CheckCircle2, color: "from-forest-400 to-forest-600" },
+    { key: "offers_pending", label: "Offers Pending", value: offersPending, icon: Clock, color: "from-gold-400 to-gold-600" },
+    { key: "re_matching", label: "Re-matching", value: reMatching, icon: RefreshCw, color: "from-blue-400 to-blue-600" },
+    { key: "unmatched", label: "Unmatched — Admin Alerted", value: unmatchedAdmin, icon: AlertTriangle, color: "from-danger to-danger-dark" },
   ];
 
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      animate="show"
-      className="max-w-[1200px] mx-auto space-y-6"
-    >
-      {/* ── Page Header ── */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3"
-      >
+    <motion.div variants={stagger} initial="hidden" animate="show" className="max-w-[1200px] mx-auto space-y-6">
+      {/* Header — FSD §8.2.1 */}
+      <motion.div variants={fadeUp} className="flex items-start gap-3">
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brown-500 to-brown-700 flex items-center justify-center text-white shrink-0 shadow-lg shadow-brown-200/40">
+          <Users className="w-5 h-5" />
+        </div>
         <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brown-500 to-brown-600 flex items-center justify-center">
-              <UsersRound className="w-4 h-4 text-white" />
-            </div>
-            <h1 className="text-[22px] font-bold text-brown-900 tracking-[-0.02em]">
-              Teams
-            </h1>
-          </div>
-          <p className="text-[13px] text-beige-500 mt-1 max-w-lg">
-            AI-matched team formation, contributor assignments, and response
-            tracking across all projects.
+          <h1 className="text-[22px] font-bold text-brown-900 tracking-[-0.02em]">Project Teams</h1>
+          <p className="text-[13px] text-beige-500 mt-1">
+            Track contributor assignment status across your active projects. Contributor identities are anonymised.
           </p>
         </div>
       </motion.div>
 
-      {/* ── Summary Stats ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MiniStat
-          label="Formation Queue"
-          value={formationQueue.length}
-          icon={Layers}
-          accent="bg-gold-100 text-gold-700"
-          subtext="Plans awaiting teams"
-        />
-        <MiniStat
-          label="Active Teams"
-          value={activeTeams.length}
-          icon={UserCheck}
-          accent="bg-forest-100 text-forest-600"
-          subtext="Delivering projects"
-        />
-        <MiniStat
-          label="Pending Responses"
-          value={pendingAssignments.length}
-          icon={Send}
-          accent="bg-teal-100 text-teal-600"
-          subtext={
-            hasUrgent
-              ? "Some approaching SLA deadline"
-              : "All within SLA window"
-          }
-        />
-        <MiniStat
-          label="Avg Match Score"
-          value={`${avgMatchScore}%`}
-          icon={Target}
-          accent="bg-brown-100 text-brown-600"
-          subtext="Across non-disbanded teams"
-        />
-      </div>
+      {/* Anonymisation notice — FSD §8.2 governance rule */}
+      <motion.div variants={fadeUp} className="rounded-xl bg-teal-50 border border-teal-200/60 p-3 flex items-start gap-2.5">
+        <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+        <p className="text-[11px] text-teal-700">
+          Contributor identities are anonymised. You see assignment outcomes and skill match quality — not personal details. This is an immutable platform governance rule.
+        </p>
+      </motion.div>
 
-      {/* ── Tab Navigation ── */}
-      <motion.div
-        variants={fadeUp}
-        className="flex items-center gap-0 border-b border-beige-200/60 overflow-x-auto"
-      >
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+      {/* Assignment Health Summary — FSD §8.2.1: 5 metrics, each clickable to filter */}
+      <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {metrics.map((s) => (
+          <motion.button
+            key={s.key}
+            variants={scaleIn}
+            onClick={() => setActiveFilter(activeFilter === s.key ? "all" : s.key)}
             className={cn(
-              "px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 whitespace-nowrap",
-              activeTab === tab.key
-                ? "text-brown-800 border-brown-500"
-                : "text-beige-500 border-transparent hover:text-brown-600"
+              "rounded-2xl border bg-white/70 backdrop-blur-sm p-4 flex items-center gap-3 text-left transition-all cursor-pointer",
+              activeFilter === s.key
+                ? "border-brown-300 ring-2 ring-brown-200/50 shadow-md"
+                : "border-beige-200/50 hover:border-beige-300/60 hover:shadow-sm"
             )}
           >
-            {tab.label}
-            <span
-              className={cn(
-                "ml-1.5 text-[10px] px-1.5 py-0.5 rounded-md font-bold",
-                activeTab === tab.key
-                  ? tab.urgent
-                    ? "bg-gold-100 text-gold-800"
-                    : "bg-brown-100 text-brown-700"
-                  : tab.urgent
-                    ? "bg-gold-100 text-gold-700 animate-pulse"
-                    : "bg-beige-100 text-beige-500"
-              )}
-            >
-              {tab.count}
-            </span>
-            {tab.urgent && activeTab !== tab.key && (
-              <AlertTriangle className="w-3 h-3 text-gold-600 inline ml-1" />
-            )}
-          </button>
+            <div className={cn("w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center text-white shrink-0", s.color)}>
+              <s.icon className="w-4.5 h-4.5" />
+            </div>
+            <div>
+              <p className="text-[22px] font-bold text-brown-900 tracking-tight leading-none">{s.value}</p>
+              <p className="text-[10px] text-beige-500 mt-0.5 font-medium">{s.label}</p>
+            </div>
+          </motion.button>
         ))}
       </motion.div>
 
-      {/* ── Tab Content ── */}
-      <AnimatePresence mode="wait">
-        {activeTab === "formation" && (
-          <motion.div
-            key="formation"
-            variants={stagger}
-            initial="hidden"
-            animate="show"
-            exit="hidden"
-            className="space-y-4"
-          >
-            {/* AI engine callout */}
-            <motion.div
-              variants={fadeUp}
-              className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-brown-50/80 via-beige-50/80 to-teal-50/80 border border-beige-200/40 p-4"
+      {/* Filter bar — Search + Status dropdown + active filter indicator */}
+      <motion.div variants={fadeUp} className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          {/* Left: Search bar */}
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search SOWs..."
+              className={cn(
+                "w-full rounded-xl border bg-white/80 backdrop-blur-sm pl-9 pr-3 py-2 text-[12px] font-medium text-brown-800 placeholder:text-beige-400 transition-all",
+                "focus:outline-none focus:ring-2 focus:ring-brown-200/50 focus:border-brown-300",
+                searchQuery.length >= 3
+                  ? "border-brown-300 shadow-sm"
+                  : "border-beige-200/60 hover:border-beige-300"
+              )}
+            />
+          </div>
+
+          {/* Right: Status dropdown */}
+          <div className="relative">
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value as StatusFilter)}
+              className={cn(
+                "appearance-none rounded-xl border bg-white/80 backdrop-blur-sm pl-3 pr-8 py-2 text-[12px] font-medium text-brown-800 transition-all cursor-pointer",
+                "focus:outline-none focus:ring-2 focus:ring-brown-200/50 focus:border-brown-300",
+                selectedStatus !== "All"
+                  ? "border-brown-300 shadow-sm"
+                  : "border-beige-200/60 hover:border-beige-300"
+              )}
             >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-500 flex items-center justify-center shrink-0">
-                <Brain className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1">
-                <p className="text-[12px] text-brown-800 font-semibold">
-                  Instant Team Formation Engine
-                </p>
-                <p className="text-[11px] text-beige-500 mt-0.5">
-                  Approved plans are matched with contributors using the Skill
-                  Genome. Each candidate includes an AI-generated explanation of
-                  why they were selected. No resumes, no bidding.
-                </p>
-              </div>
-              <ShieldCheck className="w-5 h-5 text-forest-400 shrink-0" />
-            </motion.div>
+              {statusFilterOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.value === "All" ? "Status: All" : opt.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400 pointer-events-none" />
+          </div>
+        </div>
 
-            {formationQueue.length === 0 ? (
-              <motion.div
-                variants={fadeIn}
-                className="text-center py-16 rounded-2xl border border-beige-200/50 bg-white/50 backdrop-blur-sm"
-              >
-                <Sparkles className="w-8 h-8 text-beige-300 mx-auto mb-3" />
-                <p className="text-[14px] font-medium text-beige-500">
-                  No plans in the formation queue
-                </p>
-                <p className="text-[12px] text-beige-400 mt-1">
-                  Approve a decomposition plan to start team formation
-                </p>
-              </motion.div>
-            ) : (
-              <motion.div variants={stagger} className="space-y-3">
-                {formationQueue.map(({ plan, team }) => (
-                  <FormationQueueCard
-                    key={plan.id}
-                    plan={plan}
-                    team={team}
-                  />
-                ))}
-              </motion.div>
-            )}
-          </motion.div>
+        {/* Active filter indicator */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-2">
+            <Filter className="w-3.5 h-3.5 text-beige-400" />
+            <span className="text-[11px] text-beige-500">
+              {searchQuery.length >= 3 && (
+                <>Search: <span className="font-semibold text-brown-700">&ldquo;{searchQuery}&rdquo;</span></>
+              )}
+              {searchQuery.length >= 3 && (activeFilter !== "all" || selectedStatus !== "All") && <span className="mx-1 text-beige-300">·</span>}
+              {activeFilter !== "all" && (
+                <>Metric: <span className="font-semibold text-brown-700">{metrics.find((m) => m.key === activeFilter)?.label}</span></>
+              )}
+              {activeFilter !== "all" && selectedStatus !== "All" && <span className="mx-1 text-beige-300">·</span>}
+              {selectedStatus !== "All" && (
+                <>Status: <span className="font-semibold text-brown-700">{staffingConfig[selectedStatus].label}</span></>
+              )}
+            </span>
+            <button
+              onClick={() => { setActiveFilter("all"); setSelectedStatus("All"); setSearchQuery(""); }}
+              className="text-[11px] text-teal-600 hover:text-teal-700 font-medium underline underline-offset-2"
+            >
+              Clear all
+            </button>
+          </div>
         )}
+      </motion.div>
 
-        {activeTab === "active" && (
-          <motion.div
-            key="active"
-            variants={stagger}
-            initial="hidden"
-            animate="show"
-            exit="hidden"
-            className="space-y-4"
-          >
-            {activeTeams.length === 0 ? (
-              <motion.div
-                variants={fadeIn}
-                className="text-center py-16 rounded-2xl border border-beige-200/50 bg-white/50 backdrop-blur-sm"
-              >
-                <UsersRound className="w-8 h-8 text-beige-300 mx-auto mb-3" />
-                <p className="text-[14px] font-medium text-beige-500">
-                  No active teams
-                </p>
-                <p className="text-[12px] text-beige-400 mt-1">
-                  Teams will appear here once formation is approved and
-                  contributors accept assignments
-                </p>
-              </motion.div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {activeTeams.map((team) => (
-                  <ActiveTeamCard key={team.id} team={team} />
-                ))}
+      {/* Project Assignment Table — FSD §8.2.1 */}
+      <motion.div variants={fadeUp} className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden">
+        {/* Table header */}
+        <div className="grid grid-cols-[2fr_1.2fr_0.8fr_0.8fr_1fr] gap-4 px-5 py-3 border-b border-beige-200/40 text-[11px] font-semibold text-beige-500 uppercase tracking-wider">
+          <span>Project</span>
+          <span>Team Status</span>
+          <span>Total Tasks</span>
+          <span>Staffed</span>
+          <span>Action</span>
+        </div>
+
+        {/* Table rows */}
+        {filteredTeamData.map(({ team, project, status, counts }) => {
+          const cfg = staffingConfig[status];
+          const pct = counts.total > 0 ? Math.round((counts.staffed / counts.total) * 100) : 0;
+
+          return (
+            <div
+              key={team.id}
+              className="grid grid-cols-[2fr_1.2fr_0.8fr_0.8fr_1fr] gap-4 px-5 py-4 border-b border-beige-100/60 hover:bg-beige-50/40 transition-colors items-center"
+            >
+              {/* Project — FSD: name as link, SOW ref below */}
+              <div>
+                <Link href={`/enterprise/team/${team.id}`} className="text-[13px] font-semibold text-brown-900 hover:text-teal-700 transition-colors">
+                  {project?.title ?? team.name}
+                </Link>
+                <p className="text-[10px] text-beige-400 mt-0.5">{project?.sowTitle ?? `SOW: ${team.planId}`}</p>
               </div>
-            )}
-          </motion.div>
-        )}
 
-        {activeTab === "pending" && (
-          <motion.div
-            key="pending"
-            variants={stagger}
-            initial="hidden"
-            animate="show"
-            exit="hidden"
-            className="space-y-4"
-          >
-            {/* SLA Legend */}
-            <SlaLegend />
+              {/* Team Status Badge — FSD: 4 states */}
+              <div className="flex items-center gap-2">
+                <Badge variant={cfg.variant} size="sm" dot>
+                  {cfg.label}
+                </Badge>
+              </div>
 
-            {/* Column headers */}
-            <div className="flex items-center gap-4 px-5 py-2">
-              <span className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider min-w-[180px]">
-                Contributor
-              </span>
-              <span className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider flex-1">
-                Task / Project
-              </span>
-              <span className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider hidden lg:block min-w-[120px]">
-                Sent
-              </span>
-              <span className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider min-w-[100px] text-right">
-                SLA Timer
-              </span>
-              <span className="text-[10px] font-semibold text-beige-400 uppercase tracking-wider min-w-[140px] text-right">
-                Status
-              </span>
+              {/* Total Tasks */}
+              <div>
+                <span className="text-[13px] font-semibold text-brown-800">{counts.total}</span>
+              </div>
+
+              {/* Staffed — FSD: count + progress bar */}
+              <div className="space-y-1">
+                <span className="text-[13px] font-semibold text-brown-800">{counts.staffed}</span>
+                <Progress value={pct} className="h-1.5" />
+              </div>
+
+              {/* Action — FSD: FULLY STAFFED → [View Team], others → [View Staffing Status] */}
+              <div>
+                <Link
+                  href={`/enterprise/team/${team.id}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all bg-brown-100 text-brown-700 hover:bg-brown-200"
+                >
+                  {status === "fully_staffed" ? "View Team" : "View Staffing Status"}
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
             </div>
+          );
+        })}
 
-            {allAssignments.length === 0 ? (
-              <motion.div
-                variants={fadeIn}
-                className="text-center py-16 rounded-2xl border border-beige-200/50 bg-white/50 backdrop-blur-sm"
-              >
-                <Send className="w-8 h-8 text-beige-300 mx-auto mb-3" />
-                <p className="text-[14px] font-medium text-beige-500">
-                  No pending assignments
-                </p>
-                <p className="text-[12px] text-beige-400 mt-1">
-                  Assignments will appear when teams are formed and invitations
-                  are sent
-                </p>
-              </motion.div>
-            ) : (
-              <motion.div variants={stagger} className="space-y-2">
-                {allAssignments.map((assignment) => (
-                  <PendingResponseRow
-                    key={assignment.id}
-                    assignment={assignment}
-                  />
-                ))}
-              </motion.div>
-            )}
-          </motion.div>
+        {filteredTeamData.length === 0 && (
+          <div className="p-12 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-beige-100 flex items-center justify-center mx-auto mb-4">
+              <Users className="w-7 h-7 text-beige-400" />
+            </div>
+            <h3 className="text-[15px] font-bold text-brown-800">
+              {hasActiveFilters ? "No projects found for selected status" : "No project teams yet"}
+            </h3>
+            <p className="text-[13px] text-beige-500 mt-1 max-w-sm mx-auto">
+              {hasActiveFilters
+                ? "Try selecting a different status or clear the filters."
+                : "Teams appear here after a project plan is confirmed and GlimmoraTeam begins matching contributors."}
+            </p>
+          </div>
         )}
-      </AnimatePresence>
+      </motion.div>
     </motion.div>
   );
 }

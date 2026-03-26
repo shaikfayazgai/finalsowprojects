@@ -174,6 +174,26 @@ const healthConfig: Record<
     progressGradient: "linear-gradient(90deg, #3A6368, #5B9BA2, #7BAFB4)",
     progressColor: "#2A5860",
   },
+  on_hold: {
+    label: "On Hold",
+    dot: "#9B9B9B",
+    fill: "#9B9B9B",
+    badgeBg: "rgba(155,155,155,0.10)",
+    badgeColor: "#5A5A5A",
+    badgeBorder: "rgba(155,155,155,0.22)",
+    progressGradient: "linear-gradient(90deg, #7A7A7A, #9B9B9B)",
+    progressColor: "#5A5A5A",
+  },
+  escalated: {
+    label: "Escalated",
+    dot: "#8B1A1A",
+    fill: "#8B1A1A",
+    badgeBg: "rgba(139,26,26,0.10)",
+    badgeColor: "#5C0E0E",
+    badgeBorder: "rgba(139,26,26,0.22)",
+    progressGradient: "linear-gradient(90deg, #5C0E0E, #8B1A1A)",
+    progressColor: "#5C0E0E",
+  },
 };
 
 /* ══════════════════════════════════════════
