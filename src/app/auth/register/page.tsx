@@ -662,6 +662,7 @@ function ContributorRegisterContent() {
 
             {reg.step === 3 && (
               <Step2Verification
+                registrationEmail={reg.email}
                 phoneCountry={reg.phoneCountry} setPhoneCountry={reg.setPhoneCountry}
                 phone={reg.phone} setPhone={reg.setPhone}
                 otpSent={reg.otpSent}
@@ -757,7 +758,7 @@ function ContributorRegisterContent() {
 
   /* ── Auth options + form: logo top-left, form centered ── */
   return (
-    <div className="w-full max-w-[520px] mx-auto flex flex-col py-8">
+    <div className={`w-full mx-auto flex flex-col py-8 ${uiState === "registering" ? "max-w-3xl" : "max-w-[520px]"}`}>
       <div className="mb-8">{logo}</div>
       {formBody}
     </div>

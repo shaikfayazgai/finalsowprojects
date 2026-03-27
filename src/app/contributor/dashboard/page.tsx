@@ -68,7 +68,7 @@ function getGreeting() { const h = new Date().getHours(); return h < 12 ? "Good 
 /* ═══ DASHBOARD ═══ */
 export default function ContributorDashboardPage() {
   const { data: session } = useSession();
-  const userName = session?.user?.name?.split(" ")[0] || "there";
+  const userName = session?.user?.name?.split(" ")[0] ?? "there";
   const greeting = getGreeting();
   const totalEarned = 2180;
   const pendingPayout = 680;
