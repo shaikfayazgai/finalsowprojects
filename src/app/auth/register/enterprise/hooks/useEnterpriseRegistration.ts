@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { COUNTRIES_DATA } from "../../data";
 import { getPasswordStrength } from "../../helpers";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { registerEnterprise } from "@/lib/actions/register";
 
 export type OrgType =
   | ""
@@ -207,17 +209,55 @@ export function useEnterpriseRegistration() {
     if (!acceptAhp) { setError("You must accept the Anti-Harassment Policy to proceed"); return; }
     setError("");
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsLoading(false);
 
-    // Save registration data for onboarding wizard
-    setRegistrationData({
-      companyName: orgName,
-      countryOfIncorporation: incorporationCountry,
-      adminEmail: adminEmail,
-    });
+    try {
+      const result = await registerEnterprise({
+        orgName,
+        orgType: orgType === "other" ? orgTypeOther : orgType,
+        orgTypeOther: orgType === "other" ? orgTypeOther : undefined,
+        industry: industry === "other" ? industryOther : industry,
+        industryOther: industry === "other" ? industryOther : undefined,
+        companySize,
+        website: website || undefined,
+        hqCountry: hqCountry || undefined,
+        hqCity: hqCity || undefined,
+        adminFirstName,
+        adminLastName,
+        adminTitle,
+        adminEmail,
+        adminDept: adminDept || undefined,
+        phone: phone || undefined,
+        password,
+        incorporationCountry: incorporationCountry || undefined,
+        acceptTos,
+        acceptPp,
+        acceptEsa,
+        acceptAhp,
+        marketingOptIn,
+      });
 
-    router.push("/enterprise/onboarding");
+      if (!result.success) {
+        setError(result.error);
+        setIsLoading(false);
+        return;
+      }
+
+      // Save registration data for onboarding wizard
+      setRegistrationData({
+        companyName: orgName,
+        countryOfIncorporation: incorporationCountry,
+        adminEmail: adminEmail,
+      });
+
+      await signIn("credentials", {
+        email: adminEmail,
+        password,
+        callbackUrl: "/enterprise/onboarding",
+      });
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setIsLoading(false);
+    }
   }
 
   const passwordStrength = getPasswordStrength(password);

@@ -3,31 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import bcrypt from "bcryptjs";
-
-// ── Demo users (replace with DB lookup in production) ──
-const DEMO_USERS = [
-  {
-    id: "1",
-    name: "John Doe",
-    email: "john@gmail.com",
-    password: bcrypt.hashSync("Test@1234", 10),
-    role: "enterprise" as const,
-  },
-  {
-    id: "2",
-    name: "Jane Smith",
-    email: "jane@outlook.com",
-    password: bcrypt.hashSync("Test@1234", 10),
-    role: "contributor" as const,
-  },
-  {
-    id: "3",
-    name: "Admin User",
-    email: "admin@glimmora.com",
-    password: bcrypt.hashSync("Admin@1234", 10),
-    role: "admin" as const,
-  },
-];
+import { prisma } from "@/lib/db";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
@@ -76,23 +52,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error("Password must be at least 6 characters");
         }
 
-        // Find user (replace with DB query in production)
-        const user = DEMO_USERS.find(
-          (u) => u.email.toLowerCase() === email.toLowerCase()
-        );
+        const user = await prisma.user.findUnique({
+          where: { email: email.toLowerCase() },
+        });
 
-        if (!user) {
+        if (!user || !user.passwordHash) {
           throw new Error("No account found with this email");
         }
 
-        const isPasswordValid = await bcrypt.compare(password, user.password);
+        const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
         if (!isPasswordValid) {
           throw new Error("Incorrect password");
         }
 
         return {
           id: user.id,
-          name: user.name,
+          name: `${user.firstName} ${user.lastName}`,
           email: user.email,
           role: user.role,
         };
