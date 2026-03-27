@@ -77,8 +77,8 @@ export function useRegistration(ssoData?: SSOData | null) {
   const [marketingOptIn,  setMarketingOptIn]  = useState(false);
 
   useEffect(() => {
-    if (email && !verificationEmail) setVerificationEmail(email);
-  }, [email, verificationEmail]);
+    if (email) setVerificationEmail(prev => prev || email);
+  }, [email]);
 
   useEffect(() => {
     if (step !== 3 || !country) return;
