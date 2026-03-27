@@ -8,6 +8,7 @@ import {
   Cpu, CreditCard, FileText, ChevronDown, Quote, LogOut
 } from "lucide-react";
 import { Button, Badge, MeshBackground } from "@/components/ui";
+import { roleDashboard } from "@/lib/config/auth";
 
 const STATS = [
   { value: "100+", label: "Countries" },
@@ -87,6 +88,8 @@ const TESTIMONIALS = [
 export default function HomePage() {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user;
+  const role = (session?.user as { role?: string })?.role ?? "";
+  const dashboardHref = roleDashboard[role] ?? "/enterprise/dashboard";
 
   return (
     <MeshBackground variant="warm" className="min-h-screen">
@@ -113,7 +116,7 @@ export default function HomePage() {
           <div className="flex items-center gap-4">
             {isLoggedIn ? (
               <>
-                <Link href="/enterprise/dashboard" className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors">
+                <Link href={dashboardHref} className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors">
                   Dashboard
                 </Link>
                 <Button

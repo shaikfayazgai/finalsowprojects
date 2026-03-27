@@ -53,7 +53,7 @@ export const enterpriseRegistrationSchema = z.object({
   adminDept:            z.string().optional(),
   phone:                z.string().optional(),
   password:             passwordSchema,
-  incorporationCountry: z.string().optional(),
+  incorporationCountry: z.string().min(1, "Country of incorporation is required"),
   acceptTos:            z.literal(true, { message: "Must accept Terms of Use" }),
   acceptPp:             z.literal(true, { message: "Must accept Privacy Policy" }),
   acceptEsa:            z.literal(true, { message: "Must accept Enterprise Service Agreement" }),
