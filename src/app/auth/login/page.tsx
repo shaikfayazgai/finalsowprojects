@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { GlassCard, GlassCardContent, Button, Input, Label, Badge } from "@/components/ui";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { loginSchema } from "@/lib/validations/login";
 
 type Step = "credentials" | "mfa-prompt" | "mfa" | "recovery";
 
@@ -61,6 +62,8 @@ function LoginPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [ssoLoading, setSsoLoading] = useState<"google" | "microsoft" | null>(null);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState<string>("");
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [timeLeft, setTimeLeft] = useState(30);
 
   // Show error from URL params (e.g., OAuth errors)
@@ -69,19 +72,19 @@ function LoginPageContent() {
     if (urlError) {
       switch (urlError) {
         case "OAuthAccountNotLinked":
-          setError("This email is already registered with a different sign-in method. Please use your original sign-in method.");
+          setError("This email is already associated with another sign-in method. Please use your original sign-in method to continue.");
           break;
         case "OAuthCallbackError":
-          setError("There was a problem signing in with your provider. Please try again.");
+          setError("We were unable to complete the sign-in with your provider. Please try again or use a different method.");
           break;
         case "AccessDenied":
-          setError("Access denied. You may not have permission to sign in.");
+          setError("Access denied. Your account may not have the required permissions. Please contact your administrator.");
           break;
         case "CredentialsSignin":
-          setError("Invalid email or password. Please try again.");
+          setError("The email or password you entered is incorrect. Please verify your credentials and try again.");
           break;
         default:
-          setError("An unexpected error occurred. Please try again.");
+          setError("Something went wrong on our end. Please try again shortly or contact support if the issue persists.");
       }
     }
   }, [searchParams]);
@@ -116,31 +119,39 @@ function LoginPageContent() {
   const handleCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setErrorCode("");
+    setFieldErrors({});
 
-    if (!email.trim()) {
-      setError("Enter a valid email address");
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      setError("Please enter a valid email address");
-      return;
-    }
-
-    if (!password) {
-      setError("Please enter your password");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+    const result = loginSchema.safeParse({ email: email.trim(), password });
+    if (!result.success) {
+      const errors: { email?: string; password?: string } = {};
+      for (const issue of result.error.issues) {
+        const field = issue.path[0] as "email" | "password";
+        if (!errors[field]) errors[field] = issue.message;
+      }
+      setFieldErrors(errors);
       return;
     }
 
     setIsLoading(true);
+    setErrorCode("");
 
     try {
+      // Pre-validate credentials to get specific error messages
+      const validateRes = await fetch("/api/auth/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+
+      if (!validateRes.ok) {
+        const data = await validateRes.json();
+        setError(data.message);
+        setErrorCode(data.error);
+        setIsLoading(false);
+        return;
+      }
+
       const result = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
@@ -148,11 +159,7 @@ function LoginPageContent() {
       });
 
       if (result?.error) {
-        // NextAuth returns the error message from authorize()
-        setError(result.error === "CredentialsSignin"
-          ? "Invalid email or password"
-          : result.error
-        );
+        setError("Something went wrong. Please try again.");
         setIsLoading(false);
         return;
       }
@@ -234,6 +241,8 @@ function LoginPageContent() {
     setMfaCode("");
     setRecoveryCode("");
     setError("");
+    setErrorCode("");
+    setFieldErrors({});
   };
 
   return (
@@ -377,9 +386,19 @@ function LoginPageContent() {
             {/* Form */}
             <form onSubmit={handleCredentials} className="space-y-5">
               {error && (
-                <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  {error}
+                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div>
+                    <p>{error}</p>
+                    {errorCode === "NO_ACCOUNT" && (
+                      <Link
+                        href="/auth/register"
+                        className="inline-flex items-center gap-1 mt-1.5 text-teal-600 hover:text-teal-700 font-semibold transition-colors"
+                      >
+                        Create an account <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -391,9 +410,16 @@ function LoginPageContent() {
                   placeholder="Enter your email"
                   autoComplete="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => { setEmail(e.target.value); setFieldErrors((prev) => ({ ...prev, email: undefined })); }}
+                  className={fieldErrors.email ? "border-red-400 focus:ring-red-400/20" : ""}
                   autoFocus
                 />
+                {fieldErrors.email && (
+                  <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    {fieldErrors.email}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -405,8 +431,8 @@ function LoginPageContent() {
                     placeholder="Enter your password"
                     autoComplete="current-password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pr-10"
+                    onChange={(e) => { setPassword(e.target.value); setFieldErrors((prev) => ({ ...prev, password: undefined })); }}
+                    className={`pr-10 ${fieldErrors.password ? "border-red-400 focus:ring-red-400/20" : ""}`}
                   />
                   <button
                     type="button"
@@ -417,6 +443,12 @@ function LoginPageContent() {
                     {showPassword ? <EyeOff className="w-[15px] h-[15px]" /> : <Eye className="w-[15px] h-[15px]" />}
                   </button>
                 </div>
+                {fieldErrors.password && (
+                  <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    {fieldErrors.password}
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center justify-between">
