@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glimmora Dashboard — Theme Prototype v4</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: #F7F8FA; color: #111827; -webkit-font-smoothing: antialiased; }
+
+  /* ── Layout ── */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar { width: 240px; background: #FFFFFF; border-right: 1px solid #E5E7EB; padding: 20px 12px; position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; }
+  .main { margin-left: 240px; flex: 1; }
+  .topbar { height: 56px; background: #FFFFFF; border-bottom: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; position: sticky; top: 0; z-index: 10; }
+  .content { padding: 24px 28px 48px; max-width: 1360px; }
+
+  /* ── Sidebar ── */
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; margin-bottom: 24px; }
+  .brand-icon { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #A67763, #D0B060); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; }
+  .brand-name { font-size: 14px; font-weight: 600; color: #111827; letter-spacing: -0.02em; }
+  .brand-sub { font-size: 9px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.1em; }
+  .nav-section { margin-bottom: 8px; }
+  .nav-label { font-size: 10px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.08em; padding: 8px 12px 4px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 8px; font-size: 13px; color: #6B7280; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+  .nav-item:hover { background: #F3F4F6; color: #374151; }
+  .nav-item.active { background: #FEF3EE; color: #92400E; font-weight: 500; }
+  .nav-item.active .nav-icon { color: #A67763; }
+  .nav-icon { width: 16px; height: 16px; color: #9CA3AF; }
+  .nav-badge { margin-left: auto; font-size: 10px; color: #9CA3AF; font-family: 'SF Mono', monospace; }
+
+  /* ── Topbar ── */
+  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .breadcrumb a { color: #9CA3AF; text-decoration: none; }
+  .breadcrumb a:hover { color: #6B7280; }
+  .breadcrumb .current { color: #111827; font-weight: 500; }
+  .breadcrumb .sep { color: #D1D5DB; font-size: 11px; }
+  .topbar-actions { display: flex; align-items: center; gap: 10px; }
+  .search-box { display: flex; align-items: center; gap: 8px; background: #F3F4F6; border-radius: 8px; padding: 6px 12px; width: 200px; border: 1px solid transparent; transition: all 0.2s; }
+  .search-box:focus-within { background: #FFFFFF; border-color: #D1D5DB; }
+  .search-box input { border: none; outline: none; background: transparent; font-size: 13px; color: #374151; width: 100%; }
+  .search-box input::placeholder { color: #9CA3AF; }
+  .icon-btn { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #6B7280; cursor: pointer; border: none; background: none; position: relative; }
+  .icon-btn:hover { background: #F3F4F6; }
+  .notif-dot { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: #A67763; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #A67763, #D0B060); display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: 600; cursor: pointer; }
+
+  /* ── Hero gradient card ── */
+  .hero-card { background: linear-gradient(135deg, #A67763 0%, #C4956E 50%, #D0B060 100%); border-radius: 16px; padding: 28px 32px; margin-bottom: 20px; color: white; display: flex; justify-content: space-between; align-items: flex-end; }
+  .hero-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .hero-sub { font-size: 13px; opacity: 0.75; }
+  .hero-stats { display: flex; gap: 16px; }
+  .hero-stat { background: rgba(255,255,255,0.15); backdrop-filter: blur(8px); border-radius: 12px; padding: 12px 20px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+  .hero-stat-value { font-size: 22px; font-weight: 700; }
+  .hero-stat-label { font-size: 10px; opacity: 0.65; margin-top: 2px; }
+
+  /* ── Cards ── */
+  .card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #F3F4F6; }
+  .card-title { font-size: 13px; font-weight: 600; color: #111827; }
+  .card-link { font-size: 11px; font-weight: 500; color: #A67763; text-decoration: none; display: flex; align-items: center; gap: 4px; }
+  .card-link:hover { color: #8B5E4B; }
+  .card-body { padding: 16px 20px; }
+
+  /* ── KPI strip ── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi { padding: 16px 20px; }
+  .kpi-label { font-size: 11px; color: #6B7280; font-weight: 500; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi-value { font-size: 28px; font-weight: 700; color: #111827; line-height: 1; letter-spacing: -0.02em; }
+  .kpi-change { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 500; margin-top: 6px; padding: 2px 8px; border-radius: 20px; }
+  .kpi-change.up { background: #ECFDF5; color: #059669; }
+  .kpi-change.down { background: #FEF3C7; color: #D97706; }
+
+  /* ── Grid layouts ── */
+  .grid-2 { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+  /* ── Table ── */
+  .table-header { display: grid; grid-template-columns: 1fr 120px 90px 160px 70px; padding: 8px 20px; font-size: 10px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid #F3F4F6; }
+  .table-row { display: grid; grid-template-columns: 1fr 120px 90px 160px 70px; padding: 12px 20px; align-items: center; border-bottom: 1px solid #F9FAFB; }
+  .table-row:last-child { border-bottom: none; }
+  .row-title { font-size: 13px; font-weight: 500; color: #111827; }
+  .row-sub { font-size: 11px; color: #9CA3AF; margin-top: 1px; }
+  .row-text { font-size: 12px; color: #6B7280; }
+
+  /* ── Badge/Pill ── */
+  .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .pill-forest { background: #ECFDF5; color: #065F46; }
+  .pill-gold { background: #FFFBEB; color: #92400E; }
+  .pill-danger { background: #FEF2F2; color: #991B1B; }
+  .pill-teal { background: #F0FDFA; color: #115E59; }
+  .pill-gray { background: #F3F4F6; color: #6B7280; }
+
+  /* ── Health dot ── */
+  .health-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+
+  /* ── Progress bar ── */
+  .progress-track { height: 4px; background: #F3F4F6; border-radius: 100px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 100px; }
+
+  /* ── Pipeline bar ── */
+  .pipeline-bar { display: flex; border-radius: 100px; overflow: hidden; height: 6px; background: #F3F4F6; }
+
+  /* ── List items ── */
+  .list-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #F9FAFB; }
+  .list-item:last-child { border-bottom: none; }
+  .list-item-title { font-size: 12px; font-weight: 500; color: #374151; }
+  .list-item-sub { font-size: 11px; color: #9CA3AF; margin-top: 1px; }
+
+  /* ── Attention item ── */
+  .attention-item { display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid #F9FAFB; }
+  .attention-item:last-child { border-bottom: none; }
+  .attention-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .attention-title { font-size: 13px; font-weight: 500; color: #111827; }
+  .attention-desc { font-size: 11px; color: #9CA3AF; margin-top: 1px; }
+
+  /* ── Sparkline (CSS fake) ── */
+  .sparkline-container { height: 40px; position: relative; margin-top: 8px; }
+
+  /* ── SVG Chart ── */
+  .chart-svg { width: 100%; }
+
+  /* ── Metric inline ── */
+  .metric-row { display: flex; align-items: baseline; gap: 16px; margin-bottom: 12px; }
+  .metric-big { font-size: 22px; font-weight: 700; color: #111827; }
+  .metric-label { font-size: 10px; color: #9CA3AF; margin-left: 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <div class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">G</div>
+      <div>
+        <div class="brand-name">Glimmora</div>
+        <div class="brand-sub">Enterprise</div>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <a class="nav-item active">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6z"/><path d="M3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25z"/><path d="M13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6z"/><path d="M13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25a2.25 2.25 0 01-2.25-2.25v-2.25z"/></svg>
+        Dashboard
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <a class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+        SOW Repository <span class="nav-badge">12</span>
+      </a>
+      <a class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z"/></svg>
+        Decomposition
+      </a>
+      <a class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/></svg>
+        Teams
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Project Monitoring</div>
+      <a class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+        Projects
+      </a>
+      <a class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z"/></svg>
+        Exceptions
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Review & Acceptance</div>
+      <a class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 019 9v.375M10.125 2.25A3.375 3.375 0 0113.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 013.375 3.375M9 15l2.25 2.25L15 12"/></svg>
+        Evidence Review
+      </a>
+      <a class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Acceptance Logs
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <a class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3"/></svg>
+        Billing
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ MAIN AREA ═══ -->
+  <div class="main">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="breadcrumb">
+        <span class="current">Dashboard</span>
+      </div>
+      <div class="topbar-actions">
+        <div class="search-box">
+          <svg width="14" height="14" fill="none" stroke="#9CA3AF" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          <input type="text" placeholder="Search...">
+        </div>
+        <button class="icon-btn">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+          <span class="notif-dot"></span>
+        </button>
+        <div class="avatar">PN</div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- ═══ HERO GRADIENT CARD ═══ -->
+      <div class="hero-card">
+        <div>
+          <div class="hero-title">Good morning, Priya.</div>
+          <div class="hero-sub">You have 6 items that need your attention today.</div>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <div class="hero-stat-value">12</div>
+            <div class="hero-stat-label">Active SOWs</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-value">4</div>
+            <div class="hero-stat-label">Projects</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-value">5</div>
+            <div class="hero-stat-label">Reviews</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ KPI STRIP ═══ -->
+      <div class="kpi-grid">
+        <div class="card kpi">
+          <div class="kpi-label">APG Escalations</div>
+          <div class="kpi-value">3</div>
+          <div class="kpi-change down">&#9660; +3 this week</div>
+        </div>
+        <div class="card kpi">
+          <div class="kpi-label">Budget Used</div>
+          <div class="kpi-value">$189k</div>
+          <div class="kpi-change up">&#9650; 67% of total</div>
+        </div>
+        <div class="card kpi">
+          <div class="kpi-label">On-Time Rate</div>
+          <div class="kpi-value">87%</div>
+          <div class="kpi-change up">&#9650; +4.2%</div>
+        </div>
+        <div class="card kpi">
+          <div class="kpi-label">APG Score</div>
+          <div class="kpi-value">82</div>
+          <div class="kpi-change up">&#9650; +1.5</div>
+        </div>
+      </div>
+
+      <!-- ═══ CHART + ATTENTION ═══ -->
+      <div class="grid-2">
+        <!-- Spend chart -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Spend Overview</span>
+            <span style="font-size: 11px; font-weight: 500; color: #059669; background: #ECFDF5; padding: 2px 8px; border-radius: 20px;">-48% this month</span>
+          </div>
+          <div class="card-body">
+            <svg class="chart-svg" viewBox="0 0 520 150" style="height: 140px;">
+              <defs>
+                <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#A67763" stop-opacity="0.12" />
+                  <stop offset="100%" stop-color="#A67763" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="37" x2="520" y2="37" stroke="#F3F4F6" />
+              <line x1="0" y1="75" x2="520" y2="75" stroke="#F3F4F6" />
+              <line x1="0" y1="112" x2="520" y2="112" stroke="#F3F4F6" />
+              <path d="M0,100 C60,90 100,50 160,60 220,70 260,30 320,40 380,50 420,20 480,35 L520,45 L520,150 L0,150 Z" fill="url(#cg)" />
+              <path d="M0,100 C60,90 100,50 160,60 220,70 260,30 320,40 380,50 420,20 480,35 L520,45" fill="none" stroke="#A67763" stroke-width="2" stroke-linecap="round" />
+              <circle cx="480" cy="35" r="4" fill="#A67763" stroke="white" stroke-width="2" />
+              <text x="0" y="148" fill="#9CA3AF" font-size="9" font-family="monospace">Oct</text>
+              <text x="86" y="148" fill="#9CA3AF" font-size="9" font-family="monospace">Nov</text>
+              <text x="173" y="148" fill="#9CA3AF" font-size="9" font-family="monospace">Dec</text>
+              <text x="260" y="148" fill="#9CA3AF" font-size="9" font-family="monospace">Jan</text>
+              <text x="346" y="148" fill="#9CA3AF" font-size="9" font-family="monospace">Feb</text>
+              <text x="433" y="148" fill="#9CA3AF" font-size="9" font-family="monospace">Mar</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Attention -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Needs Attention</span>
+            <span class="pill pill-danger">6</span>
+          </div>
+          <div>
+            <div class="attention-item">
+              <div class="attention-icon" style="background: #FEF2F2; color: #DC2626;">&#9888;</div>
+              <div style="flex: 1;">
+                <div class="attention-title">1 Overdue Invoice</div>
+                <div class="attention-desc">$8,000 past due</div>
+              </div>
+            </div>
+            <div class="attention-item">
+              <div class="attention-icon" style="background: #FFFBEB; color: #D97706;">&#9888;</div>
+              <div style="flex: 1;">
+                <div class="attention-title">3 Active Escalations</div>
+                <div class="attention-desc">Across 2 projects</div>
+              </div>
+            </div>
+            <div class="attention-item">
+              <div class="attention-icon" style="background: #F0FDFA; color: #0D9488;">&#8634;</div>
+              <div style="flex: 1;">
+                <div class="attention-title">2 Rework Requests</div>
+                <div class="attention-desc">API Integration, Data Migration</div>
+              </div>
+            </div>
+            <div class="attention-item">
+              <div class="attention-icon" style="background: #FEF3EE; color: #A67763;">&#10003;</div>
+              <div style="flex: 1;">
+                <div class="attention-title">4 Pending Reviews</div>
+                <div class="attention-desc">Evidence submissions awaiting</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ PROJECTS TABLE ═══ -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-header">
+          <span class="card-title">Active Projects</span>
+          <a class="card-link" href="#">View all &rarr;</a>
+        </div>
+        <div class="table-header">
+          <span>Project</span>
+          <span>Client</span>
+          <span>Health</span>
+          <span>Progress</span>
+          <span style="text-align: right;">Spend</span>
+        </div>
+        <div class="table-row">
+          <div><div class="row-title">Healthcare Data Platform</div><div class="row-sub">SOW-001</div></div>
+          <div class="row-text">Meridian HC</div>
+          <div><span class="health-dot" style="background: #4D5741;"></span><span class="row-text">On Track</span></div>
+          <div style="display: flex; align-items: center; gap: 8px;"><div class="progress-track" style="flex: 1;"><div class="progress-fill" style="width: 72%; background: #4D5741;"></div></div><span style="font-size: 11px; font-family: monospace; color: #6B7280;">72%</span></div>
+          <div style="text-align: right; font-size: 12px; font-weight: 500; color: #111827;">$180k</div>
+        </div>
+        <div class="table-row">
+          <div><div class="row-title">Mobile Banking App</div><div class="row-sub">SOW-002</div></div>
+          <div class="row-text">Nova Finance</div>
+          <div><span class="health-dot" style="background: #D0B060;"></span><span class="row-text">At Risk</span></div>
+          <div style="display: flex; align-items: center; gap: 8px;"><div class="progress-track" style="flex: 1;"><div class="progress-fill" style="width: 45%; background: #D0B060;"></div></div><span style="font-size: 11px; font-family: monospace; color: #6B7280;">45%</span></div>
+          <div style="text-align: right; font-size: 12px; font-weight: 500; color: #111827;">$95k</div>
+        </div>
+        <div class="table-row">
+          <div><div class="row-title">AI Compliance Engine</div><div class="row-sub">SOW-003</div></div>
+          <div class="row-text">TechCorp</div>
+          <div><span class="health-dot" style="background: #4D5741;"></span><span class="row-text">On Track</span></div>
+          <div style="display: flex; align-items: center; gap: 8px;"><div class="progress-track" style="flex: 1;"><div class="progress-fill" style="width: 88%; background: #4D5741;"></div></div><span style="font-size: 11px; font-family: monospace; color: #6B7280;">88%</span></div>
+          <div style="text-align: right; font-size: 12px; font-weight: 500; color: #111827;">$220k</div>
+        </div>
+        <div class="table-row">
+          <div><div class="row-title">E-Commerce Rebuild</div><div class="row-sub">SOW-004</div></div>
+          <div class="row-text">RetailCo</div>
+          <div><span class="health-dot" style="background: #C4574A;"></span><span class="row-text">Behind</span></div>
+          <div style="display: flex; align-items: center; gap: 8px;"><div class="progress-track" style="flex: 1;"><div class="progress-fill" style="width: 20%; background: #C4574A;"></div></div><span style="font-size: 11px; font-family: monospace; color: #6B7280;">20%</span></div>
+          <div style="text-align: right; font-size: 12px; font-weight: 500; color: #111827;">$40k</div>
+        </div>
+      </div>
+
+      <!-- ═══ SOW + TEAMS + GOVERNANCE ═══ -->
+      <div class="grid-3">
+        <!-- SOW Pipeline -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">SOW Pipeline</span>
+            <a class="card-link" href="#">Manage &rarr;</a>
+          </div>
+          <div class="card-body">
+            <div style="display: flex; gap: 16px; margin-bottom: 12px;">
+              <div><span style="font-size: 20px; font-weight: 700; color: #111827;">3</span> <span style="font-size: 10px; color: #9CA3AF;">Draft</span></div>
+              <div><span style="font-size: 20px; font-weight: 700; color: #111827;">2</span> <span style="font-size: 10px; color: #9CA3AF;">Approval</span></div>
+              <div><span style="font-size: 20px; font-weight: 700; color: #111827;">4</span> <span style="font-size: 10px; color: #9CA3AF;">Approved</span></div>
+            </div>
+            <div class="pipeline-bar">
+              <div style="width: 33%; background: #A67763;"></div>
+              <div style="width: 22%; background: #D0B060;"></div>
+              <div style="width: 45%; background: #4D5741;"></div>
+            </div>
+            <div style="margin-top: 16px;">
+              <div class="list-item"><div><div class="list-item-title">Healthcare SOW</div><div class="list-item-sub">MedBridge Health</div></div><span class="pill pill-gray">Draft</span></div>
+              <div class="list-item"><div><div class="list-item-title">FinTech Compliance</div><div class="list-item-sub">Nova Finance</div></div><span class="pill pill-gold">Approval</span></div>
+              <div class="list-item"><div><div class="list-item-title">Tech Platform</div><div class="list-item-sub">TechCorp</div></div><span class="pill pill-forest">Approved</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Teams -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Teams</span>
+            <a class="card-link" href="#">All &rarr;</a>
+          </div>
+          <div class="card-body">
+            <div style="display: flex; gap: 20px; margin-bottom: 16px;">
+              <div><span style="font-size: 22px; font-weight: 700; color: #0D9488;">42</span><span style="font-size: 10px; color: #9CA3AF; margin-left: 4px;">People</span></div>
+              <div><span style="font-size: 22px; font-weight: 700; color: #111827;">5</span><span style="font-size: 10px; color: #9CA3AF; margin-left: 4px;">Teams</span></div>
+            </div>
+            <div class="list-item"><div><div class="list-item-title">Alpha Healthcare</div><div class="list-item-sub">8 members</div></div><span class="pill pill-forest">Active</span></div>
+            <div class="list-item"><div><div class="list-item-title">Nova Engineering</div><div class="list-item-sub">10 members</div></div><span class="pill pill-teal">Ready</span></div>
+            <div class="list-item"><div><div class="list-item-title">TechCorp Devs</div><div class="list-item-sub">12 members</div></div><span class="pill pill-gold">Forming</span></div>
+          </div>
+        </div>
+
+        <!-- Governance -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">AI & Governance</span>
+            <a class="card-link" href="#">Audit &rarr;</a>
+          </div>
+          <div class="card-body">
+            <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+              <div><span style="font-size: 16px; font-weight: 700; color: #0D9488;">87%</span><div style="font-size: 9px; color: #9CA3AF; margin-top: 2px;">On-Time</div></div>
+              <div><span style="font-size: 16px; font-weight: 700; color: #065F46;">92%</span><div style="font-size: 9px; color: #9CA3AF; margin-top: 2px;">First-Pass</div></div>
+              <div><span style="font-size: 16px; font-weight: 700; color: #92400E;">82</span><div style="font-size: 9px; color: #9CA3AF; margin-top: 2px;">APG Score</div></div>
+            </div>
+            <div style="font-size: 11px; color: #374151; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <span style="color: #065F46;">&#10003;</span> 7/8 governance rules active
+            </div>
+            <div style="border-top: 1px solid #F3F4F6; padding-top: 8px;">
+              <div style="font-size: 11px; color: #6B7280; padding: 6px 0; border-bottom: 1px solid #F9FAFB;">
+                <span style="font-weight: 500; color: #0D9488;">APG System</span> flagged escalation on <span style="font-weight: 500; color: #111827;">Mobile Banking</span>
+                <div style="font-size: 10px; color: #9CA3AF; margin-top: 2px;">2h ago</div>
+              </div>
+              <div style="font-size: 11px; color: #6B7280; padding: 6px 0;">
+                <span style="font-weight: 500; color: #374151;">Contributor D-2M</span> submitted evidence for <span style="font-weight: 500; color: #111827;">API Integration</span>
+                <div style="font-size: 10px; color: #9CA3AF; margin-top: 2px;">5h ago</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>
