@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { COUNTRIES_DATA } from "../data";
 import { getPasswordStrength, getAgeFromDob } from "../helpers";
+import { registerContributor } from "@/lib/actions/register";
 import type { RegistrationRole, ContributorType, SSOData } from "../types";
 
 export function useRegistration(ssoData?: SSOData | null) {
@@ -233,9 +235,55 @@ export function useRegistration(ssoData?: SSOData | null) {
     if (!acceptFee) { setError("You must acknowledge the platform service fee to proceed"); return; }
     setError("");
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsLoading(false);
-    router.push("/contributor/dashboard");
+
+    try {
+      const result = await registerContributor({
+        firstName,
+        lastName,
+        email,
+        password,
+        contribType,
+        country,
+        dob,
+        timezone,
+        departmentCategory,
+        departmentOther: departmentCategory === "other" ? departmentOther : undefined,
+        primarySkills,
+        secondarySkills,
+        otherSkills,
+        availability,
+        degree: degree || undefined,
+        branch: branch || undefined,
+        linkedin: linkedin || undefined,
+        careerStage: careerStage || undefined,
+        yearsExperience: yearsExperience || undefined,
+        workStart: workStart || undefined,
+        workEnd: workEnd || undefined,
+        phone: phone || undefined,
+        ndaSignature,
+        acceptTos,
+        acceptCoc,
+        acceptPrivacy,
+        acceptFee,
+        acceptAhp,
+        marketingOptIn,
+      });
+
+      if (!result.success) {
+        setError(result.error);
+        setIsLoading(false);
+        return;
+      }
+
+      await signIn("credentials", {
+        email,
+        password,
+        callbackUrl: "/contributor/dashboard",
+      });
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setIsLoading(false);
+    }
   }
 
   const passwordStrength = getPasswordStrength(password);
