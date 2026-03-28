@@ -1,14 +1,29 @@
 "use client";
 
+import * as React from "react";
 import { CheckCircle2, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { validateSection, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
+
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</p>;
+}
 
 export function Section5BudgetRisk({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.budgetRisk;
   const update = (patch: Partial<typeof data>) => store.updateCommercialSection("budgetRisk", patch);
+  const [errors, setErrors] = React.useState<SectionErrors>({});
+
+  const handleComplete = () => {
+    const errs = validateSection("budgetRisk", data);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    onComplete();
+  };
 
   return (
     <div className="space-y-5">
@@ -23,12 +38,14 @@ export function Section5BudgetRisk({ onComplete, onBack }: Props) {
           <input type="number" value={data.budgetMinimum || ""} onChange={(e) => update({ budgetMinimum: Number(e.target.value) })}
             placeholder="e.g. 280000"
             className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
+          <FieldError error={errors.budgetMinimum} />
         </div>
         <div>
           <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Budget Maximum *</label>
           <input type="number" value={data.budgetMaximum || ""} onChange={(e) => update({ budgetMaximum: Number(e.target.value) })}
             placeholder="e.g. 350000"
             className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
+          <FieldError error={errors.budgetMaximum} />
         </div>
       </div>
 
@@ -54,6 +71,7 @@ export function Section5BudgetRisk({ onComplete, onBack }: Props) {
             <option value="outcome_based">Outcome-Based</option>
             <option value="hybrid">Hybrid</option>
           </select>
+          <FieldError error={errors.pricingModel} />
         </div>
       </div>
 
@@ -82,8 +100,8 @@ export function Section5BudgetRisk({ onComplete, onBack }: Props) {
             <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
         ) : <span />}
-        <button onClick={onComplete}
-          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
+        <button onClick={handleComplete}
+          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-linear-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
           <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete & Next
         </button>
       </div>

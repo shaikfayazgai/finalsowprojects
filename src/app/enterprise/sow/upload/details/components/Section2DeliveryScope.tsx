@@ -1,16 +1,31 @@
 "use client";
 
+import * as React from "react";
 import { CheckCircle2, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { validateSection, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
+
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</p>;
+}
 
 export function Section2DeliveryScope({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.deliveryScope;
   const update = (patch: Partial<typeof data>) => store.updateCommercialSection("deliveryScope", patch);
+  const [errors, setErrors] = React.useState<SectionErrors>({});
 
   const checkboxes = ["Frontend", "Backend", "Database", "Integration development", "CI/CD"];
+
+  const handleComplete = () => {
+    const errs = validateSection("deliveryScope", data);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    onComplete();
+  };
 
   return (
     <div className="space-y-5">
@@ -31,6 +46,7 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
             </label>
           ))}
         </div>
+        <FieldError error={errors.developmentScope} />
       </div>
 
       <div>
@@ -42,6 +58,7 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
           <option value="in_scope">In scope</option>
           <option value="client_provides">Client provides designs</option>
         </select>
+        <FieldError error={errors.uiuxDesignScope} />
       </div>
 
       <div>
@@ -54,6 +71,7 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
           <option value="on_premise">Deploy on-premise</option>
           <option value="both">Both</option>
         </select>
+        <FieldError error={errors.deploymentScope} />
       </div>
 
       <div>
@@ -65,6 +83,7 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
           <option value="go_live">Go-live included</option>
           <option value="go_live_hypercare">Go-live + Hypercare</option>
         </select>
+        <FieldError error={errors.goLiveScope} />
       </div>
 
       <div>
@@ -75,6 +94,7 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
           <option value="not_in_scope">Not in scope</option>
           <option value="in_scope">In scope</option>
         </select>
+        <FieldError error={errors.dataMigrationScope} />
       </div>
 
       <div className="flex items-center justify-between">
@@ -84,8 +104,8 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
             <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
         ) : <span />}
-        <button onClick={onComplete}
-          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
+        <button onClick={handleComplete}
+          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-linear-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
           <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete & Next
         </button>
       </div>
