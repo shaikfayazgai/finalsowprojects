@@ -1,16 +1,31 @@
 "use client";
 
-import { CheckCircle2, ShieldCheck, ArrowLeft } from "lucide-react";
+import * as React from "react";
+import { CheckCircle2, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { validateSection, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
+
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</p>;
+}
 
 export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.governance;
   const update = (patch: Partial<typeof data>) => store.updateCommercialSection("governance", patch);
+  const [errors, setErrors] = React.useState<SectionErrors>({});
 
   const regulations = ["GDPR", "SOC 2", "ISO 27001", "PCI-DSS", "HIPAA", "SEBI", "RBI", "DPDP Act"];
+
+  const handleComplete = () => {
+    const errs = validateSection("governance", data);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    onComplete();
+  };
 
   return (
     <div className="space-y-5">
@@ -32,6 +47,7 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
             </p>
           </div>
         </label>
+        <FieldError error={errors.nonDiscriminationConfirmed} />
       </div>
 
       <div>
@@ -45,6 +61,7 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
           <option value="confidential">Confidential</option>
           <option value="restricted">Restricted</option>
         </select>
+        <FieldError error={errors.dataSensitivityLevel} />
       </div>
 
       <div>
@@ -55,6 +72,7 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
           <option value="yes">Yes</option>
           <option value="no">No</option>
         </select>
+        <FieldError error={errors.personalDataInvolved} />
       </div>
 
       <div>
@@ -95,8 +113,8 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
             <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
         ) : <span />}
-        <button onClick={onComplete}
-          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
+        <button onClick={handleComplete}
+          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-linear-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
           <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete & Next
         </button>
       </div>

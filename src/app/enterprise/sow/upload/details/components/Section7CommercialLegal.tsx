@@ -1,15 +1,31 @@
 "use client";
 
+import * as React from "react";
 import { CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { validateSection, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
+
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</p>;
+}
 
 export function Section7CommercialLegal({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.commercialLegal;
   const auth = store.approvalAuthorities;
   const update = (patch: Partial<typeof data>) => store.updateCommercialSection("commercialLegal", patch);
+  const [errors, setErrors] = React.useState<SectionErrors>({});
+
+  const handleComplete = () => {
+    // Merge commercialLegal + approvalAuthorities for section 7 validation
+    const errs = validateSection("commercialLegal", { ...data, ...auth });
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    onComplete();
+  };
 
   return (
     <div className="space-y-5">
@@ -28,6 +44,7 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
           <option value="joint">Joint (per NDA)</option>
           <option value="custom">Custom</option>
         </select>
+        <FieldError error={errors.ipOwnership} />
       </div>
 
       <div>
@@ -39,6 +56,7 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
           <option value="glimmora_hosts_transfer">GlimmoraTeam hosts, transfers on M3</option>
           <option value="client_provides_day_one">Client provides repository from day one</option>
         </select>
+        <FieldError error={errors.sourceCodeOwnership} />
       </div>
 
       <div>
@@ -52,6 +70,7 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
           <option value="6_months">6 months</option>
           <option value="none">No warranty</option>
         </select>
+        <FieldError error={errors.warrantyPeriod} />
       </div>
 
       <div>
@@ -63,6 +82,7 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
           <option value="threshold_cr">Threshold-based — minor changes within contingency</option>
           <option value="time_and_materials">T&M above baseline</option>
         </select>
+        <FieldError error={errors.changeRequestProcess} />
       </div>
 
       <div>
@@ -74,6 +94,7 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
           <option value="glimmora_absorbs">GlimmoraTeam absorbs within quote</option>
           <option value="split">Split</option>
         </select>
+        <FieldError error={errors.thirdPartyCosts} />
       </div>
 
       {/* Approval Authorities */}
@@ -95,6 +116,7 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
               onChange={(e) => store.setApprovalAuthorities({ businessOwnerApprover: e.target.value })}
               placeholder="Full name of Business Owner"
               className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
+            <FieldError error={errors.businessOwnerApprover} />
           </div>
           <div>
             <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Final Approver (Stage 5) *</label>
@@ -102,6 +124,7 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
               onChange={(e) => store.setApprovalAuthorities({ finalApprover: e.target.value })}
               placeholder="Full name of Final Approver"
               className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
+            <FieldError error={errors.finalApprover} />
           </div>
           <div>
             <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Legal / Compliance Reviewer (optional)</label>
@@ -120,8 +143,8 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
             <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
         ) : <span />}
-        <button onClick={onComplete}
-          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
+        <button onClick={handleComplete}
+          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-linear-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
           <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete
         </button>
       </div>

@@ -1,14 +1,29 @@
 "use client";
 
+import * as React from "react";
 import { CheckCircle2, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { validateSection, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
+
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</p>;
+}
 
 export function Section3TechIntegrations({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.techIntegrations;
   const update = (patch: Partial<typeof data>) => store.updateCommercialSection("techIntegrations", patch);
+  const [errors, setErrors] = React.useState<SectionErrors>({});
+
+  const handleComplete = () => {
+    const errs = validateSection("techIntegrations", data);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    onComplete();
+  };
 
   return (
     <div className="space-y-5">
@@ -22,6 +37,7 @@ export function Section3TechIntegrations({ onComplete, onBack }: Props) {
         <textarea rows={3} value={data.technologyStack} onChange={(e) => update({ technologyStack: e.target.value })}
           placeholder="React 19 + Node.js + PostgreSQL. Deployed on AWS (ap-south-1)."
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 resize-none transition-colors" />
+        <FieldError error={errors.technologyStack} />
       </div>
 
       <div>
@@ -51,8 +67,8 @@ export function Section3TechIntegrations({ onComplete, onBack }: Props) {
             <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
         ) : <span />}
-        <button onClick={onComplete}
-          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
+        <button onClick={handleComplete}
+          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-linear-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
           <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete & Next
         </button>
       </div>
