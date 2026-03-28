@@ -3,7 +3,7 @@
 import * as React from "react";
 import { CheckCircle2, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { validateSection, type SectionErrors } from "@/lib/validations/sow-upload-details";
+import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
 
@@ -15,8 +15,35 @@ function FieldError({ error }: { error?: string }) {
 export function Section1BusinessContext({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.businessContext;
-  const update = (patch: Partial<typeof data>) => store.updateCommercialSection("businessContext", patch);
   const [errors, setErrors] = React.useState<SectionErrors>({});
+  const touched = React.useRef<Set<string>>(new Set());
+
+  const update = (patch: Partial<typeof data>) => {
+    store.updateCommercialSection("businessContext", patch);
+    if (touched.current.size > 0) {
+      const merged = { ...data, ...patch };
+      const allErrs = validateSection("businessContext", merged);
+      setErrors((prev) => {
+        const next = { ...prev };
+        for (const field of touched.current) {
+          if (allErrs[field]) next[field] = allErrs[field];
+          else delete next[field];
+        }
+        return next;
+      });
+    }
+  };
+
+  const blurField = (field: string) => {
+    touched.current.add(field);
+    const err = validateField("businessContext", field, data);
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (err) next[field] = err;
+      else delete next[field];
+      return next;
+    });
+  };
 
   const handleComplete = () => {
     const errs = validateSection("businessContext", data);
@@ -33,14 +60,18 @@ export function Section1BusinessContext({ onComplete, onBack }: Props) {
       </div>
 
       <Field label="Project Vision *" hint="Min 50 chars. Becomes the SOW opening vision statement.">
-        <textarea rows={3} value={data.projectVision} onChange={(e) => update({ projectVision: e.target.value })}
+        <textarea rows={3} value={data.projectVision}
+          onChange={(e) => update({ projectVision: e.target.value })}
+          onBlur={() => blurField("projectVision")}
           placeholder="Describe the project vision and elevator pitch..."
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 resize-none transition-colors" />
         <FieldError error={errors.projectVision} />
       </Field>
 
       <Field label="Business Criticality *">
-        <select value={data.businessCriticality} onChange={(e) => update({ businessCriticality: e.target.value as typeof data.businessCriticality })}
+        <select value={data.businessCriticality}
+          onChange={(e) => update({ businessCriticality: e.target.value as typeof data.businessCriticality })}
+          onBlur={() => blurField("businessCriticality")}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="mission_critical">Mission-critical</option>
@@ -52,21 +83,27 @@ export function Section1BusinessContext({ onComplete, onBack }: Props) {
       </Field>
 
       <Field label="Current State (As-Is) *" hint="Describe the current system or 'Not applicable — greenfield'.">
-        <textarea rows={2} value={data.currentState} onChange={(e) => update({ currentState: e.target.value })}
+        <textarea rows={2} value={data.currentState}
+          onChange={(e) => update({ currentState: e.target.value })}
+          onBlur={() => blurField("currentState")}
           placeholder="Running Oracle Financials (15 years)..."
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 resize-none transition-colors" />
         <FieldError error={errors.currentState} />
       </Field>
 
       <Field label="Desired Future State (To-Be) *">
-        <textarea rows={2} value={data.desiredFutureState} onChange={(e) => update({ desiredFutureState: e.target.value })}
+        <textarea rows={2} value={data.desiredFutureState}
+          onChange={(e) => update({ desiredFutureState: e.target.value })}
+          onBlur={() => blurField("desiredFutureState")}
           placeholder="Automated, cloud-native ERP with real-time dashboards..."
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 resize-none transition-colors" />
         <FieldError error={errors.desiredFutureState} />
       </Field>
 
       <Field label="Definition of Project Success *">
-        <textarea rows={2} value={data.definitionOfSuccess} onChange={(e) => update({ definitionOfSuccess: e.target.value })}
+        <textarea rows={2} value={data.definitionOfSuccess}
+          onChange={(e) => update({ definitionOfSuccess: e.target.value })}
+          onBlur={() => blurField("definitionOfSuccess")}
           placeholder="All financial operations running on the new platform with zero critical defects..."
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 resize-none transition-colors" />
         <FieldError error={errors.definitionOfSuccess} />
