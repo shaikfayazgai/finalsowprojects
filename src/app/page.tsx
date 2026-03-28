@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import {
@@ -86,10 +88,19 @@ const TESTIMONIALS = [
 ];
 
 export default function HomePage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const isLoggedIn = !!session?.user;
   const role = (session?.user as { role?: string })?.role ?? "";
   const dashboardHref = roleDashboard[role] ?? "/enterprise/dashboard";
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace(dashboardHref);
+    }
+  }, [status, dashboardHref, router]);
+
+  if (status === "loading" || status === "authenticated") return null;
 
   return (
     <MeshBackground variant="warm" className="min-h-screen">
