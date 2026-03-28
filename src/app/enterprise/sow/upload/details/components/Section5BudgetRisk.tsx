@@ -3,7 +3,7 @@
 import * as React from "react";
 import { CheckCircle2, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { validateSection, type SectionErrors } from "@/lib/validations/sow-upload-details";
+import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
 
@@ -15,8 +15,35 @@ function FieldError({ error }: { error?: string }) {
 export function Section5BudgetRisk({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.budgetRisk;
-  const update = (patch: Partial<typeof data>) => store.updateCommercialSection("budgetRisk", patch);
   const [errors, setErrors] = React.useState<SectionErrors>({});
+  const touched = React.useRef<Set<string>>(new Set());
+
+  const update = (patch: Partial<typeof data>) => {
+    store.updateCommercialSection("budgetRisk", patch);
+    if (touched.current.size > 0) {
+      const merged = { ...data, ...patch };
+      const allErrs = validateSection("budgetRisk", merged);
+      setErrors((prev) => {
+        const next = { ...prev };
+        for (const field of touched.current) {
+          if (allErrs[field]) next[field] = allErrs[field];
+          else delete next[field];
+        }
+        return next;
+      });
+    }
+  };
+
+  const blurField = (field: string) => {
+    touched.current.add(field);
+    const err = validateField("budgetRisk", field, data);
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (err) next[field] = err;
+      else delete next[field];
+      return next;
+    });
+  };
 
   const handleComplete = () => {
     const errs = validateSection("budgetRisk", data);
@@ -35,14 +62,18 @@ export function Section5BudgetRisk({ onComplete, onBack }: Props) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Budget Minimum *</label>
-          <input type="number" value={data.budgetMinimum || ""} onChange={(e) => update({ budgetMinimum: Number(e.target.value) })}
+          <input type="number" value={data.budgetMinimum || ""}
+            onChange={(e) => update({ budgetMinimum: Number(e.target.value) })}
+            onBlur={() => blurField("budgetMinimum")}
             placeholder="e.g. 280000"
             className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
           <FieldError error={errors.budgetMinimum} />
         </div>
         <div>
           <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Budget Maximum *</label>
-          <input type="number" value={data.budgetMaximum || ""} onChange={(e) => update({ budgetMaximum: Number(e.target.value) })}
+          <input type="number" value={data.budgetMaximum || ""}
+            onChange={(e) => update({ budgetMaximum: Number(e.target.value) })}
+            onBlur={() => blurField("budgetMaximum")}
             placeholder="e.g. 350000"
             className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
           <FieldError error={errors.budgetMaximum} />
@@ -52,7 +83,8 @@ export function Section5BudgetRisk({ onComplete, onBack }: Props) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Currency *</label>
-          <select value={data.currency} onChange={(e) => update({ currency: e.target.value })}
+          <select value={data.currency}
+            onChange={(e) => update({ currency: e.target.value })}
             className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
             <option value="USD">USD ($)</option>
             <option value="INR">INR (₹)</option>
@@ -63,7 +95,9 @@ export function Section5BudgetRisk({ onComplete, onBack }: Props) {
         </div>
         <div>
           <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Pricing Model *</label>
-          <select value={data.pricingModel} onChange={(e) => update({ pricingModel: e.target.value as typeof data.pricingModel })}
+          <select value={data.pricingModel}
+            onChange={(e) => update({ pricingModel: e.target.value as typeof data.pricingModel })}
+            onBlur={() => blurField("pricingModel")}
             className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
             <option value="">Select...</option>
             <option value="fixed_price">Fixed Price</option>
@@ -83,7 +117,8 @@ export function Section5BudgetRisk({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Contingency Budget</label>
-        <select value={data.contingencyPercent} onChange={(e) => update({ contingencyPercent: e.target.value })}
+        <select value={data.contingencyPercent}
+          onChange={(e) => update({ contingencyPercent: e.target.value })}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="5">5%</option>

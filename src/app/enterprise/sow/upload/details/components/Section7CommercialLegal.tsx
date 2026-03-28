@@ -3,7 +3,7 @@
 import * as React from "react";
 import { CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { validateSection, type SectionErrors } from "@/lib/validations/sow-upload-details";
+import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
 
@@ -16,12 +16,55 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.commercialLegal;
   const auth = store.approvalAuthorities;
-  const update = (patch: Partial<typeof data>) => store.updateCommercialSection("commercialLegal", patch);
   const [errors, setErrors] = React.useState<SectionErrors>({});
+  const touched = React.useRef<Set<string>>(new Set());
+
+  // Section 7 validates merged commercialLegal + approvalAuthorities
+  const merged = () => ({ ...data, ...auth });
+
+  const update = (patch: Partial<typeof data>) => {
+    store.updateCommercialSection("commercialLegal", patch);
+    if (touched.current.size > 0) {
+      const allErrs = validateSection("commercialLegal", { ...merged(), ...patch });
+      setErrors((prev) => {
+        const next = { ...prev };
+        for (const field of touched.current) {
+          if (allErrs[field]) next[field] = allErrs[field];
+          else delete next[field];
+        }
+        return next;
+      });
+    }
+  };
+
+  const updateAuth = (patch: Partial<typeof auth>) => {
+    store.setApprovalAuthorities(patch);
+    if (touched.current.size > 0) {
+      const allErrs = validateSection("commercialLegal", { ...merged(), ...patch });
+      setErrors((prev) => {
+        const next = { ...prev };
+        for (const field of touched.current) {
+          if (allErrs[field]) next[field] = allErrs[field];
+          else delete next[field];
+        }
+        return next;
+      });
+    }
+  };
+
+  const blurField = (field: string) => {
+    touched.current.add(field);
+    const err = validateField("commercialLegal", field, merged());
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (err) next[field] = err;
+      else delete next[field];
+      return next;
+    });
+  };
 
   const handleComplete = () => {
-    // Merge commercialLegal + approvalAuthorities for section 7 validation
-    const errs = validateSection("commercialLegal", { ...data, ...auth });
+    const errs = validateSection("commercialLegal", merged());
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
     onComplete();
@@ -36,7 +79,9 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">IP Ownership *</label>
-        <select value={data.ipOwnership} onChange={(e) => update({ ipOwnership: e.target.value as typeof data.ipOwnership })}
+        <select value={data.ipOwnership}
+          onChange={(e) => update({ ipOwnership: e.target.value as typeof data.ipOwnership })}
+          onBlur={() => blurField("ipOwnership")}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="client_owns_all">Client owns all IP (transfer on M3 payment)</option>
@@ -49,7 +94,9 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Source Code Repository Ownership *</label>
-        <select value={data.sourceCodeOwnership} onChange={(e) => update({ sourceCodeOwnership: e.target.value as typeof data.sourceCodeOwnership })}
+        <select value={data.sourceCodeOwnership}
+          onChange={(e) => update({ sourceCodeOwnership: e.target.value as typeof data.sourceCodeOwnership })}
+          onBlur={() => blurField("sourceCodeOwnership")}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="client_hosts">Client owns and hosts throughout</option>
@@ -61,7 +108,9 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Warranty Period *</label>
-        <select value={data.warrantyPeriod} onChange={(e) => update({ warrantyPeriod: e.target.value as typeof data.warrantyPeriod })}
+        <select value={data.warrantyPeriod}
+          onChange={(e) => update({ warrantyPeriod: e.target.value as typeof data.warrantyPeriod })}
+          onBlur={() => blurField("warrantyPeriod")}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="30_days">30 days</option>
@@ -75,7 +124,9 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Change Request Process *</label>
-        <select value={data.changeRequestProcess} onChange={(e) => update({ changeRequestProcess: e.target.value as typeof data.changeRequestProcess })}
+        <select value={data.changeRequestProcess}
+          onChange={(e) => update({ changeRequestProcess: e.target.value as typeof data.changeRequestProcess })}
+          onBlur={() => blurField("changeRequestProcess")}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="formal_cr">Formal CR — all changes priced before work begins</option>
@@ -87,7 +138,9 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Third-Party Licensing Costs *</label>
-        <select value={data.thirdPartyCosts} onChange={(e) => update({ thirdPartyCosts: e.target.value as typeof data.thirdPartyCosts })}
+        <select value={data.thirdPartyCosts}
+          onChange={(e) => update({ thirdPartyCosts: e.target.value as typeof data.thirdPartyCosts })}
+          onBlur={() => blurField("thirdPartyCosts")}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="client_pays">Client pays all third-party costs directly</option>
@@ -113,7 +166,8 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
           <div>
             <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Business Owner Approver (Stage 1) *</label>
             <input type="text" value={auth.businessOwnerApprover}
-              onChange={(e) => store.setApprovalAuthorities({ businessOwnerApprover: e.target.value })}
+              onChange={(e) => updateAuth({ businessOwnerApprover: e.target.value })}
+              onBlur={() => blurField("businessOwnerApprover")}
               placeholder="Full name of Business Owner"
               className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
             <FieldError error={errors.businessOwnerApprover} />
@@ -121,7 +175,8 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
           <div>
             <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Final Approver (Stage 5) *</label>
             <input type="text" value={auth.finalApprover}
-              onChange={(e) => store.setApprovalAuthorities({ finalApprover: e.target.value })}
+              onChange={(e) => updateAuth({ finalApprover: e.target.value })}
+              onBlur={() => blurField("finalApprover")}
               placeholder="Full name of Final Approver"
               className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
             <FieldError error={errors.finalApprover} />
@@ -129,7 +184,7 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
           <div>
             <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Legal / Compliance Reviewer (optional)</label>
             <input type="text" value={auth.legalReviewer || ""}
-              onChange={(e) => store.setApprovalAuthorities({ legalReviewer: e.target.value })}
+              onChange={(e) => updateAuth({ legalReviewer: e.target.value })}
               placeholder="Can be designated later"
               className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
           </div>

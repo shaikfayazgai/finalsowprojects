@@ -152,3 +152,11 @@ export function validateSection(section: CommercialSectionKey, data: unknown): S
   }
   return errors;
 }
+
+/**
+ * Validate a single field within a section.
+ * Returns the error message for that field, or undefined if valid.
+ */
+export function validateField(section: CommercialSectionKey, field: string, data: unknown): string | undefined {
+  return validateSection(section, data)[field];
+}

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { CheckCircle2, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { validateSection, type SectionErrors } from "@/lib/validations/sow-upload-details";
+import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
 
@@ -15,10 +15,43 @@ function FieldError({ error }: { error?: string }) {
 export function Section2DeliveryScope({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.deliveryScope;
-  const update = (patch: Partial<typeof data>) => store.updateCommercialSection("deliveryScope", patch);
   const [errors, setErrors] = React.useState<SectionErrors>({});
+  const touched = React.useRef<Set<string>>(new Set());
 
   const checkboxes = ["Frontend", "Backend", "Database", "Integration development", "CI/CD"];
+
+  const update = (patch: Partial<typeof data>) => {
+    store.updateCommercialSection("deliveryScope", patch);
+    if (touched.current.size > 0) {
+      const merged = { ...data, ...patch };
+      const allErrs = validateSection("deliveryScope", merged);
+      setErrors((prev) => {
+        const next = { ...prev };
+        for (const field of touched.current) {
+          if (allErrs[field]) next[field] = allErrs[field];
+          else delete next[field];
+        }
+        return next;
+      });
+    }
+  };
+
+  const blurField = (field: string) => {
+    touched.current.add(field);
+    const err = validateField("deliveryScope", field, data);
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (err) next[field] = err;
+      else delete next[field];
+      return next;
+    });
+  };
+
+  // For checkboxes: mark touched + re-validate on change
+  const updateCheckbox = (newScope: string[]) => {
+    touched.current.add("developmentScope");
+    update({ developmentScope: newScope });
+  };
 
   const handleComplete = () => {
     const errs = validateSection("deliveryScope", data);
@@ -40,7 +73,11 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
           {checkboxes.map((item) => (
             <label key={item} className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 hover:border-brown-300 cursor-pointer transition-colors">
               <input type="checkbox" checked={data.developmentScope.includes(item)}
-                onChange={(e) => update({ developmentScope: e.target.checked ? [...data.developmentScope, item] : data.developmentScope.filter((s) => s !== item) })}
+                onChange={(e) => updateCheckbox(
+                  e.target.checked
+                    ? [...data.developmentScope, item]
+                    : data.developmentScope.filter((s) => s !== item)
+                )}
                 className="w-3.5 h-3.5 rounded border-gray-300" />
               <span className="text-[12px] text-gray-700">{item}</span>
             </label>
@@ -51,7 +88,9 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">UI/UX Design Scope *</label>
-        <select value={data.uiuxDesignScope} onChange={(e) => update({ uiuxDesignScope: e.target.value as typeof data.uiuxDesignScope })}
+        <select value={data.uiuxDesignScope}
+          onChange={(e) => update({ uiuxDesignScope: e.target.value as typeof data.uiuxDesignScope })}
+          onBlur={() => blurField("uiuxDesignScope")}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="not_in_scope">Not in scope</option>
@@ -63,7 +102,9 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Deployment Scope *</label>
-        <select value={data.deploymentScope} onChange={(e) => update({ deploymentScope: e.target.value as typeof data.deploymentScope })}
+        <select value={data.deploymentScope}
+          onChange={(e) => update({ deploymentScope: e.target.value as typeof data.deploymentScope })}
+          onBlur={() => blurField("deploymentScope")}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="not_in_scope">Not in scope (working build handover)</option>
@@ -76,7 +117,9 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Go-Live & Hypercare *</label>
-        <select value={data.goLiveScope} onChange={(e) => update({ goLiveScope: e.target.value as typeof data.goLiveScope })}
+        <select value={data.goLiveScope}
+          onChange={(e) => update({ goLiveScope: e.target.value as typeof data.goLiveScope })}
+          onBlur={() => blurField("goLiveScope")}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="not_in_scope">Not in scope</option>
@@ -88,7 +131,9 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Data Migration Scope *</label>
-        <select value={data.dataMigrationScope} onChange={(e) => update({ dataMigrationScope: e.target.value as typeof data.dataMigrationScope })}
+        <select value={data.dataMigrationScope}
+          onChange={(e) => update({ dataMigrationScope: e.target.value as typeof data.dataMigrationScope })}
+          onBlur={() => blurField("dataMigrationScope")}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="not_in_scope">Not in scope</option>
