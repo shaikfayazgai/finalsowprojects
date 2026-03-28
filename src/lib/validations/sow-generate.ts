@@ -94,14 +94,11 @@ const step2Schema = z.object({
 const step5Schema = z
   .object({
     budgetMin: z.coerce
-      .number({ invalid_type_error: "Minimum budget must be greater than 0" })
+      .number()
       .refine((n) => n > 0, {
         message: "Minimum budget must be greater than 0",
       }),
-    budgetMax: z.coerce.number({
-      invalid_type_error:
-        "Maximum budget must be greater than or equal to minimum",
-    }),
+    budgetMax: z.coerce.number(),
     pricingModel: nonEmptyString("Select a pricing model"),
     knownRisks: nonEmptyList(1, "Add at least one known risk"),
   })
@@ -122,9 +119,7 @@ const step5Schema = z
 
 const step7Schema = z.object({
   nonDiscriminationConfirm: z.literal(true, {
-    errorMap: () => ({
-      message: "Non-discrimination confirmation is required",
-    }),
+    error: "Non-discrimination confirmation is required",
   }),
   dataSensitivity: nonEmptyString("Select data sensitivity level"),
   labourStandards: nonEmptyString("Select labour standards"),
