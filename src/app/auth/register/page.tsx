@@ -763,7 +763,7 @@ function ContributorRegisterContent() {
 
   /* ── Auth options + form: logo top-left, form centered ── */
   return (
-    <div className={`w-full mx-auto flex flex-col py-8 ${uiState === "registering" ? "max-w-3xl" : "max-w-[520px]"}`}>
+    <div className={`w-full mx-auto flex flex-col py-8 min-h-screen items-center justify-center ${uiState === "registering" ? "max-w-3xl" : "max-w-[520px]"}`}>
       <div className="mb-8">{logo}</div>
       {formBody}
     </div>
