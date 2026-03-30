@@ -496,7 +496,7 @@ function ContributorRegisterContent() {
       await signIn(providerId, {
         callbackUrl: selectedRole === "enterprise"
           ? "/enterprise/onboarding"
-          : "/contributor/dashboard",
+          : "/onboarding",
       });
     } catch {
       setSsoLoading(null);

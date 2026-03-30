@@ -57,9 +57,9 @@ function LoginPageContent() {
   const [step, setStep] = useState<Step>("credentials");
   const [userRole, setUserRole] = useState<string>("");
 
-  // Route based on user role
+  // Route based on user role — FSD §2.2 lifecycle
   const getRoleDest = () => {
-    if (userRole === "contributor") return "/contributor/dashboard";
+    if (userRole === "contributor") return isOnboardingComplete ? "/contributor/dashboard" : "/onboarding";
     if (userRole === "mentor") return "/mentor/dashboard";
     if (userRole === "admin") return "/enterprise/dashboard";
     // enterprise role — show onboarding if not complete
@@ -186,16 +186,20 @@ function LoginPageContent() {
         if (role === "enterprise") {
           setOnboardingComplete(false);
         } else {
-          // For contributor/admin/mentor, mark onboarding as complete so modal doesn't show
+          // Contributor/admin/mentor: mark onboarding complete (returning users)
+          // New contributors coming from /auth/register go through /onboarding first
           setOnboardingComplete(true);
         }
 
         // Store role for redirect after MFA
         setUserRole(role || "enterprise");
 
-        // Compute destination now while session is fresh
+        // Compute destination based on role and onboarding status
+        // FSD §2.2: Contributor lifecycle: Register → Profile Builder → Assessment → Dashboard
         const dest = callbackUrl || (
-          role === "contributor" ? "/contributor/dashboard" :
+          role === "contributor" ? (
+            isOnboardingComplete ? "/contributor/dashboard" : "/onboarding"
+          ) :
           role === "mentor" ? "/mentor/dashboard" :
           role === "admin" ? "/enterprise/dashboard" :
           isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding"

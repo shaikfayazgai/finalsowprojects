@@ -31,6 +31,7 @@ import {
   FileStack,
   Scale,
   BarChart3,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 
@@ -163,6 +164,7 @@ export const contributorNav: ModuleConfig = {
       items: [
         { label: "Tasks", href: "/contributor/tasks", icon: ListChecks },
         { label: "Submissions", href: "/contributor/tasks/submissions", icon: ClipboardCheck },
+        { label: "Assessment", href: "/contributor/assessment", icon: Target },
       ],
     },
     {
