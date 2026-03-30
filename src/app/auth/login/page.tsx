@@ -75,6 +75,16 @@ function LoginPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [ssoLoading, setSsoLoading] = useState<"google" | "microsoft" | null>(null);
   const [error, setError] = useState("");
+
+  // Reset ssoLoading when page is restored from bfcache (user pressed Back after being
+  // redirected to the OAuth provider without completing sign-in).
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setSsoLoading(null);
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
   const [errorCode, setErrorCode] = useState<string>("");
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [timeLeft, setTimeLeft] = useState(30);
