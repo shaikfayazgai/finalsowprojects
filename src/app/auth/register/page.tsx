@@ -269,7 +269,7 @@ function AuthMethodPicker({
           onClick={() => onSSO("google")}
           disabled={!!ssoLoading}
           style={{ transitionDelay: "80ms" }}
-          className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 border-beige-200 bg-white hover:border-teal-300 hover:shadow-md hover:shadow-teal-50 transition-all text-sm font-medium text-brown-800 disabled:opacity-50 group ${
+          className={`w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl border-2 border-beige-200 bg-white hover:border-teal-300 hover:shadow-md hover:shadow-teal-50 transition-all text-sm font-medium text-brown-800 disabled:opacity-50 ${
             visible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"
           }`}
         >
@@ -283,8 +283,7 @@ function AuthMethodPicker({
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
             </svg>
           )}
-          <span className="flex-1 text-left">Continue with Google</span>
-          <ArrowRight className="w-4 h-4 text-beige-300 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-all" />
+          <span>Continue with Google</span>
         </button>
 
         {/* Microsoft */}
@@ -293,7 +292,7 @@ function AuthMethodPicker({
           onClick={() => onSSO("microsoft")}
           disabled={!!ssoLoading}
           style={{ transitionDelay: "150ms" }}
-          className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 border-beige-200 bg-white hover:border-blue-300 hover:shadow-md hover:shadow-blue-50 transition-all text-sm font-medium text-brown-800 disabled:opacity-50 group ${
+          className={`w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl border-2 border-beige-200 bg-white hover:border-blue-300 hover:shadow-md hover:shadow-blue-50 transition-all text-sm font-medium text-brown-800 disabled:opacity-50 ${
             visible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"
           }`}
         >
@@ -307,8 +306,7 @@ function AuthMethodPicker({
               <rect fill="#FFB900" x="13" y="13" width="10" height="10" />
             </svg>
           )}
-          <span className="flex-1 text-left">Continue with Microsoft</span>
-          <ArrowRight className="w-4 h-4 text-beige-300 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
+          <span>Continue with Microsoft</span>
         </button>
 
         {/* Divider */}
