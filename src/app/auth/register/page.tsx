@@ -475,6 +475,16 @@ function ContributorRegisterContent() {
   const [ssoLoading, setSsoLoading] = useState<SSOProvider | null>(null);
   const [roleBarAnimated, setRoleBarAnimated] = useState(false);
 
+  // Reset ssoLoading when page is restored from bfcache (user pressed Back after being
+  // redirected to the OAuth provider without completing sign-in).
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setSsoLoading(null);
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
   const handleRoleSelect = (role: "contributor" | "enterprise") => {
     setSelectedRole(role);
     setTimeout(() => {
