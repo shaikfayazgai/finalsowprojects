@@ -359,54 +359,58 @@ export default function SOWDetailPage() {
       {/* ── Header (B6 Step 1) ── */}
       <motion.div
         variants={fadeUp}
-        className="flex flex-col md:flex-row md:items-start md:justify-between gap-4"
+        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm px-6 py-5"
       >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <h1 className="text-xl font-bold text-brown-900 tracking-tight font-heading">
-              {sow.title}
-            </h1>
-            <Badge variant={statusVariantMap[sow.status]} size="md" dot>
-              {statusLabel[sow.status]}
-            </Badge>
-            <Badge
-              variant={sow.intakeMode === "ai_generated" ? "teal" : "beige"}
-              size="sm"
-            >
-              {sow.intakeMode === "ai_generated" ? (
-                <><Bot className="w-3 h-3" /> AI Generated</>
-              ) : (
-                <><Upload className="w-3 h-3" /> Manual Upload</>
-              )}
-            </Badge>
-            <Badge variant={confidentialityVariantMap[sow.confidentiality]} size="sm">
-              <Shield className="w-3 h-3" />
-              {sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1)}
-            </Badge>
-            {sow.riskScore.overall > 0 && (
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            {/* Row 1: Title + status */}
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <h1 className="text-xl font-bold text-brown-900 tracking-tight font-heading">
+                {sow.title}
+              </h1>
+              <Badge variant={statusVariantMap[sow.status]} size="md" dot>
+                {statusLabel[sow.status]}
+              </Badge>
+            </div>
+            {/* Row 2: Sub-metadata + secondary badges */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-[11px] text-beige-500">{sow.id.toUpperCase()}</span>
+              <span className="w-1 h-1 rounded-full bg-beige-300" />
+              <span className="text-[12px] text-beige-600">{sow.client}</span>
+              <span className="w-1 h-1 rounded-full bg-beige-300" />
+              <span className="text-[12px] text-beige-600">v{sow.version}</span>
+              <span className="w-1 h-1 rounded-full bg-beige-300" />
+              <span className="text-[12px] text-beige-600">{sow.fileSize}</span>
+              <span className="w-1 h-1 rounded-full bg-beige-300" />
+              <span className="text-[12px] text-beige-600">By {sow.createdBy}</span>
+              <span className="w-1 h-1 rounded-full bg-beige-300" />
               <Badge
-                variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"}
+                variant={sow.intakeMode === "ai_generated" ? "teal" : "beige"}
                 size="sm"
               >
-                Risk: {sow.riskScore.overall}/100
+                {sow.intakeMode === "ai_generated" ? (
+                  <><Bot className="w-3 h-3" /> AI Generated</>
+                ) : (
+                  <><Upload className="w-3 h-3" /> Manual Upload</>
+                )}
               </Badge>
-            )}
+              <Badge variant={confidentialityVariantMap[sow.confidentiality]} size="sm">
+                <Shield className="w-3 h-3" />
+                {sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1)}
+              </Badge>
+              {sow.riskScore.overall > 0 && (
+                <Badge
+                  variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"}
+                  size="sm"
+                >
+                  Risk {sow.riskScore.overall}/100
+                </Badge>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3 text-sm text-beige-600 flex-wrap">
-            <span className="font-mono text-[11px] text-beige-500">{sow.id.toUpperCase()}</span>
-            <span className="w-1 h-1 rounded-full bg-beige-300" />
-            <span>{sow.client}</span>
-            <span className="w-1 h-1 rounded-full bg-beige-300" />
-            <span>v{sow.version}</span>
-            <span className="w-1 h-1 rounded-full bg-beige-300" />
-            <span>{sow.fileSize}</span>
-            <span className="w-1 h-1 rounded-full bg-beige-300" />
-            <span>Created by {sow.createdBy}</span>
-          </div>
-        </div>
 
-        {/* Status-aware header actions (B6 Step 1 a-e) */}
-        <div className="flex items-center gap-2 shrink-0">
+          {/* Status-aware header actions (B6 Step 1 a-e) */}
+          <div className="flex items-center gap-2 shrink-0">
           {(sow.status === "draft" || sow.status === "review") && isValidated && (
             <Button variant="gradient-primary" size="sm" onClick={() => setShowSubmitModal(true)}>
               <Send className="w-3.5 h-3.5" />
@@ -445,82 +449,84 @@ export default function SOWDetailPage() {
               </Button>
             </Link>
           )}
+          </div>
         </div>
       </motion.div>
 
       {/* ── Top Metadata Strip ── */}
-      <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        {[
-          { icon: BookOpen, label: "Pages", value: `${sow.pages}` },
-          { icon: Layers, label: "Sections", value: `${sow.parsedSections}/${sow.totalSections}` },
-          { icon: DollarSign, label: "Est. Budget", value: sow.estimatedBudget > 0 ? `$${(sow.estimatedBudget / 1000).toFixed(0)}K` : "TBD" },
-          { icon: Clock, label: "Duration", value: sow.estimatedDuration },
-          { icon: Users, label: "Stakeholders", value: `${sow.stakeholders.length}` },
-          { icon: Calendar, label: "Updated", value: formatDate(sow.updatedAt) },
-        ].map(({ icon: Icon, label, value }) => (
-          <div
-            key={label}
-            className="rounded-xl border border-beige-200/50 bg-white/60 backdrop-blur-sm p-3 flex items-center gap-3"
-          >
-            <div className="w-8 h-8 rounded-lg bg-beige-100/80 flex items-center justify-center shrink-0">
-              <Icon className="w-4 h-4 text-beige-500" />
+      <motion.div variants={fadeUp} className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm px-5 py-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {[
+            { icon: BookOpen, label: "Pages", value: `${sow.pages}` },
+            { icon: Layers, label: "Sections", value: `${sow.parsedSections}/${sow.totalSections}` },
+            { icon: DollarSign, label: "Est. Budget", value: sow.estimatedBudget > 0 ? `$${(sow.estimatedBudget / 1000).toFixed(0)}K` : "TBD" },
+            { icon: Clock, label: "Duration", value: sow.estimatedDuration },
+            { icon: Users, label: "Stakeholders", value: `${sow.stakeholders.length}` },
+            { icon: Calendar, label: "Updated", value: formatDate(sow.updatedAt) },
+          ].map(({ icon: Icon, label, value }, i) => (
+            <div key={label} className={cn("flex items-center gap-3", i > 0 && "lg:border-l lg:border-beige-200/50 lg:pl-4")}>
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-beige-50 to-beige-100 border border-beige-200/50 flex items-center justify-center shrink-0">
+                <Icon className="w-4 h-4 text-brown-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-beige-400 uppercase tracking-widest">{label}</p>
+                <p className="text-[15px] font-bold text-brown-900 truncate leading-tight">{value}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold text-beige-500 uppercase tracking-wider">{label}</p>
-              <p className="text-[14px] font-bold text-brown-900 truncate">{value}</p>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════
          9-TAB CONTENT (B6 Steps 2-10)
          ══════════════════════════════════════════════════════════════ */}
-      <motion.div variants={fadeUp}>
+      <motion.div variants={fadeUp} className="rounded-2xl border border-beige-100 bg-beige-50/50 overflow-hidden">
         <Tabs defaultValue="metadata" className="w-full">
-          <TabsList className="mb-2 flex-wrap">
-            <TabsTrigger value="metadata" className="gap-1.5">
-              <FileText className="w-3.5 h-3.5" /> Metadata
-            </TabsTrigger>
-            <TabsTrigger value="clauses" className="gap-1.5">
-              <Scale className="w-3.5 h-3.5" /> Clauses
-              {prohibitedCount > 0 && (
-                <span className="ml-1 w-4 h-4 rounded-full bg-brown-500 text-white text-[9px] font-bold flex items-center justify-center">
-                  {prohibitedCount}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="document" className="gap-1.5">
-              <BookOpen className="w-3.5 h-3.5" /> Document
-            </TabsTrigger>
-            <TabsTrigger value="ai-analysis" className="gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> AI Analysis
-            </TabsTrigger>
-            <TabsTrigger value="risk" className="gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" /> Risk & Compliance
-            </TabsTrigger>
-            <TabsTrigger value="approval" className="gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Approval
-            </TabsTrigger>
-            <TabsTrigger value="versions" className="gap-1.5">
-              <GitBranch className="w-3.5 h-3.5" /> Versions
-            </TabsTrigger>
-            <TabsTrigger value="audit" className="gap-1.5">
-              <History className="w-3.5 h-3.5" /> Audit
-            </TabsTrigger>
-            <TabsTrigger value="linked" className="gap-1.5">
-              <Link2 className="w-3.5 h-3.5" /> Linked
-            </TabsTrigger>
-          </TabsList>
+          <div className="px-4 pt-3 border-b border-beige-200/50 bg-beige-50/30">
+            <TabsList className="flex-wrap bg-transparent gap-0 p-0">
+              <TabsTrigger value="metadata" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-400 data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5">
+                <FileText className="w-3.5 h-3.5" /> Metadata
+              </TabsTrigger>
+              <TabsTrigger value="clauses" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-400 data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5">
+                <Scale className="w-3.5 h-3.5" /> Clauses
+                {prohibitedCount > 0 && (
+                  <span className="ml-1 w-4 h-4 rounded-full bg-brown-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {prohibitedCount}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="document" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-400 data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5">
+                <BookOpen className="w-3.5 h-3.5" /> Document
+              </TabsTrigger>
+              <TabsTrigger value="ai-analysis" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-400 data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5">
+                <Sparkles className="w-3.5 h-3.5" /> AI Analysis
+              </TabsTrigger>
+              <TabsTrigger value="risk" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-400 data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5">
+                <ShieldCheck className="w-3.5 h-3.5" /> Risk & Compliance
+              </TabsTrigger>
+              <TabsTrigger value="approval" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-400 data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Approval
+              </TabsTrigger>
+              <TabsTrigger value="versions" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-400 data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5">
+                <GitBranch className="w-3.5 h-3.5" /> Versions
+              </TabsTrigger>
+              <TabsTrigger value="audit" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-400 data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5">
+                <History className="w-3.5 h-3.5" /> Audit
+              </TabsTrigger>
+              <TabsTrigger value="linked" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-400 data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5">
+                <Link2 className="w-3.5 h-3.5" /> Linked
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* ═══════════════════════════════════════════════════
              TAB 1: Metadata (B6 Step 2)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="metadata">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <TabsContent value="metadata" className="mt-0">
+            <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
               <div className="lg:col-span-2 space-y-4">
                 {/* Core Details */}
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                <div className="rounded-2xl border border-beige-200/50 bg-beige-50/30 p-5">
                   <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">
                     SOW Details
                   </h3>
@@ -548,7 +554,7 @@ export default function SOWDetailPage() {
                 </div>
 
                 {/* Stakeholders */}
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                   <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-3">Stakeholders</h3>
                   <div className="flex flex-wrap gap-2">
                     {sow.stakeholders.map((name) => (
@@ -563,7 +569,7 @@ export default function SOWDetailPage() {
                 </div>
 
                 {/* Tags */}
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                   <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-3">Tags</h3>
                   <div className="flex flex-wrap gap-2">
                     {sow.tags.map((tag) => (
@@ -577,7 +583,7 @@ export default function SOWDetailPage() {
 
               {/* Right sidebar: AI Confidence + quick risk */}
               <div className="space-y-4">
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6 text-center">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5 text-center">
                   <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-4">
                     Overall AI Confidence
                   </h3>
@@ -600,7 +606,7 @@ export default function SOWDetailPage() {
 
                 {/* Quick risk summary */}
                 {sow.riskScore.overall > 0 && (
-                  <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                     <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-3">Risk Score</h3>
                     <div className="flex items-center gap-2 mb-3">
                       <ShieldCheck className={cn("w-5 h-5", sow.riskScore.overall <= 30 ? "text-forest-500" : sow.riskScore.overall <= 60 ? "text-gold-500" : "text-brown-600")} />
@@ -616,7 +622,7 @@ export default function SOWDetailPage() {
                 )}
 
                 {/* Deliverables summary */}
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                   <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-3">Content Summary</h3>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -648,11 +654,11 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 2: Clauses (B6 Step 3)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="clauses">
-            <div className="space-y-4">
+          <TabsContent value="clauses" className="mt-0">
+            <div className="p-5 space-y-4">
               {/* Header + filters */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <h2 className="text-[15px] font-semibold text-brown-800">
+                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">
                   Tagged Clauses
                   <span className="ml-2 text-[12px] font-normal text-beige-500">({clauses.length} total)</span>
                 </h2>
@@ -704,7 +710,7 @@ export default function SOWDetailPage() {
               {/* Clause list */}
               <div className="space-y-2">
                 {filteredClauses.length === 0 ? (
-                  <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-12 text-center">
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-12 text-center">
                     <p className="text-sm text-beige-500">No clauses match your filters.</p>
                   </div>
                 ) : (
@@ -767,10 +773,10 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 3: Document (B6 Step 4)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="document">
-            <div className="space-y-4">
+          <TabsContent value="document" className="mt-0">
+            <div className="p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-[15px] font-semibold text-brown-800">
+                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">
                   {sow.intakeMode === "ai_generated" ? "Generated Document" : "Uploaded Document"}
                   <span className="ml-2 text-[12px] font-normal text-beige-500">({sections.length} sections)</span>
                 </h2>
@@ -805,7 +811,7 @@ export default function SOWDetailPage() {
               </div>
 
               {filteredDocSections.length === 0 ? (
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-12 text-center">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-12 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-beige-100 flex items-center justify-center mx-auto mb-4">
                     <Layers className="w-7 h-7 text-beige-400" />
                   </div>
@@ -826,7 +832,7 @@ export default function SOWDetailPage() {
                     return (
                       <div
                         key={section.id}
-                        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden hover:shadow-md transition-all"
+                        className="rounded-2xl border border-beige-100 bg-beige-50/50 overflow-hidden hover:shadow-md transition-all"
                       >
                         <button
                           onClick={() => toggleSection(section.id)}
@@ -905,16 +911,16 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 4: AI Analysis (B6 Step 5)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="ai-analysis">
-            <div className="space-y-5">
+          <TabsContent value="ai-analysis" className="mt-0">
+            <div className="p-5 space-y-5">
               {sow.intakeMode === "ai_generated" ? (
                 /* ── AI-Generated SOWs ── */
                 <>
-                  <h2 className="text-[15px] font-semibold text-brown-800">AI Generation Analysis</h2>
+                  <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">AI Generation Analysis</h2>
 
                   {/* Generation Parameters */}
                   {genParams && (
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                       <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Generation Parameters</h3>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         {[
@@ -936,7 +942,7 @@ export default function SOWDetailPage() {
                   )}
 
                   {/* Confidence Breakdown */}
-                  <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                     <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Confidence Score Breakdown</h3>
                     <div className="flex items-center gap-4 mb-4">
                       <MetricRing value={sow.aiConfidence} size={80} strokeWidth={7} color={confidenceColor(sow.aiConfidence)} label="Overall" />
@@ -968,7 +974,7 @@ export default function SOWDetailPage() {
 
                   {/* 8-Layer Hallucination Prevention */}
                   {hallucinationLayers.length > 0 && (
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                       <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">
                         8-Layer Hallucination Prevention
                       </h3>
@@ -1022,7 +1028,7 @@ export default function SOWDetailPage() {
 
                   {/* Hallucination Flags */}
                   {sow.hallucinationFlags && sow.hallucinationFlags.length > 0 && (
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                       <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Red-Flag Detections</h3>
                       <div className="space-y-3">
                         {sow.hallucinationFlags.map((flag) => (
@@ -1050,10 +1056,10 @@ export default function SOWDetailPage() {
               ) : (
                 /* ── Manual Upload SOWs ── */
                 <>
-                  <h2 className="text-[15px] font-semibold text-brown-800">Parsing & Analysis Results</h2>
+                  <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Parsing & Analysis Results</h2>
 
                   {/* Completeness Score */}
-                  <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                     <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Completeness Score</h3>
                     <div className="flex items-center gap-4 mb-4">
                       <MetricRing
@@ -1073,7 +1079,7 @@ export default function SOWDetailPage() {
                   </div>
 
                   {/* Gap Analysis */}
-                  <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                     <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Gap Analysis</h3>
                     <p className="text-[12px] text-beige-600 mb-4">Comparison against platform SOW standard template.</p>
                     {sections.length > 0 ? (
@@ -1098,7 +1104,7 @@ export default function SOWDetailPage() {
 
                   {/* Hallucination Flags (manual uploads can have them too) */}
                   {sow.hallucinationFlags && sow.hallucinationFlags.length > 0 && (
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                       <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Red-Flag Detections</h3>
                       <div className="space-y-3">
                         {sow.hallucinationFlags.map((flag) => (
@@ -1124,13 +1130,13 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 5: Risk & Compliance (B6 Step 6)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="risk">
-            <div className="space-y-5">
-              <h2 className="text-[15px] font-semibold text-brown-800">Risk & Compliance</h2>
+          <TabsContent value="risk" className="mt-0">
+            <div className="p-5 space-y-5">
+              <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Risk & Compliance</h2>
 
               {/* Risk Score Breakdown */}
               {sow.riskScore.overall > 0 && (
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                   <div className="flex items-center justify-between mb-5">
                     <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider">Risk Score Breakdown</h3>
                     <div className="flex items-center gap-2">
@@ -1175,7 +1181,7 @@ export default function SOWDetailPage() {
               )}
 
               {/* Ethics Screening */}
-              <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                 <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Ethics Screening</h3>
                 {ethicsScreening.length > 0 ? (
                   <div className="space-y-2">
@@ -1213,7 +1219,7 @@ export default function SOWDetailPage() {
               </div>
 
               {/* Data Sensitivity Handling */}
-              <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider">
                     Data Sensitivity: {sow.dataSensitivity.charAt(0).toUpperCase() + sow.dataSensitivity.slice(1)}
@@ -1234,7 +1240,7 @@ export default function SOWDetailPage() {
               </div>
 
               {/* Regulatory Alignment */}
-              <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                 <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Regulatory Alignment</h3>
                 {regulatoryItems.length > 0 ? (
                   <div className="space-y-2">
@@ -1269,111 +1275,179 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 6: Approval Status (B6 Step 7)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="approval">
-            <div className="space-y-5">
-              <h2 className="text-[15px] font-semibold text-brown-800">Approval Pipeline</h2>
-
-              {/* Stage Progress Tracker */}
-              <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
-                <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-5">Stage Progress</h3>
-
-                {/* Horizontal progress bar */}
-                <div className="flex items-center gap-2 mb-6">
-                  {sow.approvalStages.map((stage, idx) => (
-                    <React.Fragment key={stage.stage}>
-                      <div className="flex-1">
-                        <div className={cn(
-                          "h-2 rounded-full",
-                          stage.status === "approved" ? "bg-forest-500" :
-                          stage.status === "in_review" ? "bg-gold-400" :
-                          stage.status === "rejected" ? "bg-brown-500" :
-                          "bg-beige-200"
-                        )} />
-                      </div>
-                      {idx < sow.approvalStages.length - 1 && <div className="w-1" />}
-                    </React.Fragment>
-                  ))}
+          <TabsContent value="approval" className="mt-0">
+            <div className="p-5 space-y-5">
+              {/* Stage Progress Stepper */}
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 px-6 py-5">
+                <div className="flex items-center justify-between mb-7">
+                  <div>
+                    <h3 className="text-[14px] font-bold text-brown-800">Approval Pipeline</h3>
+                    <p className="text-[11px] text-beige-500 mt-0.5">5-stage review process</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[12px] font-semibold text-brown-700">
+                      {sow.approvalStages.filter((s) => s.status === "approved").length}
+                    </span>
+                    <span className="text-[12px] text-beige-400">/</span>
+                    <span className="text-[12px] text-beige-500">{sow.approvalStages.length} stages approved</span>
+                  </div>
                 </div>
 
-                {/* Stage cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {sow.approvalStages.map((stage, idx) => (
-                    <div
-                      key={stage.stage}
-                      className={cn(
-                        "rounded-xl border p-4",
-                        stage.status === "approved" ? "border-forest-200/60 bg-forest-50/20" :
-                        stage.status === "in_review" ? "border-gold-200/60 bg-gold-50/20" :
-                        stage.status === "rejected" ? "border-brown-200/60 bg-brown-50/20" :
-                        "border-beige-200/50 bg-beige-50/30"
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={cn(
-                          "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
-                          stage.status === "approved" ? "bg-forest-100" :
-                          stage.status === "in_review" ? "bg-gold-100" :
-                          stage.status === "rejected" ? "bg-brown-100" :
-                          "bg-beige-100"
-                        )}>
-                          {stage.status === "approved" ? (
-                            <CheckCircle2 className="w-4 h-4 text-forest-600" />
-                          ) : stage.status === "in_review" ? (
-                            <Clock className="w-4 h-4 text-gold-600" />
-                          ) : stage.status === "rejected" ? (
-                            <X className="w-4 h-4 text-brown-600" />
-                          ) : (
-                            <span className="text-[12px] font-bold text-beige-500">{idx + 1}</span>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[14px] font-semibold text-brown-800 capitalize">
-                              Stage {idx + 1}: {stage.stage} Review
-                            </span>
-                            <Badge
-                              variant={stage.status === "approved" ? "forest" : stage.status === "in_review" ? "gold" : stage.status === "rejected" ? "brown" : "beige"}
-                              size="sm"
-                            >
-                              {stage.status === "approved" ? "Approved" : stage.status === "in_review" ? "In Review" : stage.status === "rejected" ? "Rejected" : "Pending"}
-                            </Badge>
+                {/* Multi-step progress bar */}
+                <div className="relative mb-8">
+                  <div className="absolute top-5 left-5 right-5 h-0.5 bg-beige-200" />
+                  <div
+                    className="absolute top-5 left-5 h-0.5 bg-gradient-to-r from-forest-400 to-forest-500 transition-all duration-500"
+                    style={{
+                      width: `calc(${
+                        sow.approvalStages.filter((s) => s.status === "approved").length /
+                        Math.max(sow.approvalStages.length - 1, 1) * 100
+                      }% - 2.5rem)`,
+                    }}
+                  />
+                  <div className="relative flex justify-between">
+                    {sow.approvalStages.map((stage, idx) => {
+                      const isApproved = stage.status === "approved";
+                      const isActive = stage.status === "in_review";
+                      const isRejected = stage.status === "rejected";
+                      const stageLabels: Record<string, string> = {
+                        business: "Business",
+                        glimmora_commercial: "Commercial",
+                        legal: "Legal",
+                        security: "Security",
+                        final: "Final",
+                      };
+                      return (
+                        <div key={stage.stage} className="flex flex-col items-center gap-2 flex-1">
+                          <div className={cn(
+                            "relative w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                            isApproved ? "bg-forest-500 border-forest-500 shadow-sm shadow-forest-200" :
+                            isActive ? "bg-white border-gold-400 shadow-sm shadow-gold-100 ring-4 ring-gold-100" :
+                            isRejected ? "bg-brown-500 border-brown-500" :
+                            "bg-white border-beige-300"
+                          )}>
+                            {isApproved ? <CheckCircle2 className="w-5 h-5 text-white" /> :
+                             isActive   ? <Clock className="w-4 h-4 text-gold-500" /> :
+                             isRejected ? <X className="w-4 h-4 text-white" /> :
+                             <span className="text-[12px] font-bold text-beige-400">{idx + 1}</span>}
                           </div>
-                          {stage.reviewer && (
-                            <p className="text-[12px] text-beige-600">
-                              Reviewer: <span className="font-medium text-brown-700">{stage.reviewer}</span>
-                            </p>
-                          )}
-                          {stage.reviewedAt && (
-                            <p className="text-[11px] text-beige-500 mt-0.5">
-                              {formatDateTime(stage.reviewedAt)}
-                            </p>
-                          )}
-                          {stage.comments && (
-                            <div className="mt-2 rounded-lg bg-white/80 border border-beige-200/30 p-3">
-                              <p className="text-[12px] text-brown-700 italic">&ldquo;{stage.comments}&rdquo;</p>
-                            </div>
-                          )}
+                          <div className="text-center">
+                            <p className={cn("text-[11px] font-bold leading-tight",
+                              isApproved ? "text-forest-700" : isActive ? "text-gold-700" : isRejected ? "text-brown-700" : "text-beige-500"
+                            )}>{stageLabels[stage.stage] ?? stage.stage}</p>
+                            <p className={cn("text-[10px] mt-0.5",
+                              isApproved ? "text-forest-500" : isActive ? "text-gold-500" : isRejected ? "text-brown-500" : "text-beige-400"
+                            )}>{isApproved ? "Approved" : isActive ? "In Review" : isRejected ? "Rejected" : "Pending"}</p>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {/* Quick actions */}
-                <div className="mt-4 pt-4 border-t border-beige-200/50 flex items-center gap-3">
-                  {(sow.status === "draft" || sow.status === "review") && isValidated && (
+                {/* All stage details inline */}
+                <div className="space-y-2">
+                  {sow.approvalStages.map((stage, idx) => {
+                    const isApproved = stage.status === "approved";
+                    const isActive = stage.status === "in_review";
+                    const isRejected = stage.status === "rejected";
+                    const stageNames: Record<string, string> = {
+                      business: "Business Owner",
+                      glimmora_commercial: "GlimmoraTeam Commercial",
+                      legal: "Legal / Compliance",
+                      security: "Security Review",
+                      final: "Final Approval",
+                    };
+                    return (
+                      <div key={stage.stage} className={cn(
+                        "rounded-xl border px-4 py-3.5 transition-all",
+                        isApproved ? "border-forest-200/50 bg-forest-50/20" :
+                        isActive ? "border-gold-200/60 bg-gold-50/25 ring-1 ring-gold-200/40" :
+                        isRejected ? "border-brown-200/50 bg-brown-50/20" :
+                        "border-beige-200/40 bg-white/30"
+                      )}>
+                        <div className="flex items-start gap-3">
+                          {/* Stage icon */}
+                          <div className={cn(
+                            "w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5",
+                            isApproved ? "bg-forest-500 border-forest-500" :
+                            isActive ? "bg-white border-gold-400 ring-2 ring-gold-100" :
+                            isRejected ? "bg-brown-500 border-brown-500" :
+                            "bg-beige-100 border-beige-200"
+                          )}>
+                            {isApproved ? <CheckCircle2 className="w-3.5 h-3.5 text-white" /> :
+                             isActive   ? <Clock className="w-3.5 h-3.5 text-gold-500" /> :
+                             isRejected ? <X className="w-3.5 h-3.5 text-white" /> :
+                             <span className="text-[11px] font-bold text-beige-400">{idx + 1}</span>}
+                          </div>
+
+                          {/* Stage body */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[13px] font-semibold text-brown-800">
+                                  {stageNames[stage.stage] ?? stage.stage}
+                                </span>
+                                <span className="text-[10px] text-beige-400 font-mono">Stage {idx + 1}</span>
+                              </div>
+                              <Badge
+                                variant={isApproved ? "forest" : isActive ? "gold" : isRejected ? "brown" : "beige"}
+                                size="sm"
+                              >
+                                {isApproved ? "Approved" : isActive ? "In Review" : isRejected ? "Rejected" : "Pending"}
+                              </Badge>
+                            </div>
+
+                            {stage.reviewer && (
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <User className="w-3 h-3 text-beige-400 shrink-0" />
+                                <span className="text-[12px] text-beige-600">
+                                  {stage.reviewer}
+                                </span>
+                                {stage.reviewedAt && (
+                                  <>
+                                    <span className="w-1 h-1 rounded-full bg-beige-300" />
+                                    <span className="text-[11px] text-beige-400">{formatDateTime(stage.reviewedAt)}</span>
+                                  </>
+                                )}
+                              </div>
+                            )}
+
+                            {stage.comments && (
+                              <p className="text-[12px] text-brown-600 italic mt-1 leading-relaxed">
+                                &ldquo;{stage.comments}&rdquo;
+                              </p>
+                            )}
+
+                            {/* Action buttons for active stage */}
+                            {isActive && (
+                              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gold-200/50">
+                                <Button variant="gradient-primary" size="sm" className="text-[11px] h-7 px-3">
+                                  <CheckCircle2 className="w-3 h-3" /> Approve
+                                </Button>
+                                <Button variant="outline" size="sm" className="text-[11px] h-7 px-3 border-gold-300 text-gold-700 hover:bg-gold-50">
+                                  <Clock className="w-3 h-3" /> Request Changes
+                                </Button>
+                                <Button variant="outline" size="sm" className="text-[11px] h-7 px-3 border-brown-300 text-brown-700 hover:bg-brown-50">
+                                  <X className="w-3 h-3" /> Reject
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Submit action */}
+                {(sow.status === "draft" || sow.status === "review") && isValidated && (
+                  <div className="mt-4 pt-4 border-t border-beige-100">
                     <Button variant="gradient-primary" size="sm" onClick={() => setShowSubmitModal(true)}>
                       <Send className="w-3.5 h-3.5" /> Submit for Approval
                     </Button>
-                  )}
-                  {(sow.status === "approval" || sow.status === "approved" || sow.status === "changes_requested" || sow.status === "rejected") && (
-                    <Link href={`/enterprise/sow/${sow.id}/approve`}>
-                      <Button variant="outline" size="sm">
-                        <ExternalLink className="w-3.5 h-3.5" /> View Full Approval Workflow
-                      </Button>
-                    </Link>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           </TabsContent>
@@ -1381,9 +1455,9 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 7: Versions (B6 Step 8 + B8)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="versions">
-            <div className="space-y-3">
-              <h2 className="text-[15px] font-semibold text-brown-800">
+          <TabsContent value="versions" className="mt-0">
+            <div className="p-5 space-y-3">
+              <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">
                 Version History
                 <span className="ml-2 text-[12px] font-normal text-beige-500">({versions.length} versions)</span>
               </h2>
@@ -1453,10 +1527,10 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 8: Audit History (B6 Step 9)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="audit">
-            <div className="space-y-3">
+          <TabsContent value="audit" className="mt-0">
+            <div className="p-5 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <h2 className="text-[15px] font-semibold text-brown-800">Audit Trail</h2>
+                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Audit Trail</h2>
                 <div className="flex items-center gap-2">
                   {/* Event type filter (B6 spec: filter by type) */}
                   <Select value={auditTypeFilter} onValueChange={setAuditTypeFilter}>
@@ -1480,7 +1554,7 @@ export default function SOWDetailPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden">
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 overflow-hidden">
                 {filteredAudit.map((event, idx) => {
                   const config = auditActionConfig[event.action] || auditActionConfig.updated;
                   const IconComp = auditActionIcon[event.action] || ClipboardList;
@@ -1521,14 +1595,14 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 9: Linked Projects (B6 Step 10)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="linked">
-            <div className="space-y-4">
-              <h2 className="text-[15px] font-semibold text-brown-800">Linked Resources</h2>
+          <TabsContent value="linked" className="mt-0">
+            <div className="p-5 space-y-4">
+              <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Linked Resources</h2>
 
               {sow.planId ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Link href={`/enterprise/decomposition/${sow.planId}`} className="block group">
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5 hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
                       <div className="flex items-start gap-4">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center shrink-0">
                           <GitBranch className="w-6 h-6 text-teal-600" />
@@ -1547,7 +1621,7 @@ export default function SOWDetailPage() {
 
                   {linkedProject ? (
                     <Link href={`/enterprise/projects/${linkedProject.id}`} className="block group">
-                      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
+                      <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5 hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
                         <div className="flex items-start gap-4">
                           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-forest-100 to-forest-200 flex items-center justify-center shrink-0">
                             <ClipboardList className="w-6 h-6 text-forest-600" />
@@ -1568,7 +1642,7 @@ export default function SOWDetailPage() {
                       </div>
                     </Link>
                   ) : (
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                       <div className="flex items-start gap-4">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-beige-100 to-beige-200 flex items-center justify-center shrink-0">
                           <ClipboardList className="w-6 h-6 text-beige-400" />
@@ -1585,7 +1659,7 @@ export default function SOWDetailPage() {
                   )}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-12 text-center">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-12 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-beige-100 flex items-center justify-center mx-auto mb-4">
                     <Link2 className="w-7 h-7 text-beige-400" />
                   </div>
