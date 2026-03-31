@@ -9,5 +9,9 @@ export default function ContributorLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <AppShell config={contributorNav}><ErrorBoundary>{children}</ErrorBoundary></AppShell>;
+  return (
+    <AppShell config={contributorNav}>
+      <ErrorBoundary>{children}</ErrorBoundary>
+    </AppShell>
+  );
 }
