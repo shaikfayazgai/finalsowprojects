@@ -4,14 +4,184 @@ import {
   AlertCircle, ArrowRight, ArrowLeft, X,
   Briefcase, GraduationCap, Clock,
   Sparkles, Globe, Link2,
-  ChevronDown, Search, Check,
+  ChevronDown, ChevronLeft, ChevronRight, Search, Check,
 } from "lucide-react";
 import {
   GlassCard, GlassCardContent, Button, Input, Label,
 } from "@/components/ui";
-import { Checkbox } from "@/components/ui";
 import { SKILL_OPTIONS, TIMEZONES } from "../data";
 import type { ContributorType } from "../types";
+
+/* ── Custom Date Picker (popup) ── */
+function DatePicker({ value, onChange, maxDate }: { value: string; onChange: (v: string) => void; maxDate?: string }) {
+  const today = new Date();
+  const selected = value ? new Date(value + "T00:00:00") : null;
+  const [open, setOpen] = useState(false);
+  const [viewYear, setViewYear] = useState(selected?.getFullYear() ?? today.getFullYear() - 20);
+  const [viewMonth, setViewMonth] = useState(selected?.getMonth() ?? today.getMonth());
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setShowYearPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const firstDay = new Date(viewYear, viewMonth, 1);
+  const lastDay = new Date(viewYear, viewMonth + 1, 0);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = lastDay.getDate();
+  const maxD = maxDate ? new Date(maxDate + "T00:00:00") : null;
+
+  const cells: (number | null)[] = [
+    ...Array(startOffset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const DAYS = ["Mo","Tu","We","Th","Fr","Sa","Su"];
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
+
+  const isSelected = (d: number) => selected?.getFullYear() === viewYear && selected?.getMonth() === viewMonth && selected?.getDate() === d;
+  const isToday = (d: number) => today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === d;
+  const isDisabled = (d: number) => maxD ? new Date(viewYear, viewMonth, d) > maxD : false;
+
+  const select = (d: number) => {
+    if (isDisabled(d)) return;
+    const mm = String(viewMonth + 1).padStart(2, "0");
+    const dd = String(d).padStart(2, "0");
+    onChange(`${viewYear}-${mm}-${dd}`);
+    setOpen(false);
+    setShowYearPicker(false);
+  };
+
+  const currentYear = today.getFullYear();
+  const years = Array.from({ length: currentYear - (currentYear - 80) + 1 }, (_, i) => currentYear - i);
+
+  const displayValue = selected
+    ? `${String(selected.getDate()).padStart(2, "0")} ${SHORT_MONTHS[selected.getMonth()]} ${selected.getFullYear()}`
+    : "";
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Input trigger */}
+      <button
+        type="button"
+        onClick={() => { setOpen(v => !v); setShowYearPicker(false); }}
+        className={`flex h-11 w-full items-center justify-between gap-2 rounded-xl border bg-white px-4 text-sm shadow-sm transition-all focus:outline-none ${
+          open ? "border-brown-500 ring-2 ring-brown-500/20" : "border-beige-200 hover:border-beige-300"
+        }`}
+      >
+        <span className={displayValue ? "text-brown-950" : "text-beige-400"}>
+          {displayValue || "Select date of birth"}
+        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {value && (
+            <span
+              role="button"
+              onClick={e => { e.stopPropagation(); onChange(""); }}
+              className="text-beige-400 hover:text-red-400 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </span>
+          )}
+          <ChevronDown className={`w-4 h-4 text-beige-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        </div>
+      </button>
+
+      {/* Popup calendar */}
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-beige-200 bg-white shadow-xl overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-brown-600">
+            <button type="button" onClick={prevMonth} className="w-7 h-7 rounded-lg hover:bg-white/20 flex items-center justify-center text-white transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowYearPicker(v => !v)}
+              className="text-sm font-semibold text-white hover:text-white/80 transition-colors flex items-center gap-1"
+            >
+              {MONTHS[viewMonth]} {viewYear}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showYearPicker ? "rotate-180" : ""}`} />
+            </button>
+            <button type="button" onClick={nextMonth} className="w-7 h-7 rounded-lg hover:bg-white/20 flex items-center justify-center text-white transition-colors">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Year picker */}
+          {showYearPicker ? (
+            <div className="grid grid-cols-4 gap-1 p-3 max-h-48 overflow-y-auto bg-beige-50">
+              {years.map(y => (
+                <button key={y} type="button"
+                  onClick={() => { setViewYear(y); setShowYearPicker(false); }}
+                  className={`py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    y === viewYear ? "bg-brown-600 text-white" : "text-brown-800 hover:bg-beige-200"
+                  }`}
+                >{y}</button>
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* Day headers */}
+              <div className="grid grid-cols-7 border-b border-beige-100 bg-beige-50/50">
+                {DAYS.map(d => (
+                  <div key={d} className="py-2 text-center text-[10px] font-semibold text-beige-400 uppercase">{d}</div>
+                ))}
+              </div>
+              {/* Grid */}
+              <div className="grid grid-cols-7 p-2 gap-0.5">
+                {cells.map((day, i) => (
+                  <div key={i}>
+                    {day ? (
+                      <button
+                        type="button"
+                        onClick={() => select(day)}
+                        disabled={isDisabled(day)}
+                        className={`w-full aspect-square flex items-center justify-center text-xs rounded-lg transition-all font-medium
+                          ${isSelected(day) ? "bg-brown-600 text-white shadow-sm" :
+                            isToday(day) ? "bg-teal-100 text-teal-800 font-bold" :
+                            isDisabled(day) ? "text-beige-300 cursor-not-allowed" :
+                            "text-brown-800 hover:bg-beige-100"}`}
+                      >
+                        {day}
+                      </button>
+                    ) : <div />}
+                  </div>
+                ))}
+              </div>
+              {/* Footer */}
+              <div className="px-3 py-2 border-t border-beige-100 flex items-center justify-between bg-beige-50/50">
+                <button type="button" onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); }}
+                  className="text-xs text-beige-500 hover:text-brown-700 font-medium transition-colors">
+                  Today
+                </button>
+                {value && (
+                  <button type="button" onClick={() => { onChange(""); setOpen(false); }}
+                    className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">
+                    Clear
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── Generic searchable combobox ── */
 function SearchCombobox({
@@ -55,7 +225,7 @@ function SearchCombobox({
       })).filter(g => g.items.length > 0)
     : null;
 
-  const selected = options.find(o => o.value === value);
+  const selectedItem = options.find(o => o.value === value);
 
   return (
     <div ref={ref} className="relative">
@@ -66,8 +236,8 @@ function SearchCombobox({
           open ? "border-brown-500 ring-2 ring-brown-500/20" : "border-beige-200 hover:border-beige-300"
         }`}
       >
-        <span className={selected ? "text-brown-950 truncate" : "text-beige-400"}>
-          {selected ? selected.label : placeholder}
+        <span className={selectedItem ? "text-brown-950 truncate" : "text-beige-400"}>
+          {selectedItem ? selectedItem.label : placeholder}
         </span>
         <ChevronDown className={`h-4 w-4 text-beige-500 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
@@ -209,6 +379,7 @@ function SkillAutocomplete({
   label, badge, skills, onAdd, onRemove,
   inputValue, onInputChange,
   suggestions, maxItems = 20, placeholder, tagVariant = "teal",
+  allowCustom = false,
 }: {
   label: string;
   badge?: string;
@@ -221,7 +392,29 @@ function SkillAutocomplete({
   maxItems?: number;
   placeholder: string;
   tagVariant?: "teal" | "beige" | "forest";
+  allowCustom?: boolean;
 }) {
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customValue, setCustomValue] = useState("");
+  const customRef = useRef<HTMLInputElement>(null);
+
+  const handleAddCustom = () => {
+    const trimmed = customValue.trim();
+    if (trimmed && !skills.includes(trimmed)) {
+      onAdd(trimmed);
+      setCustomValue("");
+    }
+  };
+
+  const handleCustomKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAddCustom(); }
+    if (e.key === "Escape") { setShowCustomInput(false); setCustomValue(""); }
+  };
+
+  useEffect(() => {
+    if (showCustomInput) setTimeout(() => customRef.current?.focus(), 50);
+  }, [showCustomInput]);
+
   return (
     <div className="space-y-2">
       <Label>
@@ -255,6 +448,38 @@ function SkillAutocomplete({
           </div>
         )}
       </div>
+
+      {/* Custom skill entry */}
+      {allowCustom && skills.length < maxItems && (
+        showCustomInput ? (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-brown-300 bg-brown-900">
+            <input
+              ref={customRef}
+              type="text"
+              value={customValue}
+              onChange={e => setCustomValue(e.target.value)}
+              onKeyDown={handleCustomKeyDown}
+              placeholder="Type a custom skill and press Enter"
+              className="flex-1 text-sm text-white bg-transparent outline-none placeholder:text-brown-400"
+            />
+            <button type="button" onClick={handleAddCustom}
+              disabled={!customValue.trim()}
+              className="text-xs font-semibold text-teal-300 hover:text-teal-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors px-2 py-1 rounded-lg hover:bg-white/10">
+              Add
+            </button>
+            <button type="button" onClick={() => { setShowCustomInput(false); setCustomValue(""); }}
+              className="text-brown-400 hover:text-white transition-colors">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setShowCustomInput(true)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-brown-300 bg-brown-50 hover:bg-brown-100 text-xs font-medium text-brown-700 hover:text-brown-900 transition-all group">
+            <X className="w-3.5 h-3.5 rotate-45 text-brown-500 group-hover:text-brown-700 transition-colors" />
+            Add a skill not in the list
+          </button>
+        )
+      )}
     </div>
   );
 }
@@ -318,7 +543,6 @@ interface Props {
   degree: string;                setDegree: (v: string) => void;
   branch: string;                setBranch: (v: string) => void;
   linkedin: string;              setLinkedin: (v: string) => void;
-  mentorAck: boolean;            setMentorAck: (v: boolean) => void;
   // Primary skills
   primarySkills: string[];
   skillInput: string;            setSkillInput: (v: string) => void;
@@ -354,7 +578,6 @@ export function Step3Profile({
   degree, setDegree,
   branch, setBranch,
   linkedin, setLinkedin,
-  mentorAck, setMentorAck,
   primarySkills, skillInput, setSkillInput, addPrimarySkill, removePrimarySkill,
   secondarySkills, secondarySkillInput, setSecondarySkillInput, addSecondarySkill, removeSecondarySkill,
   otherSkills, otherSkillInput, setOtherSkillInput, addOtherSkill, removeOtherSkill,
@@ -365,6 +588,36 @@ export function Step3Profile({
   error,
   onContinue, onBack,
 }: Props) {
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const validate = (field: string, val: string) => {
+    const errs = { ...fieldErrors };
+    switch (field) {
+      case "dob":
+        if (!val) errs.dob = "Date of birth is required";
+        else delete errs.dob;
+        break;
+      case "timezone":
+        if (!val) errs.timezone = "Time zone is required";
+        else delete errs.timezone;
+        break;
+      case "availability":
+        if (!val) errs.availability = "Weekly availability is required";
+        else if (Number(val) < 1 || Number(val) > 60) errs.availability = "Availability must be between 1 and 60 hours";
+        else delete errs.availability;
+        break;
+      case "departmentCategory":
+        if (!val) errs.departmentCategory = "Department category is required";
+        else delete errs.departmentCategory;
+        break;
+      case "departmentOther":
+        if (!val.trim()) errs.departmentOther = "Please specify your department name";
+        else delete errs.departmentOther;
+        break;
+    }
+    setFieldErrors(errs);
+  };
+
   // Filtered suggestions for autocomplete
   const primarySuggestions = SKILL_OPTIONS.filter(
     s => s.toLowerCase().includes(skillInput.toLowerCase()) && !primarySkills.includes(s)
@@ -390,24 +643,23 @@ export function Step3Profile({
             <SectionHeader icon={Globe} title="Profile Basics" />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="dob">Date of Birth <span className="text-red-400">*</span></Label>
-                <Input
-                  id="dob"
-                  type="date"
-                  value={dob}
-                  onChange={e => setDob(e.target.value)}
-                  max={new Date().toISOString().split("T")[0]}
-                />
-                <p className="text-[10px] text-beige-400">Must be 18 years or older</p>
+                <Label>Date of Birth <span className="text-red-400">*</span></Label>
+                <DatePicker value={dob} onChange={v => { setDob(v); validate("dob", v); }} maxDate={new Date().toISOString().split("T")[0]} />
+                {fieldErrors.dob
+                  ? <p className="text-xs text-red-500">{fieldErrors.dob}</p>
+                  : <p className="text-[10px] text-beige-400">Must be 18 years or older</p>
+                }
               </div>
               <div className="space-y-2">
                 <Label>Time Zone <span className="text-red-400">*</span></Label>
                 <SearchCombobox
-                  value={timezone} onChange={setTimezone}
+                  value={timezone}
+                  onChange={v => { setTimezone(v); validate("timezone", v); }}
                   options={TIMEZONE_OPTIONS}
                   placeholder="Select your timezone"
                   searchPlaceholder="Search timezones…"
                 />
+                {fieldErrors.timezone && <p className="text-xs text-red-500">{fieldErrors.timezone}</p>}
               </div>
             </div>
           </div>
@@ -417,30 +669,40 @@ export function Step3Profile({
             <SectionHeader icon={Clock} title="Work Preferences" />
             <div className="space-y-3">
               <div className="space-y-2">
-                <Label htmlFor="avail">Weekly Availability <span className="text-red-400">*</span></Label>
+                <Label htmlFor="avail">Tentative Availability <span className="text-red-400">*</span></Label>
                 <div className="relative">
                   <Input id="avail" type="number" min="1" max="60"
                     placeholder="Hours per week"
-                    value={availability} onChange={e => setAvailability(e.target.value)} className="pr-14" />
+                    value={availability}
+                    onChange={e => setAvailability(e.target.value)}
+                    onBlur={() => validate("availability", availability)}
+                    className="pr-14" />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-beige-400 pointer-events-none">hrs/wk</span>
                 </div>
+                {fieldErrors.availability && <p className="text-xs text-red-500">{fieldErrors.availability}</p>}
               </div>
 
               <div className="space-y-2">
                 <Label>Department Category <span className="text-red-400">*</span></Label>
                 <SearchCombobox
-                  value={departmentCategory} onChange={setDepartmentCategory}
+                  value={departmentCategory}
+                  onChange={v => { setDepartmentCategory(v); validate("departmentCategory", v); }}
                   options={DEPT_OPTIONS}
                   placeholder="Select your department"
                   searchPlaceholder="Search departments…"
                 />
+                {fieldErrors.departmentCategory && <p className="text-xs text-red-500">{fieldErrors.departmentCategory}</p>}
               </div>
 
               {departmentCategory === "other" && (
                 <div className="space-y-2">
                   <Label htmlFor="deptOther">Department Name <span className="text-red-400">*</span></Label>
                   <Input id="deptOther" placeholder="Enter your department name"
-                    value={departmentOther} onChange={e => setDepartmentOther(e.target.value)} maxLength={80} />
+                    value={departmentOther}
+                    onChange={e => setDepartmentOther(e.target.value)}
+                    onBlur={() => validate("departmentOther", departmentOther)}
+                    maxLength={80} />
+                  {fieldErrors.departmentOther && <p className="text-xs text-red-500">{fieldErrors.departmentOther}</p>}
                 </div>
               )}
             </div>
@@ -467,21 +729,27 @@ export function Step3Profile({
           <div>
             <SectionHeader icon={Sparkles} title="Skills" />
             <div className="space-y-4">
-              <SkillAutocomplete
-                label="Primary Skills"
-                badge={`(${primarySkills.length}/20) — required`}
-                skills={primarySkills}
-                onAdd={addPrimarySkill}
-                onRemove={removePrimarySkill}
-                inputValue={skillInput}
-                onInputChange={setSkillInput}
-                suggestions={primarySuggestions}
-                placeholder="Search and add your primary skills"
-                tagVariant="teal"
-              />
+              <div>
+                <SkillAutocomplete
+                  label="Primary Skills"
+                  badge={`(${primarySkills.length}/20) — required`}
+                  skills={primarySkills}
+                  onAdd={addPrimarySkill}
+                  onRemove={removePrimarySkill}
+                  inputValue={skillInput}
+                  onInputChange={setSkillInput}
+                  suggestions={primarySuggestions}
+                  placeholder="Search, add from list, or type a custom skill"
+                  tagVariant="teal"
+                  allowCustom
+                />
+                {primarySkills.length === 0 && fieldErrors.primarySkills && (
+                  <p className="text-xs text-red-500 mt-1">{fieldErrors.primarySkills}</p>
+                )}
+              </div>
               <SkillAutocomplete
                 label="Secondary Skills"
-                badge={`(${secondarySkills.length}/20) — optional`}
+                badge={`(${secondarySkills.length}/20)  optional`}
                 skills={secondarySkills}
                 onAdd={addSecondarySkill}
                 onRemove={removeSecondarySkill}
@@ -493,7 +761,7 @@ export function Step3Profile({
               />
               <SkillFreeform
                 label="Other / Niche Skills"
-                badge="(optional — not in list above)"
+                badge="(optional)"
                 skills={otherSkills}
                 onAdd={addOtherSkill}
                 onRemove={removeOtherSkill}
@@ -506,9 +774,9 @@ export function Step3Profile({
 
           {/* ══ Online Presence ══ */}
           <div>
-            <SectionHeader icon={Link2} title="Online Presence" badge="(optional)" />
+      
             <div className="space-y-2">
-              <Label htmlFor="li">LinkedIn Profile URL</Label>
+              <Label htmlFor="li">LinkedIn Profile URL <span className="text-beige-400 font-normal">(optional)</span></Label>
               <Input id="li" type="url" placeholder="https://www.linkedin.com/in/your-profile"
                 value={linkedin} onChange={e => setLinkedin(e.target.value)} />
             </div>
@@ -544,37 +812,23 @@ export function Step3Profile({
             </div>
           )}
 
-          {/* ══ Mentor Acknowledgment ══ */}
-          <label
-            htmlFor="mentor-ack"
-            className={`flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-              mentorAck
-                ? "border-brown-400 bg-brown-50"
-                : "border-beige-200 hover:border-beige-300 bg-white"
-            }`}
-          >
-            <Checkbox
-              id="mentor-ack"
-              checked={mentorAck}
-              onCheckedChange={v => setMentorAck(!!v)}
-              onClick={e => e.stopPropagation()}
-              className="mt-0.5 shrink-0"
-            />
-            <span className="text-sm text-brown-800 leading-relaxed">
-              I understand that my first 3 tasks will require an assigned{" "}
-              <span className="font-semibold text-brown-950">Reviewer / Mentor</span>{" "}
-              to guide my onboarding journey.{" "}
-              <span className="text-red-400">*</span>
-            </span>
-          </label>
-
           {error && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
               <AlertCircle className="w-4 h-4 shrink-0" />{error}
             </div>
           )}
 
-          <Button type="button" variant="primary" size="lg" className="w-full" onClick={onContinue}>
+          <Button type="button" variant="primary" size="lg" className="w-full" onClick={() => {
+            const errs: Record<string, string> = {};
+            if (!dob) errs.dob = "Date of birth is required";
+            if (!timezone) errs.timezone = "Time zone is required";
+            if (!availability) errs.availability = "Weekly availability is required";
+            if (!departmentCategory) errs.departmentCategory = "Department category is required";
+            if (departmentCategory === "other" && !departmentOther.trim()) errs.departmentOther = "Please specify your department name";
+            if (primarySkills.length === 0) errs.primarySkills = "At least one primary skill is required";
+            setFieldErrors(errs);
+            if (Object.keys(errs).length === 0) onContinue();
+          }}>
             Continue <ArrowRight className="w-4 h-4" />
           </Button>
 

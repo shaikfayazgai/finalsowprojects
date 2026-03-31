@@ -1,17 +1,114 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import {
   AlertCircle, ArrowRight, ArrowLeft,
-  CheckCircle, RefreshCw, Smartphone, Mail, FileText, PenLine, ShieldCheck,
+  CheckCircle, RefreshCw, Smartphone, Mail, FileText, ShieldCheck,
+  Download, Upload, ChevronDown, Search, X,
 } from "lucide-react";
-import { ChevronDown } from "lucide-react";
 import {
   GlassCard, GlassCardContent, Button, Input, Label,
 } from "@/components/ui";
 import { COUNTRIES_DATA } from "../data";
 
+/* ── Custom country dial code picker ── */
+function CountryDialPicker({
+  value, onChange, disabled,
+}: {
+  value: string;
+  onChange: (name: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const selected = COUNTRIES_DATA.find(c => c.name === value);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false); setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+  }, [open]);
+
+  const filtered = search.trim()
+    ? COUNTRIES_DATA.filter(c =>
+        c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.code.includes(search)
+      )
+    : COUNTRIES_DATA;
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => { setOpen(v => !v); setSearch(""); }}
+        className={`flex items-center gap-1.5 h-11 px-3 border-r border-beige-200 bg-transparent transition-all focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed rounded-l-xl ${
+          open ? "bg-beige-50" : "hover:bg-beige-50"
+        }`}
+      >
+        <span className={`fi fi-${selected?.iso} text-lg`} />
+        <span className="text-sm font-semibold text-brown-800">{selected?.code}</span>
+        <ChevronDown className={`w-3 h-3 text-beige-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-beige-200 bg-white shadow-xl overflow-hidden">
+          {/* Search */}
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-beige-100 bg-beige-50">
+            <Search className="w-3.5 h-3.5 text-beige-400 shrink-0" />
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder="Search country or code…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="flex-1 text-sm text-brown-950 bg-transparent outline-none placeholder:text-beige-400"
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch("")} className="text-beige-400 hover:text-beige-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {/* List */}
+          <div className="max-h-56 overflow-y-auto overscroll-contain">
+            {filtered.length === 0 && (
+              <p className="px-4 py-3 text-sm text-beige-400 text-center">No results</p>
+            )}
+            {filtered.map(c => (
+              <button
+                key={c.name}
+                type="button"
+                onClick={() => { onChange(c.name); setOpen(false); setSearch(""); }}
+                className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
+                  c.name === value ? "bg-brown-50 text-brown-900 font-medium" : "text-brown-800 hover:bg-beige-50"
+                }`}
+              >
+                <span className={`fi fi-${c.iso} text-base shrink-0`} />
+                <span className="flex-1 truncate">{c.name}</span>
+                <span className="text-xs text-beige-500 font-medium shrink-0">{c.code}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   registrationEmail: string;
+  setEmail: (v: string) => void;
   phoneCountry: string;
   setPhoneCountry: (v: string) => void;
   phone: string;
@@ -34,6 +131,8 @@ interface Props {
   setNdaAccepted: (v: boolean) => void;
   ndaSignature: string;
   setNdaSignature: (v: string) => void;
+  ndaSignedFile: File | null;
+  setNdaSignedFile: (v: File | null) => void;
   error: string;
   onSendOTP: () => void;
   onVerifyOTP: () => void;
@@ -45,6 +144,7 @@ interface Props {
 
 export function Step2Verification({
   registrationEmail,
+  setEmail,
   phoneCountry, setPhoneCountry,
   phone, setPhone,
   otpSent, otp, setOtp, cooldown, phoneVerified, phoneOtpLoading,
@@ -52,13 +152,34 @@ export function Step2Verification({
   emailOtpSent, emailOtp, setEmailOtp, emailCooldown, emailVerified, emailOtpLoading,
   ndaAccepted, setNdaAccepted,
   ndaSignature, setNdaSignature,
+  ndaSignedFile, setNdaSignedFile,
   error,
   onSendOTP, onVerifyOTP, onSendEmailOTP, onVerifyEmailOTP,
   onContinue, onBack,
 }: Props) {
   const selectedCountry = COUNTRIES_DATA.find(c => c.name === phoneCountry);
   const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+  const phoneMaxLen = selectedCountry?.phoneMaxLength ?? 12;
 
+  const [emailError, setEmailError] = useState("");
+
+  // Sync verified email back to Step 1 only after successful verification
+  useEffect(() => {
+    if (emailVerified) setEmail(verificationEmail);
+  }, [emailVerified]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const validateEmail = (val: string) => {
+    if (!val.trim()) {
+      setEmailError("Email is required");
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+      setEmailError("Enter a valid email address (e.g. name@company.com)");
+      return false;
+    }
+    setEmailError("");
+    return true;
+  };
 
   const handlePhoneAction = () => {
     if (phoneVerified) return;
@@ -68,11 +189,24 @@ export function Step2Verification({
 
   const handleEmailAction = () => {
     if (emailVerified) return;
-    if (!emailOtpSent) onSendEmailOTP();
-    else document.getElementById("email-otp")?.focus();
+    if (!emailOtpSent) {
+      if (!validateEmail(verificationEmail)) return;
+      onSendEmailOTP();
+    } else {
+      document.getElementById("email-otp")?.focus();
+    }
   };
 
-  const ndaSigned = ndaAccepted && ndaSignature.trim().length > 0;
+  const handleNdaFileChange = (file: File | null) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File size must be under 5MB");
+      return;
+    }
+    setNdaSignedFile(file);
+  };
+
+  const ndaSigned = ndaAccepted && !!ndaSignedFile;
 
   return (
     <GlassCard variant="heavy" padding="lg">
@@ -80,7 +214,7 @@ export function Step2Verification({
         <div className="mb-5">
           <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 3 of 4</p>
           <p className="font-heading font-semibold text-brown-950 text-lg mt-0.5">Identity Verification</p>
-          <p className="text-xs text-beige-500 mt-0.5">Review the NDA, sign, then verify your contact details</p>
+          <p className="text-xs text-beige-500 mt-0.5">Download and sign the NDA, then verify your contact details</p>
         </div>
 
         <div className="space-y-5">
@@ -88,7 +222,7 @@ export function Step2Verification({
           {/* ── NDA Document ── */}
           <div className={`rounded-2xl overflow-hidden transition-all duration-300 ${ndaSigned ? "ring-2 ring-teal-300 shadow-lg shadow-teal-50" : "ring-1 ring-beige-200 shadow-md"}`}>
 
-            {/* Doc top bar — like DocuSign */}
+            {/* Doc top bar */}
             <div className="bg-white px-5 py-3.5 flex items-center justify-between border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${ndaSigned ? "bg-teal-500" : "bg-brown-600"}`}>
@@ -109,51 +243,67 @@ export function Step2Verification({
               }
             </div>
 
-            {/* PDF — toolbar hidden */}
-            <iframe
-              src="/Glimmora International Product-Development-Non-Disclosure-Agreement.pdf#toolbar=0&navpanes=0&scrollbar=1&view=FitH"
-              className="w-full bg-gray-50"
-              style={{ height: "400px", border: "none", display: "block" }}
-              title="NDA Agreement"
-            />
+            {/* Download + Upload area */}
+            <div className="bg-gray-50 px-5 py-6 space-y-4">
+              <p className="text-sm text-gray-600 leading-relaxed">
+                Please download the NDA document, review it carefully, then sign and upload the signed copy below.
+              </p>
+
+              {/* Download button */}
+              <a
+                href="/Glimmora International Product-Development-Non-Disclosure-Agreement.pdf"
+                download
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brown-600 text-white text-sm font-medium hover:bg-brown-700 transition-colors shadow-sm"
+              >
+                <Download className="w-4 h-4" /> Download NDA Document
+              </a>
+
+              {/* Upload area */}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                  <Upload className="w-3 h-3 inline mr-1" />
+                  Upload Signed Document <span className="text-red-500">*</span>
+                </label>
+                <label
+                  className={`flex flex-col items-center justify-center gap-2 h-28 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+                    ndaSignedFile
+                      ? "border-teal-400 bg-teal-50"
+                      : "border-gray-300 bg-white hover:border-brown-400 hover:bg-brown-50"
+                  }`}
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={e => { e.preventDefault(); e.stopPropagation(); handleNdaFileChange(e.dataTransfer.files?.[0] ?? null); }}
+                >
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={e => handleNdaFileChange(e.target.files?.[0] ?? null)}
+                  />
+                  {ndaSignedFile ? (
+                    <>
+                      <CheckCircle className="w-6 h-6 text-teal-500" />
+                      <p className="text-sm text-teal-700 font-medium">{ndaSignedFile.name}</p>
+                      <p className="text-[10px] text-teal-600">{(ndaSignedFile.size / 1024).toFixed(0)} KB</p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-6 h-6 text-gray-400" />
+                      <p className="text-sm text-gray-500">Click or drag to upload signed NDA</p>
+                      <p className="text-[10px] text-gray-400">PDF, JPG, or PNG (max 5MB)</p>
+                    </>
+                  )}
+                </label>
+                {ndaSignedFile && (
+                  <button type="button" onClick={() => setNdaSignedFile(null)}
+                    className="mt-1.5 text-xs text-red-500 hover:text-red-700 font-medium">
+                    Remove file
+                  </button>
+                )}
+              </div>
+            </div>
 
             {/* Sign panel */}
             <div className="bg-white border-t border-gray-100 px-5 py-4 space-y-4">
-
-              {/* Instruction row */}
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-px bg-gray-100" />
-                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-2">Sign below</span>
-                <div className="flex-1 h-px bg-gray-100" />
-              </div>
-
-              {/* Signature input */}
-              <div className="space-y-1.5">
-                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
-                  <PenLine className="w-3 h-3" />
-                  Full legal name <span className="text-red-500 normal-case font-bold">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Type your name to sign"
-                    value={ndaSignature}
-                    onChange={e => setNdaSignature(e.target.value)}
-                    className={`w-full h-12 px-4 rounded-xl border-2 text-[15px] transition-all outline-none bg-white
-                      placeholder:text-gray-300
-                      ${ndaSignature.trim()
-                        ? "border-teal-400 text-teal-800 font-medium"
-                        : "border-gray-200 text-gray-800 focus:border-brown-400"}`}
-                    style={{}}
-                  />
-                  {ndaSignature.trim() && (
-                    <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-500" />
-                  )}
-                </div>
-                {ndaSignature.trim() && (
-                  <p className="text-[10px] text-gray-400 pl-1">Signed as: <span className="italic text-gray-600">{ndaSignature}</span> · {today}</p>
-                )}
-              </div>
 
               {/* Checkbox */}
               <label className="flex items-start gap-3 cursor-pointer group p-3 rounded-xl hover:bg-gray-50 transition-colors -mx-1">
@@ -179,10 +329,8 @@ export function Step2Verification({
                 <div className="flex items-center gap-3 p-3 rounded-xl bg-teal-50 border border-teal-200">
                   <ShieldCheck className="w-5 h-5 text-teal-500 shrink-0" />
                   <div>
-                    <p className="text-[12px] font-semibold text-teal-800">Agreement signed</p>
-                    <p className="text-[11px] text-teal-600 mt-0.5">
-                      Signed by <strong>{ndaSignature}</strong> · {today}
-                    </p>
+                    <p className="text-[12px] font-semibold text-teal-800">Agreement signed &amp; uploaded</p>
+                    <p className="text-[11px] text-teal-600 mt-0.5">Uploaded &amp; accepted · {today}</p>
                   </div>
                 </div>
               )}
@@ -204,41 +352,30 @@ export function Step2Verification({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Mobile Number <span className="text-red-400">*</span></Label>
               <div className="flex gap-2 items-center">
-                <div className="flex flex-1 h-11 rounded-xl border border-beige-200 bg-white shadow-sm overflow-hidden transition-all focus-within:border-brown-500 focus-within:ring-2 focus-within:ring-brown-500/20">
-                  <div className="relative flex items-center border-r border-beige-200 shrink-0">
-                    <select
-                      value={phoneCountry}
-                      onChange={e => {
-                        const c = COUNTRIES_DATA.find(x => x.name === e.target.value)!;
-                        setPhoneCountry(c.name);
-                        setPhone(c.code + " ");
-                      }}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                      aria-label="Country dial code"
-                    >
-                      {COUNTRIES_DATA.map(c => (
-                        <option key={c.name} value={c.name}>{c.name} ({c.code})</option>
-                      ))}
-                    </select>
-                    <div className="flex items-center gap-1.5 px-3 pointer-events-none select-none">
-                      <span className={`fi fi-${selectedCountry?.iso} text-xl`} />
-                      <span className="text-sm font-semibold text-brown-700">{selectedCountry?.code}</span>
-                      <ChevronDown className="w-3 h-3 text-beige-400" />
-                    </div>
-                  </div>
+                <div className="flex flex-1 items-center rounded-xl border border-beige-200 bg-white shadow-sm transition-all focus-within:border-brown-500 focus-within:ring-2 focus-within:ring-brown-500/20">
+                  <CountryDialPicker
+                    value={phoneCountry}
+                    onChange={name => {
+                      const c = COUNTRIES_DATA.find(x => x.name === name)!;
+                      setPhoneCountry(c.name);
+                      setPhone(c.code + " ");
+                    }}
+                    disabled={phoneVerified}
+                  />
                   <input
                     id="phone"
                     type="tel"
-                    placeholder="Work phone (with country code)"
+                    placeholder={`Phone number (${phoneMaxLen} digits)`}
                     value={phone.replace(/^\+\d+\s?/, "")}
                     onChange={e => {
+                      const digits = e.target.value.replace(/\D/g, "").slice(0, phoneMaxLen);
                       const cc = selectedCountry?.code ?? "";
-                      setPhone(cc + " " + e.target.value);
+                      setPhone(cc + " " + digits);
                     }}
+                    maxLength={phoneMaxLen}
                     disabled={phoneVerified}
-                    className="flex-1 px-3 text-sm text-brown-950 bg-transparent outline-none placeholder:text-beige-400 disabled:opacity-60"
+                    className="flex-1 h-11 px-3 text-sm text-brown-950 bg-transparent outline-none placeholder:text-beige-400 disabled:opacity-60"
                   />
                 </div>
                 <Button
@@ -299,10 +436,14 @@ export function Step2Verification({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="verify-email">Email for Verification <span className="text-red-400">*</span></Label>
               <div className="flex gap-2 items-center">
-                <Input id="verify-email" type="email" placeholder="Work email for verification"
-                  value={verificationEmail} onChange={e => setVerificationEmail(e.target.value)}
+                <Input id="verify-email" type="email" placeholder="Enter your email for verification"
+                  value={verificationEmail}
+                  onChange={e => {
+                    setVerificationEmail(e.target.value);
+                    if (emailError) validateEmail(e.target.value);
+                  }}
+                  onBlur={() => validateEmail(verificationEmail)}
                   className="flex-1" disabled={emailVerified} />
                 <Button type="button" size="sm"
                   variant={emailVerified ? "ghost" : "primary"}
@@ -316,6 +457,9 @@ export function Step2Verification({
                   ) : emailOtpSent ? "Verify OTP" : "Send OTP"}
                 </Button>
               </div>
+              {emailError && (
+                <p className="text-xs text-red-500">{emailError}</p>
+              )}
               {verificationEmail.trim() !== "" && registrationEmail.trim() !== "" && verificationEmail.trim().toLowerCase() !== registrationEmail.trim().toLowerCase() && (
                 <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
                   <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
@@ -359,7 +503,7 @@ export function Step2Verification({
           )}
 
           <Button type="button" variant="primary" size="lg" className="w-full"
-            onClick={onContinue} disabled={!ndaSigned || !phoneVerified || !emailVerified}>
+            onClick={onContinue}>
             Continue <ArrowRight className="w-4 h-4" />
           </Button>
 

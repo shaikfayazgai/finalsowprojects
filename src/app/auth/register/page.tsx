@@ -501,7 +501,7 @@ function ContributorRegisterContent() {
       await signIn(providerId, {
         callbackUrl: selectedRole === "enterprise"
           ? "/enterprise/onboarding"
-          : "/onboarding",
+          : "/contributor/onboarding",
       });
     } catch {
       setSsoLoading(null);
@@ -613,7 +613,7 @@ function ContributorRegisterContent() {
               </div>
             </div>
 
-            <StepProgress step={reg.step} />
+            <StepProgress step={reg.step} onStepClick={reg.setStep} />
 
             {reg.step === 1 && (
               <Step1Identity
@@ -623,7 +623,6 @@ function ContributorRegisterContent() {
                 password={reg.password} setPassword={reg.setPassword}
                 confirm={reg.confirm} setConfirm={reg.setConfirm}
                 showPw={reg.showPw} setShowPw={reg.setShowPw}
-                showCon={reg.showCon} setShowCon={reg.setShowCon}
                 contribType={reg.contribType} setContribType={reg.setContribType}
                 country={reg.country} setCountry={reg.setCountry}
                 passwordStrength={reg.passwordStrength}
@@ -645,7 +644,6 @@ function ContributorRegisterContent() {
                 degree={reg.degree} setDegree={reg.setDegree}
                 branch={reg.branch} setBranch={reg.setBranch}
                 linkedin={reg.linkedin} setLinkedin={reg.setLinkedin}
-                mentorAck={reg.mentorAck} setMentorAck={reg.setMentorAck}
                 primarySkills={reg.primarySkills}
                 skillInput={reg.skillInput} setSkillInput={reg.setSkillInput}
                 addPrimarySkill={reg.addPrimarySkill} removePrimarySkill={reg.removePrimarySkill}
@@ -668,6 +666,7 @@ function ContributorRegisterContent() {
             {reg.step === 3 && (
               <Step2Verification
                 registrationEmail={reg.email}
+                setEmail={reg.setEmail}
                 phoneCountry={reg.phoneCountry} setPhoneCountry={reg.setPhoneCountry}
                 phone={reg.phone} setPhone={reg.setPhone}
                 otpSent={reg.otpSent}
@@ -683,6 +682,7 @@ function ContributorRegisterContent() {
                 emailOtpLoading={reg.emailOtpLoading}
                 ndaAccepted={reg.ndaAccepted} setNdaAccepted={reg.setNdaAccepted}
                 ndaSignature={reg.ndaSignature} setNdaSignature={reg.setNdaSignature}
+                ndaSignedFile={reg.ndaSignedFile} setNdaSignedFile={reg.setNdaSignedFile}
                 error={reg.error}
                 onSendOTP={reg.sendOTP}
                 onVerifyOTP={reg.verifyOTP}

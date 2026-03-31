@@ -4,8 +4,10 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import {
   contributorRegistrationSchema,
+  contributorOnboardingSchema,
   enterpriseRegistrationSchema,
 } from "@/lib/validations/registration";
+import { auth } from "@/auth";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
@@ -67,6 +69,90 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
       },
     },
   });
+
+  return { success: true };
+}
+
+// ── Contributor Onboarding (SSO users) ──
+export async function onboardContributor(data: unknown): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return { success: false, error: "You must be signed in to complete onboarding" };
+  }
+
+  const parsed = contributorOnboardingSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message };
+  }
+  const v = parsed.data;
+
+  const email = session.user.email.toLowerCase();
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    include: { contributorProfile: true },
+  });
+
+  if (existing?.contributorProfile) {
+    return { success: false, error: "Contributor profile already exists" };
+  }
+
+  const profileData = {
+    contribType:        v.contribType,
+    country:            v.country,
+    dob:                new Date(v.dob),
+    timezone:           v.timezone,
+    departmentCategory: v.departmentCategory,
+    departmentOther:    v.departmentOther ?? null,
+    primarySkills:      v.primarySkills,
+    secondarySkills:    v.secondarySkills,
+    otherSkills:        v.otherSkills,
+    availability:       v.availability,
+    degree:             v.degree ?? null,
+    branch:             v.branch ?? null,
+    linkedin:           v.linkedin ?? null,
+    careerStage:        v.careerStage ?? null,
+    yearsExperience:    v.yearsExperience ?? null,
+    workStart:          v.workStart ?? null,
+    workEnd:            v.workEnd ?? null,
+    ndaAccepted:        v.ndaAccepted,
+    ndaSignature:       v.ndaSignature ?? null,
+    acceptTos:          true,
+    acceptCoc:          true,
+    acceptPrivacy:      true,
+    acceptFee:          true,
+    acceptAhp:          true,
+    marketingOptIn:     v.marketingOptIn,
+  };
+
+  if (existing) {
+    // SSO user exists but has no contributor profile yet
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        firstName:     v.firstName,
+        lastName:      v.lastName ?? "",
+        role:          "contributor",
+        phone:         v.phone ?? null,
+        phoneVerified: true,
+        emailVerified: true,
+        contributorProfile: { create: profileData },
+      },
+    });
+  } else {
+    // First-time SSO user — create user + profile in one go
+    await prisma.user.create({
+      data: {
+        email,
+        firstName:     v.firstName,
+        lastName:      v.lastName ?? "",
+        role:          "contributor",
+        phone:         v.phone ?? null,
+        phoneVerified: true,
+        emailVerified: true,
+        contributorProfile: { create: profileData },
+      },
+    });
+  }
 
   return { success: true };
 }

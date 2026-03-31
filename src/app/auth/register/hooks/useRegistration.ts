@@ -20,13 +20,15 @@ export function useRegistration(ssoData?: SSOData | null) {
   const [isLoading, setIsLoading]               = useState(false);
   const [previewOpen, setPreviewOpen]           = useState(false);
 
+  const generateSsoPassword = () => `Sso!${Math.random().toString(36).slice(-8)}A1`;
+  const initialSsoPassword = ssoData ? generateSsoPassword() : "";
+
   const [firstName,   setFirstName]   = useState(ssoData?.firstName ?? "");
   const [lastName,    setLastName]    = useState(ssoData?.lastName ?? "");
   const [email,       setEmail]       = useState(ssoData?.email ?? "");
-  const [password,    setPassword]    = useState("");
-  const [confirm,     setConfirm]     = useState("");
+  const [password,    setPassword]    = useState(initialSsoPassword);
+  const [confirm,     setConfirm]     = useState(initialSsoPassword);
   const [showPw,      setShowPw]      = useState(false);
-  const [showCon,     setShowCon]     = useState(false);
   const [contribType, setContribType] = useState<ContributorType>("");
   const [country,     setCountry]     = useState("");
 
@@ -38,7 +40,6 @@ export function useRegistration(ssoData?: SSOData | null) {
   const [degree,              setDegree]              = useState("");
   const [branch,              setBranch]              = useState("");
   const [linkedin,            setLinkedin]            = useState("");
-  const [mentorAck,           setMentorAck]           = useState(false);
   const [primarySkills,       setPrimarySkills]       = useState<string[]>([]);
   const [skillInput,          setSkillInput]          = useState("");
   const [secondarySkills,     setSecondarySkills]     = useState<string[]>([]);
@@ -66,6 +67,7 @@ export function useRegistration(ssoData?: SSOData | null) {
 
   const [ndaAccepted,     setNdaAccepted]     = useState(false);
   const [ndaSignature,    setNdaSignature]    = useState("");
+  const [ndaSignedFile,   setNdaSignedFile]   = useState<File | null>(null);
 
   const [resumeFile,      setResumeFile]      = useState<File | null>(null);
   const [resumeDrag,      setResumeDrag]      = useState(false);
@@ -75,6 +77,20 @@ export function useRegistration(ssoData?: SSOData | null) {
   const [acceptFee,       setAcceptFee]       = useState(false);
   const [acceptAhp,       setAcceptAhp]       = useState(false);
   const [marketingOptIn,  setMarketingOptIn]  = useState(false);
+
+  // For SSO flows, keep a strong generated password even though the field is hidden.
+  useEffect(() => {
+    if (isSsoUser && password.length < 8) {
+      const autoPw = generateSsoPassword();
+      setPassword(autoPw);
+      setConfirm(autoPw);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSsoUser]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step]);
 
   useEffect(() => {
     if (email) setVerificationEmail(prev => prev || email);
@@ -184,13 +200,6 @@ export function useRegistration(ssoData?: SSOData | null) {
   }
 
   function goToStep2() {
-    if (!firstName.trim())    { setError("Please enter your first name"); return; }
-    if (!lastName.trim())     { setError("Please enter your last name"); return; }
-    if (!email)               { setError("Please enter a valid email address"); return; }
-    if (!isSsoUser) {
-      if (password.length < 8)  { setError("Password must be at least 8 characters with a number and mixed case"); return; }
-      if (password !== confirm) { setError("Passwords do not match - please re-enter"); return; }
-    }
     if (!contribType)         { setError("Please select your contributor type"); return; }
     if (!country)             { setError("Please select your country of residence"); return; }
     setError("");
@@ -208,19 +217,20 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     if (primarySkills.length < 1) { setError("Please add at least one primary skill"); return; }
     if (!availability) { setError("Please enter your weekly availability (hours)"); return; }
-    if (!mentorAck) { setError("Please acknowledge the Reviewer / Mentor requirement to proceed"); return; }
     setError("");
     setStep(3);
   }
 
   function goToStep4() {
-    if (!ndaAccepted || !ndaSignature.trim()) {
-      setError("You must read, sign, and accept the NDA & Disclosure Agreement to continue");
-      return;
-    }
-    if (!phoneVerified || !emailVerified) {
-      setError("Please verify both your phone number and email address to continue");
-      return;
+    if (!isSsoUser) {
+      if (!ndaAccepted || !ndaSignedFile) {
+        setError("You must upload and accept the NDA document to continue");
+        return;
+      }
+      if (!phoneVerified || !emailVerified) {
+        setError("Please verify both your phone number and email address to continue");
+        return;
+      }
     }
     setError("");
     setStep(4);
@@ -302,7 +312,6 @@ export function useRegistration(ssoData?: SSOData | null) {
     password, setPassword,
     confirm, setConfirm,
     showPw, setShowPw,
-    showCon, setShowCon,
     contribType, setContribType,
     country, setCountry,
     passwordStrength,
@@ -315,7 +324,6 @@ export function useRegistration(ssoData?: SSOData | null) {
     degree, setDegree,
     branch, setBranch,
     linkedin, setLinkedin,
-    mentorAck, setMentorAck,
     primarySkills, skillInput, setSkillInput, addPrimarySkill, removePrimarySkill,
     secondarySkills, secondarySkillInput, setSecondarySkillInput, addSecondarySkill, removeSecondarySkill,
     otherSkills, otherSkillInput, setOtherSkillInput, addOtherSkill, removeOtherSkill,
@@ -341,6 +349,7 @@ export function useRegistration(ssoData?: SSOData | null) {
 
     ndaAccepted, setNdaAccepted,
     ndaSignature, setNdaSignature,
+    ndaSignedFile, setNdaSignedFile,
 
     resumeFile, setResumeFile,
     resumeDrag, setResumeDrag,
