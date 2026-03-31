@@ -52,12 +52,12 @@ type SortField = "title" | "status" | "tasks" | "confidence" | "cost" | "updated
 type SortDir = "asc" | "desc";
 
 const columns = [
-  { field: "title" as SortField, label: "Plan", align: "left" },
-  { field: "status" as SortField, label: "Status", align: "left" },
+  { field: "title" as SortField, label: "Project Name", align: "left" },
+  { field: "status" as SortField, label: "Plan Status", align: "left" },
+  { field: "updated" as SortField, label: "SOW Reference", align: "left" },
+  { field: "confidence" as SortField, label: "Milestones", align: "center" },
   { field: "tasks" as SortField, label: "Tasks", align: "center" },
-  { field: "confidence" as SortField, label: "AI Confidence", align: "left" },
-  { field: "cost" as SortField, label: "Cost", align: "right" },
-  { field: "updated" as SortField, label: "Updated", align: "left" },
+  { field: "cost" as SortField, label: "Primary Action", align: "center" },
 ];
 
 /* ═══ PAGE ═══ */
@@ -223,57 +223,48 @@ export default function DecompositionPlansPage() {
             <tbody>
               {filtered.map((plan) => {
                 const st = statusMap[plan.status];
-                const cx = complexityMap[plan.complexity];
-                const planTasks = mockTasks.filter((t) => t.planId === plan.id);
-                const completedTasks = planTasks.filter((t) => t.status === "accepted").length;
-                const taskTotal = planTasks.length > 0 ? planTasks.length : plan.totalTasks;
-                const updatedDate = new Date(plan.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
                 return (
                   <tr key={plan.id} onClick={() => router.push(`/enterprise/decomposition/${plan.id}`)}
                     className="group cursor-pointer transition-colors hover:bg-black/[0.02]"
                     style={{ borderBottom: "1px solid var(--border-hair)" }}>
-                    {/* Plan */}
+
+                    {/* Project Name */}
                     <td style={{ padding: "13px 16px" }}>
                       <div className="text-[13px] font-medium text-gray-800 truncate max-w-[280px]">{plan.title}</div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="font-mono text-[10px] text-gray-400">{plan.sowId.toUpperCase()}</span>
-                        <span className="w-1 h-1 rounded-full bg-gray-300" />
-                        <span className="text-[10px] text-gray-400">{plan.totalMilestones} milestones</span>
-                        <span className="w-1 h-1 rounded-full bg-gray-300" />
-                        <span className="text-[10px] text-gray-400">{plan.estimatedHours.toLocaleString()}h</span>
+                        <span className="text-[10px] text-gray-400">{plan.estimatedHours.toLocaleString()}h estimated</span>
                       </div>
                     </td>
-                    {/* Status */}
+
+                    {/* Plan Status */}
                     <td style={{ padding: "13px 16px" }}>
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant={st.variant}>{st.label}</Badge>
-                        {cx && <Badge variant={cx.variant}>{cx.label}</Badge>}
-                      </div>
+                      <Badge variant={st.variant}>{st.label}</Badge>
                     </td>
+
+                    {/* SOW Reference */}
+                    <td style={{ padding: "13px 16px" }}>
+                      <span className="font-mono text-[12px] text-gray-700">{plan.sowId.toUpperCase()}</span>
+                    </td>
+
+                    {/* Milestones */}
+                    <td style={{ padding: "13px 16px", textAlign: "center" }}>
+                      <span className="text-[12px] font-medium text-gray-700">{plan.totalMilestones}</span>
+                    </td>
+
                     {/* Tasks */}
                     <td style={{ padding: "13px 16px", textAlign: "center" }}>
-                      <span className="text-[12px] font-medium text-gray-700">{planTasks.length > 0 ? `${completedTasks}/${taskTotal}` : plan.totalTasks}</span>
+                      <span className="text-[12px] font-medium text-gray-700">{plan.totalTasks}</span>
                     </td>
-                    {/* AI Confidence */}
-                    <td style={{ padding: "13px 16px" }}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                          <div className={cn("h-full rounded-full",
-                            plan.aiConfidence >= 85 ? "bg-forest-500" : plan.aiConfidence >= 70 ? "bg-gold-500" : "bg-brown-500"
-                          )} style={{ width: `${plan.aiConfidence}%` }} />
-                        </div>
-                        <span className="text-[11px] font-mono font-medium text-gray-600 w-8">{plan.aiConfidence}%</span>
-                      </div>
+
+                    {/* Primary Action */}
+                    <td style={{ padding: "13px 16px", textAlign: "center" }}>
+                      <button onClick={(e) => { e.stopPropagation(); router.push(`/enterprise/decomposition/${plan.id}`); }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 transition-all">
+                        Review Plan <ArrowRight className="w-3 h-3" />
+                      </button>
                     </td>
-                    {/* Cost */}
-                    <td style={{ padding: "13px 16px", textAlign: "right" }}>
-                      <span className="text-[12px] font-semibold text-gray-800">{formatCost(plan.estimatedCost)}</span>
-                    </td>
-                    {/* Updated */}
-                    <td style={{ padding: "13px 16px" }}>
-                      <span className="text-[11.5px] text-gray-500">{updatedDate}</span>
-                    </td>
+
                   </tr>
                 );
               })}
