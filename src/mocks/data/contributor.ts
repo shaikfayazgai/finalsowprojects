@@ -51,14 +51,6 @@ export const mockContributorProfile = {
     { id: "consent-1", type: "terms_of_service", acceptedAt: "2026-01-20T06:30:00Z", version: "1.0" },
     { id: "consent-2", type: "privacy_policy", acceptedAt: "2026-01-20T06:30:00Z", version: "1.0" },
   ],
-  /* ── FSD Gap additions ── */
-  accountStatus: "active" as const,
-  designation: "Full-Stack Developer",
-  designationLevel: "mid" as const,
-  kycStatus: "verified" as const,
-  lastAvailabilityReviewedAt: "2026-03-10T10:00:00Z",
-  assessmentStartedAt: "2026-01-22T08:00:00Z",
-  assessmentCompletedAt: "2026-01-25T14:30:00Z",
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -493,8 +485,6 @@ export const mockEarnings = [
     taskTitle: "Build authentication flow UI with MFA support",
     projectTitle: "Enterprise Resource Planning Platform",
     amount: 1120,
-    platformFee: 168,
-    netAmount: 952,
     currency: "USD",
     status: "paid",
     earnedAt: "2026-03-03T11:00:00Z",
@@ -507,8 +497,6 @@ export const mockEarnings = [
     taskTitle: "Setup CI/CD pipeline with GitHub Actions",
     projectTitle: "Enterprise Resource Planning Platform",
     amount: 480,
-    platformFee: 72,
-    netAmount: 408,
     currency: "USD",
     status: "paid",
     earnedAt: "2026-02-15T14:00:00Z",
@@ -521,8 +509,6 @@ export const mockEarnings = [
     taskTitle: "Implement notification service with email and in-app channels",
     projectTitle: "Enterprise Resource Planning Platform",
     amount: 800,
-    platformFee: 120,
-    netAmount: 680,
     currency: "USD",
     status: "eligible",
     earnedAt: "2026-03-20T16:30:00Z",
@@ -533,8 +519,6 @@ export const mockEarnings = [
     taskTitle: "Build reusable data table component with sorting and pagination",
     projectTitle: "Enterprise Resource Planning Platform",
     amount: 960,
-    platformFee: 144,
-    netAmount: 816,
     currency: "USD",
     status: "pending",
     estimatedEligibleDate: "2026-04-01T00:00:00Z",
@@ -545,8 +529,6 @@ export const mockEarnings = [
     taskTitle: "Implement CRM webhook handler with retry logic",
     projectTitle: "CRM Integration Module",
     amount: 720,
-    platformFee: 108,
-    netAmount: 612,
     currency: "USD",
     status: "pending",
     estimatedEligibleDate: "2026-04-05T00:00:00Z",
@@ -557,8 +539,6 @@ export const mockEarnings = [
     taskTitle: "Build onboarding wizard component",
     projectTitle: "Enterprise Resource Planning Platform",
     amount: 200,
-    platformFee: 30,
-    netAmount: 170,
     currency: "USD",
     status: "processing",
     earnedAt: "2026-03-18T10:00:00Z",
@@ -1228,80 +1208,3 @@ export const mockMessageThreads = [
     ],
   },
 ];
-
-/* ══════════════════════════════════════════════════════════════
-   FSD §5 — ASSESSMENT MOCK DATA (Three-Part Assessment)
-   ══════════════════════════════════════════════════════════════ */
-
-export const mockAssessmentMCQQuestions = [
-  { id: "mcq-001", type: "mcq" as const, skill: "React", question: "What is the purpose of React.memo()?", description: "Select the most accurate answer.", options: [{ id: "a", text: "To memoize the return value of a function component to prevent unnecessary re-renders" }, { id: "b", text: "To store component state across renders" }, { id: "c", text: "To create a reference to a DOM element" }, { id: "d", text: "To handle side effects in functional components" }], correctAnswer: "a", points: 5, timeLimit: 90, difficulty: "intermediate" as const },
-  { id: "mcq-002", type: "mcq" as const, skill: "React", question: "Which hook should be used for data fetching with cleanup?", options: [{ id: "a", text: "useState" }, { id: "b", text: "useEffect" }, { id: "c", text: "useMemo" }, { id: "d", text: "useCallback" }], correctAnswer: "b", points: 5, timeLimit: 60, difficulty: "beginner" as const },
-  { id: "mcq-003", type: "mcq" as const, skill: "TypeScript", question: "What does the 'keyof' operator do in TypeScript?", options: [{ id: "a", text: "Creates a union of all property names of a type" }, { id: "b", text: "Returns the type of a specific key" }, { id: "c", text: "Generates an index signature" }, { id: "d", text: "Maps keys to new types" }], correctAnswer: "a", points: 5, timeLimit: 90, difficulty: "intermediate" as const },
-  { id: "mcq-004", type: "mcq" as const, skill: "TypeScript", question: "What is the difference between 'interface' and 'type' in TypeScript?", options: [{ id: "a", text: "There is no difference" }, { id: "b", text: "Interfaces can be extended and merged; types use intersections and cannot be re-opened" }, { id: "c", text: "Types are faster at compile time" }, { id: "d", text: "Interfaces support generics but types do not" }], correctAnswer: "b", points: 5, timeLimit: 90, difficulty: "intermediate" as const },
-  { id: "mcq-005", type: "mcq" as const, skill: "Node.js", question: "What is the event loop in Node.js?", options: [{ id: "a", text: "A loop that handles DOM events" }, { id: "b", text: "A mechanism that allows Node.js to perform non-blocking I/O by offloading operations" }, { id: "c", text: "A timer that runs every second" }, { id: "d", text: "A debugging tool" }], correctAnswer: "b", points: 5, timeLimit: 90, difficulty: "intermediate" as const },
-  { id: "mcq-006", type: "mcq" as const, skill: "React", question: "What is the correct way to update state based on previous state in React?", options: [{ id: "a", text: "setState(state + 1)" }, { id: "b", text: "setState(prev => prev + 1)" }, { id: "c", text: "state = state + 1" }, { id: "d", text: "this.state += 1" }], correctAnswer: "b", points: 5, timeLimit: 60, difficulty: "beginner" as const },
-  { id: "mcq-007", type: "mcq" as const, skill: "TypeScript", question: "What does 'as const' do when applied to a value?", options: [{ id: "a", text: "Makes the value immutable at runtime" }, { id: "b", text: "Narrows the type to its literal values and makes properties readonly" }, { id: "c", text: "Converts the value to a constant variable" }, { id: "d", text: "Prevents the value from being garbage collected" }], correctAnswer: "b", points: 5, timeLimit: 90, difficulty: "advanced" as const },
-  { id: "mcq-008", type: "mcq" as const, skill: "Node.js", question: "What is the purpose of the 'cluster' module in Node.js?", options: [{ id: "a", text: "To manage database connections" }, { id: "b", text: "To create child processes that share server ports" }, { id: "c", text: "To handle file system clustering" }, { id: "d", text: "To manage memory allocation" }], correctAnswer: "b", points: 5, timeLimit: 90, difficulty: "advanced" as const },
-  { id: "mcq-009", type: "mcq" as const, skill: "React", question: "What is a React Portal used for?", options: [{ id: "a", text: "Server-side rendering" }, { id: "b", text: "Rendering children into a DOM node outside the parent component hierarchy" }, { id: "c", text: "Creating portals between different React apps" }, { id: "d", text: "Lazy loading components" }], correctAnswer: "b", points: 5, timeLimit: 60, difficulty: "intermediate" as const },
-  { id: "mcq-010", type: "mcq" as const, skill: "Git", question: "What does 'git rebase' do compared to 'git merge'?", options: [{ id: "a", text: "They do the same thing" }, { id: "b", text: "Rebase replays commits on top of another base, creating a linear history" }, { id: "c", text: "Rebase deletes the source branch" }, { id: "d", text: "Rebase is only for remote branches" }], correctAnswer: "b", points: 5, timeLimit: 90, difficulty: "intermediate" as const },
-];
-
-export const mockWorkSampleBrief = {
-  id: "ws-001",
-  title: "Build a Task Card Component",
-  description: "Create a responsive React component that displays a task card with the following requirements:\n\n1. Display task title, status badge, priority indicator, and due date\n2. Show a progress bar with percentage\n3. Include a skill tags section (max 3 visible, +N for overflow)\n4. Add hover state with subtle elevation\n5. Support click handler for navigation\n6. Use TypeScript with proper prop typing\n7. Include at least one unit test",
-  skills: ["React", "TypeScript"],
-  deadline: "72 hours from start",
-  submissionFormat: "ZIP file containing component code, styles, and tests",
-  evaluationCriteria: [
-    "Code quality and TypeScript usage (20%)",
-    "Component design and reusability (20%)",
-    "Visual design and responsiveness (20%)",
-    "Test coverage and quality (20%)",
-    "Documentation and prop types (20%)",
-  ],
-};
-
-export const mockAdaptiveQuestions = [
-  { id: "adp-001", type: "mcq" as const, skill: "React", question: "In React 18, what is the purpose of useTransition?", options: [{ id: "a", text: "To animate CSS transitions" }, { id: "b", text: "To mark state updates as non-urgent, allowing urgent updates to interrupt them" }, { id: "c", text: "To transition between routes" }, { id: "d", text: "To handle page transitions" }], correctAnswer: "b", points: 10, timeLimit: 120, difficulty: "advanced" as const },
-  { id: "adp-002", type: "mcq" as const, skill: "TypeScript", question: "What is a conditional type in TypeScript?", options: [{ id: "a", text: "A type that uses if/else statements" }, { id: "b", text: "A type that uses extends keyword to select between two types based on a condition" }, { id: "c", text: "A runtime type check" }, { id: "d", text: "A nullable type" }], correctAnswer: "b", points: 10, timeLimit: 120, difficulty: "advanced" as const },
-  { id: "adp-003", type: "mcq" as const, skill: "React", question: "What problem does React Server Components solve?", options: [{ id: "a", text: "Client-side routing" }, { id: "b", text: "Reducing JavaScript bundle size by rendering components on the server without sending their code to the client" }, { id: "c", text: "Server-side state management" }, { id: "d", text: "Database queries in components" }], correctAnswer: "b", points: 10, timeLimit: 120, difficulty: "expert" as const },
-  { id: "adp-004", type: "mcq" as const, skill: "Node.js", question: "What is the difference between process.nextTick() and setImmediate()?", options: [{ id: "a", text: "They are identical" }, { id: "b", text: "nextTick fires before I/O callbacks; setImmediate fires after I/O callbacks in the event loop" }, { id: "c", text: "setImmediate is faster" }, { id: "d", text: "nextTick is deprecated" }], correctAnswer: "b", points: 10, timeLimit: 120, difficulty: "expert" as const },
-  { id: "adp-005", type: "mcq" as const, skill: "TypeScript", question: "What is a mapped type with template literal types useful for?", options: [{ id: "a", text: "String formatting at runtime" }, { id: "b", text: "Generating new property names and types by transforming existing ones using string manipulation at the type level" }, { id: "c", text: "Regular expressions in types" }, { id: "d", text: "Internationalization" }], correctAnswer: "b", points: 10, timeLimit: 120, difficulty: "expert" as const },
-];
-
-export const mockAssessmentComposite: import("@/types/contributor").AssessmentComposite = {
-  contributorId: "contrib-001",
-  status: "completed",
-  startedAt: "2026-01-22T08:00:00Z",
-  completedAt: "2026-01-25T14:30:00Z",
-  expiresAt: "2026-01-29T08:00:00Z",
-  components: [
-    { id: "comp-mcq", type: "mcq", title: "MCQ Knowledge Test", description: "25 multiple-choice questions across your declared skills", status: "completed", weight: 25, score: 82, startedAt: "2026-01-22T08:00:00Z", completedAt: "2026-01-22T09:15:00Z", totalQuestions: 10, answeredQuestions: 10, timeLimit: 45 },
-    { id: "comp-ws", type: "work_sample", title: "Work Sample Submission", description: "Build a component based on a real task brief", status: "completed", weight: 50, score: 88, startedAt: "2026-01-22T10:00:00Z", completedAt: "2026-01-24T16:00:00Z", deadline: "2026-01-25T10:00:00Z" },
-    { id: "comp-adp", type: "adaptive", title: "Adaptive Skills Test", description: "Targeted depth tests based on your skill declarations", status: "completed", weight: 25, score: 78, startedAt: "2026-01-25T10:00:00Z", completedAt: "2026-01-25T14:30:00Z", totalQuestions: 5, answeredQuestions: 5, timeLimit: 30 },
-  ],
-  compositeScore: 84,
-  passed: true,
-  designationConfirmed: "Full-Stack Developer",
-  seniorityConfirmed: "mid",
-  retakeEligibleAt: undefined,
-  attemptNumber: 1,
-};
-
-/* ══════════════════════════════════════════════════════════════
-   FSD §10.3 — KYC MOCK DATA
-   ══════════════════════════════════════════════════════════════ */
-
-export const mockKycVerification = {
-  contributorId: "contrib-001",
-  status: "verified" as const,
-  documents: [
-    { type: "government_id" as const, fileName: "passport_scan.pdf", uploadedAt: "2026-01-21T10:00:00Z", status: "approved" as const },
-    { type: "proof_of_address" as const, fileName: "utility_bill.pdf", uploadedAt: "2026-01-21T10:05:00Z", status: "approved" as const },
-  ],
-  submittedAt: "2026-01-21T10:10:00Z",
-  verifiedAt: "2026-01-22T08:00:00Z",
-  expiresAt: "2027-01-22T08:00:00Z",
-  blockedAmount: 0,
-};

@@ -1,56 +1,14 @@
 "use client";
 
-import * as React from "react";
 import { CheckCircle2, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
-
-function FieldError({ error }: { error?: string }) {
-  if (!error) return null;
-  return <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</p>;
-}
 
 export function Section3TechIntegrations({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.techIntegrations;
-  const [errors, setErrors] = React.useState<SectionErrors>({});
-  const touched = React.useRef<Set<string>>(new Set());
-
-  const update = (patch: Partial<typeof data>) => {
-    store.updateCommercialSection("techIntegrations", patch);
-    if (touched.current.size > 0) {
-      const merged = { ...data, ...patch };
-      const allErrs = validateSection("techIntegrations", merged);
-      setErrors((prev) => {
-        const next = { ...prev };
-        for (const field of touched.current) {
-          if (allErrs[field]) next[field] = allErrs[field];
-          else delete next[field];
-        }
-        return next;
-      });
-    }
-  };
-
-  const blurField = (field: string) => {
-    touched.current.add(field);
-    const err = validateField("techIntegrations", field, data);
-    setErrors((prev) => {
-      const next = { ...prev };
-      if (err) next[field] = err;
-      else delete next[field];
-      return next;
-    });
-  };
-
-  const handleComplete = () => {
-    const errs = validateSection("techIntegrations", data);
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-    onComplete();
-  };
+  const update = (patch: Partial<typeof data>) => store.updateCommercialSection("techIntegrations", patch);
 
   return (
     <div className="space-y-5">
@@ -61,33 +19,27 @@ export function Section3TechIntegrations({ onComplete, onBack }: Props) {
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Technology Stack *</label>
-        <textarea rows={3} value={data.technologyStack}
-          onChange={(e) => update({ technologyStack: e.target.value })}
-          onBlur={() => blurField("technologyStack")}
+        <textarea rows={3} value={data.technologyStack} onChange={(e) => update({ technologyStack: e.target.value })}
           placeholder="React 19 + Node.js + PostgreSQL. Deployed on AWS (ap-south-1)."
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 resize-none transition-colors" />
-        <FieldError error={errors.technologyStack} />
       </div>
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Scalability & Performance Requirements</label>
-        <textarea rows={2} value={data.scalabilityRequirements}
-          onChange={(e) => update({ scalabilityRequirements: e.target.value })}
+        <textarea rows={2} value={data.scalabilityRequirements} onChange={(e) => update({ scalabilityRequirements: e.target.value })}
           placeholder="Support 500 concurrent users with < 500ms p95 response time."
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 resize-none transition-colors" />
       </div>
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">User Management Scope</label>
-        <input type="text" value={data.userManagementScope}
-          onChange={(e) => update({ userManagementScope: e.target.value })}
+        <input type="text" value={data.userManagementScope} onChange={(e) => update({ userManagementScope: e.target.value })}
           placeholder="SSO via Azure AD with RBAC"
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
       </div>
 
       <label className="flex items-center gap-2 cursor-pointer">
-        <input type="checkbox" checked={data.ssoRequired}
-          onChange={(e) => update({ ssoRequired: e.target.checked })}
+        <input type="checkbox" checked={data.ssoRequired} onChange={(e) => update({ ssoRequired: e.target.checked })}
           className="w-3.5 h-3.5 rounded border-gray-300" />
         <span className="text-[12px] text-gray-700">SSO Required</span>
       </label>
@@ -99,8 +51,8 @@ export function Section3TechIntegrations({ onComplete, onBack }: Props) {
             <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
         ) : <span />}
-        <button onClick={handleComplete}
-          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-linear-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
+        <button onClick={onComplete}
+          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
           <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete & Next
         </button>
       </div>

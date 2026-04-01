@@ -1,64 +1,16 @@
 "use client";
 
-import * as React from "react";
-import { CheckCircle2, ArrowLeft } from "lucide-react";
+import { CheckCircle2, ShieldCheck, ArrowLeft } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 
 interface Props { onComplete: () => void; onBack?: () => void }
-
-function FieldError({ error }: { error?: string }) {
-  if (!error) return null;
-  return <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</p>;
-}
 
 export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.governance;
-  const [errors, setErrors] = React.useState<SectionErrors>({});
-  const touched = React.useRef<Set<string>>(new Set());
+  const update = (patch: Partial<typeof data>) => store.updateCommercialSection("governance", patch);
 
   const regulations = ["GDPR", "SOC 2", "ISO 27001", "PCI-DSS", "HIPAA", "SEBI", "RBI", "DPDP Act"];
-
-  const update = (patch: Partial<typeof data>) => {
-    store.updateCommercialSection("governance", patch);
-    if (touched.current.size > 0) {
-      const merged = { ...data, ...patch };
-      const allErrs = validateSection("governance", merged);
-      setErrors((prev) => {
-        const next = { ...prev };
-        for (const field of touched.current) {
-          if (allErrs[field]) next[field] = allErrs[field];
-          else delete next[field];
-        }
-        return next;
-      });
-    }
-  };
-
-  const blurField = (field: string) => {
-    touched.current.add(field);
-    const err = validateField("governance", field, data);
-    setErrors((prev) => {
-      const next = { ...prev };
-      if (err) next[field] = err;
-      else delete next[field];
-      return next;
-    });
-  };
-
-  // Checkbox: mark touched + re-validate immediately on change
-  const updateCheckbox = (patch: Partial<typeof data>, field: string) => {
-    touched.current.add(field);
-    update(patch);
-  };
-
-  const handleComplete = () => {
-    const errs = validateSection("governance", data);
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-    onComplete();
-  };
 
   return (
     <div className="space-y-5">
@@ -71,7 +23,7 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
       <div className="rounded-2xl border border-brown-200 bg-brown-50/50 px-5 py-4">
         <label className="flex items-start gap-3 cursor-pointer">
           <input type="checkbox" checked={data.nonDiscriminationConfirmed}
-            onChange={(e) => updateCheckbox({ nonDiscriminationConfirmed: e.target.checked }, "nonDiscriminationConfirmed")}
+            onChange={(e) => update({ nonDiscriminationConfirmed: e.target.checked })}
             className="w-4 h-4 rounded border-brown-300 mt-0.5" />
           <div>
             <span className="text-[12px] font-semibold text-brown-800">Non-Discrimination Confirmation *</span>
@@ -80,15 +32,12 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
             </p>
           </div>
         </label>
-        <FieldError error={errors.nonDiscriminationConfirmed} />
       </div>
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Data Sensitivity Level *</label>
         <p className="text-[10px] text-gray-400 mb-1.5">No default — explicit selection required.</p>
-        <select value={data.dataSensitivityLevel}
-          onChange={(e) => update({ dataSensitivityLevel: e.target.value as typeof data.dataSensitivityLevel })}
-          onBlur={() => blurField("dataSensitivityLevel")}
+        <select value={data.dataSensitivityLevel} onChange={(e) => update({ dataSensitivityLevel: e.target.value as typeof data.dataSensitivityLevel })}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select sensitivity level...</option>
           <option value="public">Public</option>
@@ -96,26 +45,21 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
           <option value="confidential">Confidential</option>
           <option value="restricted">Restricted</option>
         </select>
-        <FieldError error={errors.dataSensitivityLevel} />
       </div>
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Personal Data Involved *</label>
-        <select value={data.personalDataInvolved}
-          onChange={(e) => update({ personalDataInvolved: e.target.value as typeof data.personalDataInvolved })}
-          onBlur={() => blurField("personalDataInvolved")}
+        <select value={data.personalDataInvolved} onChange={(e) => update({ personalDataInvolved: e.target.value as typeof data.personalDataInvolved })}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="yes">Yes</option>
           <option value="no">No</option>
         </select>
-        <FieldError error={errors.personalDataInvolved} />
       </div>
 
       <div>
         <label className="text-[11px] font-medium text-gray-600 mb-1.5 block">Data Residency Requirement</label>
-        <select value={data.dataResidency}
-          onChange={(e) => update({ dataResidency: e.target.value })}
+        <select value={data.dataResidency} onChange={(e) => update({ dataResidency: e.target.value })}
           className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
           <option value="">Select...</option>
           <option value="india_only">India only</option>
@@ -151,8 +95,8 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
             <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
         ) : <span />}
-        <button onClick={handleComplete}
-          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-linear-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
+        <button onClick={onComplete}
+          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-forest-400 to-forest-600 px-5 py-2.5 rounded-xl transition-all">
           <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete & Next
         </button>
       </div>

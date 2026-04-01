@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { COUNTRIES_DATA } from "../data";
 import { getPasswordStrength, getAgeFromDob } from "../helpers";
-import { registerContributor } from "@/lib/actions/register";
 import type { RegistrationRole, ContributorType, SSOData } from "../types";
 
 export function useRegistration(ssoData?: SSOData | null) {
@@ -77,8 +75,8 @@ export function useRegistration(ssoData?: SSOData | null) {
   const [marketingOptIn,  setMarketingOptIn]  = useState(false);
 
   useEffect(() => {
-    if (email) setVerificationEmail(prev => prev || email);
-  }, [email]);
+    if (email && !verificationEmail) setVerificationEmail(email);
+  }, [email, verificationEmail]);
 
   useEffect(() => {
     if (step !== 3 || !country) return;
@@ -235,55 +233,9 @@ export function useRegistration(ssoData?: SSOData | null) {
     if (!acceptFee) { setError("You must acknowledge the platform service fee to proceed"); return; }
     setError("");
     setIsLoading(true);
-
-    try {
-      const result = await registerContributor({
-        firstName,
-        lastName,
-        email,
-        password,
-        contribType,
-        country,
-        dob,
-        timezone,
-        departmentCategory,
-        departmentOther: departmentCategory === "other" ? departmentOther : undefined,
-        primarySkills,
-        secondarySkills,
-        otherSkills,
-        availability,
-        degree: degree || undefined,
-        branch: branch || undefined,
-        linkedin: linkedin || undefined,
-        careerStage: careerStage || undefined,
-        yearsExperience: yearsExperience || undefined,
-        workStart: workStart || undefined,
-        workEnd: workEnd || undefined,
-        phone: phone || undefined,
-        ndaSignature,
-        acceptTos,
-        acceptCoc,
-        acceptPrivacy,
-        acceptFee,
-        acceptAhp,
-        marketingOptIn,
-      });
-
-      if (!result.success) {
-        setError(result.error);
-        setIsLoading(false);
-        return;
-      }
-
-      await signIn("credentials", {
-        email,
-        password,
-        callbackUrl: "/contributor/dashboard",
-      });
-    } catch {
-      setError("Something went wrong. Please try again.");
-      setIsLoading(false);
-    }
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setIsLoading(false);
+    router.push("/contributor/dashboard");
   }
 
   const passwordStrength = getPasswordStrength(password);

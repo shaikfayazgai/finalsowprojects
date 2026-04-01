@@ -7,7 +7,7 @@ export default function AuthLayout({
 }) {
   return (
     <MeshBackground variant="warm" className="min-h-screen flex justify-center px-6 py-6">
-      <div className="w-full max-w-7xl py-8 px-6">
+      <div className="w-full max-w-7xl flex justify-start py-8 pl-6">
         {children}
       </div>
     </MeshBackground>

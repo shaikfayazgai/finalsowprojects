@@ -1,3 +1,8 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -5,101 +10,10 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  
 }
-
-enum Role {
-  contributor
-  enterprise
-  admin
-  reviewer
-}
-
-// ── Shared user table (auth identity) ──
+//example
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String?
-  firstName     String
-  lastName      String
-  role          Role
-  phone         String?
-  phoneVerified Boolean   @default(false)
-  emailVerified Boolean   @default(false)
-  provider      String    @default("credentials")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  contributorProfile ContributorProfile?
-  enterpriseProfile  EnterpriseProfile?
-}
-
-// ── Contributor-specific profile ──
-model ContributorProfile {
-  id                 String   @id @default(cuid())
-  userId             String   @unique
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  contribType        String
-  country            String
-  dob                DateTime
-  timezone           String
-  departmentCategory String
-  departmentOther    String?
-  availability       String
-  degree             String?
-  branch             String?
-  linkedin           String?
-  careerStage        String?
-  yearsExperience    String?
-  workStart          String?
-  workEnd            String?
-
-  primarySkills      String[]
-  secondarySkills    String[]
-  otherSkills        String[]
-
-  ndaAccepted        Boolean  @default(false)
-  ndaSignature       String?
-  resumeFileKey      String?
-
-  acceptTos          Boolean  @default(false)
-  acceptCoc          Boolean  @default(false)
-  acceptPrivacy      Boolean  @default(false)
-  acceptFee          Boolean  @default(false)
-  acceptAhp          Boolean  @default(false)
-  marketingOptIn     Boolean  @default(false)
-
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-}
-
-// ── Enterprise-specific profile ──
-model EnterpriseProfile {
-  id                   String   @id @default(cuid())
-  userId               String   @unique
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  orgName              String
-  orgType              String
-  orgTypeOther         String?
-  industry             String
-  industryOther        String?
-  companySize          String
-  website              String?
-  hqCountry            String?
-  hqCity               String?
-
-  adminTitle           String
-  adminDept            String?
-  incorporationCountry String?
-  incorporationFileKey String?
-
-  acceptTos            Boolean  @default(false)
-  acceptPp             Boolean  @default(false)
-  acceptEsa            Boolean  @default(false)
-  acceptAhp            Boolean  @default(false)
-  marketingOptIn       Boolean  @default(false)
-
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id   Int    @id @default(autoincrement())
+  name String
 }

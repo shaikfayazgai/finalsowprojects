@@ -3,30 +3,30 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/db";
 
-// Build OAuth providers only when credentials are configured
-const oauthProviders = [
-  ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-    ? [Google({
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        authorization: {
-          params: {
-            prompt: "consent",
-            access_type: "offline",
-            response_type: "code",
-          },
-        },
-      })]
-    : []),
-  ...(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET
-    ? [MicrosoftEntraID({
-        clientId: process.env.MICROSOFT_CLIENT_ID,
-        clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-        issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID ?? "common"}/v2.0`,
-      })]
-    : []),
+// ── Demo users (replace with DB lookup in production) ──
+const DEMO_USERS = [
+  {
+    id: "1",
+    name: "John Doe",
+    email: "john@gmail.com",
+    password: bcrypt.hashSync("Test@1234", 10),
+    role: "enterprise" as const,
+  },
+  {
+    id: "2",
+    name: "Jane Smith",
+    email: "jane@outlook.com",
+    password: bcrypt.hashSync("Test@1234", 10),
+    role: "contributor" as const,
+  },
+  {
+    id: "3",
+    name: "Admin User",
+    email: "admin@glimmora.com",
+    password: bcrypt.hashSync("Admin@1234", 10),
+    role: "admin" as const,
+  },
 ];
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -35,7 +35,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     error: "/auth/login",
   },
   providers: [
-    ...oauthProviders,
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
+    }),
+    MicrosoftEntraID({
+      clientId: process.env.MICROSOFT_CLIENT_ID,
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+      issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID ?? "common"}/v2.0`,
+    }),
     Credentials({
       name: "credentials",
       credentials: {
@@ -61,22 +76,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error("Password must be at least 6 characters");
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: email.toLowerCase() },
-        });
+        // Find user (replace with DB query in production)
+        const user = DEMO_USERS.find(
+          (u) => u.email.toLowerCase() === email.toLowerCase()
+        );
 
-        if (!user || !user.passwordHash) {
+        if (!user) {
           throw new Error("No account found with this email");
         }
 
-        const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+        const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
           throw new Error("Incorrect password");
         }
 
         return {
           id: user.id,
-          name: `${user.firstName} ${user.lastName}`,
+          name: user.name,
           email: user.email,
           role: user.role,
         };

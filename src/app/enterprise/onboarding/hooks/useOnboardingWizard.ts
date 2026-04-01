@@ -48,15 +48,9 @@ export function useOnboardingWizard() {
   const reg = registrationData ?? MOCK_REGISTRATION;
 
   /* ── Navigation ── */
-  const [step, setStepRaw] = useState(0); // 0 = welcome
-  const [highestVisited, setHighestVisited] = useState(0);
+  const [step, setStep] = useState(0); // 0 = welcome
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  const setStep = (n: number) => {
-    setStepRaw(n);
-    setHighestVisited((prev) => Math.max(prev, n));
-  };
 
   /* ── Step 1: Company Verification ── */
   const [companyName] = useState(reg.companyName);
@@ -249,7 +243,7 @@ export function useOnboardingWizard() {
   const taxIdConfig = getTaxIdConfig(countryOfIncorporation);
 
   return {
-    step, setStep, highestVisited, error, setError, isLoading,
+    step, setStep, error, setError, isLoading,
 
     // Step 1
     companyName, countryOfIncorporation,

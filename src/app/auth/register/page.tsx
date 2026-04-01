@@ -22,8 +22,9 @@ import {
   LayoutGrid,
   RefreshCw,
   ArrowRight,
+  PenLine,
 } from "lucide-react";
-import { GlassCard, GlassCardContent, Button } from "@/components/ui";
+import { GlassCard, GlassCardContent } from "@/components/ui";
 import { useAuthStore } from "@/lib/stores/auth-store";
 
 import { useRegistration } from "./hooks/useRegistration";
@@ -268,7 +269,7 @@ function AuthMethodPicker({
           onClick={() => onSSO("google")}
           disabled={!!ssoLoading}
           style={{ transitionDelay: "80ms" }}
-          className={`w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl border-2 border-beige-200 bg-white hover:border-teal-300 hover:shadow-md hover:shadow-teal-50 transition-all text-sm font-medium text-brown-800 disabled:opacity-50 ${
+          className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 border-beige-200 bg-white hover:border-teal-300 hover:shadow-md hover:shadow-teal-50 transition-all text-sm font-medium text-brown-800 disabled:opacity-50 group ${
             visible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"
           }`}
         >
@@ -282,7 +283,8 @@ function AuthMethodPicker({
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
             </svg>
           )}
-          <span>Continue with Google</span>
+          <span className="flex-1 text-left">Continue with Google</span>
+          <ArrowRight className="w-4 h-4 text-beige-300 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-all" />
         </button>
 
         {/* Microsoft */}
@@ -291,7 +293,7 @@ function AuthMethodPicker({
           onClick={() => onSSO("microsoft")}
           disabled={!!ssoLoading}
           style={{ transitionDelay: "150ms" }}
-          className={`w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl border-2 border-beige-200 bg-white hover:border-blue-300 hover:shadow-md hover:shadow-blue-50 transition-all text-sm font-medium text-brown-800 disabled:opacity-50 ${
+          className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 border-beige-200 bg-white hover:border-blue-300 hover:shadow-md hover:shadow-blue-50 transition-all text-sm font-medium text-brown-800 disabled:opacity-50 group ${
             visible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"
           }`}
         >
@@ -305,7 +307,8 @@ function AuthMethodPicker({
               <rect fill="#FFB900" x="13" y="13" width="10" height="10" />
             </svg>
           )}
-          <span>Continue with Microsoft</span>
+          <span className="flex-1 text-left">Continue with Microsoft</span>
+          <ArrowRight className="w-4 h-4 text-beige-300 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
         </button>
 
         {/* Divider */}
@@ -321,18 +324,20 @@ function AuthMethodPicker({
         </div>
 
         {/* Manual */}
-        <Button
+        <button
           type="button"
           onClick={onManual}
-          variant="gradient-cta"
-          size="lg"
           style={{ transitionDelay: "240ms" }}
-          className={`w-full transition-all duration-500 ${
+          className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 border-beige-200 bg-white hover:border-brown-300 hover:shadow-md hover:shadow-brown-50 transition-all text-sm font-medium text-brown-800 group ${
             visible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"
           }`}
         >
-          Register Manually
-        </Button>
+          <div className="w-5 h-5 rounded-md bg-beige-100 flex items-center justify-center shrink-0 group-hover:bg-brown-100 transition-colors">
+            <PenLine className="w-3 h-3 text-beige-500 group-hover:text-brown-600 transition-colors" />
+          </div>
+          <span className="flex-1 text-left">Register manually</span>
+          <ArrowRight className="w-4 h-4 text-beige-300 group-hover:text-brown-400 group-hover:translate-x-0.5 transition-all" />
+        </button>
       </div>
     </div>
   );
@@ -470,16 +475,6 @@ function ContributorRegisterContent() {
   const [ssoLoading, setSsoLoading] = useState<SSOProvider | null>(null);
   const [roleBarAnimated, setRoleBarAnimated] = useState(false);
 
-  // Reset ssoLoading when page is restored from bfcache (user pressed Back after being
-  // redirected to the OAuth provider without completing sign-in).
-  useEffect(() => {
-    const handlePageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) setSsoLoading(null);
-    };
-    window.addEventListener("pageshow", handlePageShow);
-    return () => window.removeEventListener("pageshow", handlePageShow);
-  }, []);
-
   const handleRoleSelect = (role: "contributor" | "enterprise") => {
     setSelectedRole(role);
     setTimeout(() => {
@@ -501,7 +496,7 @@ function ContributorRegisterContent() {
       await signIn(providerId, {
         callbackUrl: selectedRole === "enterprise"
           ? "/enterprise/onboarding"
-          : "/onboarding",
+          : "/contributor/dashboard",
       });
     } catch {
       setSsoLoading(null);
@@ -667,7 +662,6 @@ function ContributorRegisterContent() {
 
             {reg.step === 3 && (
               <Step2Verification
-                registrationEmail={reg.email}
                 phoneCountry={reg.phoneCountry} setPhoneCountry={reg.setPhoneCountry}
                 phone={reg.phone} setPhone={reg.setPhone}
                 otpSent={reg.otpSent}
@@ -763,7 +757,7 @@ function ContributorRegisterContent() {
 
   /* ── Auth options + form: logo top-left, form centered ── */
   return (
-    <div className={`w-full mx-auto flex flex-col py-8 ${uiState === "registering" ? "max-w-3xl" : "max-w-[520px]"}`}>
+    <div className={`w-full mx-auto flex flex-col py-8 min-h-screen items-center justify-center ${uiState === "registering" ? "max-w-3xl" : "max-w-[520px]"}`}>
       <div className="mb-8">{logo}</div>
       {formBody}
     </div>
