@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSession } from "next-auth/react";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { onboardContributor } from "@/lib/actions/register";
 import { COUNTRIES_DATA } from "@/app/auth/register/data";
@@ -43,21 +44,54 @@ function readSsoData(): SSOData | null {
 
 export function useContributorOnboarding() {
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
+  const { data: session } = useSession();
 
-  /* ─── SSO data (read once on mount) ─── */
+  /* ─── SSO data: URL params → sessionStorage → session (fallback chain) ─── */
   const [ssoData]   = useState<SSOData | null>(() => readSsoData());
-  const ssoProvider = ssoData?.provider ?? null;
-  const ssoImage    = ssoData?.image;
+  const ssoProvider = (ssoData?.provider ?? (session?.user as { provider?: string } | undefined)?.provider ?? null) as SSOData["provider"] | null;
+  const ssoImage    = ssoData?.image ?? (session?.user as { image?: string } | undefined)?.image ?? undefined;
 
   /* ─── Navigation ─── */
   const [step,      setStep]      = useState<OnboardingStep>(1);
   const [error,     setError]     = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  /* ─── Step 1: Identity ─── */
+  /* ─── Step 1: Identity — seeded from SSO data, topped up from session ─── */
   const [firstName,   setFirstName]   = useState(ssoData?.firstName ?? "");
   const [lastName,    setLastName]    = useState(ssoData?.lastName  ?? "");
   const [email,       setEmail]       = useState(ssoData?.email     ?? "");
+
+  // Once session loads, fill any fields that URL params didn't provide
+  const sessionSynced = useRef(false);
+  useEffect(() => {
+    if (sessionSynced.current || !session?.user?.email) return;
+    sessionSynced.current = true;
+    const u = session.user as { name?: string; email?: string; image?: string };
+    if (!email && u.email)  setEmail(u.email);
+    if (!firstName && u.name) {
+      const [first = "", ...rest] = u.name.split(" ");
+      setFirstName(first);
+      if (!lastName && rest.length > 0) setLastName(rest.join(" "));
+    }
+    // Also persist to sessionStorage so refresh still works
+    if (u.email) {
+      try {
+        const existing = sessionStorage.getItem(SSO_STORAGE_KEY);
+        if (!existing) {
+          const provider = (session.user as { provider?: string }).provider ?? "";
+          const [first = "", ...rest] = (u.name ?? "").split(" ");
+          const data: SSOData = {
+            firstName: first,
+            lastName:  rest.join(" "),
+            email:     u.email,
+            provider:  provider as SSOData["provider"],
+            image:     u.image ?? undefined,
+          };
+          sessionStorage.setItem(SSO_STORAGE_KEY, JSON.stringify(data));
+        }
+      } catch { /* noop */ }
+    }
+  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
   const [contribType, setContribType] = useState<ContributorType>("");
   const [country,     setCountry]     = useState("");
 
