@@ -36,7 +36,20 @@ function LoginPageContent() {
   const isOnboardingComplete = useAuthStore((s) => s.isOnboardingComplete);
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
 
-  const callbackUrl = searchParams.get("callbackUrl") || undefined;
+  const rawCallbackUrl = searchParams.get("callbackUrl");
+  const callbackUrl = (() => {
+    if (!rawCallbackUrl) return undefined;
+    try {
+      const url = new URL(rawCallbackUrl, window.location.origin);
+      // Do not allow redirecting to the bare home page after login
+      if (url.pathname === "/" && !url.search && !url.hash) return undefined;
+      // Only allow same-origin redirects to avoid open-redirects
+      if (url.origin !== window.location.origin) return undefined;
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return undefined;
+    }
+  })();
 
   // Destination computed once after successful login and stored for sync use
   const [loginDest, setLoginDest] = useState<string>("");
@@ -44,9 +57,9 @@ function LoginPageContent() {
   const [step, setStep] = useState<Step>("credentials");
   const [userRole, setUserRole] = useState<string>("");
 
-  // Route based on user role
+  // Route based on user role — FSD §2.2 lifecycle
   const getRoleDest = () => {
-    if (userRole === "contributor") return "/contributor/dashboard";
+    if (userRole === "contributor") return isOnboardingComplete ? "/contributor/dashboard" : "/onboarding";
     if (userRole === "mentor") return "/mentor/dashboard";
     if (userRole === "admin") return "/enterprise/dashboard";
     // enterprise role — show onboarding if not complete
@@ -62,6 +75,16 @@ function LoginPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [ssoLoading, setSsoLoading] = useState<"google" | "microsoft" | null>(null);
   const [error, setError] = useState("");
+
+  // Reset ssoLoading when page is restored from bfcache (user pressed Back after being
+  // redirected to the OAuth provider without completing sign-in).
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setSsoLoading(null);
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
   const [errorCode, setErrorCode] = useState<string>("");
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [timeLeft, setTimeLeft] = useState(30);
@@ -173,16 +196,20 @@ function LoginPageContent() {
         if (role === "enterprise") {
           setOnboardingComplete(false);
         } else {
-          // For contributor/admin/mentor, mark onboarding as complete so modal doesn't show
+          // Contributor/admin/mentor: mark onboarding complete (returning users)
+          // New contributors coming from /auth/register go through /onboarding first
           setOnboardingComplete(true);
         }
 
         // Store role for redirect after MFA
         setUserRole(role || "enterprise");
 
-        // Compute destination now while session is fresh
+        // Compute destination based on role and onboarding status
+        // FSD §2.2: Contributor lifecycle: Register → Profile Builder → Assessment → Dashboard
         const dest = callbackUrl || (
-          role === "contributor" ? "/contributor/dashboard" :
+          role === "contributor" ? (
+            isOnboardingComplete ? "/contributor/dashboard" : "/onboarding"
+          ) :
           role === "mentor" ? "/mentor/dashboard" :
           role === "admin" ? "/enterprise/dashboard" :
           isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding"
