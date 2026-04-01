@@ -165,7 +165,7 @@ export function Step2AdminContact({
   const selectedCountry = COUNTRIES_DATA.find(c => c.name === phoneCountry);
 
   return (
-    <GlassCard variant="heavy" padding="lg" className="w-full">
+    <GlassCard variant="heavy" padding="lg">
       <GlassCardContent>
         <div className="mb-5">
           <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 2 of 4</p>

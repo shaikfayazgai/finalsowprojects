@@ -45,25 +45,6 @@ export interface ContributorEvidence {
   verified: boolean;
 }
 
-export type AccountStatus =
-  | "pending_assessment"
-  | "assessment_in_progress"
-  | "active"
-  | "suspended"
-  | "deactivated";
-export type KycStatus =
-  | "not_started"
-  | "pending"
-  | "verified"
-  | "rejected"
-  | "expired";
-export type DesignationLevel =
-  | "junior"
-  | "mid"
-  | "senior"
-  | "lead"
-  | "principal";
-
 export interface ContributorProfile {
   id: string;
   displayName: string;
@@ -89,14 +70,6 @@ export interface ContributorProfile {
   bio?: string;
   country?: string;
   city?: string;
-  /* ── FSD Gap additions ── */
-  accountStatus: AccountStatus;
-  designation?: string;
-  designationLevel?: DesignationLevel;
-  kycStatus: KycStatus;
-  lastAvailabilityReviewedAt?: string;
-  assessmentStartedAt?: string;
-  assessmentCompletedAt?: string;
 }
 
 /* ── 2. Skills ── */
@@ -578,79 +551,4 @@ export interface TaskMatchResult {
     trackFit: number;
     performanceBonus: number;
   };
-}
-
-/* ── FSD §5: Three-Part Assessment Composite ── */
-
-export type AssessmentComponentStatus =
-  | "not_started"
-  | "in_progress"
-  | "completed"
-  | "expired";
-
-export interface AssessmentComponent {
-  id: string;
-  type: "mcq" | "work_sample" | "adaptive";
-  title: string;
-  description: string;
-  status: AssessmentComponentStatus;
-  weight: number;
-  score?: number;
-  startedAt?: string;
-  completedAt?: string;
-  deadline?: string;
-  totalQuestions?: number;
-  answeredQuestions?: number;
-  timeLimit?: number;
-  timeRemaining?: number;
-}
-
-export interface AssessmentComposite {
-  contributorId: string;
-  status:
-    | "not_started"
-    | "in_progress"
-    | "completed"
-    | "expired"
-    | "borderline_review";
-  startedAt?: string;
-  completedAt?: string;
-  expiresAt?: string;
-  components: AssessmentComponent[];
-  compositeScore?: number;
-  passed?: boolean;
-  designationConfirmed?: string;
-  seniorityConfirmed?: DesignationLevel;
-  retakeEligibleAt?: string;
-  attemptNumber: number;
-}
-
-/* ── FSD §10.3: KYC Verification ── */
-
-export interface KycVerification {
-  contributorId: string;
-  status: KycStatus;
-  documents: {
-    type: "government_id" | "proof_of_address" | "tax_id" | "bank_statement";
-    fileName: string;
-    uploadedAt: string;
-    status: "pending" | "approved" | "rejected";
-    rejectionReason?: string;
-  }[];
-  submittedAt?: string;
-  verifiedAt?: string;
-  expiresAt?: string;
-  blockedAmount: number;
-}
-
-/* ── FSD §7.4: Workload Impact ── */
-
-export interface WorkloadImpact {
-  currentWeeklyHours: number;
-  maxWeeklyHours: number;
-  activeTasks: number;
-  newTaskHours: number;
-  projectedUtilization: number;
-  slaOverlapWarnings: string[];
-  capacityAvailable: boolean;
 }

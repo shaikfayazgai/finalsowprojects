@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
-import { validateStep, validateField, type StepErrors } from "@/lib/validations/sow-generate";
 import {
   Button, Input, Textarea, Label, Select, SelectTrigger, SelectContent,
   SelectItem, SelectValue,
@@ -59,7 +58,6 @@ interface FormData {
   previousAttempts: string;
   endUserProfiles: string[];
   languageRequirements: string[];
-  customLanguages: string[];
   userExpectations: string[];
   successMetrics: string[];
   enterpriseExpectations: string;
@@ -198,7 +196,6 @@ const initialFormData: FormData = {
   previousAttempts: "",
   endUserProfiles: [""],
   languageRequirements: [""],
-  customLanguages: [],
   userExpectations: [""],
   successMetrics: [""],
   enterpriseExpectations: "",
@@ -443,13 +440,6 @@ interface StepListProps {
   addListItem: (key: keyof FormData) => void;
   removeListItem: (key: keyof FormData, idx: number) => void;
   updateListItem: (key: keyof FormData, idx: number, value: string) => void;
-  errors?: StepErrors;
-  blurField?: (field: string) => void;
-}
-
-function FieldError({ error }: { error?: string }) {
-  if (!error) return null;
-  return <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</p>;
 }
 
 const tipVariants = {
@@ -473,11 +463,11 @@ function TipBox({ icon: Icon, variant, title, children }: { icon: React.ElementT
   );
 }
 
-function ListField({ label, items, fieldKey, placeholder, addListItem, removeListItem, updateListItem, addLabel = "Add", icon: Icon, numbered, prefix, error, onBlur }: {
+function ListField({ label, items, fieldKey, placeholder, addListItem, removeListItem, updateListItem, addLabel = "Add", icon: Icon, numbered, prefix }: {
   label: string; items: string[]; fieldKey: keyof FormData; placeholder: string;
   addListItem: (key: keyof FormData) => void; removeListItem: (key: keyof FormData, idx: number) => void;
   updateListItem: (key: keyof FormData, idx: number, value: string) => void;
-  addLabel?: string; icon?: React.ElementType; numbered?: boolean; prefix?: string; error?: string; onBlur?: () => void;
+  addLabel?: string; icon?: React.ElementType; numbered?: boolean; prefix?: string;
 }) {
   return (
     <div>
@@ -495,7 +485,7 @@ function ListField({ label, items, fieldKey, placeholder, addListItem, removeLis
                 <span className="text-[10px] font-bold text-gray-400">{prefix ? `${prefix}${idx + 1}` : idx + 1}</span>
               )}
             </div>
-            <Input placeholder={placeholder} value={item} onChange={(e) => updateListItem(fieldKey, idx, e.target.value)} onBlur={onBlur} />
+            <Input placeholder={placeholder} value={item} onChange={(e) => updateListItem(fieldKey, idx, e.target.value)} />
             {items.length > 1 && (
               <button onClick={() => removeListItem(fieldKey, idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all shrink-0">
                 <X className="w-3.5 h-3.5" />
@@ -504,7 +494,6 @@ function ListField({ label, items, fieldKey, placeholder, addListItem, removeLis
           </div>
         ))}
       </div>
-      <FieldError error={error} />
     </div>
   );
 }
@@ -522,65 +511,6 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
     <label className="mb-1.5 block" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-mid)' }}>
       {children}{required && " *"}
     </label>
-  );
-}
-
-function OtherLanguageTagInput({ languages, onChange }: { languages: string[]; onChange: (v: string[]) => void }) {
-  const [inputValue, setInputValue] = React.useState("");
-  const inputRef = React.useRef<HTMLInputElement>(null);
-
-  const addLanguage = () => {
-    const trimmed = inputValue.trim();
-    if (trimmed && !languages.includes(trimmed)) {
-      onChange([...languages, trimmed]);
-      setInputValue("");
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") { e.preventDefault(); addLanguage(); }
-    if (e.key === "Backspace" && !inputValue && languages.length > 0) {
-      onChange(languages.slice(0, -1));
-    }
-  };
-
-  return (
-    <div style={{ marginTop: 10 }}>
-      <label className="text-[12px] font-semibold text-gray-600 mb-1.5 block">Custom Languages</label>
-      <div
-        onClick={() => inputRef.current?.focus()}
-        className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 cursor-text transition-all duration-200 focus-within:border-brown-300 focus-within:ring-2 focus-within:ring-brown-100"
-        style={{ minHeight: 40 }}
-      >
-        {languages.filter(l => l.trim()).map((lang, idx) => (
-          <span
-            key={idx}
-            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium"
-            style={{ background: 'rgba(77,87,65,0.10)', color: '#4D5741' }}
-          >
-            {lang}
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onChange(languages.filter((_, i) => i !== idx)); }}
-              className="hover:text-red-500 transition-colors"
-              style={{ lineHeight: 0 }}
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </span>
-        ))}
-        <input
-          ref={inputRef}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={addLanguage}
-          placeholder={languages.filter(l => l.trim()).length === 0 ? "Type a language and press Enter..." : ""}
-          className="flex-1 min-w-[120px] border-none outline-none bg-transparent text-[13px] text-gray-900 placeholder:text-gray-400"
-          style={{ padding: 0 }}
-        />
-      </div>
-    </div>
   );
 }
 
@@ -655,68 +585,16 @@ function CheckboxGroup({ values, onChange, options }: {
 /* ══════════════════════════════════════════
    MAIN PAGE
    ══════════════════════════════════════════ */
-const SOW_STORAGE_KEY = "sow-generator-draft";
-
-function loadDraft(): { formData: FormData; currentStep: number; skippedSteps: number[] } | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(SOW_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
-function saveDraft(formData: FormData, currentStep: number, skippedSteps: Set<number>) {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(SOW_STORAGE_KEY, JSON.stringify({
-      formData,
-      currentStep,
-      skippedSteps: [...skippedSteps],
-    }));
-  } catch { /* storage full — ignore */ }
-}
-
 export default function SOWGenerateWizardPage() {
   const router = useRouter();
-  const draft = React.useRef(loadDraft());
-  const [currentStep, setCurrentStep] = React.useState(draft.current?.currentStep ?? 0);
-  const [formData, setFormData] = React.useState<FormData>(draft.current?.formData ?? initialFormData);
-  const [skippedSteps, setSkippedSteps] = React.useState<Set<number>>(new Set(draft.current?.skippedSteps ?? []));
+  const [currentStep, setCurrentStep] = React.useState(0);
+  const [formData, setFormData] = React.useState<FormData>(initialFormData);
+  const [skippedSteps, setSkippedSteps] = React.useState<Set<number>>(new Set());
   const [generating, setGenerating] = React.useState(false);
   const [genStage, setGenStage] = React.useState(0);
-  const [stepErrors, setStepErrors] = React.useState<StepErrors>({});
-  const [touchedFields, setTouchedFields] = React.useState<Set<string>>(new Set());
-
-  // Persist draft to sessionStorage on every change
-  React.useEffect(() => {
-    saveDraft(formData, currentStep, skippedSteps);
-  }, [formData, currentStep, skippedSteps]);
 
   const updateField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
-    setFormData((prev) => {
-      const next = { ...prev, [key]: value };
-      // Re-validate on change if field was already touched
-      if (touchedFields.has(key as string)) {
-        const err = validateField(currentStep, key as string, next);
-        setStepErrors((prev) => {
-          const updated = { ...prev };
-          if (err) updated[key as string] = err;
-          else delete updated[key as string];
-          return updated;
-        });
-      }
-      return next;
-    });
-  };
-
-  const blurField = (field: string) => {
-    setTouchedFields((prev) => new Set(prev).add(field));
-    const err = validateField(currentStep, field, formData);
-    if (err) {
-      setStepErrors((prev) => ({ ...prev, [field]: err }));
-    } else {
-      setStepErrors((prev) => { const next = { ...prev }; delete next[field]; return next; });
-    }
+    setFormData((prev) => ({ ...prev, [key]: value }));
   };
   const addListItem = (key: keyof FormData) => {
     setFormData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }));
@@ -903,10 +781,6 @@ export default function SOWGenerateWizardPage() {
   /* ── Next handler with validation ── */
   const handleNext = () => {
     if (currentStep < STEPS.length - 1) {
-      const errors = validateStep(currentStep, formData);
-      setStepErrors(errors);
-      if (Object.keys(errors).length > 0) return;
-      setTouchedFields(new Set());
       setCurrentStep(s => s + 1);
     }
   };
@@ -971,7 +845,7 @@ export default function SOWGenerateWizardPage() {
               <React.Fragment key={idx}>
                 {/* Step node — fixed width so connectors get the remaining space */}
                 <button
-                  onClick={() => { if (isReachable) { setStepErrors({}); setTouchedFields(new Set()); setCurrentStep(idx); } }}
+                  onClick={() => { if (isReachable) setCurrentStep(idx); }}
                   spellCheck={false}
                   className="flex flex-col items-center transition-all duration-200"
                   style={{ width: 52, flexShrink: 0, cursor: isReachable ? 'pointer' : 'default', gap: 6, padding: 0 }}
@@ -1076,23 +950,23 @@ export default function SOWGenerateWizardPage() {
                   </div>
 
                   <div style={{ padding: '28px 26px' }}>
-                    {currentStep === 0 && <Step0ContextDiscovery formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} errors={stepErrors} blurField={blurField} />}
-                    {currentStep === 1 && <Step1ProjectScope formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} errors={stepErrors} blurField={blurField} />}
-                    {currentStep === 2 && <Step2DeliveryTechnical formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} errors={stepErrors} blurField={blurField} />}
-                    {currentStep === 3 && <Step3IntegrationsUserMgmt formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} errors={stepErrors} blurField={blurField} />}
-                    {currentStep === 4 && <Step4TimelineTeamTesting formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} errors={stepErrors} blurField={blurField} />}
-                    {currentStep === 5 && <Step5BudgetRisk formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} errors={stepErrors} blurField={blurField} />}
-                    {currentStep === 6 && <Step6QualityStandards formData={formData} updateField={updateField} errors={stepErrors} blurField={blurField} />}
-                    {currentStep === 7 && <Step7GovernanceCompliance formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} errors={stepErrors} blurField={blurField} />}
-                    {currentStep === 8 && <Step8CommercialLegal formData={formData} updateField={updateField} errors={stepErrors} blurField={blurField} />}
-                    {currentStep === 9 && <Step9ReviewGenerate formData={formData} updateField={updateField} aiConfidence={aiConfidence} isStepComplete={isStepComplete} skippedSteps={skippedSteps} setCurrentStep={setCurrentStep} errors={stepErrors} blurField={blurField} />}
+                    {currentStep === 0 && <Step0ContextDiscovery formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} />}
+                    {currentStep === 1 && <Step1ProjectScope formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} />}
+                    {currentStep === 2 && <Step2DeliveryTechnical formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} />}
+                    {currentStep === 3 && <Step3IntegrationsUserMgmt formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} />}
+                    {currentStep === 4 && <Step4TimelineTeamTesting formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} />}
+                    {currentStep === 5 && <Step5BudgetRisk formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} />}
+                    {currentStep === 6 && <Step6QualityStandards formData={formData} updateField={updateField} />}
+                    {currentStep === 7 && <Step7GovernanceCompliance formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} />}
+                    {currentStep === 8 && <Step8CommercialLegal formData={formData} updateField={updateField} />}
+                    {currentStep === 9 && <Step9ReviewGenerate formData={formData} updateField={updateField} aiConfidence={aiConfidence} isStepComplete={isStepComplete} skippedSteps={skippedSteps} setCurrentStep={setCurrentStep} />}
                   </div>
 
                   {/* Navigation footer */}
                   <div style={{ padding: '16px 26px 20px', borderTop: '1px solid var(--border-hair)' }}>
                     <div className="flex items-center justify-between">
                       <button
-                        onClick={() => { setStepErrors({}); setTouchedFields(new Set()); setCurrentStep((s) => Math.max(0, s - 1)); }}
+                        onClick={() => setCurrentStep((s) => Math.max(0, s - 1))}
                         disabled={currentStep === 0}
                         className="flex items-center gap-1.5 rounded-lg transition-all duration-200"
                         style={{
@@ -1357,8 +1231,7 @@ export default function SOWGenerateWizardPage() {
 /* ================================================================
    STEP 0 — Context & Discovery
    ================================================================ */
-function Step0ContextDiscovery({ formData, updateField, addListItem, removeListItem, updateListItem, errors = {}, blurField }: StepListProps) {
-  const onBlur = (field: string) => () => blurField?.(field);
+function Step0ContextDiscovery({ formData, updateField, addListItem, removeListItem, updateListItem }: StepListProps) {
   return (
     <div className="space-y-5">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -1373,17 +1246,18 @@ function Step0ContextDiscovery({ formData, updateField, addListItem, removeListI
           placeholder="Describe the overarching vision for this project (min 50 characters)..."
           value={formData.projectVision}
           onChange={(e) => updateField("projectVision", e.target.value)}
-          onBlur={onBlur("projectVision")}
           className="min-h-[100px]"
         />
-        <FieldError error={errors.projectVision} />
+        <div style={{ fontSize: 10, color: formData.projectVision.length >= 50 ? '#4D5741' : 'var(--ink-faint)', marginTop: 4 }}>
+          {formData.projectVision.length}/500 characters (min 50)
+        </div>
       </div>
 
       {/* Business Objectives */}
-      <ListField label="Business Objectives *" items={formData.businessObjectives} fieldKey="businessObjectives" placeholder="e.g., Increase user retention by 30%" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Objective" icon={Target} error={errors.businessObjectives} onBlur={onBlur("businessObjectives")} />
+      <ListField label="Business Objectives *" items={formData.businessObjectives} fieldKey="businessObjectives" placeholder="e.g., Increase user retention by 30%" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Objective" icon={Target} />
 
       {/* Pain Points */}
-      <ListField label="Pain Points *" items={formData.painPoints} fieldKey="painPoints" placeholder="e.g., Current onboarding takes 14 days" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Pain Point" icon={AlertTriangle} error={errors.painPoints} onBlur={onBlur("painPoints")} />
+      <ListField label="Pain Points *" items={formData.painPoints} fieldKey="painPoints" placeholder="e.g., Current onboarding takes 14 days" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Pain Point" icon={AlertTriangle} />
 
       {/* Strategic Context & Business Criticality */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1413,7 +1287,6 @@ function Step0ContextDiscovery({ formData, updateField, addListItem, removeListI
               <SelectItem value="nice_to_have">Nice to Have</SelectItem>
             </SelectContent>
           </Select>
-          <FieldError error={errors.businessCriticality} />
         </div>
       </div>
 
@@ -1448,10 +1321,11 @@ function Step0ContextDiscovery({ formData, updateField, addListItem, removeListI
           placeholder="Describe the desired end state after project completion (min 30, max 1000 chars)..."
           value={formData.desiredFutureState}
           onChange={(e) => updateField("desiredFutureState", e.target.value)}
-          onBlur={onBlur("desiredFutureState")}
           className="min-h-[80px]"
         />
-        <FieldError error={errors.desiredFutureState} />
+        <div style={{ fontSize: 10, color: formData.desiredFutureState.length >= 30 ? '#4D5741' : 'var(--ink-faint)', marginTop: 4 }}>
+          {formData.desiredFutureState.length}/1000 characters (min 30)
+        </div>
       </div>
 
       {/* Previous Attempts */}
@@ -1466,20 +1340,14 @@ function Step0ContextDiscovery({ formData, updateField, addListItem, removeListI
       </div>
 
       {/* End User Profiles */}
-      <ListField label="End User Profiles *" items={formData.endUserProfiles} fieldKey="endUserProfiles" placeholder="e.g., Enterprise admin, Field technician, End customer" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Profile" error={errors.endUserProfiles} onBlur={onBlur("endUserProfiles")} />
+      <ListField label="End User Profiles *" items={formData.endUserProfiles} fieldKey="endUserProfiles" placeholder="e.g., Enterprise admin, Field technician, End customer" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Profile" />
 
       {/* Language Requirements */}
       <div>
         <FieldLabel>Language Requirements</FieldLabel>
         <CheckboxGroup
           values={formData.languageRequirements}
-          onChange={(v) => {
-            updateField("languageRequirements", v);
-            if (v.includes("other") && !formData.languageRequirements.includes("other")) {
-              updateField("customLanguages", []);
-            }
-            if (!v.includes("other")) updateField("customLanguages", []);
-          }}
+          onChange={(v) => updateField("languageRequirements", v)}
           options={[
             { value: "english", label: "English" },
             { value: "hindi", label: "Hindi" },
@@ -1491,19 +1359,13 @@ function Step0ContextDiscovery({ formData, updateField, addListItem, removeListI
             { value: "other", label: "Other" },
           ]}
         />
-        {formData.languageRequirements.includes("other") && (
-          <OtherLanguageTagInput
-            languages={formData.customLanguages}
-            onChange={(v) => updateField("customLanguages", v)}
-          />
-        )}
       </div>
 
       {/* User Expectations */}
       <ListField label="User Expectations" items={formData.userExpectations} fieldKey="userExpectations" placeholder="e.g., Sub-second page load times" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Expectation" />
 
       {/* Success Metrics */}
-      <ListField label="Success Metrics *" items={formData.successMetrics} fieldKey="successMetrics" placeholder="e.g., 99.9% uptime, <2s response time" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Metric" error={errors.successMetrics} onBlur={onBlur("successMetrics")} />
+      <ListField label="Success Metrics *" items={formData.successMetrics} fieldKey="successMetrics" placeholder="e.g., 99.9% uptime, <2s response time" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Metric" />
 
       {/* Enterprise Expectations */}
       <div>
@@ -1523,10 +1385,11 @@ function Step0ContextDiscovery({ formData, updateField, addListItem, removeListI
           placeholder="How will you measure if this project is successful? (min 30, max 500 chars)"
           value={formData.definitionOfSuccess}
           onChange={(e) => updateField("definitionOfSuccess", e.target.value)}
-          onBlur={onBlur("definitionOfSuccess")}
           className="min-h-[80px]"
         />
-        <FieldError error={errors.definitionOfSuccess} />
+        <div style={{ fontSize: 10, color: formData.definitionOfSuccess.length >= 30 ? '#4D5741' : 'var(--ink-faint)', marginTop: 4 }}>
+          {formData.definitionOfSuccess.length}/500 characters (min 30)
+        </div>
       </div>
 
       <TipBox icon={Lightbulb} variant="teal" title="Why this matters:">
@@ -1540,8 +1403,7 @@ function Step0ContextDiscovery({ formData, updateField, addListItem, removeListI
 /* ================================================================
    STEP 1 — Project & Scope
    ================================================================ */
-function Step1ProjectScope({ formData, updateField, addListItem, removeListItem, updateListItem, errors = {}, blurField }: StepListProps) {
-  const onBlur = (field: string) => () => blurField?.(field);
+function Step1ProjectScope({ formData, updateField, addListItem, removeListItem, updateListItem }: StepListProps) {
   return (
     <div className="space-y-5">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -1552,13 +1414,14 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <FieldLabel required>Project Title</FieldLabel>
-          <Input placeholder="e.g., Enterprise Resource Planning Platform v2.0" value={formData.title} onChange={(e) => updateField("title", e.target.value)} onBlur={onBlur("title")} />
-          <FieldError error={errors.title} />
+          <Input placeholder="e.g., Enterprise Resource Planning Platform v2.0" value={formData.title} onChange={(e) => updateField("title", e.target.value)} />
+          <div style={{ fontSize: 10, color: formData.title.length >= 3 ? '#4D5741' : 'var(--ink-faint)', marginTop: 4 }}>
+            {formData.title.length}/150 (min 3)
+          </div>
         </div>
         <div>
           <FieldLabel required>Client / Organization</FieldLabel>
-          <Input placeholder="e.g., TechVista Solutions" value={formData.client} onChange={(e) => updateField("client", e.target.value)} onBlur={onBlur("client")} />
-          <FieldError error={errors.client} />
+          <Input placeholder="e.g., TechVista Solutions" value={formData.client} onChange={(e) => updateField("client", e.target.value)} />
         </div>
       </div>
 
@@ -1581,7 +1444,6 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
-          <FieldError error={errors.industry} />
         </div>
         <div>
           <FieldLabel required>Project Category</FieldLabel>
@@ -1596,7 +1458,6 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
-          <FieldError error={errors.projectCategory} />
         </div>
         <div>
           <FieldLabel required>Platform Type</FieldLabel>
@@ -1614,7 +1475,6 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
-          <FieldError error={errors.platformType} />
         </div>
       </div>
 
@@ -1625,13 +1485,13 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
       </div>
 
       {/* Feature Modules */}
-      <ListField label="Feature Modules * (min 2)" items={formData.featureModules} fieldKey="featureModules" placeholder="e.g., User authentication, Dashboard analytics, Reporting engine" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Module" icon={Target} error={errors.featureModules} onBlur={onBlur("featureModules")} />
+      <ListField label="Feature Modules * (min 2)" items={formData.featureModules} fieldKey="featureModules" placeholder="e.g., User authentication, Dashboard analytics, Reporting engine" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Module" icon={Target} />
 
       {/* User Roles */}
-      <ListField label="User Roles *" items={formData.userRoles} fieldKey="userRoles" placeholder="e.g., Admin, Manager, Viewer, API Consumer" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Role" error={errors.userRoles} onBlur={onBlur("userRoles")} />
+      <ListField label="User Roles *" items={formData.userRoles} fieldKey="userRoles" placeholder="e.g., Admin, Manager, Viewer, API Consumer" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Role" />
 
       {/* Business Workflows */}
-      <ListField label="Business Workflows *" items={formData.businessWorkflows} fieldKey="businessWorkflows" placeholder="e.g., Order-to-fulfillment, Approval chain, Onboarding flow" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Workflow" error={errors.businessWorkflows} onBlur={onBlur("businessWorkflows")} />
+      <ListField label="Business Workflows *" items={formData.businessWorkflows} fieldKey="businessWorkflows" placeholder="e.g., Order-to-fulfillment, Approval chain, Onboarding flow" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Workflow" />
 
       {/* Estimated Screen Count */}
       <div>
@@ -1643,7 +1503,7 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
       <ListField label="Critical Business Rules" items={formData.criticalBusinessRules} fieldKey="criticalBusinessRules" placeholder="e.g., Orders above $10k require manager approval" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Rule" />
 
       {/* Out of Scope */}
-      <ListField label="Out of Scope *" items={formData.outOfScope} fieldKey="outOfScope" placeholder="e.g., Legacy data migration, Mobile app, Ongoing maintenance" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Item" error={errors.outOfScope} onBlur={onBlur("outOfScope")} />
+      <ListField label="Out of Scope *" items={formData.outOfScope} fieldKey="outOfScope" placeholder="e.g., Legacy data migration, Mobile app, Ongoing maintenance" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Item" />
 
       {/* Assumptions */}
       <ListField label="Assumptions" items={formData.assumptions} fieldKey="assumptions" placeholder="e.g., Client will provide API documentation by Week 2" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Assumption" />
@@ -1681,8 +1541,7 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
 /* ================================================================
    STEP 2 — Delivery & Technical
    ================================================================ */
-function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField }: StepListProps) {
-  const onBlur = (field: string) => () => blurField?.(field);
+function Step2DeliveryTechnical({ formData, updateField }: StepListProps) {
   return (
     <div className="space-y-5">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -1703,7 +1562,6 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
             { value: "cicd", label: "CI/CD" },
           ]}
         />
-        <FieldError error={errors.developmentScope} />
       </div>
 
       {/* UI/UX Design Scope */}
@@ -1718,7 +1576,6 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
             { value: "client_provides", label: "Client Provides" },
           ]}
         />
-        <FieldError error={errors.uiuxDesignScope} />
       </div>
       {formData.uiuxDesignScope === "in_scope" && (
         <div>
@@ -1740,7 +1597,6 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
             { value: "both", label: "Both" },
           ]}
         />
-        <FieldError error={errors.deploymentScope} />
       </div>
       {(formData.deploymentScope === "cloud" || formData.deploymentScope === "on_premise" || formData.deploymentScope === "both") && (
         <div>
@@ -1761,7 +1617,6 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
             { value: "go_live_hypercare", label: "Go-Live + Hypercare" },
           ]}
         />
-        <FieldError error={errors.goLiveScope} />
       </div>
       {(formData.goLiveScope === "go_live" || formData.goLiveScope === "go_live_hypercare") && (
         <div>
@@ -1773,8 +1628,10 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
       {/* Tech Stack */}
       <div>
         <FieldLabel required>Technology Stack</FieldLabel>
-        <Textarea placeholder="e.g., React + TypeScript frontend, Node.js/NestJS backend, PostgreSQL, Redis, Docker/K8s" value={formData.techStack} onChange={(e) => updateField("techStack", e.target.value)} onBlur={onBlur("techStack")} className="min-h-[80px]" />
-        <FieldError error={errors.techStack} />
+        <Textarea placeholder="e.g., React + TypeScript frontend, Node.js/NestJS backend, PostgreSQL, Redis, Docker/K8s" value={formData.techStack} onChange={(e) => updateField("techStack", e.target.value)} className="min-h-[80px]" />
+        <div style={{ fontSize: 10, color: formData.techStack.length >= 10 ? '#4D5741' : 'var(--ink-faint)', marginTop: 4 }}>
+          {formData.techStack.length}/1000 (min 10)
+        </div>
       </div>
 
       {/* Scalability Requirements */}
@@ -1838,8 +1695,7 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
 /* ================================================================
    STEP 3 — Integrations & User Management (SKIPPABLE)
    ================================================================ */
-function Step3IntegrationsUserMgmt({ formData, updateField, addListItem, removeListItem, updateListItem, errors = {}, blurField }: StepListProps) {
-  const onBlur = (field: string) => () => blurField?.(field);
+function Step3IntegrationsUserMgmt({ formData, updateField, addListItem, removeListItem, updateListItem }: StepListProps) {
   return (
     <div className="space-y-5">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -1956,8 +1812,7 @@ function Step3IntegrationsUserMgmt({ formData, updateField, addListItem, removeL
 /* ================================================================
    STEP 4 — Timeline, Team & Testing (SKIPPABLE)
    ================================================================ */
-function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeListItem, updateListItem, errors = {}, blurField }: StepListProps) {
-  const onBlur = (field: string) => () => blurField?.(field);
+function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeListItem, updateListItem }: StepListProps) {
   return (
     <div className="space-y-5">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -2135,8 +1990,7 @@ function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeLi
 /* ================================================================
    STEP 5 — Budget & Risk (MANDATORY)
    ================================================================ */
-function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, updateListItem, errors = {}, blurField }: StepListProps) {
-  const onBlur = (field: string) => () => blurField?.(field);
+function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, updateListItem }: StepListProps) {
   return (
     <div className="space-y-5">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -2157,13 +2011,11 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
               const val = e.target.value;
               if (val === "" || Number(val) >= 0) updateField("budgetMin", val);
             }}
-            onBlur={onBlur("budgetMin")}
             style={formData.budgetMin && Number(formData.budgetMin) < 0 ? { borderColor: "rgba(192,68,68,0.5)" } : {}}
           />
           {formData.budgetMin && Number(formData.budgetMin) < 0 && (
             <p style={{ fontSize: 11, color: "#983030", marginTop: 4 }}>Budget cannot be negative</p>
           )}
-          <FieldError error={errors.budgetMin} />
         </div>
         <div>
           <FieldLabel required>Budget Maximum</FieldLabel>
@@ -2176,7 +2028,6 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
               const val = e.target.value;
               if (val === "" || Number(val) >= 0) updateField("budgetMax", val);
             }}
-            onBlur={onBlur("budgetMax")}
             style={
               (formData.budgetMax && Number(formData.budgetMax) < 0) ||
               (formData.budgetMin && formData.budgetMax && Number(formData.budgetMin) >= 0 && Number(formData.budgetMax) >= 0 && Number(formData.budgetMax) < Number(formData.budgetMin))
@@ -2190,7 +2041,6 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
           {formData.budgetMin && formData.budgetMax && Number(formData.budgetMin) >= 0 && Number(formData.budgetMax) >= 0 && Number(formData.budgetMax) < Number(formData.budgetMin) && (
             <p style={{ fontSize: 11, color: "#983030", marginTop: 4 }}>Maximum must be greater than or equal to minimum</p>
           )}
-          <FieldError error={errors.budgetMax} />
         </div>
         <div>
           <FieldLabel>Currency</FieldLabel>
@@ -2221,7 +2071,6 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
             { value: "hybrid", label: "Hybrid" },
           ]}
         />
-        <FieldError error={errors.pricingModel} />
       </div>
 
       {/* Breakdown Preference */}
@@ -2242,7 +2091,7 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
       <SectionHeading>Risk</SectionHeading>
 
       {/* Known Risks */}
-      <ListField label="Known Risks *" items={formData.knownRisks} fieldKey="knownRisks" placeholder="e.g., Third-party API dependency may have rate limits" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Risk" icon={AlertTriangle} error={errors.knownRisks} onBlur={onBlur("knownRisks")} />
+      <ListField label="Known Risks *" items={formData.knownRisks} fieldKey="knownRisks" placeholder="e.g., Third-party API dependency may have rate limits" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Risk" icon={AlertTriangle} />
 
       {/* Project Constraints */}
       <div>
@@ -2290,8 +2139,7 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
 /* ================================================================
    STEP 6 — Quality Standards (SKIPPABLE)
    ================================================================ */
-function Step6QualityStandards({ formData, updateField, errors = {}, blurField }: { formData: FormData; updateField: <K extends keyof FormData>(key: K, value: FormData[K]) => void; errors?: StepErrors; blurField?: (field: string) => void }) {
-  const onBlur = (field: string) => () => blurField?.(field);
+function Step6QualityStandards({ formData, updateField }: { formData: FormData; updateField: <K extends keyof FormData>(key: K, value: FormData[K]) => void }) {
   return (
     <div className="space-y-5">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -2302,6 +2150,9 @@ function Step6QualityStandards({ formData, updateField, errors = {}, blurField }
       <div>
         <FieldLabel required>Acceptance Criteria</FieldLabel>
         <Textarea placeholder="Describe what constitutes acceptable delivery. e.g., code coverage > 80%, WCAG 2.1 AA (min 30, max 3000 chars)" value={formData.acceptanceCriteria} onChange={(e) => updateField("acceptanceCriteria", e.target.value)} className="min-h-[100px]" />
+        <div style={{ fontSize: 10, color: formData.acceptanceCriteria.length >= 30 ? '#4D5741' : 'var(--ink-faint)', marginTop: 4 }}>
+          {formData.acceptanceCriteria.length}/3000 (min 30)
+        </div>
       </div>
 
       {/* SLA & Code Review */}
@@ -2427,8 +2278,7 @@ function Step6QualityStandards({ formData, updateField, errors = {}, blurField }
 /* ================================================================
    STEP 7 — Governance & Compliance (MANDATORY)
    ================================================================ */
-function Step7GovernanceCompliance({ formData, updateField, addListItem, removeListItem, updateListItem, errors = {}, blurField }: StepListProps) {
-  const onBlur = (field: string) => () => blurField?.(field);
+function Step7GovernanceCompliance({ formData, updateField, addListItem, removeListItem, updateListItem }: StepListProps) {
   return (
     <div className="space-y-5">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -2469,7 +2319,6 @@ function Step7GovernanceCompliance({ formData, updateField, addListItem, removeL
                 This confirmation is mandatory to proceed with SOW generation.
               </p>
             )}
-            <FieldError error={errors.nonDiscriminationConfirm} />
           </div>
         </div>
       </div>
@@ -2486,7 +2335,6 @@ function Step7GovernanceCompliance({ formData, updateField, addListItem, removeL
             <SelectItem value="fair_trade">Fair Trade Certified</SelectItem>
           </SelectContent>
         </Select>
-        <FieldError error={errors.labourStandards} />
       </div>
 
       {/* Accessibility */}
@@ -2597,7 +2445,6 @@ function Step7GovernanceCompliance({ formData, updateField, addListItem, removeL
             <SelectItem value="regulated">Regulated Industry Data</SelectItem>
           </SelectContent>
         </Select>
-        <FieldError error={errors.dataSensitivity} />
       </div>
 
       {/* Encryption */}
@@ -2661,8 +2508,7 @@ function Step7GovernanceCompliance({ formData, updateField, addListItem, removeL
 /* ================================================================
    STEP 8 — Commercial & Legal (MANDATORY)
    ================================================================ */
-function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }: { formData: FormData; updateField: <K extends keyof FormData>(key: K, value: FormData[K]) => void; errors?: StepErrors; blurField?: (field: string) => void }) {
-  const onBlur = (field: string) => () => blurField?.(field);
+function Step8CommercialLegal({ formData, updateField }: { formData: FormData; updateField: <K extends keyof FormData>(key: K, value: FormData[K]) => void }) {
   return (
     <div className="space-y-5">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -2684,7 +2530,6 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
             { value: "license", label: "License to Client" },
           ]}
         />
-        <FieldError error={errors.ipOwnership} />
       </div>
 
       {/* Source Code Ownership */}
@@ -2699,7 +2544,6 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
             { value: "escrow", label: "Escrow" },
           ]}
         />
-        <FieldError error={errors.sourceCodeOwnership} />
       </div>
 
       {/* Reference Rights */}
@@ -2714,7 +2558,6 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
             { value: "not_allowed", label: "Not Allowed" },
           ]}
         />
-        <FieldError error={errors.referenceRights} />
       </div>
 
       {/* Open Source Policy */}
@@ -2747,7 +2590,6 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
             { value: "not_applicable", label: "Not Applicable" },
           ]}
         />
-        <FieldError error={errors.thirdPartyCosts} />
       </div>
 
       {/* Warranty Period */}
@@ -2764,7 +2606,6 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
             <SelectItem value="none">No Warranty</SelectItem>
           </SelectContent>
         </Select>
-        <FieldError error={errors.warrantyPeriod} />
       </div>
 
       {/* Post-Warranty Support */}
@@ -2795,7 +2636,6 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
             { value: "steering_committee", label: "Steering Committee Approval" },
           ]}
         />
-        <FieldError error={errors.changeRequestProcess} />
       </div>
 
       {/* Conditional: Change Request Approver */}
@@ -2831,17 +2671,14 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
 /* ================================================================
    STEP 9 — Review & Generate
    ================================================================ */
-function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComplete, skippedSteps, setCurrentStep, errors = {}, blurField }: {
+function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComplete, skippedSteps, setCurrentStep }: {
   formData: FormData;
   updateField: <K extends keyof FormData>(key: K, value: FormData[K]) => void;
   aiConfidence: number;
   isStepComplete: (step: number) => boolean;
   skippedSteps: Set<number>;
   setCurrentStep: (step: number) => void;
-  errors?: StepErrors;
-  blurField?: (field: string) => void;
 }) {
-  const onBlur = (field: string) => () => blurField?.(field);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -2853,13 +2690,11 @@ function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComple
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <FieldLabel required>Business Owner / Approver</FieldLabel>
-          <Input placeholder="e.g., John Smith, VP Engineering" value={formData.businessOwnerApprover} onChange={(e) => updateField("businessOwnerApprover", e.target.value)} onBlur={onBlur("businessOwnerApprover")} />
-          <FieldError error={errors.businessOwnerApprover} />
+          <Input placeholder="e.g., John Smith, VP Engineering" value={formData.businessOwnerApprover} onChange={(e) => updateField("businessOwnerApprover", e.target.value)} />
         </div>
         <div>
           <FieldLabel required>Final Approver</FieldLabel>
-          <Input placeholder="e.g., Jane Doe, CTO" value={formData.finalApprover} onChange={(e) => updateField("finalApprover", e.target.value)} onBlur={onBlur("finalApprover")} />
-          <FieldError error={errors.finalApprover} />
+          <Input placeholder="e.g., Jane Doe, CTO" value={formData.finalApprover} onChange={(e) => updateField("finalApprover", e.target.value)} />
         </div>
         <div>
           <FieldLabel>Legal Reviewer</FieldLabel>

@@ -16,7 +16,7 @@ import { WhatHappensNext } from "./components/WhatHappensNext";
 import { RecentUploads } from "./components/RecentUploads";
 import { aiPoweredFeatures } from "@/mocks/data/sow-upload-flow";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
-import { useSOWUploadStore, setFileObjectUrl } from "@/lib/stores/sow-upload-store";
+import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 
 /* ═══ Parsing stages ═══ */
 
@@ -97,13 +97,6 @@ export default function SOWUploadPage() {
   const isParsing = parsingStage !== null && parsingStage !== "complete";
   const isComplete = parsingStage === "complete";
 
-  React.useEffect(() => {
-    if (isComplete) {
-      store.setFlowStep(2);
-      router.push("/enterprise/sow/upload/report");
-    }
-  }, [isComplete]);
-
   const existingSows = mockSOWs.filter((s) => s.status === "draft" || s.status === "review");
 
   const handleFileSelect = (file: File) => {
@@ -150,7 +143,6 @@ export default function SOWUploadPage() {
     store.setClientOrganisation(clientOrg);
     store.setLinkedSowId(linkedSowId || null);
     store.setFile({ name: selectedFile.name, size: selectedFile.size, type: selectedFile.type, uploadedAt: new Date().toISOString() });
-    setFileObjectUrl(URL.createObjectURL(selectedFile));
     store.setFlowStep(1);
 
     const stages: ParsingStage[] = ["uploading", "extracting", "analyzing", "detecting", "scoring", "complete"];
@@ -184,33 +176,29 @@ export default function SOWUploadPage() {
         <div>
           {/* Optional fields */}
           {!isParsing && !isComplete && (
-            <motion.div variants={fadeUp} className="mb-4">
-              <div className="card-parchment px-5 py-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">Project Title (optional)</label>
-                    <input type="text" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)}
-                      placeholder="Auto-extracted from document"
-                      className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">Client / Organisation (optional)</label>
-                    <input type="text" value={clientOrg} onChange={(e) => setClientOrg(e.target.value)}
-                      placeholder="Override if needed"
-                      className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
-                  </div>
-                  {existingSows.length > 0 && (
-                    <div className="sm:col-span-2">
-                      <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">Link to existing SOW? (version upload)</label>
-                      <select value={linkedSowId} onChange={(e) => setLinkedSowId(e.target.value)}
-                        className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
-                        <option value="">No — create a new SOW</option>
-                        {existingSows.map((s) => <option key={s.id} value={s.id}>{s.title} ({s.status})</option>)}
-                      </select>
-                    </div>
-                  )}
-                </div>
+            <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">Project Title (optional)</label>
+                <input type="text" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)}
+                  placeholder="We'll try to extract this from your document"
+                  className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
               </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">Client / Organisation (optional)</label>
+                <input type="text" value={clientOrg} onChange={(e) => setClientOrg(e.target.value)}
+                  placeholder="Override if AI cannot extract"
+                  className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors" />
+              </div>
+              {existingSows.length > 0 && (
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">Link to existing SOW? (version upload)</label>
+                  <select value={linkedSowId} onChange={(e) => setLinkedSowId(e.target.value)}
+                    className="w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 transition-colors">
+                    <option value="">No — create new SOW</option>
+                    {existingSows.map((s) => <option key={s.id} value={s.id}>{s.title} ({s.status})</option>)}
+                  </select>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -232,81 +220,31 @@ export default function SOWUploadPage() {
           {/* STATE 1: Drop zone */}
           {!selectedFile && !isParsing && !isComplete && (
             <motion.div variants={fadeUp}>
-              <motion.div
-                className={cn(
-                  "card-parchment cursor-pointer transition-colors duration-200 overflow-hidden",
-                  isDragging
-                    ? "border-2 border-dashed border-brown-400 bg-brown-50/60"
-                    : "border border-transparent"
-                )}
-                style={{ padding: "56px 40px" }}
-                animate={isDragging ? { scale: 1.01 } : { scale: 1 }}
-                transition={{ duration: 0.15 }}
+              <div
+                className={cn("card-parchment cursor-pointer transition-all duration-200", isDragging && "ring-2 ring-brown-200 border-dashed border-2 border-brown-300")}
+                style={{ padding: "64px 40px" }}
                 onClick={handleBrowseClick}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
               >
                 <div className="flex flex-col items-center text-center">
-                  {/* Animated icon */}
-                  <div className="relative mb-7">
-                    <motion.div
-                      className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center shadow-lg"
-                      animate={isDragging
-                        ? { y: -6, boxShadow: "0 16px 32px rgba(0,0,0,0.18)" }
-                        : { y: [0, -4, 0], boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }
-                      }
-                      transition={isDragging
-                        ? { duration: 0.2 }
-                        : { duration: 2.8, repeat: Infinity, ease: "easeInOut" }
-                      }
-                    >
-                      <FileUp className="w-7 h-7 text-white" />
-                    </motion.div>
-                    {/* Pulse ring */}
-                    <motion.div
-                      className="absolute inset-0 rounded-2xl border-2 border-brown-300"
-                      animate={{ opacity: [0.6, 0, 0.6], scale: [1, 1.35, 1] }}
-                      transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
-                    />
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center mb-6">
+                    <FileUp className="w-7 h-7 text-white" />
                   </div>
-
-                  <AnimatePresence mode="wait">
-                    {isDragging ? (
-                      <motion.div key="drag"
-                        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.15 }}
-                        className="flex flex-col items-center"
-                      >
-                        <h3 className="text-[17px] font-semibold text-brown-700 mb-1">Release to upload</h3>
-                        <p className="text-[13px] text-brown-500">Drop your SOW document here</p>
-                      </motion.div>
-                    ) : (
-                      <motion.div key="idle"
-                        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.15 }}
-                        className="flex flex-col items-center"
-                      >
-                        <h3 className="text-[17px] font-semibold text-gray-900 mb-1.5">Drop your SOW document here</h3>
-                        <p className="text-[13px] text-gray-400 mb-6">Our AI will instantly parse, extract, and structure every key clause</p>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleBrowseClick(); }}
-                          className="flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2.5 rounded-xl shadow-sm transition-all"
-                        >
-                          <Upload className="w-3.5 h-3.5" /> Browse Files
-                        </button>
-                        <div className="flex items-center gap-2 mt-5">
-                          {["PDF", "DOCX", "DOC"].map((fmt) => (
-                            <span key={fmt} className="text-[10px] font-medium text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">{fmt}</span>
-                          ))}
-                          <span className="w-1 h-1 rounded-full bg-gray-300" />
-                          <span className="text-[10px] text-gray-400">Up to 50 MB</span>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  <h3 className="text-[17px] font-semibold text-gray-900 mb-1.5">Drag & drop your SOW document</h3>
+                  <p className="text-[13px] text-gray-400 mb-6">or click anywhere to browse your files</p>
+                  <button onClick={(e) => { e.stopPropagation(); handleBrowseClick(); }}
+                    className="flex items-center gap-2 text-[12px] font-medium text-gray-500 px-5 py-2 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all">
+                    <Upload className="w-3.5 h-3.5" /> Browse Files
+                  </button>
+                  <div className="flex items-center gap-3 mt-5">
+                    <span className="text-[10px] text-gray-400">PDF, DOCX, DOC</span>
+                    <span className="w-1 h-1 rounded-full bg-gray-300" />
+                    <span className="text-[10px] text-gray-400">Max 50MB</span>
+                  </div>
                 </div>
-              </motion.div>
+              </div>
             </motion.div>
           )}
 
@@ -390,34 +328,32 @@ export default function SOWUploadPage() {
           {/* STATE 4: Complete — Results (NO budget/duration per EIR-001/002) */}
           <AnimatePresence>
             {isComplete && selectedFile && (
-              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
-                className="card-parchment overflow-hidden">
-
-                {/* Success header */}
-                <div className="flex items-center gap-4 px-6 py-5 border-b border-gray-100">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest-400 to-forest-600 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-5 h-5 text-white" />
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+                {/* Success banner */}
+                <div className="card-parchment px-6 py-5 mb-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest-400 to-forest-600 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] font-semibold text-gray-900">Parsing Complete</p>
+                      <p className="text-[12px] text-gray-400 mt-0.5">{selectedFile.name} · {getFileTypeLabel(selectedFile)} · {formatFileSize(selectedFile.size)}</p>
+                    </div>
+                    <span className="text-[10px] font-semibold text-forest-700 bg-forest-50 px-2.5 py-1 rounded-full">PARSING COMPLETE</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-gray-900">Parsing Complete</p>
-                    <p className="text-[12px] text-gray-400 mt-0.5">{selectedFile.name} · {getFileTypeLabel(selectedFile)} · {formatFileSize(selectedFile.size)}</p>
-                  </div>
-                  <span className="text-[10px] font-semibold text-forest-700 bg-forest-50 px-2.5 py-1 rounded-full shrink-0">PARSING COMPLETE</span>
                 </div>
 
                 {/* KPI cards — NO budget or duration */}
-                <div className="px-6 py-5 border-b border-gray-100">
-                  <KpiRow items={[
-                    { label: "Sections Detected", value: MOCK_RESULTS.sectionsDetected, icon: LayoutList, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
-                    { label: "AI Confidence", value: `${MOCK_RESULTS.aiConfidence}%`, icon: Sparkles, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
-                    { label: "Completeness", value: `${MOCK_RESULTS.gapScore}%`, icon: ShieldCheck, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
-                    { label: "Ambiguities", value: MOCK_RESULTS.ambiguities, icon: AlertTriangle, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
-                  ]} />
-                </div>
+                <KpiRow className="mb-5" items={[
+                  { label: "Sections Detected", value: MOCK_RESULTS.sectionsDetected, icon: LayoutList, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
+                  { label: "AI Confidence", value: `${MOCK_RESULTS.aiConfidence}%`, icon: Sparkles, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
+                  { label: "Completeness", value: `${MOCK_RESULTS.gapScore}%`, icon: ShieldCheck, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
+                  { label: "Ambiguities", value: MOCK_RESULTS.ambiguities, icon: AlertTriangle, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
+                ]} />
 
                 {/* Ambiguities warning */}
                 {MOCK_RESULTS.ambiguities > 0 && (
-                  <div className="px-6 py-4 border-b border-gray-100 bg-gold-50/60">
+                  <div className="rounded-2xl bg-gold-50 px-5 py-4 mb-5">
                     <div className="flex items-center gap-2 mb-1">
                       <AlertTriangle className="w-3.5 h-3.5 text-gold-600" />
                       <span className="text-[12px] font-semibold text-gold-700">{MOCK_RESULTS.ambiguities} ambiguities flagged</span>
@@ -427,9 +363,9 @@ export default function SOWUploadPage() {
                 )}
 
                 {/* Actions */}
-                <div className="flex items-center justify-between px-6 py-4 bg-gray-50/40">
+                <div className="flex items-center justify-between">
                   <button onClick={handleReset}
-                    className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-white hover:border-gray-300 transition-all uppercase">
+                    className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all uppercase">
                     <RotateCcw className="w-3 h-3" /> Upload Another
                   </button>
                   <button onClick={handleViewReport}

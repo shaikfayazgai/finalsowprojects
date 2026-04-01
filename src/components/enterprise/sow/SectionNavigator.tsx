@@ -22,54 +22,51 @@ interface SectionNavigatorProps {
 }
 
 export function SectionNavigator({ activeSection, sectionStatus, onSectionClick, className }: SectionNavigatorProps) {
-  const completedCount = SECTIONS.filter((s) => sectionStatus[s.key] === "complete").length;
-
   return (
-    <nav className={cn("card-parchment overflow-hidden", className)}>
-      {/* Nav header */}
-      <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between">
-        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sections</span>
-        <span className="text-[10px] font-semibold text-gray-500">{completedCount}/7</span>
-      </div>
+    <nav className={cn("space-y-1", className)}>
+      <div className="label-caps mb-3">Sections</div>
+      {SECTIONS.map((sec) => {
+        const status = sectionStatus[sec.key];
+        const isActive = activeSection === sec.key;
+        const isComplete = status === "complete";
+        const isPrePopulated = status === "pre_populated";
+        const isInProgress = status === "in_progress";
 
-      <div className="p-2 space-y-0.5">
-        {SECTIONS.map((sec) => {
-          const status = sectionStatus[sec.key];
-          const isActive = activeSection === sec.key;
-          const isComplete = status === "complete";
-
-          return (
-            <button
-              key={sec.key}
-              onClick={() => onSectionClick(sec.key)}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all",
-                isActive ? "bg-brown-50 border border-brown-200" : "hover:bg-gray-50 border border-transparent",
-              )}>
-              {/* Status indicator */}
-              {isComplete ? (
-                <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" />
-              ) : (
-                <span className={cn(
-                  "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
-                  isActive ? "bg-brown-500 text-white" : "bg-gray-100 text-gray-400",
-                )}>
-                  {sec.number}
-                </span>
-              )}
-
+        return (
+          <button
+            key={sec.key}
+            onClick={() => onSectionClick(sec.key)}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all",
+              isActive && "bg-brown-50 border border-brown-200",
+              !isActive && "hover:bg-gray-50",
+            )}
+          >
+            {/* Status icon */}
+            {isComplete ? (
+              <CheckCircle2 className="w-4.5 h-4.5 text-forest-500 shrink-0" />
+            ) : (
               <span className={cn(
-                "flex-1 text-[12px] font-medium truncate",
-                isActive ? "text-brown-700" : isComplete ? "text-forest-600" : "text-gray-600",
+                "w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0",
+                isActive ? "bg-brown-500 text-white" : "bg-gray-100 text-gray-400"
               )}>
-                {sec.label}
+                {sec.number}
               </span>
+            )}
 
-              {isActive && <ChevronRight className="w-3 h-3 text-brown-400 shrink-0" />}
-            </button>
-          );
-        })}
-      </div>
+            {/* Label */}
+            <span className={cn(
+              "flex-1 text-[12px] font-medium truncate",
+              isActive ? "text-brown-700" : isComplete ? "text-forest-700" : "text-gray-600"
+            )}>
+              {sec.label}
+            </span>
+
+            {/* Arrow for active */}
+            {isActive && <ChevronRight className="w-3.5 h-3.5 text-brown-400 shrink-0" />}
+          </button>
+        );
+      })}
     </nav>
   );
 }

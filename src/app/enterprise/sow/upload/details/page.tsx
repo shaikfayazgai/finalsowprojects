@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Save } from "lucide-react";
+import { ArrowRight, ArrowLeft, Save } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
@@ -128,7 +128,7 @@ export default function CommercialDetailsPage() {
       </motion.div>
 
       {/* Two-column layout */}
-      <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 items-start">
+      <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6">
         {/* Left: Section Navigator */}
         <SectionNavigator
           activeSection={activeSection}
@@ -138,20 +138,17 @@ export default function CommercialDetailsPage() {
         />
 
         {/* Right: Section Content */}
-        <div className="card-parchment overflow-hidden">
-          <ActiveSectionComponent
-            onComplete={handleSectionComplete}
-            onBack={
-              SECTION_ORDER.indexOf(activeSection) > 0
-                ? handleSectionBack
-                : () => router.push("/enterprise/sow/upload/gaps")
-            }
-          />
+        <div>
+          <ActiveSectionComponent onComplete={handleSectionComplete} onBack={SECTION_ORDER.indexOf(activeSection) > 0 ? handleSectionBack : undefined} />
         </div>
       </motion.div>
 
-      {/* Bottom action bar — Generate only (back is handled per-section) */}
-      <motion.div variants={fadeUp} className="flex items-center justify-end mt-8 pt-6" style={{ borderTop: "1px solid var(--border-soft)" }}>
+      {/* Bottom action bar */}
+      <motion.div variants={fadeUp} className="flex items-center justify-between mt-8 pt-6" style={{ borderTop: "1px solid var(--border-soft)" }}>
+        <button onClick={() => router.push("/enterprise/sow/upload/gaps")}
+          className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Gaps
+        </button>
         <button onClick={handleGenerate} disabled={!allComplete}
           className={cn(
             "flex items-center gap-2 text-[13px] font-semibold px-6 py-2.5 rounded-xl transition-all",
