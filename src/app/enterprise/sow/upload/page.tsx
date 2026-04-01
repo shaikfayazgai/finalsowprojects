@@ -250,49 +250,47 @@ export default function SOWUploadPage() {
           {!selectedFile && !isParsing && !isComplete && (
             <motion.div variants={fadeUp}>
               <div
-                onClick={handleBrowseClick}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
+                onClick={handleBrowseClick}
                 className={cn(
-                  "rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200",
+                  "rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 flex flex-col items-center justify-center text-center py-16 px-10",
                   isDragging
-                    ? "border-brown-400 bg-brown-50"
-                    : "border-gray-300 bg-gray-50/50 hover:border-brown-300 hover:bg-brown-50/30"
+                    ? "border-brown-400 bg-brown-50/60"
+                    : "border-gray-300 bg-white hover:border-brown-300"
                 )}
               >
-                {/* Top strip — icon + text */}
-                <div className="flex items-center gap-5 px-8 py-7 border-b border-dashed border-gray-200">
-                  <div className={cn(
-                    "w-14 h-14 rounded-xl flex items-center justify-center shrink-0 transition-colors",
-                    isDragging ? "bg-brown-100" : "bg-white border border-gray-200 shadow-sm"
-                  )}>
-                    <FileUp className={cn("w-6 h-6", isDragging ? "text-brown-600" : "text-gray-400")} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-gray-800">
-                      {isDragging ? "Release to upload" : "Drag & drop your SOW document"}
-                    </p>
-                    <p className="text-[12px] text-gray-400 mt-0.5">
-                      {isDragging ? "Drop the file anywhere in this area" : "PDF, DOCX, or DOC — up to 50 MB"}
-                    </p>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleBrowseClick(); }}
-                    className="shrink-0 flex items-center gap-2 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-500 to-brown-700 hover:from-brown-600 hover:to-brown-800 px-5 py-2.5 rounded-xl shadow-sm transition-all"
-                  >
-                    <Upload className="w-3.5 h-3.5" /> Browse Files
-                  </button>
+                {/* Icon */}
+                <div className={cn(
+                  "w-20 h-20 rounded-full flex items-center justify-center mb-6 transition-colors",
+                  isDragging ? "bg-brown-100" : "bg-gray-100"
+                )}>
+                  <FileUp className={cn("w-8 h-8 transition-colors", isDragging ? "text-brown-500" : "text-gray-400")} />
                 </div>
 
-                {/* Bottom strip — format info */}
-                <div className="flex items-center gap-3 px-8 py-3.5">
-                  <span className="text-[11px] text-gray-400 font-medium">Supported formats:</span>
-                  {["PDF", "DOCX", "DOC"].map((fmt) => (
-                    <span key={fmt} className="text-[10px] font-semibold text-gray-500 bg-white border border-gray-200 px-2.5 py-1 rounded-md shadow-sm">{fmt}</span>
-                  ))}
-                  <span className="ml-auto text-[11px] text-gray-400">Max file size: 50 MB</span>
-                </div>
+                {/* Title */}
+                <h3 className="text-[18px] font-bold text-gray-800 tracking-wide uppercase mb-2">
+                  {isDragging ? "Release to Upload" : "Drag & Drop Your SOW Document"}
+                </h3>
+
+                {/* Subtitle */}
+                <p className="text-[13px] text-gray-400 mb-6">
+                  {isDragging ? "Drop the file anywhere in this area" : "or click to browse your files"}
+                </p>
+
+                {/* Format info */}
+                <p className="text-[11px] font-medium text-gray-400 tracking-widest uppercase mb-8">
+                  PDF &nbsp;•&nbsp; DOCX &nbsp;•&nbsp; DOC &nbsp;•&nbsp; Max 50MB
+                </p>
+
+                {/* CTA button */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleBrowseClick(); }}
+                  className="w-64 flex items-center justify-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-brown-500 to-brown-700 hover:from-brown-600 hover:to-brown-800 py-3 rounded-xl shadow-sm transition-all uppercase tracking-wide"
+                >
+                  <Upload className="w-4 h-4" /> Upload & Parse
+                </button>
               </div>
             </motion.div>
           )}
