@@ -29,7 +29,7 @@ const CONTRIBUTOR_TYPES: {
 ];
 
 export function Step1Identity({
-  firstName, lastName, email,
+  firstName, setFirstName, lastName, setLastName, email,
   contribType, setContribType,
   country, setCountry,
   image,
@@ -44,11 +44,11 @@ export function Step1Identity({
         </span>
         <h2 className="text-2xl font-bold text-gray-900 font-heading">Basic Identity</h2>
         <p className="text-sm text-gray-500 mt-2 leading-relaxed">
-          Select your contributor type and optionally add your mobile number to speed up verification.
+          Confirm your name, select your contributor type, and set your country.
         </p>
       </div>
 
-      {/* SSO identity summary */}
+      {/* SSO identity badge */}
       <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-200 mb-5">
         {image ? (
           <img src={image} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-sm shrink-0" />
@@ -58,7 +58,6 @@ export function Step1Identity({
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-900 truncate">{firstName} {lastName}</p>
           <p className="text-xs text-gray-500 truncate">{email}</p>
         </div>
         <span className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-teal-600 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full whitespace-nowrap">
@@ -68,6 +67,33 @@ export function Step1Identity({
       </div>
 
       <div className="space-y-5">
+        {/* Name fields */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700">
+              First Name <span className="text-red-400">*</span>
+            </Label>
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="First name"
+              className="w-full text-sm text-gray-800 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-teal-400 transition-colors"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700">
+              Last Name <span className="text-red-400">*</span>
+            </Label>
+            <input
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Last name"
+              className="w-full text-sm text-gray-800 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-teal-400 transition-colors"
+            />
+          </div>
+        </div>
         {/* Contributor Type */}
         <div className="space-y-2">
           <Label className="text-sm font-medium text-gray-700">

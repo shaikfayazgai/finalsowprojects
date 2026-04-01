@@ -61,7 +61,7 @@ export function useRegistration(ssoData?: SSOData | null) {
   const [emailOtpSent,      setEmailOtpSent]      = useState(false);
   const [emailOtp,          setEmailOtp]          = useState("");
   const [emailCooldown,     setEmailCooldown]     = useState(0);
-  const [emailVerified,     setEmailVerified]     = useState(() => !!ssoData);
+  const [emailVerified,     setEmailVerified]     = useState(false);
   const [emailOtpLoading,   setEmailOtpLoading]   = useState(false);
 
   const [ndaAccepted,     setNdaAccepted]     = useState(false);
@@ -184,9 +184,9 @@ export function useRegistration(ssoData?: SSOData | null) {
   }
 
   function goToStep2() {
-    if (!firstName.trim())    { setError("Please enter your first name"); return; }
+    if (!firstName.trim())               { setError("Please enter your first name"); return; }
     if (!lastName.trim())     { setError("Please enter your last name"); return; }
-    if (!email)               { setError("Please enter a valid email address"); return; }
+    if (!email)                          { setError("Please enter a valid email address"); return; }
     if (!isSsoUser) {
       if (password.length < 8)  { setError("Password must be at least 8 characters with a number and mixed case"); return; }
       if (password !== confirm) { setError("Passwords do not match - please re-enter"); return; }
@@ -208,7 +208,7 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     if (primarySkills.length < 1) { setError("Please add at least one primary skill"); return; }
     if (!availability) { setError("Please enter your weekly availability (hours)"); return; }
-    if (!isSsoUser && !mentorAck) { setError("Please acknowledge the Reviewer / Mentor requirement to proceed"); return; }
+    if (!mentorAck) { setError("Please acknowledge the Reviewer / Mentor requirement to proceed"); return; }
     setError("");
     setStep(3);
   }
