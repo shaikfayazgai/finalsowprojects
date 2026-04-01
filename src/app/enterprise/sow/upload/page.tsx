@@ -17,7 +17,7 @@ import { RecentUploads } from "./components/RecentUploads";
 import { aiPoweredFeatures } from "@/mocks/data/sow-upload-flow";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import { useSOWUploadStore, setFileObjectUrl } from "@/lib/stores/sow-upload-store";
-import { validateSOWUploadFields, type SOWUploadFieldErrors } from "@/lib/validations/sow-upload";
+import { validateSOWUploadFields, validateSOWField, type SOWUploadFieldErrors } from "@/lib/validations/sow-upload";
 
 /* ═══ Parsing stages ═══ */
 
@@ -94,6 +94,7 @@ export default function SOWUploadPage() {
   const [clientOrg, setClientOrg] = React.useState(store.clientOrganisation);
   const [linkedSowId, setLinkedSowId] = React.useState(store.linkedSowId || "none");
   const [fieldErrors, setFieldErrors] = React.useState<SOWUploadFieldErrors>({});
+  const [touched, setTouched] = React.useState<{ projectTitle?: boolean; clientOrg?: boolean }>({});
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const isParsing = parsingStage !== null && parsingStage !== "complete";
@@ -198,22 +199,56 @@ export default function SOWUploadPage() {
                       Project Title <span className="text-red-400">*</span>
                     </label>
                     <input type="text" value={projectTitle}
-                      onChange={(e) => { setProjectTitle(e.target.value); if (fieldErrors.projectTitle) setFieldErrors((p) => ({ ...p, projectTitle: undefined })); }}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setProjectTitle(val);
+                        if (touched.projectTitle) {
+                          setFieldErrors((p) => ({ ...p, projectTitle: validateSOWField("projectTitle", val) }));
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouched((p) => ({ ...p, projectTitle: true }));
+                        setFieldErrors((p) => ({ ...p, projectTitle: validateSOWField("projectTitle", projectTitle) }));
+                      }}
                       placeholder="e.g. HealthTech Patient Portal"
                       className={cn("w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border bg-white outline-none focus:border-brown-300 transition-colors",
                         fieldErrors.projectTitle ? "border-red-300 bg-red-50/30" : "border-gray-200")} />
-                    {fieldErrors.projectTitle && <p className="text-[11px] text-red-500 mt-1">{fieldErrors.projectTitle}</p>}
+                    <AnimatePresence>
+                      {fieldErrors.projectTitle && (
+                        <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}
+                          className="text-[11px] text-red-500 mt-1">
+                          {fieldErrors.projectTitle}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
                   </div>
                   <div>
                     <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">
                       Client / Organisation <span className="text-red-400">*</span>
                     </label>
                     <input type="text" value={clientOrg}
-                      onChange={(e) => { setClientOrg(e.target.value); if (fieldErrors.clientOrg) setFieldErrors((p) => ({ ...p, clientOrg: undefined })); }}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setClientOrg(val);
+                        if (touched.clientOrg) {
+                          setFieldErrors((p) => ({ ...p, clientOrg: validateSOWField("clientOrg", val) }));
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouched((p) => ({ ...p, clientOrg: true }));
+                        setFieldErrors((p) => ({ ...p, clientOrg: validateSOWField("clientOrg", clientOrg) }));
+                      }}
                       placeholder="e.g. MedCare Solutions Pvt. Ltd."
                       className={cn("w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border bg-white outline-none focus:border-brown-300 transition-colors",
                         fieldErrors.clientOrg ? "border-red-300 bg-red-50/30" : "border-gray-200")} />
-                    {fieldErrors.clientOrg && <p className="text-[11px] text-red-500 mt-1">{fieldErrors.clientOrg}</p>}
+                    <AnimatePresence>
+                      {fieldErrors.clientOrg && (
+                        <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}
+                          className="text-[11px] text-red-500 mt-1">
+                          {fieldErrors.clientOrg}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
                   </div>
                   <div className="sm:col-span-2">
                     <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">

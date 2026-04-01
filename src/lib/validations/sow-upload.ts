@@ -30,3 +30,13 @@ export function validateSOWUploadFields(data: SOWUploadFields): SOWUploadFieldEr
   }
   return errors;
 }
+
+/** Validate a single field and return its error message (or undefined if valid). */
+export function validateSOWField(
+  field: keyof SOWUploadFields,
+  value: string,
+): string | undefined {
+  const result = sowUploadSchema.shape[field].safeParse(value);
+  if (result.success) return undefined;
+  return result.error.issues[0]?.message;
+}
