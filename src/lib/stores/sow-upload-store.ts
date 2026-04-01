@@ -14,6 +14,24 @@ import type {
   ApprovalAuthorities,
 } from "@/types/enterprise";
 
+/* ── File Object URL (module-level, not serialized to localStorage) ──
+   Object URLs created via URL.createObjectURL() are valid only within the
+   current browser session. They cannot be persisted to localStorage, so
+   we store them outside the Zustand persist middleware. */
+let _fileObjectUrl: string | null = null;
+
+export function setFileObjectUrl(url: string) {
+  if (_fileObjectUrl) URL.revokeObjectURL(_fileObjectUrl);
+  _fileObjectUrl = url;
+}
+export function getFileObjectUrl(): string | null {
+  return _fileObjectUrl;
+}
+export function clearFileObjectUrl() {
+  if (_fileObjectUrl) URL.revokeObjectURL(_fileObjectUrl);
+  _fileObjectUrl = null;
+}
+
 /* ── Default form shape ── */
 
 const emptyCommercialDetails: CommercialDetailsForm = {
@@ -214,8 +232,9 @@ export const useSOWUploadStore = create<SOWUploadState>()(
       setLastAutoSaved: (ts) => set({ lastAutoSaved: ts }),
 
       /* Reset */
-      reset: () =>
-        set({
+      reset: () => {
+        clearFileObjectUrl();
+        return set({
           currentFlowStep: 1,
           uploadedFile: null,
           projectTitle: "",
@@ -231,7 +250,8 @@ export const useSOWUploadStore = create<SOWUploadState>()(
           generationState: "idle",
           previewState: null,
           lastAutoSaved: null,
-        }),
+        });
+      },
     }),
     { name: "gt-sow-upload" }
   )

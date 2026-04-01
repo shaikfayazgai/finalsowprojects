@@ -11,6 +11,7 @@ import {
   Circle, Sparkles, Award, Send, Paperclip, Link2, Star,
   ArrowRight, RotateCcw, Timer, Check, X,
   GraduationCap, TrendingUp, Eye, Ban, Lightbulb, Package,
+  Flag, Scale,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
@@ -86,6 +87,7 @@ export default function ContributorTaskDetailPage() {
 
   const [taskStatus, setTaskStatus] = React.useState<ContributorTaskStatus>(task.status as ContributorTaskStatus);
   const [showAcceptDialog, setShowAcceptDialog] = React.useState(false);
+  const [acceptStep, setAcceptStep] = React.useState<"workload" | "confirm">("workload");
   const [showDeclineDialog, setShowDeclineDialog] = React.useState(false);
   const [declineReason, setDeclineReason] = React.useState("");
   const [declineNotes, setDeclineNotes] = React.useState("");
@@ -96,6 +98,20 @@ export default function ContributorTaskDetailPage() {
   const [checklist, setChecklist] = React.useState(workroom?.evidenceChecklist || []);
   const [uploads, setUploads] = React.useState(workroom?.uploads || []);
   const [uploadFileName, setUploadFileName] = React.useState("");
+
+  /* ─── Change Request Flagging (FSD §9.3.2) ─── */
+  const [showFlagDialog, setShowFlagDialog] = React.useState(false);
+  const [flagTargetMsgId, setFlagTargetMsgId] = React.useState<string | null>(null);
+  const [flagExplanation, setFlagExplanation] = React.useState("");
+  const [flaggedMessages, setFlaggedMessages] = React.useState<Set<string>>(new Set());
+
+  /* ─── Dispute Flow (FSD §15.1) ─── */
+  const [showDisputeDialog, setShowDisputeDialog] = React.useState(false);
+  const [disputeCategory, setDisputeCategory] = React.useState("");
+  const [disputeDescription, setDisputeDescription] = React.useState("");
+  const [disputeFileName, setDisputeFileName] = React.useState("");
+  const [disputeSubmitted, setDisputeSubmitted] = React.useState(false);
+  const [disputeId, setDisputeId] = React.useState("");
 
   const sc = statusCfg[taskStatus] || statusCfg.available;
   const pc = prioCfg[task.priority] || prioCfg.medium;
@@ -110,8 +126,16 @@ export default function ContributorTaskDetailPage() {
     setQaMessages((prev: any[]) => [...prev, { id: `qa-user-${Date.now()}`, sender: "contributor", senderName: "You", message: qaInput.trim(), sentAt: new Date().toISOString() }]);
     setQaInput("");
     setTimeout(() => {
-      setQaMessages((prev: any[]) => [...prev, { id: `qa-ai-${Date.now()}`, sender: "ai", senderName: "Contributor Support Assistant", message: "Thanks for your question! Based on the acceptance criteria, I'd recommend focusing on the evidence checklist items first — they map directly to the rubric reviewers will use.", sentAt: new Date().toISOString() }]);
-    }, 500);
+      setQaMessages((prev: any[]) => [...prev, {
+        id: `qa-resp-${Date.now()}`,
+        sender: "reviewer",
+        senderRole: "reviewer",
+        senderName: "Assigned Reviewer",
+        message: "Thank you for your message. I'll review and respond shortly.",
+        sentAt: new Date(Date.now() + 2000).toISOString(),
+        isAI: false,
+      }]);
+    }, 2000);
   }
 
   return (
@@ -214,10 +238,11 @@ export default function ContributorTaskDetailPage() {
                 <p className="text-[14px] font-semibold text-gray-800">Ready to take on this task?</p>
                 <p className="text-[12px] text-gray-400 mt-0.5">Once accepted, you commit to delivering by {fmtDate(task.slaDeadline)}.</p>
               </div>
-              <button onClick={() => setShowAcceptDialog(true)}
-                className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all shrink-0"
+              <button onClick={() => { setAcceptStep("workload"); setShowAcceptDialog(true); }}
+                aria-label="Accept this task"
+                className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all shrink-0 focus:ring-2 focus:ring-teal-500 focus:outline-none"
                 style={{ boxShadow: "0 2px 8px color-mix(in srgb, var(--color-brown-500) 25%, transparent)" }}>
-                <CheckCircle2 className="w-4 h-4" /> Accept Task
+                <CheckCircle2 className="w-4 h-4" aria-hidden="true" /> Accept Task
               </button>
             </div>
           </motion.div>
@@ -241,11 +266,12 @@ export default function ContributorTaskDetailPage() {
                 <p className="text-[11px] text-gray-500">Start working to open your workroom with instructions, resources, and Q&A.</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button onClick={() => setShowDeclineDialog(true)} className="text-[12px] font-medium text-gray-400 px-4 py-2 rounded-xl border border-gray-200 hover:bg-white transition-all">Decline</button>
+                <button onClick={() => setShowDeclineDialog(true)} aria-label="Decline this task assignment" className="text-[12px] font-medium text-gray-400 px-4 py-2 rounded-xl border border-gray-200 hover:bg-white transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none">Decline</button>
                 <button onClick={() => setTaskStatus("in_progress")}
-                  className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2.5 rounded-xl transition-all"
+                  aria-label="Start working on this task"
+                  className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2.5 rounded-xl transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none"
                   style={{ boxShadow: "0 2px 8px color-mix(in srgb, var(--color-brown-500) 25%, transparent)" }}>
-                  <ArrowRight className="w-4 h-4" /> Start Working
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" /> Start Working
                 </button>
               </div>
             </div>
@@ -357,22 +383,57 @@ export default function ContributorTaskDetailPage() {
                 {qaMessages.length > 0 ? (
                   <div className="max-h-[360px] overflow-y-auto py-1">
                     {qaMessages.map((msg: any, i: number) => {
-                      const isAI = msg.sender === "ai";
-                      const isReviewer = msg.sender === "reviewer";
+                      const isReviewer = msg.sender === "reviewer" || msg.senderRole === "reviewer";
+                      const isMentor = msg.sender === "mentor" || msg.senderRole === "mentor";
+                      const isSupport = msg.sender === "support" || msg.senderRole === "support";
+                      const isEnterprise = msg.senderRole === "enterprise_admin" || msg.senderRole === "client";
+                      const isContributor = msg.sender === "contributor";
+                      /* FSD §9.3.1: Sender label mapping */
+                      const senderLabel = isContributor ? "You"
+                        : isEnterprise ? "Client Team"
+                        : isSupport ? "GlimmoraTeam Support"
+                        : isMentor ? "Mentor"
+                        : isReviewer ? "Reviewer"
+                        : msg.senderName || msg.sender;
+                      const senderIcon = isReviewer ? <ShieldCheck className="w-3.5 h-3.5 text-gold-500" aria-hidden="true" />
+                        : isMentor ? <GraduationCap className="w-3.5 h-3.5 text-teal-500" aria-hidden="true" />
+                        : isSupport ? <Star className="w-3.5 h-3.5 text-forest-500" aria-hidden="true" />
+                        : isEnterprise ? <Award className="w-3.5 h-3.5 text-brown-500" aria-hidden="true" />
+                        : <User className="w-3.5 h-3.5 text-brown-500" aria-hidden="true" />;
+                      const senderBg = isReviewer ? "bg-gold-50" : isMentor ? "bg-teal-50" : isSupport ? "bg-forest-50" : isEnterprise ? "bg-brown-50" : "bg-brown-50";
                       return (
                         <div key={msg.id} className="px-5 py-3" style={{ borderBottom: i < qaMessages.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
                           <div className="flex items-start gap-3">
-                            <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
-                              isAI ? "bg-teal-50" : isReviewer ? "bg-gold-50" : "bg-brown-50")}>
-                              {isAI ? <Bot className="w-3.5 h-3.5 text-teal-500" /> : isReviewer ? <ShieldCheck className="w-3.5 h-3.5 text-gold-500" /> : <User className="w-3.5 h-3.5 text-brown-500" />}
+                            <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5", senderBg)}>
+                              {senderIcon}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[11px] font-semibold text-gray-700">{msg.sender === "contributor" ? "You" : msg.senderName || msg.sender}</span>
-                                {isAI && <span className="text-[9px] font-semibold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded">AI</span>}
+                                <span className="text-[11px] font-semibold text-gray-700">{senderLabel}</span>
+                                {isReviewer && <span className="text-[9px] font-semibold text-gold-600 bg-gold-50 px-1.5 py-0.5 rounded">Reviewer</span>}
+                                {isEnterprise && <span className="text-[9px] font-semibold text-brown-600 bg-brown-50 px-1.5 py-0.5 rounded">Client</span>}
+                                {isSupport && <span className="text-[9px] font-semibold text-forest-600 bg-forest-50 px-1.5 py-0.5 rounded">Support</span>}
                                 <span className="text-[10px] text-gray-400 ml-auto">{fmtDateTime(msg.sentAt)}</span>
                               </div>
                               <p className="text-[12px] text-gray-600 leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                              {/* Change Request Flag (FSD §9.3.2) — only on reviewer/mentor messages */}
+                              {(msg.sender === "reviewer" || msg.sender === "mentor") && (
+                                <div className="flex items-center gap-2 mt-2">
+                                  {flaggedMessages.has(msg.id) ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-gold-700 bg-gold-50 px-2 py-0.5 rounded-full" role="status">
+                                      <Flag className="w-3 h-3" aria-hidden="true" /> Change Request Flagged
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => { setFlagTargetMsgId(msg.id); setShowFlagDialog(true); }}
+                                      aria-label={`Flag message from ${msg.senderName || msg.sender} as change request`}
+                                      className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-400 hover:text-gold-600 hover:bg-gold-50 px-2 py-0.5 rounded-full transition-colors focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                                    >
+                                      <Flag className="w-3 h-3" aria-hidden="true" /> Flag as Change Request
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -382,16 +443,18 @@ export default function ContributorTaskDetailPage() {
                 ) : (
                   <div className="px-5 py-8 text-center">
                     <MessageSquare className="w-5 h-5 text-gray-300 mx-auto mb-2" />
-                    <p className="text-[12px] text-gray-400">Ask a question to get help from the AI assistant or project team.</p>
+                    <p className="text-[12px] text-gray-400">Ask a question to communicate directly with your assigned Reviewer.</p>
                   </div>
                 )}
                 <div className="px-5 py-3" style={{ borderTop: "1px solid var(--border-soft)" }}>
                   <div className="flex items-center gap-2">
-                    <input type="text" placeholder="Ask a question..." value={qaInput} onChange={(e) => setQaInput(e.target.value)}
+                    <label htmlFor="qa-input" className="sr-only">Ask a question</label>
+                    <input id="qa-input" type="text" placeholder="Ask a question..." value={qaInput} onChange={(e) => setQaInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") sendQA(); }}
-                      className="flex-1 text-[12px] text-gray-700 placeholder:text-gray-400 bg-white border border-gray-200 hover:border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" />
-                    <button onClick={() => setShowUploadDialog(true)} className="p-2.5 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all"><Paperclip className="w-3.5 h-3.5" /></button>
-                    <button onClick={sendQA} className="p-2.5 rounded-xl bg-gradient-to-r from-brown-400 to-brown-600 text-white transition-all"><Send className="w-3.5 h-3.5" /></button>
+                      aria-label="Ask a question in Q&A thread"
+                      className="flex-1 text-[12px] text-gray-700 placeholder:text-gray-400 bg-white border border-gray-200 hover:border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-brown-300 transition-all" />
+                    <button onClick={() => setShowUploadDialog(true)} aria-label="Attach file to message" className="p-2.5 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none"><Paperclip className="w-3.5 h-3.5" aria-hidden="true" /></button>
+                    <button onClick={sendQA} aria-label="Send message" className="p-2.5 rounded-xl bg-gradient-to-r from-brown-400 to-brown-600 text-white transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none"><Send className="w-3.5 h-3.5" aria-hidden="true" /></button>
                   </div>
                 </div>
               </Section>
@@ -450,9 +513,10 @@ export default function ContributorTaskDetailPage() {
                 <p className="text-[13px] font-semibold text-gray-800 mb-1">Ready to submit?</p>
                 <p className="text-[11px] text-gray-400 mb-4">{totalChecklist > 0 ? `${completedChecklist}/${totalChecklist} evidence items complete` : "Ensure all deliverables are uploaded."}</p>
                 <button onClick={() => setShowSubmitDialog(true)}
-                  className="w-full flex items-center justify-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all"
+                  aria-label="Submit task for review"
+                  className="w-full flex items-center justify-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none"
                   style={{ boxShadow: "0 2px 8px color-mix(in srgb, var(--color-brown-500) 25%, transparent)" }}>
-                  <Send className="w-4 h-4" /> Submit for Review
+                  <Send className="w-4 h-4" aria-hidden="true" /> Submit for Review
                 </button>
               </div>
             </div>
@@ -633,12 +697,30 @@ export default function ContributorTaskDetailPage() {
                 <p className="text-[13px] font-semibold text-gray-800">Changes Requested</p>
                 <p className="text-[11px] text-gray-500">Revisions needed before acceptance.{task.reworkDeadline && <> Deadline: <span className="font-semibold text-gray-700">{fmtDate(task.reworkDeadline)}</span></>}</p>
               </div>
-              <button onClick={() => setShowSubmitDialog(true)}
-                className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2.5 rounded-xl transition-all shrink-0">
-                <Send className="w-4 h-4" /> Resubmit
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={() => setShowDisputeDialog(true)}
+                  aria-label="Dispute this rework decision"
+                  className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-white hover:text-gray-700 transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                  <Scale className="w-4 h-4" aria-hidden="true" /> Dispute This Decision
+                </button>
+                <button onClick={() => setShowSubmitDialog(true)}
+                  aria-label="Resubmit your work for review"
+                  className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2.5 rounded-xl transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                  <Send className="w-4 h-4" aria-hidden="true" /> Resubmit
+                </button>
+              </div>
             </div>
           </motion.div>
+
+          {/* Dispute success banner */}
+          {disputeSubmitted && (
+            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-5" role="alert">
+              <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl bg-forest-50 border border-forest-200">
+                <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" aria-hidden="true" />
+                <p className="text-[13px] font-medium text-forest-700">Dispute {disputeId} submitted. GlimmoraTeam Admin will review within 48 hours.</p>
+              </div>
+            </motion.div>
+          )}
 
           <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-5 gap-5">
             <div className="lg:col-span-3 space-y-5">
@@ -646,8 +728,8 @@ export default function ContributorTaskDetailPage() {
               <Section title="Reviewer Feedback">
                 <div className="px-5 py-4">
                   {task.reworkReason && (
-                    <div className="flex items-start gap-3 p-3 rounded-xl mb-3" style={{ background: "var(--danger-light)" }}>
-                      <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-3 p-3 rounded-xl mb-3" style={{ background: "var(--danger-light)" }} role="alert">
+                      <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" aria-hidden="true" />
                       <p className="text-[12px] text-red-700 leading-relaxed">{task.reworkReason}</p>
                     </div>
                   )}
@@ -751,27 +833,164 @@ export default function ContributorTaskDetailPage() {
 
       {/* ═══ DIALOGS ═══ */}
 
-      {showAcceptDialog && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowAcceptDialog(false)}>
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
-            className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center"><CheckCircle2 className="w-5 h-5 text-white" /></div>
-              <h3 className="text-[16px] font-heading font-semibold text-gray-900">Accept this task?</h3>
-            </div>
-            <p className="text-[13px] font-medium text-gray-800 mb-1">{task.title}</p>
-            <p className="text-[12px] text-gray-400 mb-4">{task.estimatedHours}h · {fmt$(task.pricing.amount)} · Due {fmtDate(task.slaDeadline)}</p>
-            <div className="bg-gold-50 rounded-xl px-4 py-3 mb-5">
-              <p className="text-[12px] text-gold-700">By accepting, you commit to delivering by <span className="font-semibold">{fmtDate(task.slaDeadline)}</span>.</p>
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <button onClick={() => setShowAcceptDialog(false)} className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Cancel</button>
-              <button onClick={() => { setTaskStatus("assigned"); setShowAcceptDialog(false); }}
-                className="text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">Confirm</button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+      {showAcceptDialog && (() => {
+        /* Mock workload capacity data (FSD 7.4 — Workload Impact Confirmation) */
+        const currentWeeklyHours = 18;
+        const maxWeeklyHours = 25;
+        const activeTasksCount = 3;
+        const newTaskHours = task.estimatedHours;
+        const projectedHours = currentWeeklyHours + newTaskHours;
+        const projectedUtilization = Math.min(Math.round((projectedHours / maxWeeklyHours) * 100), 100);
+        const capacityAvailable = projectedUtilization <= 75;
+        const atRisk = projectedUtilization > 75 && projectedUtilization <= 90;
+        const overCapacity = projectedUtilization > 90;
+        const hasSlaOverlap = daysUntil(task.slaDeadline) <= 5;
+
+        return (
+          <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowAcceptDialog(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
+              className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+
+              {/* Header with step indicator */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-heading font-semibold text-gray-900">
+                    {acceptStep === "workload" ? "Workload Impact" : "Confirm Acceptance"}
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className={cn("w-2 h-2 rounded-full transition-colors", acceptStep === "workload" ? "bg-brown-500" : "bg-gray-200")} />
+                    <span className={cn("w-2 h-2 rounded-full transition-colors", acceptStep === "confirm" ? "bg-brown-500" : "bg-gray-200")} />
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[13px] font-medium text-gray-800 mb-1">{task.title}</p>
+              <p className="text-[12px] text-gray-400 mb-4">{task.estimatedHours}h · {fmt$(task.pricing.amount)} · Due {fmtDate(task.slaDeadline)}</p>
+
+              {acceptStep === "workload" && (
+                <>
+                  {/* Workload Impact Detail */}
+                  <div className="rounded-xl border border-gray-100 overflow-hidden mb-4">
+                    <div className="px-4 py-2.5 bg-gray-50" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+                      <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Capacity Overview</span>
+                    </div>
+
+                    {/* Current vs Max hours */}
+                    <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[12px] text-gray-500">Current weekly hours</span>
+                        <span className="text-[12px] font-semibold text-gray-700">{currentWeeklyHours} / {maxWeeklyHours} hrs this week</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-teal-400 to-teal-500 transition-all"
+                          style={{ width: `${(currentWeeklyHours / maxWeeklyHours) * 100}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Active tasks */}
+                    <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+                      <span className="text-[12px] text-gray-500">Active tasks</span>
+                      <span className="text-[12px] font-semibold text-gray-700">{activeTasksCount}</span>
+                    </div>
+
+                    {/* New task hours */}
+                    <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+                      <span className="text-[12px] text-gray-500">New task hours to add</span>
+                      <span className="text-[12px] font-semibold text-brown-600">+{newTaskHours}h</span>
+                    </div>
+
+                    {/* Projected utilization with animated bar */}
+                    <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[12px] text-gray-500">Projected utilization</span>
+                        <span className={cn("text-[13px] font-bold font-mono",
+                          overCapacity ? "text-red-500" : atRisk ? "text-gold-600" : "text-forest-600"
+                        )}>
+                          {projectedUtilization}%
+                        </span>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
+                        <motion.div
+                          initial={{ width: `${(currentWeeklyHours / maxWeeklyHours) * 100}%` }}
+                          animate={{ width: `${Math.min(projectedUtilization, 100)}%` }}
+                          transition={{ duration: 0.6, ease: "easeOut" }}
+                          className={cn("h-full rounded-full",
+                            overCapacity ? "bg-gradient-to-r from-red-400 to-red-500"
+                              : atRisk ? "bg-gradient-to-r from-gold-400 to-gold-500"
+                              : "bg-gradient-to-r from-forest-400 to-forest-500"
+                          )}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-[10px] text-gray-400">{projectedHours}h projected</span>
+                        <span className="text-[10px] text-gray-400">{maxWeeklyHours}h max</span>
+                      </div>
+                    </div>
+
+                    {/* SLA overlap warning */}
+                    {hasSlaOverlap && (
+                      <div className="flex items-start gap-2.5 px-4 py-3 bg-gold-50/50" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+                        <AlertTriangle className="w-4 h-4 text-gold-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-[11px] font-semibold text-gold-700">SLA Overlap Warning</p>
+                          <p className="text-[10px] text-gold-600 mt-0.5">This task&apos;s deadline is within 5 days and may overlap with other active SLAs.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Capacity status indicator */}
+                    <div className="px-4 py-3">
+                      {capacityAvailable ? (
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" />
+                          <span className="text-[12px] font-medium text-forest-700">Capacity available — you can take this task</span>
+                        </div>
+                      ) : atRisk ? (
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-gold-500 shrink-0" />
+                          <span className="text-[12px] font-medium text-gold-700">Capacity at risk — consider your current workload</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                          <span className="text-[12px] font-medium text-red-700">Over capacity — accepting may impact delivery quality</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2">
+                    <button onClick={() => setShowAcceptDialog(false)}
+                      className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Cancel</button>
+                    <button onClick={() => setAcceptStep("confirm")}
+                      className="text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">
+                      Continue
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {acceptStep === "confirm" && (
+                <>
+                  <div className="bg-gold-50 rounded-xl px-4 py-3 mb-5">
+                    <p className="text-[12px] text-gold-700">By accepting, you commit to delivering by <span className="font-semibold">{fmtDate(task.slaDeadline)}</span>.</p>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <button onClick={() => setAcceptStep("workload")}
+                      className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Back</button>
+                    <button onClick={() => { setTaskStatus("assigned"); setShowAcceptDialog(false); }}
+                      className="text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">Confirm Acceptance</button>
+                  </div>
+                </>
+              )}
+
+            </motion.div>
+          </div>
+        );
+      })()}
 
       {showDeclineDialog && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowDeclineDialog(false)}>
@@ -836,27 +1055,163 @@ export default function ContributorTaskDetailPage() {
       {showUploadDialog && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowUploadDialog(false)}>
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
-            className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-[16px] font-heading font-semibold text-gray-900 mb-4">Upload File</h3>
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}
+            role="dialog" aria-labelledby="upload-dialog-title">
+            <h3 id="upload-dialog-title" className="text-[16px] font-heading font-semibold text-gray-900 mb-4">Upload File</h3>
             <div className="space-y-3 mb-5">
               <div>
-                <label className="text-[11px] font-medium text-gray-500 mb-1 block">File Name</label>
-                <input type="text" placeholder="e.g. deliverable-v2.zip" value={uploadFileName} onChange={(e) => setUploadFileName(e.target.value)}
-                  className="w-full text-[12px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brown-200 focus:border-brown-300 transition-all" />
+                <label htmlFor="upload-file-name" className="text-[11px] font-medium text-gray-500 mb-1 block">File Name</label>
+                <input id="upload-file-name" type="text" placeholder="e.g. deliverable-v2.zip" value={uploadFileName} onChange={(e) => setUploadFileName(e.target.value)}
+                  aria-label="File name for upload"
+                  className="w-full text-[12px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-brown-300 transition-all" />
               </div>
               <div>
-                <label className="text-[11px] font-medium text-gray-500 mb-1 block">File</label>
-                <input type="file" className="w-full text-[12px] text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 file:mr-3 file:text-[11px] file:font-medium file:bg-brown-50 file:text-brown-600 file:border-0 file:rounded-lg file:px-3 file:py-1 file:cursor-pointer" />
+                <label htmlFor="upload-file-input" className="text-[11px] font-medium text-gray-500 mb-1 block">File</label>
+                <input id="upload-file-input" type="file" aria-label="Choose file to upload" className="w-full text-[12px] text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 file:mr-3 file:text-[11px] file:font-medium file:bg-brown-50 file:text-brown-600 file:border-0 file:rounded-lg file:px-3 file:py-1 file:cursor-pointer focus:ring-2 focus:ring-teal-500 focus:outline-none" />
               </div>
             </div>
             <div className="flex items-center justify-end gap-2">
               <button onClick={() => { setShowUploadDialog(false); setUploadFileName(""); }}
-                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Cancel</button>
+                aria-label="Cancel upload"
+                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none">Cancel</button>
               <button onClick={() => {
                 const name = uploadFileName.trim() || `upload-${Date.now()}.zip`;
                 setUploads((prev: any[]) => [...prev, { id: `upload-${Date.now()}`, fileName: name, fileSize: Math.floor(Math.random() * 500000) + 50000, fileType: "application/zip", uploadedAt: new Date().toISOString(), uploadedBy: "contrib-001", url: `/uploads/${name}`, category: "deliverable" as const }]);
                 setShowUploadDialog(false); setUploadFileName("");
-              }} className="text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">Upload</button>
+              }} aria-label="Confirm upload" className="text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none">Upload</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ═══ FLAG CHANGE REQUEST DIALOG (FSD §9.3.2) ═══ */}
+      {showFlagDialog && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => { setShowFlagDialog(false); setFlagExplanation(""); }}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}
+            role="dialog" aria-labelledby="flag-dialog-title">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center">
+                <Flag className="w-5 h-5 text-white" aria-hidden="true" />
+              </div>
+              <h3 id="flag-dialog-title" className="text-[16px] font-heading font-semibold text-gray-900">Flag as Scope Change</h3>
+            </div>
+            <p className="text-[12px] text-gray-500 leading-relaxed mb-4">
+              This will notify GlimmoraTeam Admin that this reviewer message may constitute a scope change beyond the original task brief.
+            </p>
+            <div className="mb-5">
+              <label htmlFor="flag-explanation" className="text-[11px] font-medium text-gray-500 mb-1 block">Explanation (optional)</label>
+              <textarea
+                id="flag-explanation"
+                value={flagExplanation}
+                onChange={(e) => setFlagExplanation(e.target.value)}
+                placeholder="Describe why you believe this is a scope change..."
+                rows={3}
+                aria-label="Explanation for why this message constitutes a scope change"
+                className="w-full text-[12px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-brown-300 transition-all resize-none"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => { setShowFlagDialog(false); setFlagExplanation(""); setFlagTargetMsgId(null); }}
+                aria-label="Cancel flagging"
+                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none">Cancel</button>
+              <button onClick={() => {
+                if (flagTargetMsgId) {
+                  setFlaggedMessages((prev) => new Set(prev).add(flagTargetMsgId));
+                }
+                setShowFlagDialog(false); setFlagExplanation(""); setFlagTargetMsgId(null);
+              }}
+                aria-label="Submit change request flag"
+                className="text-[12px] font-semibold text-white bg-gradient-to-r from-gold-400 to-gold-600 hover:from-gold-500 hover:to-gold-700 px-5 py-2 rounded-xl transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none">Submit Flag</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ═══ DISPUTE DIALOG (FSD §15.1) ═══ */}
+      {showDisputeDialog && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => { setShowDisputeDialog(false); setDisputeCategory(""); setDisputeDescription(""); setDisputeFileName(""); }}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
+            className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}
+            role="dialog" aria-labelledby="dispute-dialog-title">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center">
+                <Scale className="w-5 h-5 text-white" aria-hidden="true" />
+              </div>
+              <h3 id="dispute-dialog-title" className="text-[16px] font-heading font-semibold text-gray-900">Raise a Formal Dispute</h3>
+            </div>
+            <p className="text-[12px] text-gray-500 mb-3">
+              If you believe your submission met the acceptance criteria and the rework request is unreasonable.
+            </p>
+            <div className="bg-gold-50 rounded-xl px-4 py-3 mb-4" role="alert">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-gold-600 shrink-0" aria-hidden="true" />
+                <p className="text-[11px] text-gold-700">Filing a dispute does not pause the rework timeline. You should still resubmit within the deadline.</p>
+              </div>
+            </div>
+            <div className="space-y-3 mb-5">
+              <div>
+                <label htmlFor="dispute-category" className="text-[11px] font-medium text-gray-500 mb-1 block">Category</label>
+                <select
+                  id="dispute-category"
+                  value={disputeCategory}
+                  onChange={(e) => setDisputeCategory(e.target.value)}
+                  aria-label="Dispute category"
+                  className="w-full text-[12px] text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-brown-300 transition-all appearance-none"
+                >
+                  <option value="">Select a category...</option>
+                  <option value="unfair_review">Unfair Review</option>
+                  <option value="scope_mismatch">Scope Mismatch</option>
+                  <option value="criteria_not_matched">Criteria Not Matched</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="dispute-description" className="text-[11px] font-medium text-gray-500 mb-1 block">Description <span className="text-red-400">*</span></label>
+                <textarea
+                  id="dispute-description"
+                  value={disputeDescription}
+                  onChange={(e) => setDisputeDescription(e.target.value)}
+                  placeholder="Describe why you believe this rework request is unreasonable..."
+                  rows={4}
+                  required
+                  aria-required="true"
+                  aria-label="Dispute description"
+                  className="w-full text-[12px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-brown-300 transition-all resize-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="dispute-evidence" className="text-[11px] font-medium text-gray-500 mb-1 block">Supporting Evidence (optional)</label>
+                <input
+                  id="dispute-evidence"
+                  type="file"
+                  onChange={(e) => setDisputeFileName(e.target.files?.[0]?.name || "")}
+                  aria-label="Upload supporting evidence for dispute"
+                  className="w-full text-[12px] text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 file:mr-3 file:text-[11px] file:font-medium file:bg-brown-50 file:text-brown-600 file:border-0 file:rounded-lg file:px-3 file:py-1 file:cursor-pointer focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => { setShowDisputeDialog(false); setDisputeCategory(""); setDisputeDescription(""); setDisputeFileName(""); }}
+                aria-label="Cancel dispute"
+                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none">Cancel</button>
+              <button
+                onClick={() => {
+                  if (!disputeDescription.trim()) return;
+                  const grvId = `GRV-${Math.floor(100000 + Math.random() * 900000)}`;
+                  setDisputeId(grvId);
+                  setDisputeSubmitted(true);
+                  setShowDisputeDialog(false);
+                  setDisputeCategory(""); setDisputeDescription(""); setDisputeFileName("");
+                }}
+                disabled={!disputeDescription.trim()}
+                aria-label="Submit formal dispute"
+                className={cn(
+                  "text-[12px] font-semibold text-white px-5 py-2 rounded-xl transition-all focus:ring-2 focus:ring-teal-500 focus:outline-none",
+                  disputeDescription.trim()
+                    ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+                    : "bg-gray-300 cursor-not-allowed"
+                )}>Submit Dispute</button>
             </div>
           </motion.div>
         </div>

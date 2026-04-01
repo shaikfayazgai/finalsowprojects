@@ -18,20 +18,20 @@ const nextSteps = [
   {
     icon: Target,
     gradient: "from-teal-400 to-teal-600",
-    title: "AI Matching",
-    description: "Scanning projects that fit your skills and preferences",
+    title: "Skills Assessment",
+    description: "Complete the 3-part assessment to unlock task assignments",
   },
   {
     icon: ShieldCheck,
     gradient: "from-forest-400 to-forest-600",
-    title: "Verification",
-    description: "Identity review completes within 24-48 hours",
+    title: "Designation Confirmed",
+    description: "AGI confirms your designation and seniority level",
   },
   {
     icon: Sparkles,
     gradient: "from-gold-400 to-gold-600",
-    title: "First Task",
-    description: "You'll be notified when a match is found",
+    title: "Receive Task Offers",
+    description: "AGI matches tasks to your verified skills automatically",
   },
 ];
 
@@ -77,7 +77,7 @@ export default function OnboardingCompletePage() {
           </span>
         </h1>
         <p className="text-[14px] text-gray-400 mt-3 max-w-sm mx-auto leading-relaxed">
-          Your profile is ready. Our AI is already finding your first task match.
+          Your profile is ready. Complete your skills assessment to start receiving task offers.
         </p>
       </motion.div>
 
@@ -121,17 +121,17 @@ export default function OnboardingCompletePage() {
       {/* -- CTA Buttons -- */}
       <motion.div variants={fadeUp} className="w-full max-w-lg space-y-3">
         <Link
-          href="/contributor/dashboard"
+          href="/contributor/assessment"
           className="w-full flex items-center justify-center gap-2 text-[13px] font-semibold px-6 py-3.5 rounded-xl text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 shadow-md transition-all"
         >
-          Go to Dashboard
+          Start Skills Assessment
           <ArrowRight className="w-4 h-4" />
         </Link>
         <Link
-          href="/contributor/profile"
+          href="/contributor/dashboard"
           className="w-full flex items-center justify-center text-[13px] font-medium text-gray-400 hover:text-gray-600 transition-colors py-2"
         >
-          View Profile
+          Go to Dashboard
         </Link>
       </motion.div>
     </motion.div>

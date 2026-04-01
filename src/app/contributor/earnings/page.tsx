@@ -8,6 +8,7 @@ import {
   TrendingUp, ArrowUpRight, ArrowDownRight, ArrowUp, ArrowDown,
   ChevronRight, ChevronLeft, Banknote, CalendarDays,
   Download, ExternalLink, Building2, X, AlertCircle, Settings,
+  ShieldCheck, ArrowRight, Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
@@ -374,6 +375,28 @@ export default function EarningsPage() {
         </p>
       </motion.div>
 
+      {/* ═══ KYC STATUS ═══ */}
+      {profile.kycStatus !== "verified" ? (
+        <motion.div variants={fadeUp} className="mb-5">
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-gold-50 border border-gold-200">
+            <ShieldCheck className="w-5 h-5 text-gold-600 shrink-0" />
+            <span className="text-[13px] text-gold-800 flex-1">
+              Identity verification required for payouts.
+            </span>
+            <Link href="/contributor/earnings/kyc" className="inline-flex items-center gap-1 text-[12px] font-semibold text-gold-700 hover:text-gold-900 transition-colors whitespace-nowrap">
+              Verify Now <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </motion.div>
+      ) : (
+        <motion.div variants={fadeUp} className="mb-5">
+          <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-forest-700 bg-forest-50 px-3 py-1.5 rounded-full">
+            <ShieldCheck className="w-3.5 h-3.5 text-forest-500" />
+            KYC Verified
+          </div>
+        </motion.div>
+      )}
+
       {/* ═══ TABS ═══ */}
       <motion.div variants={fadeUp}>
         <Tabs defaultValue="overview">
@@ -445,7 +468,16 @@ export default function EarningsPage() {
                   <thead>
                     <tr style={{ borderBottom: "1px solid var(--border-hair)" }}>
                       <ColHeader field="task" activeField={earnSort} activeDir={earnSortDir} onClick={() => handleEarnSort("task")} label="Task / Project" />
-                      <ColHeader field="amount" activeField={earnSort} activeDir={earnSortDir} onClick={() => handleEarnSort("amount")} label="Amount" />
+                      <ColHeader field="amount" activeField={earnSort} activeDir={earnSortDir} onClick={() => handleEarnSort("amount")} label="Gross" />
+                      <th style={{ padding: "11px 16px", fontSize: 10, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-gray-400)", background: "color-mix(in srgb, var(--color-gray-100) 40%, white)" }}>
+                        <div className="flex items-center gap-1" title="GlimmoraTeam platform fee (15%)">
+                          <span>Platform Fee</span>
+                          <Info className="w-3 h-3 text-gray-300" />
+                        </div>
+                      </th>
+                      <th style={{ padding: "11px 16px", fontSize: 10, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-gray-400)", background: "color-mix(in srgb, var(--color-gray-100) 40%, white)" }}>
+                        <span>Net Amount</span>
+                      </th>
                       <ColHeader field="status" activeField={earnSort} activeDir={earnSortDir} onClick={() => handleEarnSort("status")} label="Status" />
                       <ColHeader field="date" activeField={earnSort} activeDir={earnSortDir} onClick={() => handleEarnSort("date")} label="Date" />
                     </tr>
@@ -463,6 +495,12 @@ export default function EarningsPage() {
                           </td>
                           <td style={{ padding: "13px 16px" }}>
                             <span className="text-[13px] font-semibold text-gray-900 font-mono">{fmt$(e.amount)}</span>
+                          </td>
+                          <td style={{ padding: "13px 16px" }}>
+                            <span className="text-[12px] font-mono text-red-400">-{fmt$(e.platformFee ?? Math.round(e.amount * 0.15))}</span>
+                          </td>
+                          <td style={{ padding: "13px 16px" }}>
+                            <span className="text-[13px] font-semibold text-forest-700 font-mono">{fmt$(e.netAmount ?? e.amount - Math.round(e.amount * 0.15))}</span>
                           </td>
                           <td style={{ padding: "13px 16px" }}>
                             <Pill bg={ec.bg} color={ec.color}>{ec.label}</Pill>

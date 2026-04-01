@@ -73,7 +73,7 @@ export function Step4Agreements({
   const allRequired = acceptTos && acceptPp && acceptEsa && acceptAhp;
 
   return (
-    <GlassCard variant="heavy" padding="lg">
+    <GlassCard variant="heavy" padding="lg" className="w-full">
       <GlassCardContent>
         <form onSubmit={onSubmit} className="space-y-6">
           <div className="pb-1 border-b border-beige-100">

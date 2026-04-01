@@ -11,6 +11,7 @@ import {
 import { COUNTRIES_DATA } from "../data";
 
 interface Props {
+  registrationEmail: string;
   phoneCountry: string;
   setPhoneCountry: (v: string) => void;
   phone: string;
@@ -43,6 +44,7 @@ interface Props {
 }
 
 export function Step2Verification({
+  registrationEmail,
   phoneCountry, setPhoneCountry,
   phone, setPhone,
   otpSent, otp, setOtp, cooldown, phoneVerified, phoneOtpLoading,
@@ -203,7 +205,7 @@ export function Step2Verification({
 
             <div className="space-y-2">
               <Label htmlFor="phone">Mobile Number <span className="text-red-400">*</span></Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <div className="flex flex-1 h-11 rounded-xl border border-beige-200 bg-white shadow-sm overflow-hidden transition-all focus-within:border-brown-500 focus-within:ring-2 focus-within:ring-brown-500/20">
                   <div className="relative flex items-center border-r border-beige-200 shrink-0">
                     <select
@@ -298,7 +300,7 @@ export function Step2Verification({
 
             <div className="space-y-2">
               <Label htmlFor="verify-email">Email for Verification <span className="text-red-400">*</span></Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Input id="verify-email" type="email" placeholder="Work email for verification"
                   value={verificationEmail} onChange={e => setVerificationEmail(e.target.value)}
                   className="flex-1" disabled={emailVerified} />
@@ -314,6 +316,14 @@ export function Step2Verification({
                   ) : emailOtpSent ? "Verify OTP" : "Send OTP"}
                 </Button>
               </div>
+              {verificationEmail.trim() !== "" && registrationEmail.trim() !== "" && verificationEmail.trim().toLowerCase() !== registrationEmail.trim().toLowerCase() && (
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-700 leading-relaxed">
+                    This email differs from the one provided during registration. If you proceed, the verification email will be used as your primary contact for all account-related communications.
+                  </p>
+                </div>
+              )}
             </div>
 
             {emailOtpSent && !emailVerified && (

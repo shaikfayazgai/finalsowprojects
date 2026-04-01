@@ -6,7 +6,7 @@ import {
   User, Mail, Clock, Globe, MapPin, Shield, CheckCircle2,
   Calendar, Pencil, Award, ExternalLink, FileText, Github,
   Link2, Briefcase, TrendingUp, Target, RotateCcw, Zap,
-  BarChart3, ShieldCheck, ArrowRight,
+  BarChart3, ShieldCheck, ArrowRight, Activity, AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
@@ -205,6 +205,70 @@ export default function ProfilePage() {
             );
           })}
         </div>
+      </motion.div>
+
+      {/* ═══ AVAILABILITY & CAPACITY ═══ */}
+      <motion.div variants={fadeUp} className="bg-white/80 backdrop-blur rounded-2xl border border-white/40 shadow-sm p-6 mb-6">
+        <div className="flex items-center justify-between mb-5">
+          <span className="text-sm font-semibold text-gray-800">Availability &amp; Capacity</span>
+          <Link href="/contributor/profile/edit" className="text-[12px] text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors">
+            Update <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <div className="flex items-center gap-3">
+            <Clock className="w-4 h-4 text-teal-500 shrink-0" />
+            <div>
+              <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Weekly Hours</div>
+              <div className="text-[14px] font-semibold text-gray-800">{profile.weeklyHours} hrs/week</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Globe className="w-4 h-4 text-teal-500 shrink-0" />
+            <div>
+              <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Timezone</div>
+              <div className="text-[14px] font-semibold text-gray-800">{profile.timezone}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Activity className="w-4 h-4 text-teal-500 shrink-0" />
+            <div>
+              <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Status</div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Badge variant={avail.variant} dot>{avail.label}</Badge>
+              </div>
+            </div>
+          </div>
+        </div>
+        {(() => {
+          const lastReviewed = profile.lastAvailabilityReviewedAt;
+          if (!lastReviewed) {
+            return (
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gold-50 border border-gold-200">
+                <AlertTriangle className="w-4 h-4 text-gold-600 shrink-0 mt-0.5" />
+                <p className="text-[12px] text-gold-800">
+                  Your availability hasn&apos;t been reviewed yet. Keeping this current helps AGI match you accurately.{" "}
+                  <Link href="/contributor/profile/edit" className="font-semibold text-gold-700 hover:text-gold-900 transition-colors">Update Now →</Link>
+                </p>
+              </div>
+            );
+          }
+          const daysSince = Math.floor((Date.now() - new Date(lastReviewed).getTime()) / (1000 * 60 * 60 * 24));
+          if (daysSince > 14) {
+            return (
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gold-50 border border-gold-200">
+                <AlertTriangle className="w-4 h-4 text-gold-600 shrink-0 mt-0.5" />
+                <p className="text-[12px] text-gold-800">
+                  Your availability hasn&apos;t been reviewed in {daysSince} days. Keeping this current helps AGI match you accurately.{" "}
+                  <Link href="/contributor/profile/edit" className="font-semibold text-gold-700 hover:text-gold-900 transition-colors">Update Now →</Link>
+                </p>
+              </div>
+            );
+          }
+          return (
+            <p className="text-[11px] text-gray-400">Last reviewed {daysSince} days ago</p>
+          );
+        })()}
       </motion.div>
 
       {/* ═══ DIGITAL TWIN METRICS ═══ */}
