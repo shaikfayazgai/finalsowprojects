@@ -47,7 +47,10 @@ function SidebarStep({ step, current }: { step: typeof STEPS[0]; current: number
 export default function OnboardingModal() {
   const ob = useContributorOnboarding();
   const [started, setStarted] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
   const contentRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => { setMounted(true); }, []);
 
   React.useEffect(() => {
     contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -92,7 +95,7 @@ export default function OnboardingModal() {
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30">
                   Signed in as
                 </p>
-                {ob.ssoImage ? (
+                {mounted && ob.ssoImage ? (
                   <img src={ob.ssoImage} alt="" className="w-12 h-12 rounded-full ring-2 ring-white/20 object-cover" />
                 ) : (
                   <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
