@@ -17,6 +17,7 @@ import { RecentUploads } from "./components/RecentUploads";
 import { aiPoweredFeatures } from "@/mocks/data/sow-upload-flow";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import { useSOWUploadStore, setFileObjectUrl } from "@/lib/stores/sow-upload-store";
+import { validateSOWUploadFields, type SOWUploadFieldErrors } from "@/lib/validations/sow-upload";
 
 /* ═══ Parsing stages ═══ */
 
@@ -92,7 +93,7 @@ export default function SOWUploadPage() {
   const [projectTitle, setProjectTitle] = React.useState(store.projectTitle);
   const [clientOrg, setClientOrg] = React.useState(store.clientOrganisation);
   const [linkedSowId, setLinkedSowId] = React.useState(store.linkedSowId || "none");
-  const [fieldErrors, setFieldErrors] = React.useState<{ projectTitle?: string; clientOrg?: string }>({});
+  const [fieldErrors, setFieldErrors] = React.useState<SOWUploadFieldErrors>({});
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const isParsing = parsingStage !== null && parsingStage !== "complete";
@@ -146,10 +147,8 @@ export default function SOWUploadPage() {
 
   const startParsing = () => {
     if (!selectedFile || isParsing) return;
-    /* Validate required fields */
-    const errors: { projectTitle?: string; clientOrg?: string } = {};
-    if (!projectTitle.trim()) errors.projectTitle = "Project title is required";
-    if (!clientOrg.trim()) errors.clientOrg = "Client / Organisation is required";
+    /* Validate required fields with Zod */
+    const errors = validateSOWUploadFields({ projectTitle, clientOrg, linkedSowId });
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
     setFieldErrors({});
     /* Save to store */
