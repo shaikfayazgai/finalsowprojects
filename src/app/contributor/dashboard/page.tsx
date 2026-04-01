@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
   ListChecks, Wallet, Award, TrendingUp, Clock, ArrowRight,
@@ -67,6 +68,7 @@ function getGreeting() { const h = new Date().getHours(); return h < 12 ? "Good 
 
 /* ═══ DASHBOARD ═══ */
 export default function ContributorDashboardPage() {
+  const { data: session } = useSession();
   const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -77,6 +79,7 @@ export default function ContributorDashboardPage() {
   if (isLoading) return <ContributorDashboardSkeleton />;
 
   const greeting = getGreeting();
+  const firstName = (session?.user?.name ?? "").split(" ")[0] || "there";
   const totalEarned = 2180;
   const pendingPayout = 680;
 
@@ -86,7 +89,7 @@ export default function ContributorDashboardPage() {
       {/* ═══ HEADER ═══ */}
       <motion.div variants={fadeUp} className="mb-8">
         <h1 className="font-heading text-[24px] font-semibold text-gray-900 tracking-[-0.02em]">
-          {greeting}, Arjun
+          {greeting}, {firstName}
         </h1>
         <p className="text-[13px] text-gray-400 mt-1">
           {activeTasks.length} active tasks · {notifications.filter(n => !n.read).length} new notifications

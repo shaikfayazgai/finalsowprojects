@@ -224,6 +224,7 @@ export default function OnboardingModal() {
                     onVerifyOTP={ob.verifyOTP}
                     onSendEmailOTP={ob.sendEmailOTP}
                     onVerifyEmailOTP={ob.verifyEmailOTP}
+                    hideEmailVerification
                     onContinue={ob.goToStep4}
                     onBack={() => { ob.setStep(2); ob.setError(""); }}
                   />

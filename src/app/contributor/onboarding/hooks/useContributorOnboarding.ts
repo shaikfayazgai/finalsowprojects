@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { onboardContributor } from "@/lib/actions/register";
@@ -43,6 +44,7 @@ function readSsoData(): SSOData | null {
 }
 
 export function useContributorOnboarding() {
+  const router = useRouter();
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
   const { data: session } = useSession();
 
@@ -241,6 +243,7 @@ export function useContributorOnboarding() {
         firstName,
         lastName:           lastName  || undefined,
         email,
+        provider:           ssoProvider ?? undefined,
         contribType,
         country,
         dob,
@@ -271,6 +274,7 @@ export function useContributorOnboarding() {
       if (!result.success) { setError(result.error); return; }
       try { sessionStorage.removeItem(SSO_STORAGE_KEY); } catch { /* noop */ }
       setOnboardingComplete(true);
+      router.push("/contributor/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {

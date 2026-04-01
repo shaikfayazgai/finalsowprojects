@@ -94,6 +94,7 @@ interface Props {
   onSendOTP: () => void; onVerifyOTP: () => void;
   onSendEmailOTP: () => void; onVerifyEmailOTP: () => void;
   onContinue: () => void; onBack: () => void;
+  hideEmailVerification?: boolean;
 }
 
 export function Step3Verification({
@@ -107,6 +108,7 @@ export function Step3Verification({
   error,
   onSendOTP, onVerifyOTP, onSendEmailOTP, onVerifyEmailOTP,
   onContinue, onBack,
+  hideEmailVerification = false,
 }: Props) {
   const selectedCountry = COUNTRIES_DATA.find(c => c.name === phoneCountry);
   const phoneMaxLen     = selectedCountry?.phoneMaxLength ?? 12;
@@ -296,7 +298,7 @@ export function Step3Verification({
         </div>
 
         {/* ── Email ── */}
-        <div className="rounded-xl border border-gray-200 overflow-hidden">
+        {!hideEmailVerification && <div className="rounded-xl border border-gray-200 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
             <div className="flex items-center gap-2">
               <Mail className="w-4 h-4 text-gray-400" />
@@ -350,7 +352,7 @@ export function Step3Verification({
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
         {/* Error */}
         {error && (

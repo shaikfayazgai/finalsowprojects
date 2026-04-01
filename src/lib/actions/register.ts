@@ -76,6 +76,7 @@ export async function onboardContributor(data: {
   firstName: string;
   lastName?: string;
   email: string;
+  provider?: string;
   contribType: string;
   country: string;
   dob: string;
@@ -104,56 +105,70 @@ export async function onboardContributor(data: {
   marketingOptIn: boolean;
 }): Promise<ActionResult> {
   try {
-    const user = await prisma.user.findUnique({
-      where: { email: data.email.toLowerCase() },
-    });
+    const profileData = {
+      contribType:        data.contribType,
+      country:            data.country,
+      dob:                new Date(data.dob),
+      timezone:           data.timezone,
+      departmentCategory: data.departmentCategory,
+      departmentOther:    data.departmentOther ?? null,
+      primarySkills:      data.primarySkills,
+      secondarySkills:    data.secondarySkills,
+      otherSkills:        data.otherSkills,
+      availability:       data.availability,
+      degree:             data.degree ?? null,
+      branch:             data.branch ?? null,
+      linkedin:           data.linkedin ?? null,
+      careerStage:        data.careerStage ?? null,
+      yearsExperience:    data.yearsExperience ?? null,
+      workStart:          data.workStart ?? null,
+      workEnd:            data.workEnd ?? null,
+      ndaAccepted:        data.ndaAccepted,
+      ndaSignature:       data.ndaSignature ?? "",
+      acceptTos:          true,
+      acceptCoc:          true,
+      acceptPrivacy:      true,
+      acceptFee:          true,
+      acceptAhp:          true,
+      marketingOptIn:     data.marketingOptIn,
+    };
 
-    if (!user) {
-      return { success: false, error: "No account found for this email" };
-    }
-
-    await prisma.user.update({
+    // SSO users are not created in DB by NextAuth (JWT strategy, no adapter).
+    // upsert: create on first onboarding, update if somehow the record already exists.
+    await prisma.user.upsert({
       where: { email: data.email.toLowerCase() },
-      data: {
+      create: {
+        email:         data.email.toLowerCase(),
+        passwordHash:  null,          // SSO — no password
+        provider:      data.provider || undefined,
+        firstName:     data.firstName,
+        lastName:      data.lastName ?? "",
+        role:          "contributor",
+        phone:         data.phone ?? null,
+        emailVerified: true,
+        phoneVerified: !!data.phone,
+        contributorProfile: { create: profileData },
+      },
+      update: {
         firstName: data.firstName,
         lastName:  data.lastName ?? "",
         role:      "contributor",
         phone:     data.phone ?? null,
+        // Use upsert on the profile too so re-running onboarding doesn't violate the unique constraint
         contributorProfile: {
-          create: {
-            contribType:        data.contribType,
-            country:            data.country,
-            dob:                new Date(data.dob),
-            timezone:           data.timezone,
-            departmentCategory: data.departmentCategory,
-            departmentOther:    data.departmentOther ?? null,
-            primarySkills:      data.primarySkills,
-            secondarySkills:    data.secondarySkills,
-            otherSkills:        data.otherSkills,
-            availability:       data.availability,
-            degree:             data.degree ?? null,
-            branch:             data.branch ?? null,
-            linkedin:           data.linkedin ?? null,
-            careerStage:        data.careerStage ?? null,
-            yearsExperience:    data.yearsExperience ?? null,
-            workStart:          data.workStart ?? null,
-            workEnd:            data.workEnd ?? null,
-            ndaAccepted:        data.ndaAccepted,
-            ndaSignature:       data.ndaSignature ?? "",
-            acceptTos:          true,
-            acceptCoc:          true,
-            acceptPrivacy:      true,
-            acceptFee:          true,
-            acceptAhp:          true,
-            marketingOptIn:     data.marketingOptIn,
+          upsert: {
+            create: profileData,
+            update: profileData,
           },
         },
       },
     });
 
     return { success: true };
-  } catch {
-    return { success: false, error: "Failed to complete onboarding. Please try again." };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[onboardContributor]", msg);
+    return { success: false, error: msg };
   }
 }
 
