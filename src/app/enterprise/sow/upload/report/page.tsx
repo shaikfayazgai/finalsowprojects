@@ -4,8 +4,8 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  CheckCircle2, LayoutList, Sparkles, ShieldCheck, AlertTriangle,
-  Clock, Eye, RotateCcw, ArrowRight, Target, Users, Lightbulb,
+  CheckCircle2, Clock, RotateCcw, ArrowRight, Target, Users, Lightbulb,
+  LayoutList, Sparkles, ShieldCheck, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
@@ -75,95 +75,98 @@ export default function ExtractionReportPage() {
         </div>
       </motion.div>
 
-      {/* Context Detection Card */}
-      <motion.div variants={fadeUp} className="card-parchment mb-6">
-        <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
-          <span className="text-sm font-semibold text-gray-800">Context Detection</span>
-        </div>
-        <div>
-          {contextRows.map((row, i) => {
-            const status = report.contextDetection[row.key];
-            const style = detectionStyles[status];
-            const desc = status === "PRESENT" ? row.presentDesc : status === "PARTIAL" ? row.partialDesc : row.absentDesc;
-            const Icon = row.icon;
-            return (
-              <div key={row.key} className="flex items-center gap-4 px-5 py-3.5"
-                style={{ borderBottom: i < contextRows.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
-                <Icon className="w-4 h-4 text-brown-400 shrink-0" />
-                <span className="text-[12px] font-medium text-gray-700 flex-1">{row.label}</span>
-                <div className="text-right">
-                  <SowBadge variant={style.text.includes("forest") ? "forest" : style.text.includes("gold") ? "gold" : "danger"} dot>
-                    {style.label}
-                  </SowBadge>
-                  <p className="text-[10px] text-gray-400 mt-1 max-w-[240px]">{desc}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </motion.div>
+      {/* Single card — all content */}
+      <motion.div variants={fadeUp} className="card-parchment overflow-hidden">
 
-      {/* KPI Row — NO budget or timeline (EIR-001, EIR-002) */}
-      <motion.div variants={fadeUp} className="mb-6">
-        <KpiRow items={[
-          { label: "Sections Found", value: report.sectionsFound, icon: LayoutList, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
-          { label: "AI Confidence", value: `${report.aiConfidence}%`, icon: Sparkles, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
-          { label: "Gap Score", value: `${report.gapScore}%`, icon: ShieldCheck, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
-          { label: "Ambiguities", value: report.ambiguities, icon: AlertTriangle, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
-        ]} />
-      </motion.div>
+        {/* KPI Row */}
+        <div className="px-5 py-5 border-b border-gray-100">
+          <KpiRow items={[
+            { label: "Sections Found",  value: report.sectionsFound,        icon: LayoutList,    iconBg: "bg-gradient-to-br from-brown-400 to-brown-600"  },
+            { label: "AI Confidence",   value: `${report.aiConfidence}%`,   icon: Sparkles,      iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
+            { label: "Gap Score",       value: `${report.gapScore}%`,       icon: ShieldCheck,   iconBg: "bg-gradient-to-br from-teal-400 to-teal-600"    },
+            { label: "Ambiguities",     value: report.ambiguities,          icon: AlertTriangle, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600"    },
+          ]} />
+        </div>
 
-      {/* Additional metrics row */}
-      <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-        {/* Sensitive Data */}
-        <div className="card-parchment px-5 py-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="label-caps">Sensitive Data</span>
-            <SowBadge variant={sensitiveStyles[report.sensitiveDataDetected].variant}>
-              {sensitiveStyles[report.sensitiveDataDetected].label}
-            </SowBadge>
-          </div>
-          {report.sensitiveDataTypes && report.sensitiveDataTypes.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {report.sensitiveDataTypes.map((t) => (
-                <span key={t} className="text-[10px] text-gold-600 bg-gold-50 px-2 py-0.5 rounded-full">{t}</span>
-              ))}
+        {/* Context Detection + Sensitive Data + Estimated Review Time */}
+        <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
+
+          {/* Left: Context Detection */}
+          <div className="px-5 py-4">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Context Detection</p>
+            <div className="rounded-xl border border-gray-100 overflow-hidden">
+              {contextRows.map((row, i) => {
+                const status = report.contextDetection[row.key];
+                const style = detectionStyles[status];
+                const Icon = row.icon;
+                return (
+                  <div key={row.key} className={cn("flex items-center gap-3 px-4 py-2.5 bg-white", i < contextRows.length - 1 && "border-b border-gray-100")}>
+                    <Icon className="w-3.5 h-3.5 text-brown-400 shrink-0" />
+                    <span className="text-[12px] font-medium text-gray-700 flex-1">{row.label}</span>
+                    <SowBadge variant={style.text.includes("forest") ? "forest" : style.text.includes("gold") ? "gold" : "danger"} dot>
+                      {style.label}
+                    </SowBadge>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
-
-        {/* Estimated Review Time */}
-        <div className="card-parchment px-5 py-4">
-          <div className="label-caps mb-2">Estimated Review Time</div>
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-brown-400" />
-            <span className="num-display text-[20px] text-gray-900">{report.estimatedReviewTime}</span>
           </div>
-          <p className="text-[10px] text-gray-400 mt-1">Time for you to review extractions and resolve gaps</p>
+
+          {/* Middle: Sensitive Data */}
+          <div className="px-5 py-4">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Sensitive Data</p>
+            <div className="rounded-xl border border-gray-100 bg-white px-4 py-5 h-[calc(100%-28px)]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="label-caps">Detection</span>
+                <SowBadge variant={sensitiveStyles[report.sensitiveDataDetected].variant}>
+                  {sensitiveStyles[report.sensitiveDataDetected].label}
+                </SowBadge>
+              </div>
+              {report.sensitiveDataTypes && report.sensitiveDataTypes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {report.sensitiveDataTypes.map((t) => (
+                    <span key={t} className="text-[10px] text-gold-600 bg-gold-50 px-2 py-0.5 rounded-full">{t}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Estimated Review Time */}
+          <div className="px-5 py-4">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Estimated Review Time</p>
+            <div className="rounded-xl border border-gray-100 bg-white px-4 py-5 h-[calc(100%-28px)]">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="w-4 h-4 text-brown-400" />
+                <span className="num-display text-[20px] text-gray-900">{report.estimatedReviewTime}</span>
+              </div>
+              <p className="text-[10px] text-gray-400">Time to review extractions and resolve gaps</p>
+            </div>
+          </div>
         </div>
-      </motion.div>
 
-      {/* Warning if gaps or ambiguities */}
-      {(report.gapScore < 80 || report.ambiguities > 3) && (
-        <motion.div variants={fadeUp} className="mb-6">
-          <StatusBanner
-            variant="warning"
-            title="Review recommended before proceeding"
-            description={`${report.ambiguities} ambiguities and ${100 - report.gapScore}% of standard sections are missing. These will be addressed in the Gap Analysis step.`}
-          />
-        </motion.div>
-      )}
+        {/* Warning banner (conditional) */}
+        {(report.gapScore < 80 || report.ambiguities > 3) && (
+          <div className="px-5 py-4 border-b border-gray-100">
+            <StatusBanner
+              variant="warning"
+              title="Review recommended before proceeding"
+              description={`${report.ambiguities} ambiguities and ${100 - report.gapScore}% of standard sections are missing. These will be addressed in the Gap Analysis step.`}
+            />
+          </div>
+        )}
 
-      {/* Actions */}
-      <motion.div variants={fadeUp} className="flex items-center justify-between">
-        <button onClick={handleUploadAnother}
-          className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all uppercase">
-          <RotateCcw className="w-3 h-3" /> Upload Another
-        </button>
-        <button onClick={handleViewParsedSOW}
-          className="flex items-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all uppercase">
-          View Parsed SOW <ArrowRight className="w-3.5 h-3.5" />
-        </button>
+        {/* Footer actions */}
+        <div className="flex items-center justify-end gap-2 px-5 py-4 bg-gray-50/40">
+          <button onClick={handleUploadAnother}
+            className="text-[12px] font-semibold text-white bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 px-4 py-2.5 rounded-xl transition-all uppercase">
+            Upload Another
+          </button>
+          <button onClick={handleViewParsedSOW}
+            className="flex items-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all uppercase">
+            View Parsed SOW <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </motion.div>
     </motion.div>
   );
