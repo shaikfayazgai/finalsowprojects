@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import {
   User,
   Camera,
@@ -98,12 +99,13 @@ const MOCK_RECOVERY_CODES = [
 
 export default function ProfilePage() {
   /* ── Personal Information State ── */
-  const [firstName, setFirstName] = useState("Priya");
-  const [lastName, setLastName] = useState("Nair");
-  const [displayName, setDisplayName] = useState("Priya Nair");
-  const [email] = useState("priya@enterprise.com");
-  const [jobTitle, setJobTitle] = useState("Engineering Manager");
-  const [phone, setPhone] = useState("+91 98765 43210");
+  const { data: session } = useSession();
+  const [firstName, setFirstName] = useState(session?.user?.name?.split(" ")[0] ?? "");
+  const [lastName, setLastName] = useState(session?.user?.name?.split(" ")[1] ?? "");
+  const [displayName, setDisplayName] = useState(session?.user?.name ?? "");
+  const [email] = useState(session?.user?.email ?? "");
+  const [jobTitle, setJobTitle] = useState("");
+  const [phone, setPhone] = useState("");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [displayNameCustomized, setDisplayNameCustomized] = useState(false);
   const [personalErrors, setPersonalErrors] = useState<Record<string, string>>(

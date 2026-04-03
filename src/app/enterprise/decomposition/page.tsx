@@ -46,6 +46,7 @@ function formatCost(n: number) { return new Intl.NumberFormat("en-US", { style: 
 function PrimaryActionButton({ plan, onClick }: { plan: DecompositionPlan; onClick: (e: React.MouseEvent) => void }) {
   const [showWithdrawModal, setShowWithdrawModal] = React.useState(false);
   const [showConfirmModal, setShowConfirmModal] = React.useState(false);
+  const [showToast, setShowToast] = React.useState(false);
   if (plan.status === "draft") {
     return (
       <button onClick={onClick}
@@ -100,6 +101,12 @@ function PrimaryActionButton({ plan, onClick }: { plan: DecompositionPlan; onCli
             </div>
           </div>
         )}
+        {showToast && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-lg">
+            <span className="text-green-400 text-lg">✓</span>
+            <span className="text-[13px] font-medium">Plan has been successfully off-boarded.</span>
+          </div>
+        )}
         {showConfirmModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
             onClick={() => setShowConfirmModal(false)}>
@@ -116,7 +123,8 @@ function PrimaryActionButton({ plan, onClick }: { plan: DecompositionPlan; onCli
                 <button
                   onClick={() => {
                     setShowConfirmModal(false);
-                    alert("Plan has been successfully off-boarded.");
+                    setShowToast(true);
+                    setTimeout(() => setShowToast(false), 3000);
                   }}
                   className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white bg-red-500 hover:bg-red-600 transition-all">
                   Yes

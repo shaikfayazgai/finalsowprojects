@@ -146,21 +146,25 @@ function StatusBadge({ status }: { status: TeamMember["status"] }) {
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("company");
 
-  /* ── Company Profile state ── */
-  const [companyName] = useState("Acme Technologies Pvt. Ltd.");
+  /* ── Load saved company profile from localStorage ── */
+const saved = typeof window !== "undefined"
+  ? JSON.parse(localStorage.getItem("companyProfile") || "{}")
+  : {};
+
+  const [companyName, setCompanyName] = useState(saved.companyName || "");
   const [logo, setLogo] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [industryType, setIndustryType] = useState("Technology");
-  const [companySize, setCompanySize] = useState("51-200");
-  const [addressLine1, setAddressLine1] = useState("42 Innovation Park");
-  const [addressLine2, setAddressLine2] = useState("Sector 62");
-  const [city, setCity] = useState("Noida");
-  const [addrState, setAddrState] = useState("Uttar Pradesh");
-  const [postalCode, setPostalCode] = useState("201301");
-  const [country, setCountry] = useState("India");
-  const [website, setWebsite] = useState("https://acmetech.in");
-  const [primaryEmail, setPrimaryEmail] = useState("priya@enterprise.com");
-  const [taxId] = useState("29ABCDE1234F1Z5");
+  const [logoPreview, setLogoPreview] = useState<string | null>(saved.logoPreview || null);
+  const [industryType, setIndustryType] = useState(saved.industryType || "Technology");
+  const [companySize, setCompanySize] = useState(saved.companySize || "51-200");
+  const [addressLine1, setAddressLine1] = useState(saved.addressLine1 || "");
+  const [addressLine2, setAddressLine2] = useState(saved.addressLine2 || "");
+  const [city, setCity] = useState(saved.city || "");
+  const [addrState, setAddrState] = useState(saved.addrState || "");
+  const [postalCode, setPostalCode] = useState(saved.postalCode || "");
+  const [country, setCountry] = useState(saved.country || "");
+  const [website, setWebsite] = useState(saved.website || "");
+  const [primaryEmail, setPrimaryEmail] = useState(saved.primaryEmail || "");
+  const [taxId, setTaxId] = useState(saved.taxId || "");
   const [verificationStatus] = useState<"verified" | "pending" | "rejected">("verified");
 
   /* ── Team Members state ── */
@@ -345,10 +349,11 @@ export default function SettingsPage() {
                   {/* Company Name (read-only) */}
                   <div className="space-y-2">
                     <Label className="text-brown-800">Company Name</Label>
-                    <Input value={companyName} disabled className="bg-beige-50/50" />
+                    {/*<Input value={companyName} disabled className="bg-beige-50/50" />
                     <p className="text-xs text-beige-500 flex items-center gap-1">
                       <Info className="h-3 w-3" /> Edit via support — contact support@glimmora.com
-                    </p>
+                    </p>*/}
+                    <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Enter company name" />
                   </div>
 
                   {/* Company Logo */}
@@ -515,7 +520,14 @@ export default function SettingsPage() {
 
                   {/* Save */}
                   <div className="flex justify-end">
-                    <Button variant="primary" size="lg">
+                    <Button variant="primary" size="lg" onClick={() => {
+                      localStorage.setItem("companyProfile", JSON.stringify({
+                        companyName, logoPreview, industryType, companySize,
+                        addressLine1, addressLine2, city, addrState,
+                        postalCode, country, website, primaryEmail, taxId,
+                        }));
+                        alert("Company profile saved successfully!");
+                      }}>
                       Save Changes
                     </Button>
                   </div>
