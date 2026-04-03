@@ -31,6 +31,10 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
+      <head>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@svar-ui/react-gantt/dist/index.css" />
+      </head>
+      
       <body className="antialiased">
         <SessionProvider>{children}</SessionProvider>
       </body>

@@ -7,12 +7,13 @@ import { motion } from "framer-motion";
 import {
   Network, Clock, Layers, ArrowRight, Boxes, Sparkles, Download,
   Milestone as MilestoneIcon, BrainCircuit, CheckCircle2, Search, X,
-  ChevronRight, ChevronLeft, ArrowUp, ArrowDown,
+  ChevronRight, ChevronLeft, ArrowUp, ArrowDown, ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
 import { mockPlans, mockTasks } from "@/mocks/data/enterprise-projects";
+import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import type { DecompositionPlan, PlanStatus } from "@/types/enterprise";
 
 /* ═══ Badge ═══ */
@@ -39,12 +40,107 @@ const statusMap: Record<PlanStatus, { variant: string; label: string }> = {
   completed: { variant: "brown", label: "Completed" },
 };
 
-const complexityMap: Record<string, { variant: string; label: string }> = {
-  low: { variant: "forest", label: "Low" }, medium: { variant: "teal", label: "Medium" },
-  high: { variant: "gold", label: "High" }, critical: { variant: "brown", label: "Critical" },
-};
-
 function formatCost(n: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 0 }).format(n); }
+
+/* ═══ Primary Action Button ═══ */
+function PrimaryActionButton({ plan, onClick }: { plan: DecompositionPlan; onClick: (e: React.MouseEvent) => void }) {
+  const [showWithdrawModal, setShowWithdrawModal] = React.useState(false);
+  const [showConfirmModal, setShowConfirmModal] = React.useState(false);
+  if (plan.status === "draft") {
+    return (
+      <button onClick={onClick}
+        className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[11px] font-bold text-white bg-teal-500 hover:bg-teal-600 transition-all shadow-sm">
+        Kick-off
+      </button>
+    );
+  }
+  if (plan.status === "pending_review") {
+    return (
+      <button onClick={onClick}
+        className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[11px] font-bold text-white bg-gold-500 hover:bg-gold-600 transition-all shadow-sm">
+        Review Plan
+      </button>
+    );
+  }
+  if (plan.status === "in_progress") {
+    return (
+      <>
+        {showWithdrawModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowWithdrawModal(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl p-6 w-[380px] mx-4"
+              onClick={(e) => e.stopPropagation()}>
+              <div className="flex flex-col items-center gap-3 mb-3 text-center">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                  <span className="text-red-600 text-lg">⚠️</span>
+                </div>
+                <div>
+                  <p className="text-[14px] font-bold text-gray-900">Withdraw Plan?</p>
+                  <p className="text-[12px] text-gray-500">This action cannot be undone.</p>
+                </div>
+              </div>
+              <p className="text-[12px] text-gray-600 mb-5 leading-relaxed">
+                By clicking this your onboarding project will be off-boarded.And this will be removed from the active project.
+              </p>
+              <div className="flex items-center gap-2 justify-end">
+                <button
+                  onClick={() => setShowWithdrawModal(false)}
+                  className="px-4 py-2 rounded-lg text-[12px] font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all">
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowWithdrawModal(false);
+                    setShowConfirmModal(true);
+                  }}
+                  className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white bg-red-500 hover:bg-red-600 transition-all">
+                  Yes, Withdraw
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showConfirmModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowConfirmModal(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl p-6 w-[340px] mx-4 text-center"
+              onClick={(e) => e.stopPropagation()}>
+              <p className="text-[15px] font-bold text-gray-900 mb-2">Are you sure?</p>
+              <p className="text-[12px] text-gray-500 mb-5">This will permanently off-board the project.</p>
+              <div className="flex items-center gap-2 justify-center">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="px-4 py-2 rounded-lg text-[12px] font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all">
+                  No
+                </button>
+                <button
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    alert("Plan has been successfully off-boarded.");
+                  }}
+                  className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white bg-red-500 hover:bg-red-600 transition-all">
+                  Yes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowWithdrawModal(true); }}
+          className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[11px] font-semibold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 transition-all">
+          Withdraw
+        </button>
+      </>
+    );
+  }
+  // covers: revision_in_progress, approved, completed
+  return (
+    <button onClick={onClick}
+      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[11px] font-semibold text-gray-600 border border-gray-200 bg-white hover:bg-gray-50 transition-all">
+      View Plan
+    </button>
+  );
+}
 
 /* ═══ Sort ═══ */
 
@@ -53,11 +149,11 @@ type SortDir = "asc" | "desc";
 
 const columns = [
   { field: "title" as SortField, label: "Project Name", align: "left" },
-  { field: "status" as SortField, label: "Plan Status", align: "left" },
+  
   { field: "updated" as SortField, label: "SOW Reference", align: "left" },
   { field: "confidence" as SortField, label: "Milestones", align: "center" },
   { field: "tasks" as SortField, label: "Tasks", align: "center" },
-  { field: "cost" as SortField, label: "Primary Action", align: "center" },
+  { field: "cost" as SortField, label: "Action", align: "center" },
 ];
 
 /* ═══ PAGE ═══ */
@@ -222,7 +318,10 @@ export default function DecompositionPlansPage() {
             </thead>
             <tbody>
               {filtered.map((plan) => {
-                const st = statusMap[plan.status];
+                
+                const sow = mockSOWs.find((s) => s.id === plan.sowId);
+                const sowVersion = sow?.version ? `SOW Version V${sow.version}` : `SOW Version V${plan.version}`;
+                const sowRef = `SOW-2026-${plan.sowId.replace("sow-", "").padStart(3, "0")}`;
 
                 return (
                   <tr key={plan.id} onClick={() => router.push(`/enterprise/decomposition/${plan.id}`)}
@@ -233,18 +332,20 @@ export default function DecompositionPlansPage() {
                     <td style={{ padding: "13px 16px" }}>
                       <div className="text-[13px] font-medium text-gray-800 truncate max-w-[280px]">{plan.title}</div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-gray-400">{plan.estimatedHours.toLocaleString()}h estimated</span>
+                        <span className="text-[10px] text-gray-400">{sowVersion}</span>
                       </div>
                     </td>
 
-                    {/* Plan Status */}
-                    <td style={{ padding: "13px 16px" }}>
-                      <Badge variant={st.variant}>{st.label}</Badge>
-                    </td>
+                    
 
                     {/* SOW Reference */}
                     <td style={{ padding: "13px 16px" }}>
-                      <span className="font-mono text-[12px] text-gray-700">{plan.sowId.toUpperCase()}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[12px] text-gray-700">{sowRef}</span>
+                        <Link href={`/enterprise/sow/${plan.sowId}`} onClick={(e) => e.stopPropagation()}>
+                          <ExternalLink className="w-3 h-3 text-gray-400 hover:text-brown-500 transition-colors" />
+                        </Link>
+                      </div>
                     </td>
 
                     {/* Milestones */}
@@ -259,10 +360,10 @@ export default function DecompositionPlansPage() {
 
                     {/* Primary Action */}
                     <td style={{ padding: "13px 16px", textAlign: "center" }}>
-                      <button onClick={(e) => { e.stopPropagation(); router.push(`/enterprise/decomposition/${plan.id}`); }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 transition-all">
-                        Review Plan <ArrowRight className="w-3 h-3" />
-                      </button>
+                      <PrimaryActionButton
+                        plan={plan}
+                        onClick={(e) => { e.stopPropagation(); router.push(`/enterprise/decomposition/${plan.id}`); }}
+                      />
                     </td>
 
                   </tr>

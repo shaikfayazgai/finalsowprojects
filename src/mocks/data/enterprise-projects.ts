@@ -156,6 +156,12 @@ export const mockPlanMilestones: PlanMilestone[] = [
   { id: "pm-013", planId: "plan-004", title: "Data Pipeline", description: "Ingestion, transformation, and warehousing for supply chain data", order: 1, estimatedHours: 560, taskCount: 2, subtaskCount: 4, itemStatus: "proposed", aiConfidence: 76 },
   { id: "pm-014", planId: "plan-004", title: "Analytics Engine", description: "ML-powered demand forecasting and anomaly detection", order: 2, estimatedHours: 480, taskCount: 2, subtaskCount: 3, itemStatus: "proposed", aiConfidence: 73 },
   { id: "pm-015", planId: "plan-004", title: "Dashboard & Visualization", description: "Interactive dashboards with real-time supply chain metrics", order: 3, estimatedHours: 400, taskCount: 2, subtaskCount: 3, itemStatus: "proposed", aiConfidence: 72 },
+
+  /* ── Plan-005: Healthcare Portal ── */
+  { id: "pm-016", planId: "plan-005", title: "HIPAA Compliance & Infrastructure", description: "Compliance setup, cloud infrastructure, and authentication layer", order: 1, estimatedHours: 640, taskCount: 2, subtaskCount: 4, itemStatus: "accepted", aiConfidence: 88 },
+  { id: "pm-017", planId: "plan-005", title: "Patient Portal Development", description: "Patient-facing portal with appointment booking and health records", order: 2, estimatedHours: 960, taskCount: 3, subtaskCount: 5, itemStatus: "proposed", aiConfidence: 84 },
+  { id: "pm-018", planId: "plan-005", title: "Provider Interface", description: "Provider dashboard, EHR integration, and clinical workflows", order: 3, estimatedHours: 800, taskCount: 2, subtaskCount: 4, itemStatus: "proposed", aiConfidence: 81 },
+  { id: "pm-019", planId: "plan-005", title: "Analytics & Reporting", description: "Patient analytics, compliance reporting, and audit trails", order: 4, estimatedHours: 400, taskCount: 2, subtaskCount: 2, itemStatus: "proposed", aiConfidence: 78 },
 ];
 
 /* ══════════════════════════════════════════════════════════════
@@ -609,6 +615,133 @@ export const mockTasks: DecompositionTask[] = [
     ],
   },
 
+  /* ══════════════════════════════════════════════════════════════
+     PLAN-005: Healthcare Portal — 9 tasks, 15 subtasks
+     ══════════════════════════════════════════════════════════════ */
+  {
+    id: "task-hp-001", planId: "plan-005", milestoneId: "pm-016",
+    title: "HIPAA compliance infrastructure setup",
+    description: "Configure HIPAA-compliant AWS infrastructure with encryption, audit logging, and access controls.",
+    status: "accepted", priority: "critical", estimatedHours: 320,
+    skillsRequired: [skill("DevOps"), skill("AWS"), skill("Security")],
+    dependencies: [],
+    phase: 1, order: 1, aiConfidence: 90, itemStatus: "accepted",
+    acceptanceCriteria: ["HIPAA BAA signed with AWS", "Encryption at rest and in transit", "Audit logging enabled", "Access control policies documented"],
+    subtasks: [
+      { id: "st-hp-001", taskId: "task-hp-001", title: "AWS HIPAA environment setup", estimatedHours: 80, skillsRequired: [skill("DevOps"), skill("AWS")], itemStatus: "accepted", aiConfidence: 92 },
+      { id: "st-hp-002", taskId: "task-hp-001", title: "Encryption and audit logging", estimatedHours: 60, skillsRequired: [skill("Security")], itemStatus: "accepted", aiConfidence: 88 },
+    ],
+  },
+  {
+    id: "task-hp-002", planId: "plan-005", milestoneId: "pm-016",
+    title: "HIPAA-compliant authentication service",
+    description: "Multi-factor authentication with role-based access for patients, providers, and admins.",
+    status: "accepted", priority: "critical", estimatedHours: 320,
+    skillsRequired: [skill("Backend"), skill("Security"), skill("OIDC")],
+    dependencies: [dep("task-hp-001")],
+    phase: 1, order: 2, aiConfidence: 87, itemStatus: "accepted",
+    acceptanceCriteria: ["MFA for all user roles", "Session timeout enforcement", "Failed login attempt lockout", "Audit trail for all auth events"],
+    subtasks: [
+      { id: "st-hp-003", taskId: "task-hp-002", title: "Auth service with MFA", estimatedHours: 80, skillsRequired: [skill("Backend"), skill("Security")], itemStatus: "accepted", aiConfidence: 89 },
+      { id: "st-hp-004", taskId: "task-hp-002", title: "RBAC for patients and providers", estimatedHours: 60, skillsRequired: [skill("Backend"), skill("OIDC")], itemStatus: "accepted", aiConfidence: 86 },
+    ],
+  },
+  {
+    id: "task-hp-003", planId: "plan-005", milestoneId: "pm-017",
+    title: "Patient registration and profile",
+    description: "Patient onboarding, profile management, and health history intake forms.",
+    status: "in_progress", priority: "high", estimatedHours: 280,
+    skillsRequired: [skill("React"), skill("TypeScript")],
+    dependencies: [dep("task-hp-002")],
+    phase: 2, order: 1, aiConfidence: 85, itemStatus: "accepted",
+    acceptanceCriteria: ["Patient registration with ID verification", "Health history intake form", "Profile photo and document upload", "Consent management flow"],
+    subtasks: [
+      { id: "st-hp-005", taskId: "task-hp-003", title: "Registration and onboarding flow", estimatedHours: 80, skillsRequired: [skill("React"), skill("TypeScript")], itemStatus: "accepted", aiConfidence: 87 },
+    ],
+  },
+  {
+    id: "task-hp-004", planId: "plan-005", milestoneId: "pm-017",
+    title: "Appointment booking system",
+    description: "Real-time appointment scheduling with provider availability, reminders, and cancellation flows.",
+    status: "in_progress", priority: "high", estimatedHours: 360,
+    skillsRequired: [skill("React"), skill("Backend"), skill("TypeScript")],
+    dependencies: [dep("task-hp-003")],
+    phase: 2, order: 2, aiConfidence: 83, itemStatus: "accepted",
+    acceptanceCriteria: ["Real-time availability calendar", "Appointment confirmation emails/SMS", "Cancellation and rescheduling", "Waitlist management"],
+    subtasks: [
+      { id: "st-hp-006", taskId: "task-hp-004", title: "Availability calendar component", estimatedHours: 80, skillsRequired: [skill("React"), skill("TypeScript")], itemStatus: "accepted", aiConfidence: 85 },
+      { id: "st-hp-007", taskId: "task-hp-004", title: "Booking and notification service", estimatedHours: 60, skillsRequired: [skill("Backend")], itemStatus: "proposed", aiConfidence: 81 },
+    ],
+  },
+  {
+    id: "task-hp-005", planId: "plan-005", milestoneId: "pm-017",
+    title: "Health records access portal",
+    description: "Secure patient access to lab results, prescriptions, and visit summaries.",
+    status: "backlog", priority: "high", estimatedHours: 320,
+    skillsRequired: [skill("React"), skill("Backend"), skill("Security")],
+    dependencies: [dep("task-hp-002")],
+    phase: 2, order: 3, aiConfidence: 82, itemStatus: "proposed",
+    acceptanceCriteria: ["Lab results with trend visualization", "Prescription history and refill requests", "Visit summaries PDF download", "Secure document sharing with providers"],
+    subtasks: [
+      { id: "st-hp-008", taskId: "task-hp-005", title: "Records viewer with PDF export", estimatedHours: 80, skillsRequired: [skill("React"), skill("Backend")], itemStatus: "proposed", aiConfidence: 84 },
+    ],
+  },
+  {
+    id: "task-hp-006", planId: "plan-005", milestoneId: "pm-018",
+    title: "Provider clinical dashboard",
+    description: "Provider-facing dashboard with patient queue, clinical notes, and task management.",
+    status: "backlog", priority: "critical", estimatedHours: 400,
+    skillsRequired: [skill("React"), skill("Backend"), skill("TypeScript")],
+    dependencies: [dep("task-hp-002")],
+    phase: 3, order: 1, aiConfidence: 81, itemStatus: "proposed",
+    acceptanceCriteria: ["Patient queue with priority indicators", "Clinical notes with templates", "Task assignment and tracking", "Provider schedule management"],
+    subtasks: [
+      { id: "st-hp-009", taskId: "task-hp-006", title: "Patient queue and clinical notes", estimatedHours: 100, skillsRequired: [skill("React"), skill("TypeScript")], itemStatus: "proposed", aiConfidence: 83 },
+      { id: "st-hp-010", taskId: "task-hp-006", title: "Provider schedule management", estimatedHours: 60, skillsRequired: [skill("Backend")], itemStatus: "proposed", aiConfidence: 79 },
+    ],
+  },
+  {
+    id: "task-hp-007", planId: "plan-005", milestoneId: "pm-018",
+    title: "EHR system integration",
+    description: "HL7 FHIR integration with existing EHR systems for data synchronization.",
+    status: "backlog", priority: "critical", estimatedHours: 400,
+    skillsRequired: [skill("Backend"), skill("Security"), skill("API")],
+    dependencies: [dep("task-hp-006")],
+    phase: 3, order: 2, aiConfidence: 79, itemStatus: "proposed",
+    acceptanceCriteria: ["HL7 FHIR R4 compliant APIs", "Bi-directional EHR sync", "Data mapping and transformation", "Error handling and reconciliation"],
+    subtasks: [
+      { id: "st-hp-011", taskId: "task-hp-007", title: "FHIR API integration layer", estimatedHours: 120, skillsRequired: [skill("Backend"), skill("Security")], itemStatus: "proposed", aiConfidence: 81 },
+      { id: "st-hp-012", taskId: "task-hp-007", title: "Data sync and reconciliation", estimatedHours: 80, skillsRequired: [skill("Backend"), skill("API")], itemStatus: "proposed", aiConfidence: 77 },
+    ],
+  },
+  {
+    id: "task-hp-008", planId: "plan-005", milestoneId: "pm-019",
+    title: "Patient analytics dashboard",
+    description: "Population health analytics with outcome tracking and risk stratification.",
+    status: "backlog", priority: "medium", estimatedHours: 200,
+    skillsRequired: [skill("React"), skill("Data"), skill("TypeScript")],
+    dependencies: [dep("task-hp-005"), dep("task-hp-007", "related")],
+    phase: 4, order: 1, aiConfidence: 78, itemStatus: "proposed",
+    acceptanceCriteria: ["Population health KPI dashboard", "Risk stratification scoring", "Outcome tracking over time", "Export to PDF and CSV"],
+    subtasks: [
+      { id: "st-hp-013", taskId: "task-hp-008", title: "Analytics charts and KPIs", estimatedHours: 60, skillsRequired: [skill("React"), skill("Data")], itemStatus: "proposed", aiConfidence: 80 },
+    ],
+  },
+  {
+    id: "task-hp-009", planId: "plan-005", milestoneId: "pm-019",
+    title: "Compliance reporting and audit trails",
+    description: "Automated HIPAA compliance reports, access logs, and audit trail generation.",
+    status: "backlog", priority: "high", estimatedHours: 200,
+    skillsRequired: [skill("Backend"), skill("Security"), skill("DevOps")],
+    dependencies: [dep("task-hp-001")],
+    phase: 4, order: 2, aiConfidence: 76, itemStatus: "proposed",
+    acceptanceCriteria: ["Automated monthly compliance reports", "User access audit trail", "Data breach detection alerts", "HIPAA audit package generation"],
+    subtasks: [
+      { id: "st-hp-014", taskId: "task-hp-009", title: "Audit trail and reporting engine", estimatedHours: 60, skillsRequired: [skill("Backend"), skill("Security")], itemStatus: "proposed", aiConfidence: 78 },
+      { id: "st-hp-015", taskId: "task-hp-009", title: "HIPAA compliance report generator", estimatedHours: 40, skillsRequired: [skill("Backend"), skill("DevOps")], itemStatus: "proposed", aiConfidence: 75 },
+    ],
+  },
+  
   /* ══════════════════════════════════════════════════════════════
      PLAN-004: Supply Chain Analytics — 6 tasks, 10 subtasks (all backlog/proposed)
      ══════════════════════════════════════════════════════════════ */

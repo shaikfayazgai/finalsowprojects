@@ -187,6 +187,7 @@ interface EditableTask {
   status: string;
   priority: "low" | "medium" | "high" | "critical";
   estimatedHours: number;
+  startDate?: string;
   skillsRequired: SkillTag[];
   dependencies: TaskDependency[];
   phase: number;
@@ -692,22 +693,21 @@ function EditableTaskCard({
               </Select>
             </div>
 
-            {/* Hours input */}
+           {/* Start Date picker */}
             <div className="flex items-center gap-1.5">
               <Clock className="w-3 h-3 text-gray-400" />
               <Input
-                type="number"
-                value={task.estimatedHours}
+                type="date"
+                value={task.startDate ?? ""}
                 onChange={(e) =>
                   onUpdate({
                     ...task,
-                    estimatedHours: parseInt(e.target.value) || 0,
+                    startDate: e.target.value,
                     isModified: true,
                   })
                 }
-                className="h-8 w-16 text-[11px] text-center px-2 rounded-lg border-gray-200"
+                className="h-8 w-36 text-[11px] px-2 rounded-lg border-gray-200"
               />
-              <span className="text-[10px] text-gray-400">hrs</span>
             </div>
 
             {/* Dependencies indicator */}
