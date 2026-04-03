@@ -14,4 +14,5 @@ export interface SSOData {
   lastName: string;
   email: string;
   provider: SSOProvider;
+  image?: string;
 }

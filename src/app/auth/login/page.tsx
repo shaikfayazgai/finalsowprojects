@@ -59,7 +59,7 @@ function LoginPageContent() {
 
   // Route based on user role — FSD §2.2 lifecycle
   const getRoleDest = () => {
-    if (userRole === "contributor") return isOnboardingComplete ? "/contributor/dashboard" : "/onboarding";
+    if (userRole === "contributor") return isOnboardingComplete ? "/contributor/dashboard" : "/contributor/onboarding";
     if (userRole === "mentor") return "/mentor/dashboard";
     if (userRole === "admin") return "/enterprise/dashboard";
     // enterprise role — show onboarding if not complete
@@ -208,7 +208,7 @@ function LoginPageContent() {
         // FSD §2.2: Contributor lifecycle: Register → Profile Builder → Assessment → Dashboard
         const dest = callbackUrl || (
           role === "contributor" ? (
-            isOnboardingComplete ? "/contributor/dashboard" : "/onboarding"
+            isOnboardingComplete ? "/contributor/dashboard" : "/contributor/onboarding"
           ) :
           role === "mentor" ? "/mentor/dashboard" :
           role === "admin" ? "/enterprise/dashboard" :

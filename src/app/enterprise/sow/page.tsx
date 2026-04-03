@@ -12,7 +12,8 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
-import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
+import { mockSOWSections } from "@/mocks/data/enterprise-sow";
+import { useSowStore } from "@/lib/stores/sow-store";
 
 /* ══════════════════════════════════════════ Status config ══════════════════════════════════════════ */
 
@@ -82,7 +83,8 @@ export default function SOWListPage() {
   const [search, setSearch] = React.useState("");
   const [searchFocused, setSearchFocused] = React.useState(false);
 
-  const uniqueClients = React.useMemo(() => [...new Set(mockSOWs.map((s) => s.client))].sort(), []);
+  const allSows = useSowStore((s) => s.sows);
+  const uniqueClients = React.useMemo(() => [...new Set(allSows.map((s) => s.client))].sort(), [allSows]);
 
   const [sortField, setSortField] = React.useState<SortField>("modified");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
@@ -95,7 +97,7 @@ export default function SOWListPage() {
   }
 
   const filtered = React.useMemo(() => {
-    let list = [...mockSOWs];
+    let list = [...allSows];
     if (statusFilter !== "all") {
       const chip = statusChips.find((c) => c.value === statusFilter);
       if (chip) list = list.filter((s) => chip.statuses.includes(s.status));
@@ -144,12 +146,12 @@ export default function SOWListPage() {
 
   function clearAllFilters() { setStatusFilter("all"); setDateFilter("all"); setClientFilter("all"); setSearch(""); }
 
-  const totalSOWs = mockSOWs.length;
-  const pendingCount = mockSOWs.filter((s) => ["approval", "review", "parsing"].includes(s.status)).length;
-  const approvedCount = mockSOWs.filter((s) => s.status === "approved").length;
-  const scoredSOWs = mockSOWs.filter((s) => s.riskScore.overall > 0);
+  const totalSOWs = allSows.length;
+  const pendingCount = allSows.filter((s) => ["approval", "review", "parsing"].includes(s.status)).length;
+  const approvedCount = allSows.filter((s) => s.status === "approved").length;
+  const scoredSOWs = allSows.filter((s) => s.riskScore.overall > 0);
   const avgRisk = scoredSOWs.length > 0 ? Math.round(scoredSOWs.reduce((sum, s) => sum + s.riskScore.overall, 0) / scoredSOWs.length) : 0;
-  const totalBudget = mockSOWs.reduce((sum, s) => sum + s.estimatedBudget, 0);
+  const totalBudget = allSows.reduce((sum, s) => sum + s.estimatedBudget, 0);
 
   const columns = [
     { field: "title" as SortField, label: "Title", align: "left" },
@@ -210,7 +212,7 @@ export default function SOWListPage() {
       </motion.div>
 
       {/* ═══ TABLE CARD ═══ */}
-      {mockSOWs.length === 0 ? (
+      {allSows.length === 0 ? (
         <motion.div variants={fadeUp} className="card-parchment">
           <div className="flex flex-col items-center justify-center py-20 text-center px-6">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center mb-4">

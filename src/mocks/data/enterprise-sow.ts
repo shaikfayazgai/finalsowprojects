@@ -2,7 +2,7 @@ import type { SOW, SOWSection, RiskScoreBreakdown, SOWApprovalStage } from "@/ty
 
 /* 5-stage approval pipeline per FSD v2.7 §7.7 */
 const approvedStages: SOWApprovalStage[] = [
-  { stage: "business", status: "approved", reviewer: "Priya Nair", reviewedAt: "2026-02-25T10:00:00Z", comments: "Budget and scope align with Q2 priorities." },
+  { stage: "business", status: "approved", reviewer: "Enterprise Admin", reviewedAt: "2026-02-25T10:00:00Z", comments: "Budget and scope align with Q2 priorities." },
   { stage: "glimmora_commercial", status: "approved", reviewer: "GlimmoraTeam Commercial", reviewedAt: "2026-02-25T18:00:00Z", comments: "Contracted value confirmed at $285,000. Rate cards aligned." },
   { stage: "legal", status: "approved", reviewer: "Kavita Sharma", reviewedAt: "2026-02-26T14:30:00Z", comments: "All clauses compliant with standard terms." },
   { stage: "security", status: "approved", reviewer: "Arjun Reddy", reviewedAt: "2026-02-27T09:15:00Z", comments: "Data handling meets ISO 27001 requirements." },
@@ -10,15 +10,15 @@ const approvedStages: SOWApprovalStage[] = [
 ];
 
 const pendingApprovalStages: SOWApprovalStage[] = [
-  { stage: "business", status: "approved", reviewer: "Priya Nair", reviewedAt: "2026-03-04T10:00:00Z", comments: "Scope verified." },
-  { stage: "glimmora_commercial", status: "approved", reviewer: "GlimmoraTeam Commercial", reviewedAt: "2026-03-05T11:30:00Z", comments: "Budget viability confirmed." },
-  { stage: "legal", status: "in_review", reviewer: "Kavita Sharma" },
+  { stage: "business", status: "approved", reviewer: "Enterprise Admin", reviewedAt: "2026-03-04T10:00:00Z", comments: "Scope verified." },
+  { stage: "glimmora_commercial", status: "approved", reviewer: "GlimmoraTeam Admin", reviewedAt: "2026-03-05T11:30:00Z", comments: "Budget viability confirmed." },
+  { stage: "legal", status: "in_review", reviewer: "Enterprise Admin" },
   { stage: "security", status: "pending" },
   { stage: "final", status: "pending" },
 ];
 
 const draftStages: SOWApprovalStage[] = [
-  { stage: "business", status: "pending" },
+  { stage: "business", status: "in_review", reviewer: "Enterprise Admin" },
   { stage: "glimmora_commercial", status: "pending" },
   { stage: "legal", status: "pending" },
   { stage: "security", status: "pending" },
@@ -26,8 +26,8 @@ const draftStages: SOWApprovalStage[] = [
 ];
 
 const changesRequestedStages: SOWApprovalStage[] = [
-  { stage: "business", status: "approved", reviewer: "Priya Nair", reviewedAt: "2026-03-10T10:00:00Z", comments: "Scope verified." },
-  { stage: "glimmora_commercial", status: "rejected", reviewer: "GlimmoraTeam Commercial", reviewedAt: "2026-03-11T15:00:00Z", comments: "Budget range too low for declared scope. Minimum viable budget for this scope is $220,000." },
+  { stage: "business", status: "approved", reviewer: "Enterprise Admin", reviewedAt: "2026-03-10T10:00:00Z", comments: "Scope verified." },
+  { stage: "glimmora_commercial", status: "rejected", reviewer: "GlimmoraTeam Admin", reviewedAt: "2026-03-11T15:00:00Z", comments: "Budget range too low for declared scope. Minimum viable budget for this scope is $220,000." },
   { stage: "legal", status: "pending" },
   { stage: "security", status: "pending" },
   { stage: "final", status: "pending" },
@@ -222,4 +222,18 @@ export const mockSOWSections: SOWSection[] = [
   { id: "sec-010", sowId: "sow-001", title: "Quality Assurance", content: "Unit tests (Jest), integration tests (Playwright), performance tests (k6). CI/CD pipeline with automated quality gates.", confidence: 96, order: 10 },
   { id: "sec-011", sowId: "sow-001", title: "Security & Compliance", content: "SOC 2 Type II compliance, AES-256 encryption at rest, TLS 1.3 in transit, RBAC with MFA, quarterly penetration testing.", confidence: 94, order: 11 },
   { id: "sec-012", sowId: "sow-001", title: "Support & Maintenance", content: "6-month post-launch warranty. 24/7 monitoring, 4-hour SLA for P1 incidents, monthly security patches.", confidence: 91, order: 12 },
+
+  // ── sow-003: HealthTech Patient Portal ──
+  { id: "s3-001", sowId: "sow-003", title: "Executive Summary", content: "This Statement of Work defines the design, development, and deployment of a HIPAA-compliant patient portal for MedCare Solutions Pvt. Ltd. The portal will enable patients to schedule appointments, access medical records, receive lab results, and communicate securely with healthcare providers.", confidence: 97, order: 1 },
+  { id: "s3-002", sowId: "sow-003", title: "Project Scope", content: "In Scope: Patient registration and identity verification, appointment scheduling with calendar sync, electronic health record (EHR) integration via HL7 FHIR APIs, lab result delivery with trend visualisation, secure provider-patient messaging, prescription refill requests, and a mobile-responsive web application.\n\nOut of Scope: Native iOS/Android applications, billing and insurance claims processing, and in-clinic kiosk integration.", confidence: 94, order: 2 },
+  { id: "s3-003", sowId: "sow-003", title: "Technical Requirements", content: "Frontend: Next.js 14 (App Router), TailwindCSS, React Query for data fetching.\nBackend: Node.js with Express, PostgreSQL, Redis for session caching.\nIntegrations: Epic FHIR R4 API, Twilio for SMS OTP, SendGrid for email notifications.\nInfrastructure: AWS (ECS Fargate, RDS Aurora, S3, CloudFront), Terraform for IaC.\nCompliance: HIPAA, HITECH, SOC 2 Type II.", confidence: 96, order: 3 },
+  { id: "s3-004", sowId: "sow-003", title: "Timeline & Milestones", content: "Milestone 1 — Discovery & Architecture (Weeks 1–2): Finalise technical design, API contracts, and data model. Deliverable: Architecture Decision Record (ADR).\n\nMilestone 2 — Core Portal MVP (Weeks 3–8): Patient auth, appointment scheduling, EHR read access. Deliverable: Staging deployment + UAT sign-off.\n\nMilestone 3 — Messaging & Lab Results (Weeks 9–12): Secure inbox, lab result viewer, prescription requests. Deliverable: QA-complete build.\n\nMilestone 4 — Production Launch (Weeks 13–14): Load testing, penetration test, go-live, hypercare.", aiSuggestion: "Consider adding a 1-week buffer before Milestone 4 for regulatory sign-off from the client's compliance team.", confidence: 87, order: 4 },
+  { id: "s3-005", sowId: "sow-003", title: "Team Composition", content: "1 × Project Manager / Scrum Master\n2 × Senior Full-Stack Engineers (Next.js + Node.js)\n1 × Backend Engineer — FHIR Integration Specialist\n1 × UI/UX Designer (Healthcare UX experience required)\n1 × DevOps / Cloud Engineer\n1 × QA Engineer (manual + automated)\n1 × Security & Compliance Consultant (HIPAA)", confidence: 93, order: 5 },
+  { id: "s3-006", sowId: "sow-003", title: "Budget & Payment Schedule", content: "Total Contract Value: $340,000 USD\n\nPayment Schedule:\n• 20% on contract signature ($68,000) — mobilisation\n• 30% on Milestone 2 sign-off ($102,000) — MVP delivery\n• 30% on Milestone 3 sign-off ($102,000) — full feature set\n• 20% on production go-live ($68,000) — final acceptance\n\nExpenses: Capped at 5% of total contract value. AWS infrastructure costs billed at cost + 10% management fee.", confidence: 91, order: 6 },
+  { id: "s3-007", sowId: "sow-003", title: "Acceptance Criteria", content: "Each milestone deliverable is accepted when:\n1. All functional acceptance tests pass (Playwright suite, >95% pass rate).\n2. Performance benchmarks met: p95 API response < 300ms under 500 concurrent users.\n3. Zero Critical or High findings in OWASP ZAP security scan.\n4. HIPAA compliance checklist signed off by client's Privacy Officer.\n5. UAT sign-off received in writing within 5 business days of staging deployment.", confidence: 95, order: 7 },
+  { id: "s3-008", sowId: "sow-003", title: "Risk Register", content: "Risk 1 — FHIR API Instability (High): Epic sandbox environments have historically had rate-limit issues. Mitigation: Build request queue with exponential back-off; allocate 1 week spike in Milestone 2.\n\nRisk 2 — HIPAA Audit Delays (Medium): Client's internal compliance review may delay go-live. Mitigation: Engage compliance consultant from Week 1; share draft BAA by Week 2.\n\nRisk 3 — Scope Creep (Medium): Healthcare stakeholders frequently request additional features post-discovery. Mitigation: Strict change request process with written approval; out-of-scope items priced separately.", aiSuggestion: "Add a risk entry for third-party SendGrid deliverability issues affecting OTP emails.", confidence: 86, order: 8 },
+  { id: "s3-009", sowId: "sow-003", title: "Security & Compliance", content: "All PHI (Protected Health Information) encrypted at rest (AES-256) and in transit (TLS 1.3). Role-Based Access Control (RBAC) enforced at API and UI layers. Audit logs retained for 7 years per HIPAA §164.312. MFA mandatory for all provider accounts. Quarterly penetration tests conducted by an independent third party. Business Associate Agreement (BAA) to be signed prior to any PHI data access.", confidence: 98, order: 9 },
+  { id: "s3-010", sowId: "sow-003", title: "Assumptions & Dependencies", content: "1. Client will provide access to Epic FHIR sandbox within 5 business days of contract signature.\n2. Client's internal IT team will configure firewall rules for outbound API calls.\n3. Final approved UI designs will be provided by the client's design team no later than end of Week 1.\n4. A dedicated client UAT team of at least 3 clinical staff will be available during Milestones 2 and 3.\n5. All third-party API credentials (Twilio, SendGrid) provisioned by client under their own accounts.", confidence: 89, order: 10 },
+  { id: "s3-011", sowId: "sow-003", title: "Intellectual Property", content: "All custom source code, documentation, and design assets created under this SOW are the exclusive property of MedCare Solutions Pvt. Ltd. upon full payment. Open-source libraries used under their respective licenses (MIT, Apache 2.0) are excluded. The vendor retains rights to generic tooling and internal frameworks not specific to this engagement.", confidence: 92, order: 11 },
+  { id: "s3-012", sowId: "sow-003", title: "Warranty & Support", content: "90-day defect warranty post go-live. Defects classified as Critical (portal down, data loss) resolved within 4 hours; High (feature broken) within 1 business day; Medium/Low within 5 business days. After warranty period, optional SLA-backed maintenance retainer available at $8,500/month covering monitoring, patches, and up to 20 hours of change requests.", confidence: 90, order: 12 },
 ];

@@ -20,8 +20,8 @@ import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import type {
   DecompositionTask, PlanMilestone, PlanStatus, TaskStatus, AIRecommendation,
 } from "@/types/enterprise";
-import { Gantt, Willow } from "@svar-ui/react-gantt";
-import "@svar-ui/react-gantt/all.css";
+import { Gantt } from "@svar-ui/react-gantt";
+import "@svar-ui/react-gantt/style.css";
 
 /* ═══ Badge ═══ */
 

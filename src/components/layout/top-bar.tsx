@@ -31,10 +31,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { ModuleConfig } from "@/lib/config/navigation";
-import type { AppNotification } from "@/types/enterprise";
 import { mockPlans, mockTeams } from "@/mocks/data/enterprise-projects";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
-import { mockNotifications } from "@/mocks/data/enterprise-dashboard";
+import { useNotificationStore } from "@/lib/stores/notification-store";
 
 const segmentLabels: Record<string, string> = {
   apg: "Policies", "sow-forms": "SOW Intake Forms", "clause-library": "Clause Library",
@@ -71,7 +70,7 @@ function timeAgo(ts: string) {
 const severityColor: Record<string, string> = { high: "bg-red-500", medium: "bg-gold-500", low: "bg-gray-300" };
 
 function NotificationBell() {
-  const [notifications, setNotifications] = React.useState<AppNotification[]>(mockNotifications);
+  const { notifications, markRead, markAllRead } = useNotificationStore();
   const [tab, setTab] = React.useState<"all" | "high">("all");
 
   const unread = notifications.filter((n) => !n.read);
@@ -79,9 +78,6 @@ function NotificationBell() {
   const badgeColor = hasHigh ? "bg-red-500" : "bg-gold-500";
 
   const filtered = tab === "high" ? notifications.filter((n) => n.severity === "high") : notifications;
-
-  const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  const markRead = (id: string) => setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
 
   return (
     <Popover>

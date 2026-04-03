@@ -1,15 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
-  Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle,
+  AlertCircle, ArrowRight, CheckCircle,
   GraduationCap, Briefcase, Users,
 } from "lucide-react";
 import {
   GlassCard, GlassCardContent, Button, Input, Label,
 } from "@/components/ui";
 import { CountryCombobox } from "./CountryCombobox";
-import type { PasswordStrength, SSOProvider } from "../types";
+import type { PasswordStrength } from "../types";
 import type { ContributorType } from "../types";
 
 interface Props {
@@ -19,14 +20,14 @@ interface Props {
   password: string;        setPassword: (v: string) => void;
   confirm: string;         setConfirm: (v: string) => void;
   showPw: boolean;         setShowPw: (v: boolean) => void;
-  showCon: boolean;        setShowCon: (v: boolean) => void;
   contribType: ContributorType; setContribType: (v: ContributorType) => void;
   country: string;         setCountry: (v: string) => void;
   passwordStrength: PasswordStrength;
   error: string;
   onContinue: () => void;
   isSsoUser?: boolean;
-  ssoProvider?: SSOProvider | null;
+  ssoProvider?: "google" | "microsoft" | null;
+  hideSignInLink?: boolean;
 }
 
 const CONTRIBUTOR_TYPES: {
@@ -70,7 +71,6 @@ export function Step1Identity({
   password, setPassword,
   confirm, setConfirm,
   showPw, setShowPw,
-  showCon, setShowCon,
   contribType, setContribType,
   country, setCountry,
   passwordStrength,
@@ -78,7 +78,44 @@ export function Step1Identity({
   onContinue,
   isSsoUser = false,
   ssoProvider = null,
+  hideSignInLink = false,
 }: Props) {
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const validateField = (field: string, value: string) => {
+    const errs = { ...fieldErrors };
+    switch (field) {
+      case "firstName":
+        if (!value.trim()) errs.firstName = "First name is required";
+        else delete errs.firstName;
+        break;
+      case "lastName":
+        if (!value.trim()) errs.lastName = "Last name is required";
+        else delete errs.lastName;
+        break;
+      case "email":
+        if (!value.trim()) errs.email = "Email is required";
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+          errs.email = "Enter a valid email address (e.g. name@company.com)";
+        else delete errs.email;
+        break;
+      case "password":
+        if (!value) errs.password = "Password is required";
+        else if (value.length < 8) errs.password = "Password must be at least 8 characters";
+        else if (!/[A-Z]/.test(value)) errs.password = "Must include an uppercase letter";
+        else if (!/[0-9]/.test(value)) errs.password = "Must include a number";
+        else if (!/[^A-Za-z0-9]/.test(value)) errs.password = "Must include a special character";
+        else delete errs.password;
+        break;
+      case "confirm":
+        if (!value) errs.confirm = "Please confirm your password";
+        else if (value !== password) errs.confirm = "Passwords do not match";
+        else delete errs.confirm;
+        break;
+    }
+    setFieldErrors(errs);
+  };
+
   return (
     <GlassCard variant="heavy" padding="lg">
       <GlassCardContent>
@@ -95,12 +132,20 @@ export function Step1Identity({
             <div className="space-y-2">
               <Label htmlFor="fn">First Name <span className="text-red-400">*</span></Label>
               <Input id="fn" placeholder="Enter first name" value={firstName}
-                onChange={e => setFirstName(e.target.value)} maxLength={50} autoFocus />
+                onChange={e => setFirstName(e.target.value)}
+                onBlur={() => validateField("firstName", firstName)}
+                maxLength={50} autoFocus readOnly={isSsoUser}
+                className={isSsoUser ? "bg-beige-50 text-beige-700" : ""} />
+              {fieldErrors.firstName && <p className="text-xs text-red-500">{fieldErrors.firstName}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="ln">Last Name <span className="text-red-400">*</span></Label>
               <Input id="ln" placeholder="Enter last name" value={lastName}
-                onChange={e => setLastName(e.target.value)} maxLength={50} />
+                onChange={e => setLastName(e.target.value)}
+                onBlur={() => validateField("lastName", lastName)}
+                maxLength={50} readOnly={isSsoUser}
+                className={isSsoUser ? "bg-beige-50 text-beige-700" : ""} />
+              {fieldErrors.lastName && <p className="text-xs text-red-500">{fieldErrors.lastName}</p>}
             </div>
           </div>
 
@@ -108,8 +153,10 @@ export function Step1Identity({
           <div className="space-y-2">
             <Label htmlFor="email">Email Address <span className="text-red-400">*</span></Label>
             <div className="relative">
-              <Input id="email" type="email" placeholder="name@company.com" value={email}
-                onChange={e => setEmail(e.target.value)} autoComplete="email"
+              <Input id="email" type="email" placeholder="Enter your email" value={email}
+                onChange={e => setEmail(e.target.value)}
+                onBlur={() => validateField("email", email)}
+                autoComplete="email"
                 readOnly={isSsoUser} className={isSsoUser ? "pr-10 bg-beige-50 text-beige-700" : ""} />
               {isSsoUser && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -117,6 +164,7 @@ export function Step1Identity({
                 </div>
               )}
             </div>
+            {fieldErrors.email && <p className="text-xs text-red-500">{fieldErrors.email}</p>}
             {isSsoUser && ssoProvider && (
               <p className="text-xs text-teal-600 flex items-center gap-1">
                 <CheckCircle className="w-3 h-3" />
@@ -129,35 +177,12 @@ export function Step1Identity({
           {!isSsoUser && (
             <div className="space-y-2">
               <Label htmlFor="pw">Password <span className="text-red-400">*</span></Label>
-              <div className="relative">
-                <Input id="pw" type={showPw ? "text" : "password"}
-                  placeholder="Create a strong password (min 8 characters)"
-                  value={password} onChange={e => setPassword(e.target.value)} className="pr-10" />
-                <button type="button" onClick={() => setShowPw(!showPw)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600">
-                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {password && (
-                <div className="space-y-1">
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map(i => (
-                      <div key={i}
-                        className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                          i <= passwordStrength.score ? passwordStrength.color : "bg-beige-200"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <p className={`text-xs font-medium ${
-                    passwordStrength.score <= 1 ? "text-red-500"
-                    : passwordStrength.score <= 3 ? "text-gold-600"
-                    : "text-teal-600"
-                  }`}>
-                    {passwordStrength.label}
-                  </p>
-                </div>
-              )}
+              <Input id="pw" type={showPw ? "text" : "password"}
+                placeholder="Create a strong password (min 8 characters)"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                onBlur={() => validateField("password", password)} />
+              {fieldErrors.password && <p className="text-xs text-red-500">{fieldErrors.password}</p>}
             </div>
           )}
 
@@ -165,15 +190,51 @@ export function Step1Identity({
           {!isSsoUser && (
             <div className="space-y-2">
               <Label htmlFor="con">Confirm Password <span className="text-red-400">*</span></Label>
-              <div className="relative">
-                <Input id="con" type={showCon ? "text" : "password"}
-                  placeholder="Re-enter password to confirm"
-                  value={confirm} onChange={e => setConfirm(e.target.value)} className="pr-10" />
-                <button type="button" onClick={() => setShowCon(!showCon)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600">
-                  {showCon ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+              <Input id="con" type={showPw ? "text" : "password"}
+                placeholder="Re-enter password to confirm"
+                value={confirm}
+                onChange={e => setConfirm(e.target.value)}
+                onBlur={() => validateField("confirm", confirm)} />
+              {confirm && password !== confirm && (
+                <p className="text-xs text-red-500">Passwords do not match</p>
+              )}
+              {confirm && password === confirm && password.length > 0 && (
+                <p className="text-xs text-teal-600 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" /> Passwords match
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Show password checkbox — shared toggle for both fields */}
+          {!isSsoUser && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={showPw} onChange={e => setShowPw(e.target.checked)}
+                className="w-4 h-4 rounded border-beige-300 accent-brown-600 cursor-pointer" />
+              <span className="text-xs text-beige-600">Show password</span>
+            </label>
+          )}
+
+          {/* Password requirements checklist */}
+          {!isSsoUser && password && (
+            <div className="p-3 rounded-lg bg-beige-50 border border-beige-200 space-y-1">
+              <p className="text-xs font-semibold text-beige-700 mb-1">Password requirements:</p>
+              {[
+                { check: password.length >= 8, text: "At least 8 characters" },
+                { check: /[A-Z]/.test(password), text: "Uppercase letter" },
+                { check: /[a-z]/.test(password), text: "Lowercase letter" },
+                { check: /[0-9]/.test(password), text: "Number" },
+                { check: /[^A-Za-z0-9]/.test(password), text: "Special character" },
+              ].map((req, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 ${
+                    req.check ? "bg-teal-500" : "bg-beige-300"
+                  }`}>
+                    {req.check && <CheckCircle className="w-2.5 h-2.5 text-white" />}
+                  </div>
+                  <span className={req.check ? "text-teal-700" : "text-beige-500"}>{req.text}</span>
+                </div>
+              ))}
             </div>
           )}
 
@@ -215,10 +276,12 @@ export function Step1Identity({
             Continue <ArrowRight className="w-4 h-4" />
           </Button>
 
-          <p className="text-center text-sm text-beige-600">
-            Already have an account?{" "}
-            <Link href="/auth/login" className="text-teal-600 hover:text-teal-700 font-medium">Sign in</Link>
-          </p>
+          {!hideSignInLink && (
+            <p className="text-center text-sm text-beige-600">
+              Already have an account?{" "}
+              <Link href="/auth/login" className="text-teal-600 hover:text-teal-700 font-medium">Sign in</Link>
+            </p>
+          )}
         </div>
       </GlassCardContent>
     </GlassCard>

@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   FileText,
@@ -40,8 +41,15 @@ import {
   Lock,
   Fingerprint,
   Filter,
+  MessageSquareDiff,
+  Undo2,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { toast } from "@/lib/stores/toast-store";
+import { useNotificationStore } from "@/lib/stores/notification-store";
+import { useSowMessagesStore } from "@/lib/stores/sow-messages-store";
+import { buildActivatedMessage, buildApprovedMessage, buildNextApproverMessage, buildChangesRequestedMessage } from "@/mocks/data/sow-approval-messages";
 import { stagger, fadeUp, slideInRight } from "@/lib/utils/motion-variants";
 import {
   Badge,
@@ -59,7 +67,8 @@ import {
 } from "@/components/ui";
 import { MetricRing } from "@/components/enterprise/metric-ring";
 import { StatusTimeline } from "@/components/enterprise/status-timeline";
-import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
+import { mockSOWSections } from "@/mocks/data/enterprise-sow";
+import { useSowStore, INITIAL_APPROVAL_STAGES } from "@/lib/stores/sow-store";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
 import {
   mockSOWClauses,
@@ -150,7 +159,7 @@ function formatDateTime(iso: string): string {
 
 /* ── Mock generators ── */
 
-function generateVersionHistory(sow: (typeof mockSOWs)[0]) {
+function generateVersionHistory(sow: import("@/types/enterprise").SOW) {
   const versions = [];
   for (let v = sow.version; v >= 1; v--) {
     const date = new Date(sow.createdAt);
@@ -180,7 +189,7 @@ type AuditEvent = {
   details: string;
 };
 
-function generateAuditTrail(sow: (typeof mockSOWs)[0]) {
+function generateAuditTrail(sow: import("@/types/enterprise").SOW) {
   const events: AuditEvent[] = [
     {
       id: "audit-1",
@@ -260,7 +269,12 @@ const auditActionIcon: Record<string, React.ElementType> = {
 export default function SOWDetailPage() {
   const params = useParams();
   const sowId = params.sowId as string;
-  const sow = mockSOWs.find((s) => s.id === sowId) || mockSOWs[0];
+  const allSows = useSowStore((s) => s.sows);
+  const updateSow = useSowStore((s) => s.updateSow);
+  const sow = React.useMemo(
+    () => allSows.find((s) => s.id === sowId) ?? allSows[0],
+    [allSows, sowId]
+  );
   const linkedProject = mockProjects.find((p) => p.sowId === sow.id);
   const sections = mockSOWSections.filter((s) => s.sowId === sow.id);
   const clauses = mockSOWClauses.filter((c) => c.sowId === sow.id);
@@ -282,6 +296,57 @@ export default function SOWDetailPage() {
   const [clauseSearch, setClauseSearch] = React.useState("");
   const [auditTypeFilter, setAuditTypeFilter] = React.useState("all");
   const [docSearch, setDocSearch] = React.useState("");
+  const [approvalChecked, setApprovalChecked] = React.useState<Record<string, boolean>>({});
+  const [signatureText, setSignatureText] = React.useState("");
+  const [activeApprovalIdx, setActiveApprovalIdx] = React.useState(0);
+  const [showRequestChanges, setShowRequestChanges] = React.useState(false);
+  const [requestChangesNote, setRequestChangesNote] = React.useState("");
+  const [requestCategory, setRequestCategory] = React.useState<"scope"|"deliverables"|"timeline"|"other">("scope");
+  const [requestSection, setRequestSection] = React.useState("Section 3 — Deliverables");
+  const [sectionDropdownOpen, setSectionDropdownOpen] = React.useState(false);
+  const sectionDropdownRef = React.useRef<HTMLDivElement>(null);
+  const sectionTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const [dropdownCoords, setDropdownCoords] = React.useState({ top: 0, left: 0, width: 0 });
+
+  React.useEffect(() => {
+    if (!sectionDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        sectionDropdownRef.current && !sectionDropdownRef.current.contains(e.target as Node) &&
+        sectionTriggerRef.current && !sectionTriggerRef.current.contains(e.target as Node)
+      ) {
+        setSectionDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [sectionDropdownOpen]);
+
+  const openSectionDropdown = () => {
+    if (sectionTriggerRef.current) {
+      const rect = sectionTriggerRef.current.getBoundingClientRect();
+      setDropdownCoords({ top: rect.bottom + 6, left: rect.left, width: Math.max(rect.width, 220) });
+    }
+    setSectionDropdownOpen(v => !v);
+  };
+  const pushNotification = useNotificationStore((s) => s.push);
+  const addSowMessage = useSowMessagesStore((s) => s.addMessage);
+
+  // Seed initial stage_activated message on first visit
+  React.useEffect(() => {
+    const thread = useSowMessagesStore.getState().getThread(sow.id);
+    if (thread.length === 0) {
+      const activatedMsg = buildActivatedMessage(sow.id, 0, sow.title);
+      useSowMessagesStore.getState().addMessage(sow.id, activatedMsg);
+      useNotificationStore.getState().push({
+        title: activatedMsg.subject,
+        body: activatedMsg.body,
+        severity: "medium",
+        href: `/enterprise/sow/${sow.id}`,
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sow.id]);
 
   const toggleSection = (id: string) => {
     setExpandedSections((prev) => {
@@ -296,6 +361,23 @@ export default function SOWDetailPage() {
   const isValidated = sow.parsedSections > 0 && sow.totalSections > 0;
 
   function handleConfirmSubmit() {
+    updateSow(sow.id, {
+      status: "approval",
+      approvalStages: INITIAL_APPROVAL_STAGES,
+      updatedAt: new Date().toISOString(),
+    });
+    // Seed the first stage activation message
+    const thread = useSowMessagesStore.getState().getThread(sow.id);
+    if (thread.length === 0) {
+      const activatedMsg = buildActivatedMessage(sow.id, 0, sow.title);
+      useSowMessagesStore.getState().addMessage(sow.id, activatedMsg);
+      useNotificationStore.getState().push({
+        title: activatedMsg.subject,
+        body: activatedMsg.body,
+        severity: "medium",
+        href: `/enterprise/sow/${sow.id}`,
+      });
+    }
     setSubmitSuccess(true);
     setTimeout(() => setShowSubmitModal(false), 2000);
   }
@@ -359,54 +441,58 @@ export default function SOWDetailPage() {
       {/* ── Header (B6 Step 1) ── */}
       <motion.div
         variants={fadeUp}
-        className="flex flex-col md:flex-row md:items-start md:justify-between gap-4"
+        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm px-6 py-5"
       >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <h1 className="text-xl font-bold text-brown-900 tracking-tight font-heading">
-              {sow.title}
-            </h1>
-            <Badge variant={statusVariantMap[sow.status]} size="md" dot>
-              {statusLabel[sow.status]}
-            </Badge>
-            <Badge
-              variant={sow.intakeMode === "ai_generated" ? "teal" : "beige"}
-              size="sm"
-            >
-              {sow.intakeMode === "ai_generated" ? (
-                <><Bot className="w-3 h-3" /> AI Generated</>
-              ) : (
-                <><Upload className="w-3 h-3" /> Manual Upload</>
-              )}
-            </Badge>
-            <Badge variant={confidentialityVariantMap[sow.confidentiality]} size="sm">
-              <Shield className="w-3 h-3" />
-              {sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1)}
-            </Badge>
-            {sow.riskScore.overall > 0 && (
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            {/* Row 1: Title + status */}
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <h1 className="text-xl font-bold text-brown-900 tracking-tight font-heading">
+                {sow.title}
+              </h1>
+              <Badge variant={statusVariantMap[sow.status]} size="md" dot>
+                {statusLabel[sow.status]}
+              </Badge>
+            </div>
+            {/* Row 2: Sub-metadata + secondary badges */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-[11px] text-beige-500">{sow.id.toUpperCase()}</span>
+              <span className="w-1 h-1 rounded-full bg-beige-300" />
+              <span className="text-[12px] text-beige-600">{sow.client}</span>
+              <span className="w-1 h-1 rounded-full bg-beige-300" />
+              <span className="text-[12px] text-beige-600">v{sow.version}</span>
+              <span className="w-1 h-1 rounded-full bg-beige-300" />
+              <span className="text-[12px] text-beige-600">{sow.fileSize}</span>
+              <span className="w-1 h-1 rounded-full bg-beige-300" />
+              <span className="text-[12px] text-beige-600">By {sow.createdBy}</span>
+              <span className="w-1 h-1 rounded-full bg-beige-300" />
               <Badge
-                variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"}
+                variant={sow.intakeMode === "ai_generated" ? "teal" : "beige"}
                 size="sm"
               >
-                Risk: {sow.riskScore.overall}/100
+                {sow.intakeMode === "ai_generated" ? (
+                  <><Bot className="w-3 h-3" /> AI Generated</>
+                ) : (
+                  <><Upload className="w-3 h-3" /> Manual Upload</>
+                )}
               </Badge>
-            )}
+              <Badge variant={confidentialityVariantMap[sow.confidentiality]} size="sm">
+                <Shield className="w-3 h-3" />
+                {sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1)}
+              </Badge>
+              {sow.riskScore.overall > 0 && (
+                <Badge
+                  variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"}
+                  size="sm"
+                >
+                  Risk {sow.riskScore.overall}/100
+                </Badge>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3 text-sm text-beige-600 flex-wrap">
-            <span className="font-mono text-[11px] text-beige-500">{sow.id.toUpperCase()}</span>
-            <span className="w-1 h-1 rounded-full bg-beige-300" />
-            <span>{sow.client}</span>
-            <span className="w-1 h-1 rounded-full bg-beige-300" />
-            <span>v{sow.version}</span>
-            <span className="w-1 h-1 rounded-full bg-beige-300" />
-            <span>{sow.fileSize}</span>
-            <span className="w-1 h-1 rounded-full bg-beige-300" />
-            <span>Created by {sow.createdBy}</span>
-          </div>
-        </div>
 
-        {/* Status-aware header actions (B6 Step 1 a-e) */}
-        <div className="flex items-center gap-2 shrink-0">
+          {/* Status-aware header actions (B6 Step 1 a-e) */}
+          <div className="flex items-center gap-2 shrink-0">
           {(sow.status === "draft" || sow.status === "review") && isValidated && (
             <Button variant="gradient-primary" size="sm" onClick={() => setShowSubmitModal(true)}>
               <Send className="w-3.5 h-3.5" />
@@ -445,82 +531,84 @@ export default function SOWDetailPage() {
               </Button>
             </Link>
           )}
+          </div>
         </div>
       </motion.div>
 
       {/* ── Top Metadata Strip ── */}
-      <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        {[
-          { icon: BookOpen, label: "Pages", value: `${sow.pages}` },
-          { icon: Layers, label: "Sections", value: `${sow.parsedSections}/${sow.totalSections}` },
-          { icon: DollarSign, label: "Est. Budget", value: sow.estimatedBudget > 0 ? `$${(sow.estimatedBudget / 1000).toFixed(0)}K` : "TBD" },
-          { icon: Clock, label: "Duration", value: sow.estimatedDuration },
-          { icon: Users, label: "Stakeholders", value: `${sow.stakeholders.length}` },
-          { icon: Calendar, label: "Updated", value: formatDate(sow.updatedAt) },
-        ].map(({ icon: Icon, label, value }) => (
-          <div
-            key={label}
-            className="rounded-xl border border-beige-200/50 bg-white/60 backdrop-blur-sm p-3 flex items-center gap-3"
-          >
-            <div className="w-8 h-8 rounded-lg bg-beige-100/80 flex items-center justify-center shrink-0">
-              <Icon className="w-4 h-4 text-beige-500" />
+      <motion.div variants={fadeUp} className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm px-5 py-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {[
+            { icon: BookOpen, label: "Pages", value: `${sow.pages}` },
+            { icon: Layers, label: "Sections", value: `${sow.parsedSections}/${sow.totalSections}` },
+            { icon: DollarSign, label: "Est. Budget", value: sow.estimatedBudget > 0 ? `$${(sow.estimatedBudget / 1000).toFixed(0)}K` : "TBD" },
+            { icon: Clock, label: "Duration", value: sow.estimatedDuration },
+            { icon: Users, label: "Stakeholders", value: `${sow.stakeholders.length}` },
+            { icon: Calendar, label: "Updated", value: formatDate(sow.updatedAt) },
+          ].map(({ icon: Icon, label, value }, i) => (
+            <div key={label} className={cn("flex items-center gap-3", i > 0 && "lg:border-l lg:border-beige-200/50 lg:pl-4")}>
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-beige-50 to-beige-100 border border-beige-200/50 flex items-center justify-center shrink-0">
+                <Icon className="w-4 h-4 text-brown-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-beige-400 uppercase tracking-widest">{label}</p>
+                <p className="text-[15px] font-bold text-brown-900 truncate leading-tight">{value}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold text-beige-500 uppercase tracking-wider">{label}</p>
-              <p className="text-[14px] font-bold text-brown-900 truncate">{value}</p>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════
          9-TAB CONTENT (B6 Steps 2-10)
          ══════════════════════════════════════════════════════════════ */}
-      <motion.div variants={fadeUp}>
-        <Tabs defaultValue="metadata" className="w-full">
-          <TabsList className="mb-2 flex-wrap">
-            <TabsTrigger value="metadata" className="gap-1.5">
-              <FileText className="w-3.5 h-3.5" /> Metadata
-            </TabsTrigger>
-            <TabsTrigger value="clauses" className="gap-1.5">
-              <Scale className="w-3.5 h-3.5" /> Clauses
-              {prohibitedCount > 0 && (
-                <span className="ml-1 w-4 h-4 rounded-full bg-brown-500 text-white text-[9px] font-bold flex items-center justify-center">
-                  {prohibitedCount}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="document" className="gap-1.5">
-              <BookOpen className="w-3.5 h-3.5" /> Document
-            </TabsTrigger>
-            <TabsTrigger value="ai-analysis" className="gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> AI Analysis
-            </TabsTrigger>
-            <TabsTrigger value="risk" className="gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" /> Risk & Compliance
-            </TabsTrigger>
-            <TabsTrigger value="approval" className="gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Approval
-            </TabsTrigger>
-            <TabsTrigger value="versions" className="gap-1.5">
-              <GitBranch className="w-3.5 h-3.5" /> Versions
-            </TabsTrigger>
-            <TabsTrigger value="audit" className="gap-1.5">
-              <History className="w-3.5 h-3.5" /> Audit
-            </TabsTrigger>
-            <TabsTrigger value="linked" className="gap-1.5">
-              <Link2 className="w-3.5 h-3.5" /> Linked
-            </TabsTrigger>
-          </TabsList>
+      <motion.div variants={fadeUp} className="rounded-2xl border border-beige-100 bg-beige-50/50 overflow-hidden">
+        <Tabs defaultValue="approval" className="w-full">
+          <div className="border-b border-beige-200/50 bg-beige-50/30">
+            <TabsList className="flex flex-wrap bg-transparent gap-0 p-0 px-3">
+              <TabsTrigger value="approval" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Approval
+              </TabsTrigger>
+              <TabsTrigger value="ai-analysis" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <Sparkles className="w-3.5 h-3.5 shrink-0" /> AI Analysis
+              </TabsTrigger>
+              <TabsTrigger value="audit" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <History className="w-3.5 h-3.5 shrink-0" /> Audit
+              </TabsTrigger>
+              <TabsTrigger value="clauses" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <Scale className="w-3.5 h-3.5 shrink-0" /> Clauses
+                {prohibitedCount > 0 && (
+                  <span className="ml-1 w-4 h-4 rounded-full bg-brown-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {prohibitedCount}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="document" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <BookOpen className="w-3.5 h-3.5 shrink-0" /> Document
+              </TabsTrigger>
+              <TabsTrigger value="linked" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <Link2 className="w-3.5 h-3.5 shrink-0" /> Linked
+              </TabsTrigger>
+              <TabsTrigger value="metadata" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <FileText className="w-3.5 h-3.5 shrink-0" /> Metadata
+              </TabsTrigger>
+              <TabsTrigger value="risk" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" /> Risk & Compliance
+              </TabsTrigger>
+              <TabsTrigger value="versions" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <GitBranch className="w-3.5 h-3.5 shrink-0" /> Versions
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* ═══════════════════════════════════════════════════
              TAB 1: Metadata (B6 Step 2)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="metadata">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <TabsContent value="metadata" className="mt-0">
+            <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
               <div className="lg:col-span-2 space-y-4">
                 {/* Core Details */}
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                <div className="rounded-2xl border border-beige-200/50 bg-beige-50/30 p-5">
                   <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">
                     SOW Details
                   </h3>
@@ -548,7 +636,7 @@ export default function SOWDetailPage() {
                 </div>
 
                 {/* Stakeholders */}
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                   <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-3">Stakeholders</h3>
                   <div className="flex flex-wrap gap-2">
                     {sow.stakeholders.map((name) => (
@@ -563,7 +651,7 @@ export default function SOWDetailPage() {
                 </div>
 
                 {/* Tags */}
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                   <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-3">Tags</h3>
                   <div className="flex flex-wrap gap-2">
                     {sow.tags.map((tag) => (
@@ -577,7 +665,7 @@ export default function SOWDetailPage() {
 
               {/* Right sidebar: AI Confidence + quick risk */}
               <div className="space-y-4">
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6 text-center">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5 text-center">
                   <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-4">
                     Overall AI Confidence
                   </h3>
@@ -600,7 +688,7 @@ export default function SOWDetailPage() {
 
                 {/* Quick risk summary */}
                 {sow.riskScore.overall > 0 && (
-                  <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                     <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-3">Risk Score</h3>
                     <div className="flex items-center gap-2 mb-3">
                       <ShieldCheck className={cn("w-5 h-5", sow.riskScore.overall <= 30 ? "text-forest-500" : sow.riskScore.overall <= 60 ? "text-gold-500" : "text-brown-600")} />
@@ -616,7 +704,7 @@ export default function SOWDetailPage() {
                 )}
 
                 {/* Deliverables summary */}
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                   <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-3">Content Summary</h3>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -648,11 +736,11 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 2: Clauses (B6 Step 3)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="clauses">
-            <div className="space-y-4">
+          <TabsContent value="clauses" className="mt-0">
+            <div className="p-5 space-y-4">
               {/* Header + filters */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <h2 className="text-[15px] font-semibold text-brown-800">
+                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">
                   Tagged Clauses
                   <span className="ml-2 text-[12px] font-normal text-beige-500">({clauses.length} total)</span>
                 </h2>
@@ -704,7 +792,7 @@ export default function SOWDetailPage() {
               {/* Clause list */}
               <div className="space-y-2">
                 {filteredClauses.length === 0 ? (
-                  <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-12 text-center">
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-12 text-center">
                     <p className="text-sm text-beige-500">No clauses match your filters.</p>
                   </div>
                 ) : (
@@ -767,10 +855,10 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 3: Document (B6 Step 4)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="document">
-            <div className="space-y-4">
+          <TabsContent value="document" className="mt-0">
+            <div className="p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-[15px] font-semibold text-brown-800">
+                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">
                   {sow.intakeMode === "ai_generated" ? "Generated Document" : "Uploaded Document"}
                   <span className="ml-2 text-[12px] font-normal text-beige-500">({sections.length} sections)</span>
                 </h2>
@@ -805,7 +893,7 @@ export default function SOWDetailPage() {
               </div>
 
               {filteredDocSections.length === 0 ? (
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-12 text-center">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-12 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-beige-100 flex items-center justify-center mx-auto mb-4">
                     <Layers className="w-7 h-7 text-beige-400" />
                   </div>
@@ -826,7 +914,7 @@ export default function SOWDetailPage() {
                     return (
                       <div
                         key={section.id}
-                        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden hover:shadow-md transition-all"
+                        className="rounded-2xl border border-beige-100 bg-beige-50/50 overflow-hidden hover:shadow-md transition-all"
                       >
                         <button
                           onClick={() => toggleSection(section.id)}
@@ -905,16 +993,16 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 4: AI Analysis (B6 Step 5)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="ai-analysis">
-            <div className="space-y-5">
+          <TabsContent value="ai-analysis" className="mt-0">
+            <div className="p-5 space-y-5">
               {sow.intakeMode === "ai_generated" ? (
                 /* ── AI-Generated SOWs ── */
                 <>
-                  <h2 className="text-[15px] font-semibold text-brown-800">AI Generation Analysis</h2>
+                  <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">AI Generation Analysis</h2>
 
                   {/* Generation Parameters */}
                   {genParams && (
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                       <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Generation Parameters</h3>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         {[
@@ -936,7 +1024,7 @@ export default function SOWDetailPage() {
                   )}
 
                   {/* Confidence Breakdown */}
-                  <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                     <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Confidence Score Breakdown</h3>
                     <div className="flex items-center gap-4 mb-4">
                       <MetricRing value={sow.aiConfidence} size={80} strokeWidth={7} color={confidenceColor(sow.aiConfidence)} label="Overall" />
@@ -968,7 +1056,7 @@ export default function SOWDetailPage() {
 
                   {/* 8-Layer Hallucination Prevention */}
                   {hallucinationLayers.length > 0 && (
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                       <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">
                         8-Layer Hallucination Prevention
                       </h3>
@@ -1022,7 +1110,7 @@ export default function SOWDetailPage() {
 
                   {/* Hallucination Flags */}
                   {sow.hallucinationFlags && sow.hallucinationFlags.length > 0 && (
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                       <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Red-Flag Detections</h3>
                       <div className="space-y-3">
                         {sow.hallucinationFlags.map((flag) => (
@@ -1050,10 +1138,10 @@ export default function SOWDetailPage() {
               ) : (
                 /* ── Manual Upload SOWs ── */
                 <>
-                  <h2 className="text-[15px] font-semibold text-brown-800">Parsing & Analysis Results</h2>
+                  <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Parsing & Analysis Results</h2>
 
                   {/* Completeness Score */}
-                  <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                     <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Completeness Score</h3>
                     <div className="flex items-center gap-4 mb-4">
                       <MetricRing
@@ -1073,7 +1161,7 @@ export default function SOWDetailPage() {
                   </div>
 
                   {/* Gap Analysis */}
-                  <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                     <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Gap Analysis</h3>
                     <p className="text-[12px] text-beige-600 mb-4">Comparison against platform SOW standard template.</p>
                     {sections.length > 0 ? (
@@ -1098,7 +1186,7 @@ export default function SOWDetailPage() {
 
                   {/* Hallucination Flags (manual uploads can have them too) */}
                   {sow.hallucinationFlags && sow.hallucinationFlags.length > 0 && (
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                       <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Red-Flag Detections</h3>
                       <div className="space-y-3">
                         {sow.hallucinationFlags.map((flag) => (
@@ -1124,13 +1212,13 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 5: Risk & Compliance (B6 Step 6)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="risk">
-            <div className="space-y-5">
-              <h2 className="text-[15px] font-semibold text-brown-800">Risk & Compliance</h2>
+          <TabsContent value="risk" className="mt-0">
+            <div className="p-5 space-y-5">
+              <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Risk & Compliance</h2>
 
               {/* Risk Score Breakdown */}
               {sow.riskScore.overall > 0 && (
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                   <div className="flex items-center justify-between mb-5">
                     <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider">Risk Score Breakdown</h3>
                     <div className="flex items-center gap-2">
@@ -1175,7 +1263,7 @@ export default function SOWDetailPage() {
               )}
 
               {/* Ethics Screening */}
-              <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                 <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Ethics Screening</h3>
                 {ethicsScreening.length > 0 ? (
                   <div className="space-y-2">
@@ -1213,7 +1301,7 @@ export default function SOWDetailPage() {
               </div>
 
               {/* Data Sensitivity Handling */}
-              <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider">
                     Data Sensitivity: {sow.dataSensitivity.charAt(0).toUpperCase() + sow.dataSensitivity.slice(1)}
@@ -1234,7 +1322,7 @@ export default function SOWDetailPage() {
               </div>
 
               {/* Regulatory Alignment */}
-              <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                 <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Regulatory Alignment</h3>
                 {regulatoryItems.length > 0 ? (
                   <div className="space-y-2">
@@ -1269,121 +1357,481 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 6: Approval Status (B6 Step 7)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="approval">
-            <div className="space-y-5">
-              <h2 className="text-[15px] font-semibold text-brown-800">Approval Pipeline</h2>
+          <TabsContent value="approval" className="mt-0">
+            {(() => {
+              const STAGE_META: Record<string, { name: string; role: string }> = {
+                business:            { name: "Business Owner Review",        role: "Enterprise Admin" },
+                glimmora_commercial: { name: "GlimmoraTeam Commercial Review", role: "GlimmoraTeam Admin" },
+                legal:               { name: "Legal / Compliance Review",    role: "Enterprise Admin" },
+                security:            { name: "Security Review",              role: "Enterprise Admin" },
+                final:               { name: "Final Sign-off",               role: "Enterprise Admin" },
+              };
+              const STAGE_CHECKLISTS: Record<string, string[]> = {
+                business: [
+                  "Scope aligns with stated business objectives",
+                  "Budget range is within my authorisation limit",
+                  "Timeline is realistic for the project scope",
+                  "Deliverables are clearly defined",
+                  "Stakeholders correctly identified",
+                ],
+                glimmora_commercial: [
+                  "Commercial terms are acceptable",
+                  "Pricing model is validated",
+                  "Revenue recognition clauses reviewed",
+                  "Client credit check completed",
+                  "Contract template approved",
+                ],
+                legal: [
+                  "IP ownership clauses are compliant",
+                  "Liability caps are within policy",
+                  "Data processing agreement reviewed",
+                  "Dispute resolution terms accepted",
+                  "Governing law confirmed",
+                ],
+                security: [
+                  "Data classification requirements met",
+                  "Security controls are documented",
+                  "Penetration testing scope defined",
+                  "Access control policy aligned",
+                  "Incident response plan referenced",
+                ],
+                final: [
+                  "All prior stages approved",
+                  "Executive sign-off obtained",
+                  "SOW filed in document repository",
+                  "Client countersignature received",
+                  "Kick-off meeting scheduled",
+                ],
+              };
 
-              {/* Stage Progress Tracker */}
-              <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
-                <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-5">Stage Progress</h3>
+              const totalStages     = sow.approvalStages.length;
+              const isDone         = activeApprovalIdx >= totalStages;
+              const activeStageIdx = isDone ? totalStages - 1 : activeApprovalIdx;
+              const activeStage    = sow.approvalStages[activeApprovalIdx];
+              const activeMeta     = !isDone && activeStage ? STAGE_META[activeStage.stage] : null;
+              const checklist      = !isDone && activeStage ? (STAGE_CHECKLISTS[activeStage.stage] ?? []) : [];
+              const allChecked     = checklist.every((_, i) => approvalChecked[`${activeApprovalIdx}-${i}`]);
 
-                {/* Horizontal progress bar */}
-                <div className="flex items-center gap-2 mb-6">
-                  {sow.approvalStages.map((stage, idx) => (
-                    <React.Fragment key={stage.stage}>
-                      <div className="flex-1">
-                        <div className={cn(
-                          "h-2 rounded-full",
-                          stage.status === "approved" ? "bg-forest-500" :
-                          stage.status === "in_review" ? "bg-gold-400" :
-                          stage.status === "rejected" ? "bg-brown-500" :
-                          "bg-beige-200"
-                        )} />
-                      </div>
-                      {idx < sow.approvalStages.length - 1 && <div className="w-1" />}
-                    </React.Fragment>
-                  ))}
-                </div>
+              const handleApprove = () => {
+                const stageName = activeMeta?.name ?? "Stage";
+                toast.success(`Stage ${activeApprovalIdx + 1} Approved`, `${stageName} has been approved successfully.`);
+                addSowMessage(sow.id, buildApprovedMessage(sow.id, activeApprovalIdx, sow.title, sow.createdBy));
+                pushNotification({
+                  title: `Stage ${activeApprovalIdx + 1} Approved — ${stageName}`,
+                  body: `"${sow.title}" has moved to the next approval stage.`,
+                  severity: "medium",
+                  href: `/enterprise/sow/${sow.id}`,
+                });
+                const nextMsg = buildNextApproverMessage(sow.id, activeApprovalIdx + 1, sow.title);
+                if (nextMsg) {
+                  addSowMessage(sow.id, nextMsg);
+                  pushNotification({
+                    title: nextMsg.subject,
+                    body: nextMsg.body,
+                    severity: "medium",
+                    href: `/enterprise/sow/${sow.id}`,
+                  });
+                }
+                setApprovalChecked({});
+                setSignatureText("");
+                setShowRequestChanges(false);
+                setRequestChangesNote("");
+                setActiveApprovalIdx(prev => prev + 1);
+              };
 
-                {/* Stage cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {sow.approvalStages.map((stage, idx) => (
-                    <div
-                      key={stage.stage}
-                      className={cn(
-                        "rounded-xl border p-4",
-                        stage.status === "approved" ? "border-forest-200/60 bg-forest-50/20" :
-                        stage.status === "in_review" ? "border-gold-200/60 bg-gold-50/20" :
-                        stage.status === "rejected" ? "border-brown-200/60 bg-brown-50/20" :
-                        "border-beige-200/50 bg-beige-50/30"
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={cn(
-                          "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
-                          stage.status === "approved" ? "bg-forest-100" :
-                          stage.status === "in_review" ? "bg-gold-100" :
-                          stage.status === "rejected" ? "bg-brown-100" :
-                          "bg-beige-100"
-                        )}>
-                          {stage.status === "approved" ? (
-                            <CheckCircle2 className="w-4 h-4 text-forest-600" />
-                          ) : stage.status === "in_review" ? (
-                            <Clock className="w-4 h-4 text-gold-600" />
-                          ) : stage.status === "rejected" ? (
-                            <X className="w-4 h-4 text-brown-600" />
-                          ) : (
-                            <span className="text-[12px] font-bold text-beige-500">{idx + 1}</span>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[14px] font-semibold text-brown-800 capitalize">
-                              Stage {idx + 1}: {stage.stage} Review
-                            </span>
-                            <Badge
-                              variant={stage.status === "approved" ? "forest" : stage.status === "in_review" ? "gold" : stage.status === "rejected" ? "brown" : "beige"}
-                              size="sm"
-                            >
-                              {stage.status === "approved" ? "Approved" : stage.status === "in_review" ? "In Review" : stage.status === "rejected" ? "Rejected" : "Pending"}
-                            </Badge>
-                          </div>
-                          {stage.reviewer && (
-                            <p className="text-[12px] text-beige-600">
-                              Reviewer: <span className="font-medium text-brown-700">{stage.reviewer}</span>
-                            </p>
-                          )}
-                          {stage.reviewedAt && (
-                            <p className="text-[11px] text-beige-500 mt-0.5">
-                              {formatDateTime(stage.reviewedAt)}
-                            </p>
-                          )}
-                          {stage.comments && (
-                            <div className="mt-2 rounded-lg bg-white/80 border border-beige-200/30 p-3">
-                              <p className="text-[12px] text-brown-700 italic">&ldquo;{stage.comments}&rdquo;</p>
+              const PRE_FILLED_NOTES: Record<number, string> = {
+                0: "Please revisit the scope definition — deliverables in Section 3 are too broad and need measurable acceptance criteria before I can approve.",
+                1: "The commercial terms need revision. The payment schedule doesn't align with milestone completion. Please adjust the invoicing structure.",
+                2: "Legal review requires additional clarity on IP ownership clauses and data processing agreement references.",
+                3: "Security controls documentation is incomplete. Please provide evidence of penetration testing scope and access control policies.",
+                4: "Final sign-off pending resolution of all prior stage comments. Please resubmit after addressing feedback.",
+              };
+
+              const handleSubmitRequestChanges = () => {
+                const stageName = activeMeta?.name ?? `Stage ${activeApprovalIdx + 1}`;
+                const noteText = requestChangesNote || PRE_FILLED_NOTES[activeApprovalIdx] || "Please review and address the feedback.";
+
+                // Push into global notification bell
+                pushNotification({
+                  title: `Changes Requested — ${stageName}`,
+                  body: noteText,
+                  severity: "high",
+                  href: `/enterprise/sow/${sow.id}`,
+                });
+
+                // Play notification sound
+                try {
+                  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                  const playTone = (freq: number, start: number, dur: number, gain: number) => {
+                    const osc = ctx.createOscillator();
+                    const g   = ctx.createGain();
+                    osc.type = "sine";
+                    osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+                    g.gain.setValueAtTime(0, ctx.currentTime + start);
+                    g.gain.linearRampToValueAtTime(gain, ctx.currentTime + start + 0.02);
+                    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+                    osc.connect(g);
+                    g.connect(ctx.destination);
+                    osc.start(ctx.currentTime + start);
+                    osc.stop(ctx.currentTime + start + dur);
+                  };
+                  playTone(880, 0,    0.18, 0.18);
+                  playTone(660, 0.18, 0.22, 0.14);
+                  playTone(440, 0.38, 0.30, 0.10);
+                } catch (_) {}
+
+                toast.warning(`Changes Requested — Stage ${activeApprovalIdx + 1}`, noteText);
+                addSowMessage(sow.id, buildChangesRequestedMessage(sow.id, activeApprovalIdx, sow.title, sow.createdBy, noteText, requestSection));
+                setShowRequestChanges(false);
+              };
+
+              return (
+                <div className="space-y-0">
+                  {/* ── Banner ── */}
+                  {!isDone && activeMeta && (
+                    <div className="flex items-center gap-3 px-5 py-3.5 bg-teal-50 border-b border-teal-100">
+                      <Clock className="w-4 h-4 text-teal-600 shrink-0" />
+                      <p className="text-[13px] text-teal-800">
+                        {activeMeta.name} — waiting for:{" "}
+                        <span className="font-bold">Enterprise Admin</span>
+                      </p>
+                    </div>
+                  )}
+                  {isDone && (
+                    <div className="flex items-center gap-3 px-5 py-3.5 bg-forest-50 border-b border-forest-100">
+                      <CheckCircle2 className="w-4 h-4 text-forest-600 shrink-0" />
+                      <p className="text-[13px] text-forest-800 font-medium">All stages approved — SOW is fully signed off.</p>
+                    </div>
+                  )}
+
+                  {/* ── Horizontal stepper ── */}
+                  <div className="px-6 pt-6 pb-5 border-b border-beige-100">
+                    <div className="relative flex items-start justify-between">
+                      {/* connecting line behind circles */}
+                      <div className="absolute top-5 left-0 right-0 h-px bg-beige-200 z-0" />
+                      {sow.approvalStages.map((stage, idx) => {
+                        const isApproved = idx < activeApprovalIdx;
+                        const isActive   = idx === activeApprovalIdx && !isDone;
+                        const isRejected = false;
+                        const meta       = STAGE_META[stage.stage] ?? { name: stage.stage, role: "" };
+                        return (
+                          <div key={stage.stage} className="relative z-10 flex flex-col items-center gap-2 flex-1">
+                            <div className={cn(
+                              "w-10 h-10 rounded-full border-2 flex items-center justify-center bg-white shrink-0 transition-all",
+                              isApproved ? "bg-teal-500 border-teal-500 shadow-md shadow-teal-100" :
+                              isActive   ? "border-brown-400 ring-4 ring-brown-100 shadow-sm" :
+                              isRejected ? "bg-brown-500 border-brown-500" :
+                              "border-beige-300"
+                            )}>
+                              {isApproved
+                                ? <CheckCircle2 className="w-5 h-5 text-white" />
+                                : isRejected
+                                ? <X className="w-4 h-4 text-white" />
+                                : <span className={cn("text-[13px] font-bold",
+                                    isActive ? "text-brown-600" : "text-beige-400"
+                                  )}>{idx + 1}</span>
+                              }
                             </div>
-                          )}
-                        </div>
+                            <div className="text-center px-1">
+                              <p className={cn("text-[11px] font-semibold leading-tight",
+                                isApproved ? "text-teal-700" : isActive ? "text-brown-800" : isRejected ? "text-brown-600" : "text-gray-600"
+                              )}>{meta.name}</p>
+                              <p className={cn("text-[10px] mt-0.5",
+                                isApproved ? "text-teal-500" : isActive ? "text-teal-600" : "text-beige-400"
+                              )}>{meta.role}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* ── Checklist ── */}
+                  {!isDone && activeStage && checklist.length > 0 && (
+                    <div className="px-6 py-5 border-b border-beige-100">
+                      <p className="text-[10px] font-bold text-beige-500 uppercase tracking-widest mb-4">
+                        Stage {activeApprovalIdx + 1} Review Checklist
+                      </p>
+                      <div className="space-y-3">
+                        {checklist.map((item, i) => {
+                          const key = `${activeApprovalIdx}-${i}`;
+                          const checked = !!approvalChecked[key];
+                          return (
+                            <label key={key} className="flex items-center gap-3 cursor-pointer group">
+                              <button
+                                type="button"
+                                onClick={() => setApprovalChecked(prev => ({ ...prev, [key]: !checked }))}
+                                className="w-[18px] h-[18px] rounded-[5px] shrink-0 flex items-center justify-center transition-all duration-150"
+                                style={checked ? {
+                                  background: "linear-gradient(135deg,#2A6068,#1D4A50)",
+                                  border: "none",
+                                  boxShadow: "0 2px 6px rgba(42,96,104,0.35)",
+                                } : {
+                                  background: "#fff",
+                                  border: "1.5px solid #D1D5DB",
+                                  boxShadow: "inset 0 1px 2px rgba(0,0,0,0.04)",
+                                }}
+                                onMouseEnter={e => { if (!checked) e.currentTarget.style.borderColor = "#2A6068"; }}
+                                onMouseLeave={e => { if (!checked) e.currentTarget.style.borderColor = "#D1D5DB"; }}
+                              >
+                                {checked && (
+                                  <motion.div
+                                    initial={{ scale: 0, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ type: "spring", stiffness: 500, damping: 22 }}
+                                  >
+                                    <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                                  </motion.div>
+                                )}
+                              </button>
+                              <span className={cn("text-[12.5px] transition-colors", checked ? "text-gray-400" : "text-gray-700")}>
+                                {item}
+                              </span>
+                            </label>
+                          );
+                        })}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )}
 
-                {/* Quick actions */}
-                <div className="mt-4 pt-4 border-t border-beige-200/50 flex items-center gap-3">
-                  {(sow.status === "draft" || sow.status === "review") && isValidated && (
-                    <Button variant="gradient-primary" size="sm" onClick={() => setShowSubmitModal(true)}>
-                      <Send className="w-3.5 h-3.5" /> Submit for Approval
-                    </Button>
+                  {/* ── Digital Signature ── */}
+                  {!isDone && activeStage && (
+                    <div className="px-6 py-3.5 border-b border-beige-100">
+                      <p className="text-[9px] font-bold text-beige-500 uppercase tracking-widest mb-1">
+                        Digital Signature
+                      </p>
+                      <p className="text-[11px] text-gray-400 mb-2">
+                        Type your full name to sign — constitutes formal approval of Stage {activeApprovalIdx + 1}.
+                      </p>
+                      <input
+                        type="text"
+                        value={signatureText}
+                        onChange={e => setSignatureText(e.target.value)}
+                        placeholder="Your full name"
+                        className="w-64 border border-beige-200 rounded-lg px-3 py-1.5 text-[12px] text-gray-800 italic font-medium bg-beige-50/50 focus:outline-none focus:border-brown-400 focus:ring-2 focus:ring-brown-100 transition-all"
+                      />
+                    </div>
                   )}
-                  {(sow.status === "approval" || sow.status === "approved" || sow.status === "changes_requested" || sow.status === "rejected") && (
-                    <Link href={`/enterprise/sow/${sow.id}/approve`}>
-                      <Button variant="outline" size="sm">
-                        <ExternalLink className="w-3.5 h-3.5" /> View Full Approval Workflow
+
+                  {/* ── Request Changes panel ── */}
+                  <AnimatePresence>
+                  {showRequestChanges && !isDone && activeStage && (() => {
+                    const SECTIONS = ["Section 1 — Business Context", "Section 2 — Delivery Scope", "Section 3 — Deliverables", "Section 4 — Timeline", "Section 5 — Budget"];
+                    const MAX = 500;
+                    const pct = Math.min((requestChangesNote.length / MAX) * 100, 100);
+                    return (
+                      <motion.div
+                        key="request-changes"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                        className="overflow-hidden border-b border-beige-100"
+                      >
+                      <div className="bg-white px-5 py-3" style={{ overflow: "visible" }}>
+                        {/* constrained width card */}
+                        <div className="max-w-sm">
+
+                          {/* ── Header ── */}
+                          <div className="flex items-center justify-between mb-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                                style={{ background: "linear-gradient(135deg,#A67763,#8B5E4A)", boxShadow: "0 2px 8px rgba(166,119,99,0.3)" }}>
+                                <MessageSquareDiff className="w-3.5 h-3.5 text-white" />
+                              </div>
+                              <div>
+                                <p className="text-[12.5px] font-bold text-gray-800 leading-none">Request changes</p>
+                                <p className="text-[10px] text-gray-400 mt-0.5">{activeMeta?.name}</p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-semibold text-brown-700 border border-brown-200 bg-brown-50 rounded-full px-2.5 py-0.5">
+                              Stage {activeApprovalIdx + 1}
+                            </span>
+                          </div>
+
+                          {/* ── Textarea ── */}
+                          <textarea
+                            rows={4}
+                            maxLength={MAX}
+                            value={requestChangesNote}
+                            onChange={e => setRequestChangesNote(e.target.value)}
+                            className="w-full rounded-xl px-3 py-2.5 text-[12px] text-gray-700 leading-relaxed resize-none focus:outline-none transition-all border border-gray-200 bg-white"
+                            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
+                            onFocus={e => { e.currentTarget.style.borderColor = "rgba(166,119,99,0.5)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(166,119,99,0.1)"; }}
+                            onBlur={e => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)"; }}
+                          />
+
+                          {/* ── Section dropdown + char count ── */}
+                          <div className="flex items-center justify-between mt-2 mb-3">
+
+                            {/* Custom dropdown — portal to escape overflow:hidden parents */}
+                            <div className="relative">
+                              <button
+                                ref={sectionTriggerRef}
+                                type="button"
+                                onClick={openSectionDropdown}
+                                className="flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded-lg text-[11px] font-medium text-gray-700 transition-all"
+                                style={{
+                                  border: "1px solid rgba(166,119,99,0.3)",
+                                  background: "linear-gradient(to bottom, #FFFAF7, #FFF3EC)",
+                                  boxShadow: "0 1px 4px rgba(166,119,99,0.1), inset 0 1px 0 rgba(255,255,255,0.9)",
+                                  minWidth: 180,
+                                }}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#A67763" }} />
+                                <span className="flex-1 text-left truncate">{requestSection}</span>
+                                <motion.span animate={{ rotate: sectionDropdownOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                  <ChevronDown className="w-3 h-3 shrink-0" style={{ color: "#A67763" }} />
+                                </motion.span>
+                              </button>
+
+                              {typeof document !== "undefined" && createPortal(
+                                <AnimatePresence>
+                                  {sectionDropdownOpen && (
+                                    <motion.div
+                                      ref={sectionDropdownRef}
+                                      initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                                      exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                                      transition={{ duration: 0.15, ease: "easeOut" }}
+                                      style={{
+                                        position: "fixed",
+                                        top: dropdownCoords.top,
+                                        left: dropdownCoords.left,
+                                        width: dropdownCoords.width,
+                                        zIndex: 9999,
+                                        background: "#fff",
+                                        border: "1px solid rgba(166,119,99,0.2)",
+                                        borderRadius: 12,
+                                        overflow: "hidden",
+                                        boxShadow: "0 8px 28px rgba(166,119,99,0.18), 0 2px 8px rgba(0,0,0,0.08)",
+                                      }}
+                                    >
+                                      {SECTIONS.map((s, idx) => {
+                                        const isSelected = s === requestSection;
+                                        return (
+                                          <button
+                                            key={s}
+                                            type="button"
+                                            onClick={() => { setRequestSection(s); setSectionDropdownOpen(false); }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-[11.5px] transition-all"
+                                            style={{
+                                              background: isSelected ? "linear-gradient(to right,#FFF3EC,#FFF8F4)" : "transparent",
+                                              color: isSelected ? "#8B5E4A" : "#4B5563",
+                                              fontWeight: isSelected ? 600 : 400,
+                                              borderBottom: idx < SECTIONS.length - 1 ? "1px solid rgba(166,119,99,0.08)" : "none",
+                                            }}
+                                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "#FAFAFA"; }}
+                                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = isSelected ? "linear-gradient(to right,#FFF3EC,#FFF8F4)" : "transparent"; }}
+                                          >
+                                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: isSelected ? "#A67763" : "#D1D5DB" }} />
+                                            {s}
+                                            {isSelected && <CheckCircle2 className="w-3 h-3 ml-auto shrink-0" style={{ color: "#A67763" }} />}
+                                          </button>
+                                        );
+                                      })}
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>,
+                                document.body
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                <div className="h-full rounded-full transition-all duration-300"
+                                  style={{ width: `${pct}%`, background: pct > 80 ? "linear-gradient(to right,#A67763,#8B5E4A)" : "linear-gradient(to right,#2A6068,#1D4A50)" }} />
+                              </div>
+                              <span className="text-[10px] text-gray-400 tabular-nums">{requestChangesNote.length}/{MAX}</span>
+                            </div>
+                          </div>
+
+                          {/* ── Footer actions ── */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1">
+                              <button className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all">
+                                <Fingerprint className="w-3 h-3" />
+                              </button>
+                              <button className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all">
+                                <Clock className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setShowRequestChanges(false)}
+                                className="px-3 py-1.5 rounded-lg text-[11.5px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all"
+                              >Cancel</button>
+                              <button
+                                onClick={handleSubmitRequestChanges}
+                                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[11.5px] font-bold text-white transition-all"
+                                style={{ background: "linear-gradient(135deg,#A67763,#8B5E4A)", boxShadow: "0 2px 8px rgba(166,119,99,0.35)" }}
+                                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(166,119,99,0.5)"; }}
+                                onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 2px 8px rgba(166,119,99,0.35)"; }}
+                              >
+                                <Send className="w-3 h-3" /> Send feedback
+                              </button>
+                            </div>
+                          </div>
+
+                        </div>
+                      </div>{/* end overflow-visible inner */}
+                      </motion.div>
+                    );
+                  })()}
+                  </AnimatePresence>
+
+                  {/* ── Action buttons ── */}
+                  {!isDone && activeStage && (
+                    <div className="px-6 py-4 flex items-center gap-3">
+                      <button
+                        onClick={handleApprove}
+                        disabled={!allChecked || !signatureText.trim()}
+                        className={cn(
+                          "flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+                          allChecked && signatureText.trim()
+                            ? "bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 shadow-md shadow-teal-200"
+                            : "bg-gray-300 cursor-not-allowed"
+                        )}
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Approve Stage {activeApprovalIdx + 1}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowRequestChanges(v => !v);
+                          setRequestChangesNote(PRE_FILLED_NOTES[activeApprovalIdx] ?? "");
+                          setRequestCategory("scope");
+                        }}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all"
+                        style={{ background: "linear-gradient(135deg, #A67763, #8B5E4A)", boxShadow: "0 3px 10px rgba(166,119,99,0.35)" }}
+                        onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 5px 16px rgba(166,119,99,0.5)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 3px 10px rgba(166,119,99,0.35)"; e.currentTarget.style.transform = ""; }}
+                      >
+                        <Undo2 className="w-4 h-4" />
+                        Request Changes
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Submit for Approval (pre-pipeline) */}
+                  {(sow.status === "draft" || sow.status === "review") && isValidated && (
+                    <div className="px-6 py-4">
+                      <Button variant="gradient-primary" size="sm" onClick={() => setShowSubmitModal(true)}>
+                        <Send className="w-3.5 h-3.5" /> Submit for Approval
                       </Button>
-                    </Link>
+                    </div>
                   )}
                 </div>
-              </div>
-            </div>
+              );
+            })()}
           </TabsContent>
 
           {/* ═══════════════════════════════════════════════════
              TAB 7: Versions (B6 Step 8 + B8)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="versions">
-            <div className="space-y-3">
-              <h2 className="text-[15px] font-semibold text-brown-800">
+          <TabsContent value="versions" className="mt-0">
+            <div className="p-5 space-y-3">
+              <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">
                 Version History
                 <span className="ml-2 text-[12px] font-normal text-beige-500">({versions.length} versions)</span>
               </h2>
@@ -1453,10 +1901,10 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 8: Audit History (B6 Step 9)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="audit">
-            <div className="space-y-3">
+          <TabsContent value="audit" className="mt-0">
+            <div className="p-5 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <h2 className="text-[15px] font-semibold text-brown-800">Audit Trail</h2>
+                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Audit Trail</h2>
                 <div className="flex items-center gap-2">
                   {/* Event type filter (B6 spec: filter by type) */}
                   <Select value={auditTypeFilter} onValueChange={setAuditTypeFilter}>
@@ -1480,7 +1928,7 @@ export default function SOWDetailPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden">
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 overflow-hidden">
                 {filteredAudit.map((event, idx) => {
                   const config = auditActionConfig[event.action] || auditActionConfig.updated;
                   const IconComp = auditActionIcon[event.action] || ClipboardList;
@@ -1521,14 +1969,14 @@ export default function SOWDetailPage() {
           {/* ═══════════════════════════════════════════════════
              TAB 9: Linked Projects (B6 Step 10)
              ═══════════════════════════════════════════════════ */}
-          <TabsContent value="linked">
-            <div className="space-y-4">
-              <h2 className="text-[15px] font-semibold text-brown-800">Linked Resources</h2>
+          <TabsContent value="linked" className="mt-0">
+            <div className="p-5 space-y-4">
+              <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Linked Resources</h2>
 
               {sow.planId ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Link href={`/enterprise/decomposition/${sow.planId}`} className="block group">
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5 hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
                       <div className="flex items-start gap-4">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center shrink-0">
                           <GitBranch className="w-6 h-6 text-teal-600" />
@@ -1547,7 +1995,7 @@ export default function SOWDetailPage() {
 
                   {linkedProject ? (
                     <Link href={`/enterprise/projects/${linkedProject.id}`} className="block group">
-                      <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
+                      <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5 hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
                         <div className="flex items-start gap-4">
                           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-forest-100 to-forest-200 flex items-center justify-center shrink-0">
                             <ClipboardList className="w-6 h-6 text-forest-600" />
@@ -1568,7 +2016,7 @@ export default function SOWDetailPage() {
                       </div>
                     </Link>
                   ) : (
-                    <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-6">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                       <div className="flex items-start gap-4">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-beige-100 to-beige-200 flex items-center justify-center shrink-0">
                           <ClipboardList className="w-6 h-6 text-beige-400" />
@@ -1585,7 +2033,7 @@ export default function SOWDetailPage() {
                   )}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-12 text-center">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-12 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-beige-100 flex items-center justify-center mx-auto mb-4">
                     <Link2 className="w-7 h-7 text-beige-400" />
                   </div>

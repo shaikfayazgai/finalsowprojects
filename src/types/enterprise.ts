@@ -597,6 +597,25 @@ export interface AppNotification {
   href?: string;
 }
 
+export type ApprovalMessageType = "stage_activated" | "stage_approved" | "changes_requested";
+
+export interface ApprovalMessage {
+  id: string;
+  sowId: string;
+  stageIndex: number;
+  stageKey: string;
+  type: ApprovalMessageType;
+  senderName: string;
+  senderRole: string;
+  recipientName: string;
+  recipientRole: string;
+  subject: string;
+  body: string;
+  sectionRef?: string;
+  sentAt: string;
+  read: boolean;
+}
+
 /* ══════════════════════════════════════════════════════════════
    MANUAL SOW UPLOAD FLOW TYPES (FSD 7.5–7.8.3)
    ══════════════════════════════════════════════════════════════ */

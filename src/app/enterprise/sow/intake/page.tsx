@@ -43,15 +43,17 @@ const hallucinationLayers = [
 const aiFeatures = [
   "10-step guided wizard",
   "8-layer hallucination prevention",
+  "Business context anchoring",
   "Industry-specific templates",
-  "Risk & confidence scoring",
+  "Risk & Confidence scoring",
 ];
 
 const uploadFeatures = [
   "OCR + NLP parsing",
   "Automated gap analysis",
   "Smart section detection",
-  "PDF & DOCX support",
+  "Structured commercial details",
+  "Multi-format support (PDF, DOCX)",
 ];
 
 /* ══════════════════════════════════════════
@@ -64,12 +66,10 @@ interface SelectionCardProps {
   icon: React.ElementType;
   features: string[];
   timeEstimate: string;
-  ctaLabel: string;
   isRecommended?: boolean;
   onNavigate: (href: string) => void;
   href: string;
   accentColor: string;
-  accentLight: string;
   isNavigating: boolean;
 }
 
@@ -79,125 +79,205 @@ function SelectionCard({
   icon: Icon,
   features,
   timeEstimate,
-  ctaLabel,
   isRecommended,
   onNavigate,
   href,
   accentColor,
-  accentLight,
   isNavigating,
 }: SelectionCardProps) {
   const [hovered, setHovered] = React.useState(false);
 
   return (
     <motion.div
-      className="relative flex flex-col rounded-2xl border border-[#E5DDD4] overflow-hidden h-full"
+      className="relative flex flex-col rounded-3xl overflow-hidden h-full cursor-pointer"
       onHoverStart={() => setHovered(true)}
       onHoverEnd={() => setHovered(false)}
+      onClick={() => !isNavigating && onNavigate(href)}
+      initial={false}
       animate={{
-        borderColor: hovered ? accentColor + "35" : "#E5DDD4",
+        y: hovered ? -8 : 0,
         boxShadow: hovered
-          ? `0 16px 36px -10px ${accentColor}18, 0 4px 12px -4px ${accentColor}10`
-          : "0 1px 3px rgba(0,0,0,0.04)",
+          ? `0 32px 56px -12px ${accentColor}32, 0 12px 24px -6px ${accentColor}20, 0 0 0 1.5px ${accentColor}35`
+          : `0 6px 24px rgba(0,0,0,0.09), 0 2px 8px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.06)`,
       }}
-      transition={{ duration: 0.25 }}
-      style={{ backgroundColor: "white" }}
+      transition={{ type: "spring", stiffness: 340, damping: 28 }}
+      style={{
+        background: `linear-gradient(160deg, #FFFFFF 0%, ${accentColor}05 100%)`,
+      }}
     >
-      {/* Subtle top accent line on hover */}
-      <motion.div
-        className="absolute top-0 left-6 right-6 h-0.5 rounded-b-full"
-        animate={{ opacity: hovered ? 1 : 0, scaleX: hovered ? 1 : 0.5 }}
-        transition={{ duration: 0.3 }}
-        style={{ background: `linear-gradient(90deg, transparent, ${accentColor}60, transparent)` }}
+      {/* Always-on subtle top accent bar */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[3px] z-20"
+        style={{
+          background: `linear-gradient(90deg, transparent 0%, ${accentColor}40 25%, ${accentColor}70 50%, ${accentColor}40 75%, transparent 100%)`,
+        }}
       />
 
-      {/* Background gradient on hover */}
+      {/* Hover shimmer sweep */}
       <motion.div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute inset-0 pointer-events-none z-10"
+        initial={false}
+        animate={{ opacity: hovered ? 1 : 0, x: hovered ? "100%" : "-40%" }}
+        transition={{ duration: 0.6, ease: "easeInOut" }}
+        style={{
+          background: `linear-gradient(105deg, transparent 25%, ${accentColor}0C 50%, transparent 75%)`,
+        }}
+      />
+
+      {/* Always-on diagonal grain/texture overlay for depth */}
+      <div
+        className="absolute inset-0 pointer-events-none z-0 opacity-[0.025]"
+        style={{
+          backgroundImage: `repeating-linear-gradient(
+            -45deg,
+            ${accentColor} 0px,
+            ${accentColor} 1px,
+            transparent 1px,
+            transparent 8px
+          )`,
+        }}
+      />
+
+      {/* Always-on corner glow (bottom-right decorative) */}
+      <div
+        className="absolute bottom-0 right-0 w-48 h-48 pointer-events-none z-0 rounded-full"
+        style={{
+          background: `radial-gradient(circle at bottom right, ${accentColor}10 0%, transparent 70%)`,
+          transform: "translate(30%, 30%)",
+        }}
+      />
+
+      {/* Hover radial bloom */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none z-0"
+        initial={false}
         animate={{ opacity: hovered ? 1 : 0 }}
-        transition={{ duration: 0.35 }}
-        style={{ background: `radial-gradient(ellipse at top left, ${accentColor}06 0%, transparent 65%)` }}
+        transition={{ duration: 0.4 }}
+        style={{
+          background: `radial-gradient(ellipse at 15% 10%, ${accentColor}10 0%, transparent 55%)`,
+        }}
       />
 
-      <div className="relative flex flex-col flex-1 p-7">
-        {/* Header Row */}
-        <div className="flex items-start gap-4 mb-5">
-          <div
-            className="shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300"
+      {/* RECOMMENDED badge */}
+      {isRecommended && (
+        <motion.div
+          className="absolute top-5 right-5 z-30"
+          animate={{ scale: hovered ? 1.06 : 1 }}
+          transition={{ type: "spring", stiffness: 400, damping: 20 }}
+        >
+          <span
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest"
             style={{
-              background: `linear-gradient(145deg, ${accentColor}${hovered ? "20" : "12"}, ${accentLight}${hovered ? "12" : "07"})`,
-              boxShadow: hovered ? `0 6px 16px ${accentColor}18` : `0 2px 8px rgba(0,0,0,0.05)`,
-              border: `1px solid ${accentColor}${hovered ? "22" : "12"}`,
+              background: `linear-gradient(135deg, ${accentColor}22, ${accentColor}12)`,
+              color: accentColor,
+              border: `1.5px solid ${accentColor}35`,
+              boxShadow: `0 2px 10px ${accentColor}20, inset 0 1px 0 ${accentColor}15`,
             }}
           >
-            <Icon className="w-6 h-6 transition-colors duration-300" style={{ color: accentColor }} />
-          </div>
+            <Star className="w-2.5 h-2.5 fill-current" />
+            Recommended
+          </span>
+        </motion.div>
+      )}
 
-          <div className="min-w-0 pt-0.5">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h3 className="text-lg font-bold text-[#3D3126] leading-tight">{title}</h3>
-              {isRecommended && (
-                <span
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
-                  style={{
-                    background: `linear-gradient(135deg, ${accentColor}12, ${accentLight}08)`,
-                    color: accentColor,
-                    border: `1px solid ${accentColor}20`,
-                  }}
-                >
-                  <Star className="w-2.5 h-2.5 fill-current" />
-                  Recommended
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1.5 text-[#A99B8C]">
-              <Clock className="w-3.5 h-3.5" />
-              <span className="text-[11px] font-semibold tracking-wide">{timeEstimate}</span>
-            </div>
-          </div>
-        </div>
+      {/* Card body */}
+      <div className="relative flex flex-col flex-1 p-7 pb-5 z-20">
 
-        {/* Description */}
-        <p className="text-[13.5px] text-[#8B7355] leading-relaxed mb-5">{description}</p>
-
-        {/* Features */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 mb-6">
-          {features.map((feature) => (
-            <div key={feature} className="flex items-center gap-2.5">
-              <div
-                className="shrink-0 w-5 h-5 rounded-md flex items-center justify-center transition-all duration-300"
-                style={{
-                  backgroundColor: accentColor + "10",
-                  border: `1px solid ${accentColor}18`,
-                }}
-              >
-                <Check className="w-3 h-3" style={{ color: accentColor }} strokeWidth={2.5} />
-              </div>
-              <span className="text-[13px] text-[#6B5344] leading-snug">{feature}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex-1" />
-
-        {/* CTA Button */}
-        <button
-          onClick={() => onNavigate(href)}
-          disabled={isNavigating}
-          className="group/cta relative flex items-center justify-center gap-2.5 w-full px-6 py-3.5 rounded-xl text-white text-sm font-bold transition-all duration-300 active:scale-[0.98] overflow-hidden disabled:opacity-80 disabled:cursor-not-allowed"
+        {/* Icon box — premium at rest */}
+        <motion.div
+          className="w-[68px] h-[68px] rounded-2xl flex items-center justify-center mb-6"
+          animate={{
+            scale: hovered ? 1.1 : 1,
+            boxShadow: hovered
+              ? `0 12px 28px ${accentColor}30, inset 0 1px 0 rgba(255,255,255,0.5)`
+              : `0 4px 16px ${accentColor}22, inset 0 1px 0 rgba(255,255,255,0.6)`,
+          }}
+          transition={{ type: "spring", stiffness: 360, damping: 24 }}
           style={{
-            background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)`,
-            boxShadow: hovered ? `0 6px 20px ${accentColor}30` : `0 2px 8px ${accentColor}18`,
+            background: `linear-gradient(145deg, ${accentColor}28, ${accentColor}12)`,
+            border: `1.5px solid ${accentColor}28`,
           }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/cta:translate-x-full transition-transform duration-700" />
-          {isNavigating ? (
-            <><Loader2 className="relative w-4 h-4 animate-spin" /><span className="relative">Preparing...</span></>
-          ) : (
-            <><span className="relative">{ctaLabel}</span><ArrowRight className="relative w-4 h-4 transition-transform duration-200 group-hover/cta:translate-x-0.5" /></>
-          )}
-        </button>
+          <motion.div
+            animate={{ rotate: hovered ? [0, -10, 10, 0] : 0 }}
+            transition={{ duration: 0.5, ease: "easeInOut" }}
+          >
+            <Icon className="w-8 h-8" style={{ color: accentColor }} />
+          </motion.div>
+        </motion.div>
+
+        {/* Title */}
+        <motion.h3
+          className="text-[22px] font-extrabold uppercase tracking-tight leading-tight mb-2"
+          animate={{ color: hovered ? accentColor : "#1C1C1C" }}
+          transition={{ duration: 0.25 }}
+        >
+          {title}
+        </motion.h3>
+
+        {/* Description */}
+        <p className="text-[13.5px] leading-relaxed mb-6" style={{ color: "#6B7280" }}>{description}</p>
+
+        {/* Features — single column */}
+        <div className="flex flex-col gap-3 flex-1">
+          {features.map((feature, i) => (
+            <motion.div
+              key={feature}
+              className="flex items-center gap-3"
+              animate={{ x: hovered ? 5 : 0 }}
+              transition={{ duration: 0.22, delay: hovered ? i * 0.045 : 0, ease: "easeOut" }}
+            >
+              <motion.div
+                className="shrink-0 w-[22px] h-[22px] rounded-full flex items-center justify-center"
+                animate={{
+                  backgroundColor: hovered ? accentColor + "22" : accentColor + "12",
+                  borderColor: hovered ? accentColor + "AA" : accentColor + "55",
+                  boxShadow: hovered ? `0 0 0 3px ${accentColor}10` : "none",
+                }}
+                transition={{ duration: 0.2 }}
+                style={{ border: `1.5px solid ${accentColor}55` }}
+              >
+                <Check className="w-2.5 h-2.5" style={{ color: accentColor }} strokeWidth={3} />
+              </motion.div>
+              <span className="text-[13.5px] text-gray-700 leading-snug">{feature}</span>
+            </motion.div>
+          ))}
+        </div>
       </div>
+
+      {/* Footer */}
+      <motion.div
+        className="relative flex items-center justify-between px-7 py-4 z-20"
+        animate={{ backgroundColor: hovered ? `${accentColor}07` : `${accentColor}03` }}
+        transition={{ duration: 0.3 }}
+        style={{ borderTop: `1px solid ${accentColor}18` }}
+      >
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest uppercase" style={{ color: "#9CA3AF" }}>
+          <Clock className="w-3.5 h-3.5" />
+          Est. Time: {timeEstimate}
+        </div>
+
+        <motion.button
+          onClick={(e) => { e.stopPropagation(); onNavigate(href); }}
+          disabled={isNavigating}
+          className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-widest disabled:opacity-60 disabled:cursor-not-allowed"
+          style={{ color: accentColor }}
+        >
+          {isNavigating ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Preparing...</>
+          ) : (
+            <>
+              Start Path
+              <motion.span
+                animate={{ x: hovered ? 4 : 0 }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+              </motion.span>
+            </>
+          )}
+        </motion.button>
+      </motion.div>
     </motion.div>
   );
 }
@@ -277,16 +357,14 @@ export default function SOWIntakePage() {
         <motion.div variants={fadeUp}>
           <SelectionCard
             title="AI-Generated SOW"
-            description="Answer guided questions and let AI craft a complete SOW with built-in hallucination prevention."
+            description="Best for new engagements without an existing SOW document."
             icon={Sparkles}
             features={aiFeatures}
-            timeEstimate="55–65 min"
-            ctaLabel="Start AI Wizard"
+            timeEstimate="~55–65 min"
             isRecommended
             onNavigate={handleNavigate}
             href="/enterprise/sow/generate"
             accentColor="#2A6068"
-            accentLight="#5B9BA2"
             isNavigating={navigatingTo === "/enterprise/sow/generate"}
           />
         </motion.div>
@@ -294,15 +372,13 @@ export default function SOWIntakePage() {
         <motion.div variants={fadeUp}>
           <SelectionCard
             title="Upload SOW Document"
-            description="Upload existing SOW files for AI-enhanced parsing, extraction, and gap analysis."
+            description="Best for enterprises with an existing SOW from procurement or legal."
             icon={Upload}
             features={uploadFeatures}
-            timeEstimate="40–50 min"
-            ctaLabel="Upload & Analyze"
+            timeEstimate="~40–50 min"
             onNavigate={handleNavigate}
             href="/enterprise/sow/upload"
             accentColor="#A67763"
-            accentLight="#D4C8BC"
             isNavigating={navigatingTo === "/enterprise/sow/upload"}
           />
         </motion.div>

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useSidebarStore } from "@/lib/stores/sidebar-store";
+import { useSowBadges } from "@/lib/hooks/use-sow-badges";
 import type { ModuleConfig } from "@/lib/config/navigation";
 import {
   Tooltip,
@@ -28,6 +29,7 @@ interface SidebarProps {
 export function Sidebar({ config }: SidebarProps) {
   const pathname = usePathname();
   const { isCollapsed, isMobileOpen, toggle, closeMobile } = useSidebarStore();
+  const dynamicBadges = useSowBadges();
   const [expandedSections, setExpandedSections] = React.useState<
     Record<number, boolean>
   >({});
@@ -185,6 +187,7 @@ export function Sidebar({ config }: SidebarProps) {
                         {section.items.map((item) => {
                           const active = isActive(item.href);
                           const Icon = item.icon;
+                          const badge = dynamicBadges[item.href] ?? item.badge;
 
                           const link = (
                             <Link
@@ -207,15 +210,22 @@ export function Sidebar({ config }: SidebarProps) {
                                 } : {}),
                               }}
                             >
-
-                              <Icon
-                                className={cn(
-                                  "shrink-0",
-                                  isCollapsed
-                                    ? "w-4 h-4"
-                                    : "w-[14px] h-[14px]"
+                              <span className="relative shrink-0">
+                                <Icon
+                                  className={cn(
+                                    isCollapsed ? "w-4 h-4" : "w-[14px] h-[14px]"
+                                  )}
+                                />
+                                {badge && isCollapsed && (
+                                  <span
+                                    className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+                                    style={{ background: "linear-gradient(135deg,#A67763,#8B5E4A)" }}
+                                  >
+                                    {badge}
+                                  </span>
                                 )}
-                              />
+                              </span>
+
                               <AnimatePresence>
                                 {!isCollapsed && (
                                   <motion.span
@@ -229,9 +239,12 @@ export function Sidebar({ config }: SidebarProps) {
                                 )}
                               </AnimatePresence>
 
-                              {item.badge && !isCollapsed && (
-                                <span className="ml-auto font-mono text-[10px] text-gray-400">
-                                  {item.badge}
+                              {badge && !isCollapsed && (
+                                <span
+                                  className="ml-auto px-1.5 py-0.5 rounded-full text-[9px] font-bold text-white"
+                                  style={{ background: "linear-gradient(135deg,#A67763,#8B5E4A)" }}
+                                >
+                                  {badge}
                                 </span>
                               )}
                             </Link>

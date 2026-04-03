@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { MentorDashboardSkeleton } from "./components/dashboard-skeleton";
 import {
   ClipboardCheck,
   Clock,
@@ -26,6 +28,10 @@ import {
 
 export default function MentorDashboardPage() {
   const router = useRouter();
+  const { status } = useSession();
+
+  if (status === "loading") return <MentorDashboardSkeleton />;
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}

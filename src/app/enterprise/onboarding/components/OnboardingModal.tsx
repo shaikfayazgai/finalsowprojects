@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import { Briefcase, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -35,11 +34,6 @@ const stepVariants = {
 
 export default function OnboardingModal() {
   const wiz = useOnboardingWizard();
-  const contentRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }, [wiz.step]);
 
   return (
     <motion.div
@@ -70,21 +64,15 @@ export default function OnboardingModal() {
               <div className="w-7 h-7 rounded-lg bg-brown-600 ring-2 ring-brown-200 flex items-center justify-center shadow-sm">
                 <Briefcase className="w-3.5 h-3.5 text-white" />
               </div>
-              <span className="text-sm font-semibold text-brown-950">Onboarding</span>
+              <span className="text-sm font-semibold text-brown-950">Enterprise Onboarding</span>
             </div>
           </div>
 
-          {wiz.step > 0 && (
-            <OnboardingStepProgress
-              step={wiz.step}
-              highestVisited={wiz.highestVisited}
-              onStepClick={(n) => { wiz.setError(""); wiz.setStep(n); }}
-            />
-          )}
+          {wiz.step > 0 && <OnboardingStepProgress step={wiz.step} />}
         </div>
 
         {/* Scrollable Content with animated transitions */}
-        <div ref={contentRef} className="flex-1 overflow-y-auto px-8 py-6 scroll-smooth">
+        <div className="flex-1 overflow-y-auto px-8 py-6">
           <AnimatePresence mode="wait">
             <motion.div
               key={wiz.step}

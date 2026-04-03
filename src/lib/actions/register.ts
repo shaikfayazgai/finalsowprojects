@@ -71,6 +71,107 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
   return { success: true };
 }
 
+// ── SSO Contributor Onboarding (existing user, no password) ──
+export async function onboardContributor(data: {
+  firstName: string;
+  lastName?: string;
+  email: string;
+  provider?: string;
+  contribType: string;
+  country: string;
+  dob: string;
+  timezone: string;
+  departmentCategory: string;
+  departmentOther?: string;
+  primarySkills: string[];
+  secondarySkills: string[];
+  otherSkills: string[];
+  availability: string;
+  degree?: string;
+  branch?: string;
+  linkedin?: string;
+  careerStage?: string;
+  yearsExperience?: string;
+  workStart?: string;
+  workEnd?: string;
+  phone?: string;
+  ndaAccepted: boolean;
+  ndaSignature?: string;
+  acceptTos: boolean;
+  acceptCoc: boolean;
+  acceptPrivacy: boolean;
+  acceptFee: boolean;
+  acceptAhp: boolean;
+  marketingOptIn: boolean;
+}): Promise<ActionResult> {
+  try {
+    const profileData = {
+      contribType:        data.contribType,
+      country:            data.country,
+      dob:                new Date(data.dob),
+      timezone:           data.timezone,
+      departmentCategory: data.departmentCategory,
+      departmentOther:    data.departmentOther ?? null,
+      primarySkills:      data.primarySkills,
+      secondarySkills:    data.secondarySkills,
+      otherSkills:        data.otherSkills,
+      availability:       data.availability,
+      degree:             data.degree ?? null,
+      branch:             data.branch ?? null,
+      linkedin:           data.linkedin ?? null,
+      careerStage:        data.careerStage ?? null,
+      yearsExperience:    data.yearsExperience ?? null,
+      workStart:          data.workStart ?? null,
+      workEnd:            data.workEnd ?? null,
+      ndaAccepted:        data.ndaAccepted,
+      ndaSignature:       data.ndaSignature ?? "",
+      acceptTos:          true,
+      acceptCoc:          true,
+      acceptPrivacy:      true,
+      acceptFee:          true,
+      acceptAhp:          true,
+      marketingOptIn:     data.marketingOptIn,
+    };
+
+    // SSO users are not created in DB by NextAuth (JWT strategy, no adapter).
+    // upsert: create on first onboarding, update if somehow the record already exists.
+    await prisma.user.upsert({
+      where: { email: data.email.toLowerCase() },
+      create: {
+        email:         data.email.toLowerCase(),
+        passwordHash:  null,          // SSO — no password
+        provider:      data.provider || undefined,
+        firstName:     data.firstName,
+        lastName:      data.lastName ?? "",
+        role:          "contributor",
+        phone:         data.phone ?? null,
+        emailVerified: true,
+        phoneVerified: !!data.phone,
+        contributorProfile: { create: profileData },
+      },
+      update: {
+        firstName: data.firstName,
+        lastName:  data.lastName ?? "",
+        role:      "contributor",
+        phone:     data.phone ?? null,
+        // Use upsert on the profile too so re-running onboarding doesn't violate the unique constraint
+        contributorProfile: {
+          upsert: {
+            create: profileData,
+            update: profileData,
+          },
+        },
+      },
+    });
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[onboardContributor]", msg);
+    return { success: false, error: msg };
+  }
+}
+
 // ── Enterprise Registration ──
 export async function registerEnterprise(data: unknown): Promise<ActionResult> {
   const parsed = enterpriseRegistrationSchema.safeParse(data);

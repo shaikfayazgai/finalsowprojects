@@ -510,7 +510,6 @@ export default function ProjectsPage() {
   const [sortKey, setSortKey] = React.useState<SortKey>("severity");
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("asc");
   const [projects, setProjects] = React.useState<Project[]>(mockProjects);
-  const [visibleCount, setVisibleCount] = React.useState(4);
   const [lastRefreshed, setLastRefreshed] = React.useState<Date | null>(null);
   const [validationModal, setValidationModal] = React.useState<{
     isOpen: boolean;
@@ -603,11 +602,6 @@ export default function ProjectsPage() {
 
     return results;
   }, [activeFilters, searchQuery, projects]);
-
-  // Reset visible count when filters/search change
-  React.useEffect(() => {
-    setVisibleCount(4);
-  }, [activeFilters, searchQuery]);
 
   /* Sort - by default sort by health severity (most critical first) */
   const sorted = React.useMemo(() => {
@@ -859,29 +853,17 @@ export default function ProjectsPage() {
 
       {/* Grid View */}
       {viewMode === "grid" && filtered.length > 0 && (
-        <>
-          <motion.div variants={stagger} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {sorted.slice(0, visibleCount).map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onStatusChange={handleStatusChange}
-                onEscalate={handleEscalate}
-                onValidationModalOpen={(type, projectId) => setValidationModal({ isOpen: true, type, projectId })}
-              />
-            ))}
-          </motion.div>
-          {visibleCount < sorted.length && (
-            <motion.div variants={fadeUp} className="flex justify-center mt-6">
-              <span
-                onClick={() => setVisibleCount((prev) => prev + 4)}
-                className="text-sm font-medium text-beige-500 hover:text-beige-600 cursor-pointer transition-colors duration-200"
-              >
-                Load More ...
-              </span>
-            </motion.div>
-          )}
-        </>
+        <motion.div variants={stagger} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {sorted.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              onStatusChange={handleStatusChange}
+              onEscalate={handleEscalate}
+              onValidationModalOpen={(type, projectId) => setValidationModal({ isOpen: true, type, projectId })}
+            />
+          ))}
+        </motion.div>
       )}
 
       {/* Table View */}

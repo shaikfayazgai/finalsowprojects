@@ -14,6 +14,7 @@ declare module "next-auth" {
       role: UserRole;
       initials: string;
       image?: string | null;
+      provider?: string;
     };
   }
 }
@@ -22,5 +23,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     role?: UserRole;
     initials?: string;
+    provider?: string;
   }
 }

@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import {
@@ -10,7 +8,6 @@ import {
   Cpu, CreditCard, FileText, ChevronDown, Quote, LogOut
 } from "lucide-react";
 import { Button, Badge, MeshBackground } from "@/components/ui";
-import { roleDashboard } from "@/lib/config/auth";
 
 const STATS = [
   { value: "100+", label: "Countries" },
@@ -88,19 +85,8 @@ const TESTIMONIALS = [
 ];
 
 export default function HomePage() {
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
   const isLoggedIn = !!session?.user;
-  const role = (session?.user as { role?: string })?.role ?? "";
-  const dashboardHref = roleDashboard[role] ?? "/enterprise/dashboard";
-  const router = useRouter();
-
-  useEffect(() => {
-    if (status === "authenticated") {
-      router.replace(dashboardHref);
-    }
-  }, [status, dashboardHref, router]);
-
-  if (status === "loading" || status === "authenticated") return null;
 
   return (
     <MeshBackground variant="warm" className="min-h-screen">
@@ -127,7 +113,7 @@ export default function HomePage() {
           <div className="flex items-center gap-4">
             {isLoggedIn ? (
               <>
-                <Link href={dashboardHref} className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors">
+                <Link href="/enterprise/dashboard" className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors">
                   Dashboard
                 </Link>
                 <Button
