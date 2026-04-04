@@ -1,12 +1,80 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, User, Scale, Handshake, ShieldCheck } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
-import { SectionHeader, SectionFooter, Field, inputCls } from "./_shared";
+import { SectionHeader, SectionFooter, Field, CustomSelect, inputCls } from "./_shared";
 
 interface Props { onComplete: () => void; onBack?: () => void }
+
+const IP_OPTIONS = [
+  { value: "client_owns_all",            label: "Client Owns All IP",              description: "Full IP transfer to client upon milestone 3 delivery" },
+  { value: "glimmora_retains_framework", label: "GlimmoraTeam Retains Framework",   description: "Client owns the application; GlimmoraTeam retains reusable framework" },
+  { value: "joint",                      label: "Joint Ownership",                  description: "Shared IP rights as defined in the NDA" },
+  { value: "custom",                     label: "Custom Arrangement",               description: "Defined separately in contract addendum" },
+];
+
+const SOURCE_CODE_OPTIONS = [
+  { value: "glimmora_hosts_transfer",  label: "GlimmoraTeam Hosts → Transfers on M3", description: "Repository hosted by GlimmoraTeam, transferred at milestone 3" },
+  { value: "client_provides_day_one", label: "Client Provides Repository",             description: "Client-owned repository from day one of engagement" },
+];
+
+const THIRD_PARTY_OPTIONS = [
+  { value: "client_pays",      label: "Client Pays Directly", description: "All third-party licensing costs billed directly to client" },
+  { value: "glimmora_absorbs", label: "Absorbed in Quote",    description: "GlimmoraTeam absorbs third-party costs within the quoted price" },
+];
+
+const CHANGE_REQUEST_OPTIONS = [
+  { value: "formal_cr",          label: "Formal Change Request", description: "All changes scoped and priced before work begins" },
+  { value: "threshold_cr",       label: "Threshold-Based",       description: "Minor changes within contingency budget; larger changes require CR" },
+  { value: "time_and_materials", label: "Time & Materials",      description: "Work above baseline billed at agreed T&M rate" },
+];
+
+function SubSection({ icon: Icon, title, children }: {
+  icon: React.ElementType;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-100">
+      <div className="flex items-center gap-2.5 px-4 py-3 bg-gray-50/80 border-b border-gray-100">
+        <div className="w-6 h-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0">
+          <Icon className="w-3.5 h-3.5 text-gray-500" />
+        </div>
+        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">{title}</p>
+      </div>
+      <div className="px-4 py-4 space-y-4 bg-white">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function UserInput({ value, onChange, onBlur, placeholder, error }: {
+  value: string;
+  onChange: (v: string) => void;
+  onBlur?: () => void;
+  placeholder: string;
+  error?: string;
+}) {
+  return (
+    <div>
+      <div className="relative">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          className={inputCls + " pl-9"}
+        />
+        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+      </div>
+      {error && <p className="text-[11px] text-red-500 font-medium mt-1">{error}</p>}
+    </div>
+  );
+}
 
 export function Section7CommercialLegal({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
@@ -62,117 +130,92 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
     <>
       <SectionHeader number={7} title="Commercial & Legal" />
 
-      <div className="px-6 py-6 space-y-5">
+      <div className="px-6 py-6 space-y-4">
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="IP Ownership" error={errors.ipOwnership}>
-            <select value={data.ipOwnership}
-              onChange={(e) => update({ ipOwnership: e.target.value as typeof data.ipOwnership })}
-              onBlur={() => blurField("ipOwnership")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="client_owns_all">Client owns all IP (transfer on M3)</option>
-              <option value="glimmora_retains_framework">GlimmoraTeam retains framework — client owns app</option>
-              <option value="joint">Joint (per NDA)</option>
-              <option value="custom">Custom</option>
-            </select>
-          </Field>
+        {/* Intellectual Property */}
+        <SubSection icon={Scale} title="Intellectual Property">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="IP Ownership" error={errors.ipOwnership}>
+              <CustomSelect
+                value={data.ipOwnership}
+                onChange={(v) => update({ ipOwnership: v as typeof data.ipOwnership })}
+                onBlur={() => blurField("ipOwnership")}
+                options={IP_OPTIONS}
+                placeholder="Select IP arrangement…"
+              />
+            </Field>
 
-          <Field label="Source Code Repository" error={errors.sourceCodeOwnership}>
-            <select value={data.sourceCodeOwnership}
-              onChange={(e) => update({ sourceCodeOwnership: e.target.value as typeof data.sourceCodeOwnership })}
-              onBlur={() => blurField("sourceCodeOwnership")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="client_hosts">Client owns and hosts throughout</option>
-              <option value="glimmora_hosts_transfer">GlimmoraTeam hosts, transfers on M3</option>
-              <option value="client_provides_day_one">Client provides repository from day one</option>
-            </select>
-          </Field>
-        </div>
+            <Field label="Source Code Repository" error={errors.sourceCodeOwnership}>
+              <CustomSelect
+                value={data.sourceCodeOwnership}
+                onChange={(v) => update({ sourceCodeOwnership: v as typeof data.sourceCodeOwnership })}
+                onBlur={() => blurField("sourceCodeOwnership")}
+                options={SOURCE_CODE_OPTIONS}
+                placeholder="Select repository model…"
+              />
+            </Field>
+          </div>
+        </SubSection>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Warranty Period" error={errors.warrantyPeriod}>
-            <select value={data.warrantyPeriod}
-              onChange={(e) => update({ warrantyPeriod: e.target.value as typeof data.warrantyPeriod })}
-              onBlur={() => blurField("warrantyPeriod")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="30_days">30 days</option>
-              <option value="60_days">60 days</option>
-              <option value="90_days">90 days</option>
-              <option value="6_months">6 months</option>
-              <option value="none">No warranty</option>
-            </select>
-          </Field>
+        {/* Commercial Terms */}
+        <SubSection icon={Handshake} title="Commercial Terms">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Third-Party Licensing Costs" error={errors.thirdPartyCosts}>
+              <CustomSelect
+                value={data.thirdPartyCosts}
+                onChange={(v) => update({ thirdPartyCosts: v as typeof data.thirdPartyCosts })}
+                onBlur={() => blurField("thirdPartyCosts")}
+                options={THIRD_PARTY_OPTIONS}
+                placeholder="Select cost model…"
+              />
+            </Field>
 
-          <Field label="Third-Party Licensing Costs" error={errors.thirdPartyCosts}>
-            <select value={data.thirdPartyCosts}
-              onChange={(e) => update({ thirdPartyCosts: e.target.value as typeof data.thirdPartyCosts })}
-              onBlur={() => blurField("thirdPartyCosts")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="client_pays">Client pays all third-party costs directly</option>
-              <option value="glimmora_absorbs">GlimmoraTeam absorbs within quote</option>
-              <option value="split">Split</option>
-            </select>
-          </Field>
-        </div>
+            <Field label="Change Request Process" error={errors.changeRequestProcess}>
+              <CustomSelect
+                value={data.changeRequestProcess}
+                onChange={(v) => update({ changeRequestProcess: v as typeof data.changeRequestProcess })}
+                onBlur={() => blurField("changeRequestProcess")}
+                options={CHANGE_REQUEST_OPTIONS}
+                placeholder="Select change request model…"
+              />
+            </Field>
+          </div>
+        </SubSection>
 
-        <Field label="Change Request Process" error={errors.changeRequestProcess}>
-          <select value={data.changeRequestProcess}
-            onChange={(e) => update({ changeRequestProcess: e.target.value as typeof data.changeRequestProcess })}
-            onBlur={() => blurField("changeRequestProcess")}
-            className={inputCls}>
-            <option value="">Select…</option>
-            <option value="formal_cr">Formal CR — all changes priced before work begins</option>
-            <option value="threshold_cr">Threshold-based — minor changes within contingency</option>
-            <option value="time_and_materials">T&amp;M above baseline</option>
-          </select>
-        </Field>
-
-        {/* Approval Authorities subsection */}
-        <div className="pt-2">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
-            Approval Authorities
-          </p>
-
-          <div className="rounded-2xl border border-gold-200 bg-gold-50/40 px-5 py-3.5 mb-4 flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-gold-600 shrink-0 mt-0.5" />
+        {/* Approval Authorities */}
+        <SubSection icon={ShieldCheck} title="Approval Authorities">
+          <div className="rounded-xl border border-gold-200 bg-gold-50/50 px-4 py-3 flex items-start gap-2.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-gold-600 shrink-0 mt-0.5" />
             <p className="text-[11px] text-gold-700 leading-relaxed">
-              <span className="font-semibold">Business Owner must differ from the SOW submitter.</span> The platform enforces this — selecting yourself will block submission.
+              <span className="font-semibold">Business Owner must differ from the SOW submitter.</span>{" "}
+              The platform enforces this — selecting yourself will block submission.
             </p>
           </div>
 
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="SOW Submitter" error={errors.sowSubmitter}>
+              <UserInput
+                value={auth.sowSubmitter ?? ""}
+                onChange={(v) => updateAuth({ sowSubmitter: v })}
+                onBlur={() => blurField("sowSubmitter")}
+                placeholder="Full name of SOW submitter"
+              />
+            </Field>
+
             <Field label="Business Owner Approver (Stage 1)" error={errors.businessOwnerApprover}>
-              <input type="text" value={auth.businessOwnerApprover}
-                onChange={(e) => updateAuth({ businessOwnerApprover: e.target.value })}
+              <UserInput
+                value={auth.businessOwnerApprover}
+                onChange={(v) => updateAuth({ businessOwnerApprover: v })}
                 onBlur={() => blurField("businessOwnerApprover")}
                 placeholder="Full name of Business Owner"
-                className={inputCls} />
-            </Field>
-
-            <Field label="Final Approver (Stage 5)" error={errors.finalApprover}>
-              <input type="text" value={auth.finalApprover}
-                onChange={(e) => updateAuth({ finalApprover: e.target.value })}
-                onBlur={() => blurField("finalApprover")}
-                placeholder="Full name of Final Approver"
-                className={inputCls} />
-            </Field>
-
-            <Field label="Legal / Compliance Reviewer">
-              <input type="text" value={auth.legalReviewer || ""}
-                onChange={(e) => updateAuth({ legalReviewer: e.target.value })}
-                placeholder="Optional — can be designated later"
-                className={inputCls} />
+              />
             </Field>
           </div>
-        </div>
+        </SubSection>
 
       </div>
 
-      <SectionFooter onBack={onBack} onComplete={handleComplete} completeLabel="Mark Complete" />
+      <SectionFooter onBack={onBack} onComplete={handleComplete} completeLabel="Generate Final SOW" variant="generate" />
     </>
   );
 }

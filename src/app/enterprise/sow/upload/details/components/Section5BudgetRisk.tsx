@@ -4,6 +4,7 @@ import * as React from "react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 import { SectionHeader, SectionFooter, Field, inputCls } from "./_shared";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 interface Props { onComplete: () => void; onBack?: () => void }
 
@@ -63,42 +64,54 @@ export function Section5BudgetRisk({ onComplete, onBack }: Props) {
               className={inputCls} />
           </Field>
           <Field label="Currency">
-            <select value={data.currency}
-              onChange={(e) => update({ currency: e.target.value })}
-              className={inputCls}>
-              <option value="USD">USD ($)</option>
-              <option value="INR">INR (₹)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="AED">AED (د.إ)</option>
-            </select>
+            <SelectDropdown
+              value={data.currency ?? "USD"}
+              onChange={(val) => update({ currency: val })}
+              searchable={false}
+              dropdownHeight={200}
+              options={[
+                { value: "USD", label: "USD ($)" },
+                { value: "INR", label: "INR (₹)" },
+                { value: "GBP", label: "GBP (£)" },
+                { value: "EUR", label: "EUR (€)" },
+                { value: "AED", label: "AED (د.إ)" },
+              ]}
+            />
           </Field>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Pricing Model" error={errors.pricingModel}>
-            <select value={data.pricingModel}
-              onChange={(e) => update({ pricingModel: e.target.value as typeof data.pricingModel })}
-              onBlur={() => blurField("pricingModel")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="fixed_price">Fixed Price</option>
-              <option value="time_and_materials">Time &amp; Materials</option>
-              <option value="outcome_based">Outcome-Based</option>
-              <option value="hybrid">Hybrid</option>
-            </select>
+            <SelectDropdown
+              value={data.pricingModel ?? ""}
+              onChange={(val) => { update({ pricingModel: val as typeof data.pricingModel }); blurField("pricingModel"); }}
+              placeholder="Select…"
+              searchable={false}
+              dropdownHeight={160}
+              error={!!errors.pricingModel}
+              options={[
+                { value: "fixed_price", label: "Fixed Price" },
+                { value: "time_and_materials", label: "Time & Materials" },
+                { value: "outcome_based", label: "Outcome-Based" },
+                { value: "hybrid", label: "Hybrid" },
+              ]}
+            />
           </Field>
 
           <Field label="Contingency Budget">
-            <select value={data.contingencyPercent}
-              onChange={(e) => update({ contingencyPercent: e.target.value })}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="5">5%</option>
-              <option value="10">10%</option>
-              <option value="15">15%</option>
-              <option value="20">20%</option>
-            </select>
+            <SelectDropdown
+              value={data.contingencyPercent ?? ""}
+              onChange={(val) => update({ contingencyPercent: val })}
+              placeholder="Select…"
+              searchable={false}
+              dropdownHeight={160}
+              options={[
+                { value: "5", label: "5%" },
+                { value: "10", label: "10%" },
+                { value: "15", label: "15%" },
+                { value: "20", label: "20%" },
+              ]}
+            />
           </Field>
         </div>
 
@@ -108,7 +121,7 @@ export function Section5BudgetRisk({ onComplete, onBack }: Props) {
             Platform Payment Schedule
           </p>
           <p className="text-[12px] text-gray-600 leading-relaxed">
-            30% on SOW onboarding (M1) &nbsp;·&nbsp; 35% on development completion (M2) &nbsp;·&nbsp; 35% on UAT sign-off (M3)
+            35% on SOW onboarding (M1) &nbsp;·&nbsp; 35% on development completion (M2) &nbsp;·&nbsp; 30% on UAT sign-off (M3)
           </p>
         </div>
 

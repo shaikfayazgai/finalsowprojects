@@ -4,6 +4,7 @@ import * as React from "react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 import { SectionHeader, SectionFooter, Field, inputCls } from "./_shared";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 interface Props { onComplete: () => void; onBack?: () => void }
 
@@ -57,30 +58,34 @@ export function Section1BusinessContext({ onComplete, onBack }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Business Criticality" error={errors.businessCriticality}>
-            <select value={data.businessCriticality}
-              onChange={(e) => update({ businessCriticality: e.target.value as typeof data.businessCriticality })}
-              onBlur={() => blurField("businessCriticality")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="mission_critical">Mission-critical</option>
-              <option value="business_important">Business-important</option>
-              <option value="standard">Standard</option>
-              <option value="low">Low</option>
-            </select>
-          </Field>
-
-          <Field label="Definition of Project Success" error={errors.definitionOfSuccess}>
-            <textarea rows={3} value={data.definitionOfSuccess}
-              onChange={(e) => update({ definitionOfSuccess: e.target.value })}
-              onBlur={() => blurField("definitionOfSuccess")}
-              placeholder="Zero critical defects for 30 consecutive days…"
-              className={inputCls + " resize-none"} />
+            <SelectDropdown
+              value={data.businessCriticality ?? ""}
+              onChange={(val) => { update({ businessCriticality: val as typeof data.businessCriticality }); blurField("businessCriticality"); }}
+              placeholder="Select…"
+              searchable={false}
+              dropdownHeight={160}
+              error={!!errors.businessCriticality}
+              options={[
+                { value: "mission_critical", label: "Mission-critical" },
+                { value: "business_important", label: "Business-important" },
+                { value: "standard", label: "Standard" },
+                { value: "low", label: "Low" },
+              ]}
+            />
           </Field>
         </div>
 
+        <Field label="Definition of Project Success" error={errors.definitionOfSuccess}>
+          <textarea rows={3} value={data.definitionOfSuccess}
+            onChange={(e) => update({ definitionOfSuccess: e.target.value })}
+            onBlur={() => blurField("definitionOfSuccess")}
+            placeholder="Zero critical defects for 30 consecutive days…"
+            className={inputCls + " resize-none"} />
+        </Field>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Current State (As-Is)" error={errors.currentState}
-            hint="Describe the existing system, or 'Not applicable — greenfield'.">
+            info="Describe the existing system, or 'Not applicable — greenfield'.">
             <textarea rows={3} value={data.currentState}
               onChange={(e) => update({ currentState: e.target.value })}
               onBlur={() => blurField("currentState")}

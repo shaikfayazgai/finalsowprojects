@@ -3,7 +3,9 @@
 import * as React from "react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
+import { Info } from "lucide-react";
 import { SectionHeader, SectionFooter, Field, inputCls } from "./_shared";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 interface Props { onComplete: () => void; onBack?: () => void }
 
@@ -13,6 +15,7 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.governance;
   const [errors, setErrors] = React.useState<SectionErrors>({});
+  const [showSensitivityNotes, setShowSensitivityNotes] = React.useState(false);
   const touched = React.useRef<Set<string>>(new Set());
 
   const update = (patch: Partial<typeof data>) => {
@@ -74,43 +77,74 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Data Sensitivity Level" error={errors.dataSensitivityLevel}
-            hint="No default — explicit selection required.">
-            <select value={data.dataSensitivityLevel}
-              onChange={(e) => update({ dataSensitivityLevel: e.target.value as typeof data.dataSensitivityLevel })}
-              onBlur={() => blurField("dataSensitivityLevel")}
-              className={inputCls}>
-              <option value="">Select sensitivity level…</option>
-              <option value="public">Public</option>
-              <option value="internal">Internal</option>
-              <option value="confidential">Confidential</option>
-              <option value="restricted">Restricted</option>
-            </select>
-          </Field>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                Data Sensitivity Level
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowSensitivityNotes((v) => !v)}
+                className={`transition-colors ${showSensitivityNotes ? "text-brown-500" : "text-gray-400 hover:text-brown-500"}`}
+              >
+                <Info className="w-3 h-3" />
+              </button>
+            </div>
+            {showSensitivityNotes && (
+              <p className="text-[11px] text-brown-600 leading-relaxed">
+                Classify the data this project will handle. <span className="font-semibold">Public</span> — freely shareable. <span className="font-semibold">Internal</span> — company-only. <span className="font-semibold">Confidential</span> — restricted, contains PII or trade secrets. <span className="font-semibold">Restricted</span> — highest protection, financial/legal/regulated data.
+              </p>
+            )}
+            <SelectDropdown
+              value={data.dataSensitivityLevel ?? ""}
+              onChange={(val) => { update({ dataSensitivityLevel: val as typeof data.dataSensitivityLevel }); blurField("dataSensitivityLevel"); }}
+              placeholder="Select sensitivity level…"
+              searchable={false}
+              dropdownHeight={160}
+              error={!!errors.dataSensitivityLevel}
+              options={[
+                { value: "public", label: "Public" },
+                { value: "internal", label: "Internal" },
+                { value: "confidential", label: "Confidential" },
+                { value: "restricted", label: "Restricted" },
+              ]}
+            />
+            {errors.dataSensitivityLevel && (
+              <p className="text-[11px] text-red-500 font-medium mt-1">{errors.dataSensitivityLevel}</p>
+            )}
+          </div>
 
           <Field label="Personal Data Involved" error={errors.personalDataInvolved}>
-            <select value={data.personalDataInvolved}
-              onChange={(e) => update({ personalDataInvolved: e.target.value as typeof data.personalDataInvolved })}
-              onBlur={() => blurField("personalDataInvolved")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
+            <SelectDropdown
+              value={data.personalDataInvolved ?? ""}
+              onChange={(val) => { update({ personalDataInvolved: val as typeof data.personalDataInvolved }); blurField("personalDataInvolved"); }}
+              placeholder="Select…"
+              searchable={false}
+              dropdownHeight={80}
+              error={!!errors.personalDataInvolved}
+              options={[
+                { value: "yes", label: "Yes" },
+                { value: "no", label: "No" },
+              ]}
+            />
           </Field>
         </div>
 
         <Field label="Data Residency Requirement">
-          <select value={data.dataResidency}
-            onChange={(e) => update({ dataResidency: e.target.value })}
-            className={inputCls}>
-            <option value="">Select…</option>
-            <option value="india_only">India only</option>
-            <option value="eu_only">EU only</option>
-            <option value="us_only">US only</option>
-            <option value="no_restriction">No restriction</option>
-            <option value="custom">Custom</option>
-          </select>
+          <SelectDropdown
+            value={data.dataResidency ?? ""}
+            onChange={(val) => update({ dataResidency: val })}
+            placeholder="Select…"
+            searchable={false}
+            dropdownHeight={200}
+            options={[
+              { value: "india_only", label: "India only" },
+              { value: "eu_only", label: "EU only" },
+              { value: "us_only", label: "US only" },
+              { value: "no_restriction", label: "No restriction" },
+              { value: "custom", label: "Custom" },
+            ]}
+          />
         </Field>
 
         {/* Regulatory frameworks */}

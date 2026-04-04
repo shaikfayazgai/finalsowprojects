@@ -4,10 +4,11 @@ import * as React from "react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 import { SectionHeader, SectionFooter, Field, FieldGroup, inputCls } from "./_shared";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 interface Props { onComplete: () => void; onBack?: () => void }
 
-const DEV_SCOPE_ITEMS = ["Frontend", "Backend", "Database", "Integration development", "CI/CD"];
+const DEV_SCOPE_ITEMS = ["Frontend", "Backend","Integration development", "CI/CD"];
 
 export function Section2DeliveryScope({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
@@ -74,53 +75,69 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="UI/UX Design Scope" error={errors.uiuxDesignScope}>
-            <select value={data.uiuxDesignScope}
-              onChange={(e) => update({ uiuxDesignScope: e.target.value as typeof data.uiuxDesignScope })}
-              onBlur={() => blurField("uiuxDesignScope")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="not_in_scope">Not in scope</option>
-              <option value="in_scope">In scope</option>
-              <option value="client_provides">Client provides designs</option>
-            </select>
+            <SelectDropdown
+              value={data.uiuxDesignScope ?? ""}
+              onChange={(val) => { update({ uiuxDesignScope: val as typeof data.uiuxDesignScope }); blurField("uiuxDesignScope"); }}
+              placeholder="Select…"
+              searchable={false}
+              dropdownHeight={120}
+              error={!!errors.uiuxDesignScope}
+              options={[
+                { value: "not_in_scope", label: "Not in scope" },
+                { value: "in_scope", label: "In scope" },
+                { value: "client_provides", label: "Client provides designs" },
+              ]}
+            />
           </Field>
 
           <Field label="Deployment Scope" error={errors.deploymentScope}>
-            <select value={data.deploymentScope}
-              onChange={(e) => update({ deploymentScope: e.target.value as typeof data.deploymentScope })}
-              onBlur={() => blurField("deploymentScope")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="not_in_scope">Not in scope (working build handover)</option>
-              <option value="cloud">Deploy to cloud</option>
-              <option value="on_premise">Deploy on-premise</option>
-              <option value="both">Both</option>
-            </select>
+            <SelectDropdown
+              value={data.deploymentScope ?? ""}
+              onChange={(val) => { update({ deploymentScope: val as typeof data.deploymentScope }); blurField("deploymentScope"); }}
+              placeholder="Select…"
+              searchable={false}
+              dropdownHeight={160}
+              error={!!errors.deploymentScope}
+              options={[
+                { value: "not_in_scope", label: "Not in scope (working build handover)" },
+                { value: "cloud", label: "Deploy to cloud" },
+                { value: "on_premise", label: "Deploy on-premise" },
+                { value: "both", label: "Both" },
+              ]}
+            />
           </Field>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Go-Live & Hypercare" error={errors.goLiveScope}>
-            <select value={data.goLiveScope}
-              onChange={(e) => update({ goLiveScope: e.target.value as typeof data.goLiveScope })}
-              onBlur={() => blurField("goLiveScope")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="not_in_scope">Not in scope</option>
-              <option value="go_live">Go-live included</option>
-              <option value="go_live_hypercare">Go-live + Hypercare</option>
-            </select>
+            <SelectDropdown
+              value={data.goLiveScope ?? ""}
+              onChange={(val) => { update({ goLiveScope: val as typeof data.goLiveScope }); blurField("goLiveScope"); }}
+              placeholder="Select…"
+              searchable={false}
+              dropdownHeight={120}
+              error={!!errors.goLiveScope}
+              options={[
+                { value: "not_in_scope", label: "Not in scope" },
+                { value: "go_live", label: "Go-live included" },
+                { value: "go_live_hypercare", label: "Go-live + Hypercare" },
+              ]}
+            />
           </Field>
 
           <Field label="Data Migration Scope" error={errors.dataMigrationScope}>
-            <select value={data.dataMigrationScope}
-              onChange={(e) => update({ dataMigrationScope: e.target.value as typeof data.dataMigrationScope })}
-              onBlur={() => blurField("dataMigrationScope")}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="not_in_scope">Not in scope</option>
-              <option value="in_scope">In scope</option>
-            </select>
+            <SelectDropdown
+              value={data.dataMigrationScope ?? ""}
+              onChange={(val) => { update({ dataMigrationScope: val as typeof data.dataMigrationScope }); blurField("dataMigrationScope"); }}
+              placeholder="Select…"
+              searchable={false}
+              dropdownHeight={80}
+              error={!!errors.dataMigrationScope}
+              options={[
+                { value: "not_in_scope", label: "Not in scope" },
+                { value: "in_scope", label: "In scope" },
+              ]}
+            />
           </Field>
         </div>
 

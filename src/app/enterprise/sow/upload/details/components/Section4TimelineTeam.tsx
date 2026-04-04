@@ -5,6 +5,7 @@ import { AlertTriangle } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 import { SectionHeader, SectionFooter, Field, inputCls } from "./_shared";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 interface Props { onComplete: () => void; onBack?: () => void }
 
@@ -69,27 +70,35 @@ export function Section4TimelineTeam({ onComplete, onBack }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Estimated Team Size">
-            <select value={data.estimatedTeamSize}
-              onChange={(e) => update({ estimatedTeamSize: e.target.value })}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="1-3">1–3</option>
-              <option value="4-8">4–8</option>
-              <option value="9-15">9–15</option>
-              <option value="16-25">16–25</option>
-              <option value="25+">25+</option>
-            </select>
+            <SelectDropdown
+              value={data.estimatedTeamSize ?? ""}
+              onChange={(val) => update({ estimatedTeamSize: val })}
+              placeholder="Select…"
+              searchable={false}
+              dropdownHeight={200}
+              options={[
+                { value: "1-3", label: "1–3" },
+                { value: "4-8", label: "4–8" },
+                { value: "9-15", label: "9–15" },
+                { value: "16-25", label: "16–25" },
+                { value: "25+", label: "25+" },
+              ]}
+            />
           </Field>
           <Field label="Work Model">
-            <select value={data.workModel}
-              onChange={(e) => update({ workModel: e.target.value })}
-              className={inputCls}>
-              <option value="">Select…</option>
-              <option value="remote">Fully remote</option>
-              <option value="hybrid">Hybrid</option>
-              <option value="onsite">On-site</option>
-              <option value="flexible">Flexible</option>
-            </select>
+            <SelectDropdown
+              value={data.workModel ?? ""}
+              onChange={(val) => update({ workModel: val })}
+              placeholder="Select…"
+              searchable={false}
+              dropdownHeight={160}
+              options={[
+                { value: "remote", label: "Fully remote" },
+                { value: "hybrid", label: "Hybrid" },
+                { value: "onsite", label: "On-site" },
+                { value: "flexible", label: "Flexible" },
+              ]}
+            />
           </Field>
         </div>
 

@@ -3,8 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Save } from "lucide-react";
-import { cn } from "@/lib/utils/cn";
+import { Save } from "lucide-react";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { SectionNavigator } from "@/components/enterprise/sow/SectionNavigator";
@@ -96,6 +95,7 @@ export default function CommercialDetailsPage() {
   const completedCount = SECTION_ORDER.filter((k) => store.commercialSectionStatus[k] === "complete").length;
 
   const handleGenerate = () => {
+    store.markSectionComplete("commercialLegal");
     store.setFlowStep(6);
     router.push("/enterprise/sow/upload/generate");
   };
@@ -140,7 +140,7 @@ export default function CommercialDetailsPage() {
         {/* Right: Section Content */}
         <div className="card-parchment overflow-hidden">
           <ActiveSectionComponent
-            onComplete={handleSectionComplete}
+            onComplete={activeSection === "commercialLegal" ? handleGenerate : handleSectionComplete}
             onBack={
               SECTION_ORDER.indexOf(activeSection) > 0
                 ? handleSectionBack
@@ -150,18 +150,6 @@ export default function CommercialDetailsPage() {
         </div>
       </motion.div>
 
-      {/* Bottom action bar — Generate only (back is handled per-section) */}
-      <motion.div variants={fadeUp} className="flex items-center justify-end mt-8 pt-6" style={{ borderTop: "1px solid var(--border-soft)" }}>
-        <button onClick={handleGenerate} disabled={!allComplete}
-          className={cn(
-            "flex items-center gap-2 text-[13px] font-semibold px-6 py-2.5 rounded-xl transition-all",
-            allComplete
-              ? "text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700"
-              : "text-gray-400 bg-gray-100 cursor-not-allowed"
-          )}>
-          Generate Final SOW <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </motion.div>
     </motion.div>
   );
 }

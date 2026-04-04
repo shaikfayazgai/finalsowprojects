@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight, ArrowLeft, CheckCircle2, AlertTriangle, Ban,
-  Sparkles, X, Clock, Send, Bot, Undo2, MessageSquare,
+  Sparkles, X, Clock, Send, Bot, Undo2, MessageSquare, Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
@@ -114,6 +114,114 @@ function GapRow({
   );
 }
 
+/* ── Suggestion Card ── */
+
+function SuggestionCard({
+  index,
+  text,
+  state,
+  onAccept,
+  onDismiss,
+  onEdit,
+}: {
+  index: number;
+  text: string;
+  state?: "accepted" | "dismissed";
+  onAccept: (text: string) => void;
+  onDismiss: () => void;
+  onEdit: (text: string) => void;
+}) {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editText, setEditText] = React.useState(text);
+
+  const handleSave = () => {
+    onEdit(editText);
+    setIsEditing(false);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.08 }}
+      className={cn(
+        "px-3.5 py-2.5 rounded-xl border text-[12px] leading-relaxed transition-all",
+        state === "accepted"
+          ? "bg-forest-50 border-forest-200 text-forest-800"
+          : state === "dismissed"
+          ? "bg-gray-50 border-gray-200 text-gray-400 line-through opacity-50"
+          : "bg-white border-teal-100 text-gray-700",
+      )}
+    >
+      {isEditing ? (
+        <div className="space-y-2">
+          <textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            rows={3}
+            autoFocus
+            className="w-full text-[12px] text-gray-700 px-2.5 py-1.5 rounded-lg border border-brown-200 bg-white outline-none focus:border-brown-400 focus:ring-2 focus:ring-brown-100 resize-none transition-all"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!editText.trim()}
+              className="flex items-center gap-1 text-[10px] font-semibold text-white bg-brown-500 hover:bg-brown-600 px-2.5 py-1 rounded-lg transition-all disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-3 h-3" /> Save
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEditText(text); setIsEditing(false); }}
+              className="flex items-center gap-1 text-[10px] font-medium text-gray-500 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-all"
+            >
+              <X className="w-3 h-3" /> Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p>{editText}</p>
+          {!state && (
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => onAccept(editText)}
+                className="flex items-center gap-1 text-[10px] font-semibold text-forest-700 bg-forest-50 border border-forest-200 px-2.5 py-1 rounded-lg hover:bg-forest-100 transition-all"
+              >
+                <CheckCircle2 className="w-3 h-3" /> Accept
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-1 text-[10px] font-medium text-brown-600 border border-brown-200 px-2.5 py-1 rounded-lg hover:bg-brown-50 transition-all"
+              >
+                <Pencil className="w-3 h-3" /> Edit
+              </button>
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="flex items-center gap-1 text-[10px] font-medium text-red-500 border border-red-200 px-2.5 py-1 rounded-lg hover:bg-red-50 transition-all"
+              >
+                <Ban className="w-3 h-3" /> Exclude
+              </button>
+            </div>
+          )}
+          {state === "accepted" && (
+            <p className="text-[10px] font-bold text-forest-600 mt-1 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Accepted
+            </p>
+          )}
+          {state === "dismissed" && (
+            <p className="text-[10px] text-gray-400 mt-1">Excluded</p>
+          )}
+        </>
+      )}
+    </motion.div>
+  );
+}
+
 /* ── Chat Bubble ── */
 
 function ChatBubble({
@@ -121,11 +229,13 @@ function ChatBubble({
   suggStates,
   onAccept,
   onDismiss,
+  onEdit,
 }: {
   msg: ChatMessage;
   suggStates?: Record<number, "accepted" | "dismissed">;
-  onAccept?: (idx: number) => void;
+  onAccept?: (idx: number, text: string) => void;
   onDismiss?: (idx: number) => void;
+  onEdit?: (idx: number, text: string) => void;
 }) {
   if (msg.role === "system") {
     return (
@@ -152,52 +262,19 @@ function ChatBubble({
             {msg.content}
           </div>
 
-          {/* Per-suggestion cards with Accept / Dismiss */}
+          {/* Per-suggestion cards with Accept / Edit / Dismiss */}
           {msg.suggestions?.map((s, i) => {
             const state = suggStates?.[i];
             return (
-              <motion.div
+              <SuggestionCard
                 key={i}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.08 }}
-                className={cn(
-                  "px-3.5 py-2.5 rounded-xl border text-[12px] leading-relaxed transition-all",
-                  state === "accepted"
-                    ? "bg-forest-50 border-forest-200 text-forest-800"
-                    : state === "dismissed"
-                    ? "bg-gray-50 border-gray-200 text-gray-400 line-through opacity-50"
-                    : "bg-white border-teal-100 text-gray-700",
-                )}
-              >
-                <p>{s}</p>
-                {!state && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => onAccept?.(i)}
-                      className="flex items-center gap-1 text-[10px] font-semibold text-forest-700 bg-forest-50 border border-forest-200 px-2.5 py-1 rounded-lg hover:bg-forest-100 transition-all"
-                    >
-                      <CheckCircle2 className="w-3 h-3" /> Accept
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDismiss?.(i)}
-                      className="flex items-center gap-1 text-[10px] font-medium text-gray-400 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-all"
-                    >
-                      <X className="w-3 h-3" /> Dismiss
-                    </button>
-                  </div>
-                )}
-                {state === "accepted" && (
-                  <p className="text-[10px] font-bold text-forest-600 mt-1 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Accepted
-                  </p>
-                )}
-                {state === "dismissed" && (
-                  <p className="text-[10px] text-gray-400 mt-1">Dismissed</p>
-                )}
-              </motion.div>
+                index={i}
+                text={s}
+                state={state}
+                onAccept={(text) => onAccept?.(i, text)}
+                onDismiss={() => onDismiss?.(i)}
+                onEdit={(text) => onEdit?.(i, text)}
+              />
             );
           })}
         </div>
@@ -235,6 +312,7 @@ export default function GapAnalysisPage() {
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [fpInput, setFpInput] = React.useState<Record<string, string>>({});
   const [showAcceptModal, setShowAcceptModal] = React.useState(false);
+
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
   const selectedGap = gaps.find((g) => g.id === selectedGapId) ?? null;
@@ -310,7 +388,7 @@ export default function GapAnalysisPage() {
     }, 1400);
   };
 
-  const handleAcceptSuggestion = React.useCallback((msgId: string, idx: number) => {
+  const handleAcceptSuggestion = React.useCallback((msgId: string, idx: number, _text: string) => {
     setSuggestionStates((prev) => ({
       ...prev,
       [msgId]: { ...(prev[msgId] ?? {}), [idx]: "accepted" },
@@ -542,8 +620,8 @@ export default function GapAnalysisPage() {
                             )}
                             {selectedGap.severity === "optional" && (
                               <button type="button" onClick={() => dismissGap(selectedGap.id)}
-                                className="flex items-center gap-1 text-[11px] font-medium text-gray-500 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-all">
-                                <X className="w-3 h-3" /> Dismiss
+                                className="flex items-center gap-1 text-[11px] font-medium text-red-500 px-3 py-1.5 rounded-lg border border-red-200 bg-white hover:bg-red-50 transition-all">
+                                <Ban className="w-3 h-3" /> Exclude
                               </button>
                             )}
                             {selectedGap.severity === "critical" && !selectedGap.isProhibited && (
@@ -592,8 +670,9 @@ export default function GapAnalysisPage() {
                         key={msg.id}
                         msg={msg}
                         suggStates={suggestionStates[msg.id]}
-                        onAccept={(idx) => handleAcceptSuggestion(msg.id, idx)}
+                        onAccept={(idx, text) => handleAcceptSuggestion(msg.id, idx, text)}
                         onDismiss={(idx) => handleDismissSuggestion(msg.id, idx)}
+                        onEdit={() => {}}
                       />
                     ))}
                     {isGenerating && (
