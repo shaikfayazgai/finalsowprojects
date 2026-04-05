@@ -1,7 +1,8 @@
 "use server";
 
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
+import { authApi } from "@/lib/api/auth";
+import { ApiError } from "@/lib/api/client";
 import {
   contributorRegistrationSchema,
   enterpriseRegistrationSchema,
@@ -9,7 +10,8 @@ import {
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
-// ── Contributor Registration ──
+// ── Contributor Registration ──────────────────────────────────────────────
+
 export async function registerContributor(data: unknown): Promise<ActionResult> {
   const parsed = contributorRegistrationSchema.safeParse(data);
   if (!parsed.success) {
@@ -17,61 +19,58 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
   }
   const v = parsed.data;
 
-  const existing = await prisma.user.findUnique({
-    where: { email: v.email.toLowerCase() },
-  });
-  if (existing) {
-    return { success: false, error: "An account with this email already exists" };
+  try {
+    await authApi.registerContributor({
+      firstName:               v.firstName,
+      lastName:                v.lastName,
+      email:                   v.email.toLowerCase(),
+      password:                v.password,
+      confirmPassword:         v.password,
+      contributorType:         v.contribType,
+      countryOfResidence:      v.country,
+      dateOfBirth:             v.dob,
+      timeZone:                v.timezone,
+      weeklyAvailabilityHours: v.availability,
+      departmentCategory:      v.departmentCategory,
+      primarySkills:           v.primarySkills,
+      secondarySkills:         v.secondarySkills,
+      otherSkills:             v.otherSkills,
+      phone:                   v.phone,
+      degree:                  v.degree,
+      branch:                  v.branch,
+      linkedin:                v.linkedin,
+      careerStage:             v.careerStage,
+      yearsExperience:         v.yearsExperience,
+      workStart:               v.workStart,
+      workEnd:                 v.workEnd,
+      // Mapped to actual Glimmora API field names
+      ndaSignatoryLegalName:   v.ndaSignature,
+      mentorGuideAcknowledged: true,
+      acceptTermsOfUse:        v.acceptTos,
+      acceptCodeOfConduct:     v.acceptCoc,
+      acceptPrivacyPolicy:     v.acceptPrivacy,
+      acceptHarassmentPolicy:  v.acceptAhp,
+      acknowledgmentsAccepted: true,
+      notifyNewTasksOptIn:     false,
+      marketingOptIn:          v.marketingOptIn,
+    });
+
+    return { success: true };
+  } catch (err) {
+    if (err instanceof ApiError) {
+      if (err.status === 409) {
+        return { success: false, error: "An account with this email already exists" };
+      }
+      return { success: false, error: err.message };
+    }
+    return { success: false, error: "Registration failed. Please try again." };
   }
-
-  const passwordHash = await bcrypt.hash(v.password, 10);
-
-  await prisma.user.create({
-    data: {
-      email:         v.email.toLowerCase(),
-      passwordHash,
-      firstName:     v.firstName,
-      lastName:      v.lastName,
-      role:          "contributor",
-      phone:         v.phone ?? null,
-      phoneVerified: true,
-      emailVerified: true,
-      contributorProfile: {
-        create: {
-          contribType:        v.contribType,
-          country:            v.country,
-          dob:                new Date(v.dob),
-          timezone:           v.timezone,
-          departmentCategory: v.departmentCategory,
-          departmentOther:    v.departmentOther ?? null,
-          primarySkills:      v.primarySkills,
-          secondarySkills:    v.secondarySkills,
-          otherSkills:        v.otherSkills,
-          availability:       v.availability,
-          degree:             v.degree ?? null,
-          branch:             v.branch ?? null,
-          linkedin:           v.linkedin ?? null,
-          careerStage:        v.careerStage ?? null,
-          yearsExperience:    v.yearsExperience ?? null,
-          workStart:          v.workStart ?? null,
-          workEnd:            v.workEnd ?? null,
-          ndaAccepted:        true,
-          ndaSignature:       v.ndaSignature,
-          acceptTos:          true,
-          acceptCoc:          true,
-          acceptPrivacy:      true,
-          acceptFee:          true,
-          acceptAhp:          true,
-          marketingOptIn:     v.marketingOptIn,
-        },
-      },
-    },
-  });
-
-  return { success: true };
 }
 
-// ── SSO Contributor Onboarding (existing user, no password) ──
+// ── SSO Contributor Onboarding (existing SSO user, no password) ──────────
+// SSO onboarding still writes to the local Prisma DB so NextAuth can look up
+// the contributor profile during the signIn callback.
+
 export async function onboardContributor(data: {
   firstName: string;
   lastName?: string;
@@ -133,13 +132,11 @@ export async function onboardContributor(data: {
       marketingOptIn:     data.marketingOptIn,
     };
 
-    // SSO users are not created in DB by NextAuth (JWT strategy, no adapter).
-    // upsert: create on first onboarding, update if somehow the record already exists.
     await prisma.user.upsert({
       where: { email: data.email.toLowerCase() },
       create: {
         email:         data.email.toLowerCase(),
-        passwordHash:  null,          // SSO — no password
+        passwordHash:  null,
         provider:      data.provider || undefined,
         firstName:     data.firstName,
         lastName:      data.lastName ?? "",
@@ -154,7 +151,6 @@ export async function onboardContributor(data: {
         lastName:  data.lastName ?? "",
         role:      "contributor",
         phone:     data.phone ?? null,
-        // Use upsert on the profile too so re-running onboarding doesn't violate the unique constraint
         contributorProfile: {
           upsert: {
             create: profileData,
@@ -172,7 +168,8 @@ export async function onboardContributor(data: {
   }
 }
 
-// ── Enterprise Registration ──
+// ── Enterprise Registration ───────────────────────────────────────────────
+
 export async function registerEnterprise(data: unknown): Promise<ActionResult> {
   const parsed = enterpriseRegistrationSchema.safeParse(data);
   if (!parsed.success) {
@@ -180,48 +177,40 @@ export async function registerEnterprise(data: unknown): Promise<ActionResult> {
   }
   const v = parsed.data;
 
-  const existing = await prisma.user.findUnique({
-    where: { email: v.adminEmail.toLowerCase() },
-  });
-  if (existing) {
-    return { success: false, error: "An account with this email already exists" };
+  try {
+    await authApi.registerEnterprise({
+      firstName:            v.adminFirstName,
+      lastName:             v.adminLastName,
+      email:                v.adminEmail.toLowerCase(),
+      password:             v.password,
+      orgName:              v.orgName,
+      orgType:              v.orgType,
+      orgTypeOther:         v.orgTypeOther,
+      industry:             v.industry,
+      industryOther:        v.industryOther,
+      companySize:          v.companySize,
+      adminTitle:           v.adminTitle,
+      adminDept:            v.adminDept,
+      website:              v.website,
+      hqCountry:            v.hqCountry,
+      hqCity:               v.hqCity,
+      phone:                v.phone,
+      incorporationCountry: v.incorporationCountry,
+      acceptTos:            v.acceptTos,
+      acceptPp:             v.acceptPp,
+      acceptEsa:            v.acceptEsa,
+      acceptAhp:            v.acceptAhp,
+      marketingOptIn:       v.marketingOptIn,
+    });
+
+    return { success: true };
+  } catch (err) {
+    if (err instanceof ApiError) {
+      if (err.status === 409) {
+        return { success: false, error: "An account with this email already exists" };
+      }
+      return { success: false, error: err.message };
+    }
+    return { success: false, error: "Registration failed. Please try again." };
   }
-
-  const passwordHash = await bcrypt.hash(v.password, 10);
-
-  await prisma.user.create({
-    data: {
-      email:         v.adminEmail.toLowerCase(),
-      passwordHash,
-      firstName:     v.adminFirstName,
-      lastName:      v.adminLastName,
-      role:          "enterprise",
-      phone:         v.phone ?? null,
-      phoneVerified: true,
-      emailVerified: true,
-      enterpriseProfile: {
-        create: {
-          orgName:              v.orgName,
-          orgType:              v.orgType,
-          orgTypeOther:         v.orgTypeOther ?? null,
-          industry:             v.industry,
-          industryOther:        v.industryOther ?? null,
-          companySize:          v.companySize,
-          website:              v.website ?? null,
-          hqCountry:            v.hqCountry ?? null,
-          hqCity:               v.hqCity ?? null,
-          adminTitle:           v.adminTitle,
-          adminDept:            v.adminDept ?? null,
-          incorporationCountry: v.incorporationCountry ?? null,
-          acceptTos:            true,
-          acceptPp:             true,
-          acceptEsa:            true,
-          acceptAhp:            true,
-          marketingOptIn:       v.marketingOptIn,
-        },
-      },
-    },
-  });
-
-  return { success: true };
 }
