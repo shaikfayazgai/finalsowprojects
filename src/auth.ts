@@ -2,33 +2,10 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
-import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/db";
+import { authApi, isMfaPending } from "@/lib/api/auth";
 
 export type UserRole = "contributor" | "enterprise" | "admin" | "reviewer";
-
-// Build OAuth providers only when credentials are configured
-const oauthProviders = [
-  ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-    ? [Google({
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        authorization: {
-          params: {
-            prompt: "consent",
-            access_type: "offline",
-            response_type: "code",
-          },
-        },
-      })]
-    : []),
-  ...(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET
-    ? [MicrosoftEntraID({
-        clientId: process.env.MICROSOFT_CLIENT_ID,
-        clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-        issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID ?? "common"}/v2.0`,
-      })]
-    : []),
-];
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Make the secret explicit to avoid env-resolution issues across runtimes/bundlers.
@@ -38,15 +15,53 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     error: "/auth/login",
   },
   providers: [
+    /**
+     * "glimmora-oauth" — receives pre-validated tokens from the Glimmora OAuth
+     * callback page (/auth/oauth/callback) and creates a NextAuth session.
+     * The Glimmora API handles the full Google/Microsoft OAuth dance; this
+     * provider only wraps the resulting tokens into a NextAuth JWT.
+     */
+    Credentials({
+      id: "glimmora-oauth",
+      name: "Glimmora OAuth",
+      credentials: {
+        accessToken:  {},
+        refreshToken: {},
+        expiresIn:    {},
+        userId:       {},
+        email:        {},
+        firstName:    {},
+        lastName:     {},
+        role:         {},
+        provider:     {},
+      },
+      async authorize(credentials) {
+        if (!credentials?.accessToken) return null;
+        const role = ((credentials.role as string) || "enterprise") as UserRole;
+        return {
+          id:           credentials.userId as string,
+          name:         `${credentials.firstName} ${credentials.lastName}`,
+          email:        credentials.email as string,
+          role,
+          accessToken:  credentials.accessToken as string,
+          refreshToken: credentials.refreshToken as string,
+          expiresIn:    Number(credentials.expiresIn) || 3600,
+          provider:     (credentials.provider as string) || "google",
+        };
+      },
+    }),
+    /**
+     * NextAuth-managed Google OAuth — uses our own Google Cloud credentials
+     * (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) which are registered with our
+     * app's redirect URI, not Glimmora's. This correctly redirects back to our
+     * app after OAuth. Glimmora's own OAuth endpoints can't do this (their
+     * callback is locked to glimmora-api.onrender.com).
+     */
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       authorization: {
-        params: {
-          prompt: "consent",
-          access_type: "offline",
-          response_type: "code",
-        },
+        params: { prompt: "consent", access_type: "offline", response_type: "code" },
       },
     }),
     MicrosoftEntraID({
@@ -61,35 +76,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        // IMPORTANT:
-        // Returning `null` (instead of throwing) helps ensure Auth.js returns JSON for the
-        // client helper methods (signIn/signOut/getSession/getProviders). Throwing can lead
-        // to redirects/HTML responses which then fail JSON parsing on the client.
+        // Returning null (not throwing) ensures Auth.js returns JSON for client helpers.
         try {
-          const email = typeof credentials?.email === "string" ? credentials.email : "";
+          const email = typeof credentials?.email === "string" ? credentials.email.trim().toLowerCase() : "";
           const password = typeof credentials?.password === "string" ? credentials.password : "";
 
           if (!email || !password) return null;
 
-          // Basic format validation (avoid DB work for obviously invalid input).
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(email)) return null;
-          if (password.length < 6) return null;
+          const response = await authApi.login(email, password);
 
-          const user = await prisma.user.findUnique({
-            where: { email: email.toLowerCase() },
-          });
+          // MFA required — not fully authenticated yet (Step 5 will wire MFA verify)
+          if (isMfaPending(response)) return null;
 
-          if (!user?.passwordHash) return null;
-
-          const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-          if (!isPasswordValid) return null;
+          const role = (response.user.role ?? "contributor") as UserRole;
 
           return {
-            id: user.id,
-            name: `${user.firstName} ${user.lastName}`,
-            email: user.email,
-            role: user.role,
+            id: response.user.id,
+            name: `${response.user.firstName} ${response.user.lastName}`,
+            email: response.user.email,
+            role,
+            accessToken: response.access_token,
+            refreshToken: response.refresh_token,
+            expiresIn: response.expires_in,
           };
         } catch {
           return null;
@@ -103,53 +111,81 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user, account }) {
+      // Initial sign-in — user object only present on first call
       if (user) {
-        token.id   = user.id;
-        token.role = (user as { role?: string }).role || "user";
+        token.id = user.id;
+        token.role = (user as { role?: string }).role || "contributor";
+        token.glimmoraAccessToken = (user as { accessToken?: string }).accessToken;
+        token.glimmoraRefreshToken = (user as { refreshToken?: string }).refreshToken;
+        const expiresIn = (user as { expiresIn?: number }).expiresIn;
+        if (expiresIn) {
+          token.glimmoraExpiresAt = Math.floor(Date.now() / 1000) + expiresIn;
+        }
       }
       if (account) {
         token.provider = account.provider;
       }
+
+      // Proactive token refresh — refresh if within 60 seconds of expiry
+      const shouldRefresh =
+        token.glimmoraRefreshToken &&
+        token.glimmoraExpiresAt &&
+        Date.now() / 1000 > token.glimmoraExpiresAt - 60;
+
+      if (shouldRefresh) {
+        try {
+          const refreshed = await authApi.refreshToken(token.glimmoraRefreshToken as string);
+          token.glimmoraAccessToken = refreshed.access_token;
+          token.glimmoraRefreshToken = refreshed.refresh_token;
+          // Default to 1 hour if the refresh response has no expires_in
+          token.glimmoraExpiresAt = Math.floor(Date.now() / 1000) + 3600;
+        } catch {
+          // Refresh failed — clear tokens so the user is prompted to re-login
+          delete token.glimmoraAccessToken;
+          delete token.glimmoraRefreshToken;
+          delete token.glimmoraExpiresAt;
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id       = token.id as string;
-        session.user.role     = token.role as UserRole;
+        session.user.id = token.id as string;
+        session.user.role = token.role as UserRole;
         session.user.provider = token.provider;
+        session.user.accessToken = token.glimmoraAccessToken;
       }
       return session;
     },
     async signIn({ user, account }) {
-      if (account?.provider === "credentials") return true;
-
-      try {
-        // Check if this SSO user already has a contributor profile
-        const existing = user.email
-          ? await prisma.user.findUnique({
-              where: { email: user.email.toLowerCase() },
-              select: { contributorProfile: { select: { id: true } } },
-            })
-          : null;
-
-        // Returning users go to dashboard via the default callbackUrl
-        if (existing?.contributorProfile) return true;
-      } catch {
-        // DB unreachable — allow sign-in to proceed, onboarding will re-check
+      // Credentials (email/password) and Glimmora OAuth callback — always allow.
+      // Routing is handled by the login page / OAuth callback page.
+      if (account?.provider === "credentials" || account?.provider === "glimmora-oauth") {
         return true;
       }
 
-      // First-time SSO user — redirect to onboarding with data pre-filled in URL
-      const [firstName = "", ...rest] = (user.name ?? "").split(" ");
-      const lastName = rest.join(" ");
-      const params = new URLSearchParams({
-        firstName,
-        lastName,
-        email:    user.email ?? "",
-        provider: account?.provider ?? "",
-      });
-      if (user.image) params.set("image", user.image);
-      return `/contributor/onboarding?${params.toString()}`;
+      // Legacy NextAuth Google/Microsoft providers (kept as fallback).
+      // Glimmora OAuth is the primary path; this branch only fires if the user
+      // somehow triggers NextAuth's own OAuth providers directly.
+      try {
+        const existing = user.email
+          ? await prisma.user.findUnique({
+              where: { email: user.email.toLowerCase() },
+              select: { id: true },
+            })
+          : null;
+
+        // Returning user — let NextAuth route via callbackUrl
+        if (existing) return true;
+      } catch {
+        // DB unreachable — proceed, onboarding modal will handle first-time flow
+        return true;
+      }
+
+      // First-time SSO user via legacy NextAuth OAuth — send to enterprise dashboard.
+      // The enterprise layout detects isSSO && !isOnboardingComplete and shows the wizard.
+      return "/enterprise/dashboard";
     },
     async redirect({ url, baseUrl }) {
       // If the url is relative, prefix with baseUrl
