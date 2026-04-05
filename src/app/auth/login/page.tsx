@@ -1,9 +1,11 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { signIn, getSession } from "next-auth/react";
+import { authApi } from "@/lib/api/auth";
+import { ApiError } from "@/lib/api/client";
 import {
   Sparkles,
   ArrowRight,
@@ -33,8 +35,6 @@ const STATS = [
 function LoginPageContent() {
   const searchParams = useSearchParams();
   const isMfaEnabled = useAuthStore((s) => s.isMfaEnabled);
-  const isOnboardingComplete = useAuthStore((s) => s.isOnboardingComplete);
-  const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
 
   const rawCallbackUrl = searchParams.get("callbackUrl");
   const callbackUrl = (() => {
@@ -56,16 +56,13 @@ function LoginPageContent() {
 
   const [step, setStep] = useState<Step>("credentials");
   const [userRole, setUserRole] = useState<string>("");
+  const mfaPendingTokenRef = useRef<string>("");
 
-  // Route based on user role — FSD §2.2 lifecycle
-  const getRoleDest = () => {
-    if (userRole === "contributor") return isOnboardingComplete ? "/contributor/dashboard" : "/contributor/onboarding";
-    if (userRole === "mentor") return "/mentor/dashboard";
-    if (userRole === "admin") return "/enterprise/dashboard";
-    // enterprise role — show onboarding if not complete
-    return isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding";
-  };
-  const redirectTo = callbackUrl || getRoleDest();
+  const redirectTo = callbackUrl || (
+    userRole === "contributor" ? "/contributor/dashboard" :
+    userRole === "mentor"      ? "/mentor/dashboard" :
+                                 "/enterprise/dashboard"
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -123,14 +120,21 @@ function LoginPageContent() {
     return () => clearInterval(id);
   }, [step]);
 
-  /* ── Auto-submit MFA when 6 digits entered ── */
+  /* ── Verify TOTP code via Glimmora API ── */
   const handleMFA = useCallback(async () => {
     setError("");
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setIsLoading(false);
-    window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
-  }, [loginDest, callbackUrl]);
+    try {
+      await authApi.verifyMfaCode(mfaCode, mfaPendingTokenRef.current);
+      // MFA verified — refresh the NextAuth session to pick up the new token state
+      await getSession();
+      window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Invalid code. Please try again.";
+      setError(msg);
+      setIsLoading(false);
+    }
+  }, [mfaCode, loginDest, callbackUrl]);
 
   useEffect(() => {
     if (step === "mfa" && mfaCode.length === 6 && !isLoading) {
@@ -175,6 +179,16 @@ function LoginPageContent() {
         return;
       }
 
+      const validateData = await validateRes.json();
+
+      // MFA required — skip signIn, store the pending token and show TOTP step
+      if (validateData.mfaRequired) {
+        mfaPendingTokenRef.current = validateData.mfaPendingToken ?? "";
+        setStep("mfa");
+        setIsLoading(false);
+        return;
+      }
+
       const result = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
@@ -188,42 +202,23 @@ function LoginPageContent() {
       }
 
       if (result?.ok) {
-        // Fetch session to get user role
         const session = await getSession();
         const role = (session?.user as { role?: string })?.role;
 
-        // Reset onboarding so the modal shows after login (enterprise only)
-        if (role === "enterprise") {
-          setOnboardingComplete(false);
-        } else {
-          // Contributor/admin/mentor: mark onboarding complete (returning users)
-          // New contributors coming from /auth/register go through /onboarding first
-          setOnboardingComplete(true);
-        }
-
-        // Store role for redirect after MFA
         setUserRole(role || "enterprise");
 
-        // Compute destination based on role and onboarding status
-        // FSD §2.2: Contributor lifecycle: Register → Profile Builder → Assessment → Dashboard
+        // Manual (credentials) registration users have already completed their
+        // profile during sign-up — send them straight to the dashboard.
+        // Onboarding wizard is only for first-time SSO users (handled in auth.ts signIn callback).
         const dest = callbackUrl || (
-          role === "contributor" ? (
-            isOnboardingComplete ? "/contributor/dashboard" : "/contributor/onboarding"
-          ) :
-          role === "mentor" ? "/mentor/dashboard" :
-          role === "admin" ? "/enterprise/dashboard" :
-          isOnboardingComplete ? "/enterprise/dashboard" : "/enterprise/onboarding"
+          role === "contributor" ? "/contributor/dashboard" :
+          role === "mentor"      ? "/mentor/dashboard" :
+                                   "/enterprise/dashboard"
         );
         setLoginDest(dest);
 
-        // Credentials verified - check MFA
-        if (isMfaEnabled) {
-          setStep("mfa");
-          setIsLoading(false);
-        } else {
-          setStep("mfa-prompt");
-          setIsLoading(false);
-        }
+        setStep("mfa-prompt");
+        setIsLoading(false);
       }
     } catch {
       setError("Something went wrong. Please try again.");
@@ -242,20 +237,25 @@ function LoginPageContent() {
     if (!recoveryCode) { setError("Please enter your recovery code"); return; }
     setError("");
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setIsLoading(false);
-    window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
+    try {
+      await authApi.redeemRecoveryCode(recoveryCode, mfaPendingTokenRef.current);
+      await getSession();
+      window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Invalid recovery code. Please try again.";
+      setError(msg);
+      setIsLoading(false);
+    }
   };
 
   /* ── Google / Microsoft SSO via NextAuth ── */
   const handleSSO = async (provider: "google" | "microsoft") => {
     setError("");
     setSsoLoading(provider);
-
     try {
       const providerId = provider === "microsoft" ? "microsoft-entra-id" : "google";
       await signIn(providerId, {
-        callbackUrl: redirectTo,
+        callbackUrl: callbackUrl || "/enterprise/dashboard",
       });
     } catch {
       setError(`Failed to sign in with ${provider}. Please try again.`);

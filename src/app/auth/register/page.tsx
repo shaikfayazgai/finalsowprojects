@@ -495,12 +495,11 @@ function ContributorRegisterContent() {
     try {
       const providerId = provider === "microsoft" ? "microsoft-entra-id" : "google";
       if (selectedRole === "enterprise") {
-        // Reset onboarding so the modal shows after OAuth login
         setOnboardingComplete(false);
       }
       await signIn(providerId, {
         callbackUrl: selectedRole === "enterprise"
-          ? "/enterprise/onboarding"
+          ? "/enterprise/dashboard"
           : "/contributor/onboarding",
       });
     } catch {
