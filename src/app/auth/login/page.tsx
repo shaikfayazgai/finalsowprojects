@@ -247,19 +247,13 @@ function LoginPageContent() {
     }
   };
 
-  /* ── Google / Microsoft SSO via NextAuth ── */
-  const handleSSO = async (provider: "google" | "microsoft") => {
+  /* ── Google / Microsoft SSO via Glimmora OAuth API ── */
+  const handleSSO = (provider: "google" | "microsoft") => {
     setError("");
     setSsoLoading(provider);
-    try {
-      const providerId = provider === "microsoft" ? "microsoft-entra-id" : "google";
-      await signIn(providerId, {
-        callbackUrl: callbackUrl || "/enterprise/dashboard",
-      });
-    } catch {
-      setError(`Failed to sign in with ${provider}. Please try again.`);
-      setSsoLoading(null);
-    }
+    const redirectAfter = callbackUrl || "/enterprise/dashboard";
+    const params = new URLSearchParams({ provider, redirectAfter, role: "enterprise" });
+    window.location.href = `/api/auth/oauth/authorize?${params.toString()}`;
   };
 
   const resetToCredentials = () => {

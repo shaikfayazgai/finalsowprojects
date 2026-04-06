@@ -3,7 +3,6 @@
 import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
 import {
   Sparkles,
   Briefcase,
@@ -488,23 +487,19 @@ function ContributorRegisterContent() {
     }, 150);
   };
 
-  const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
+  const setPendingOnboarding = useAuthStore((s) => s.setPendingOnboarding);
 
-  const handleSSO = async (provider: SSOProvider) => {
+  const handleSSO = (provider: SSOProvider) => {
     setSsoLoading(provider);
-    try {
-      const providerId = provider === "microsoft" ? "microsoft-entra-id" : "google";
-      if (selectedRole === "enterprise") {
-        setOnboardingComplete(false);
-      }
-      await signIn(providerId, {
-        callbackUrl: selectedRole === "enterprise"
-          ? "/enterprise/dashboard"
-          : "/contributor/onboarding",
-      });
-    } catch {
-      setSsoLoading(null);
+    const role = selectedRole === "enterprise" ? "enterprise" : "contributor";
+    if (role === "enterprise") {
+      setPendingOnboarding(true);
     }
+    const redirectAfter = role === "enterprise"
+      ? "/enterprise/dashboard"
+      : "/contributor/onboarding";
+    const params = new URLSearchParams({ provider, redirectAfter, role });
+    window.location.href = `/api/auth/oauth/authorize?${params.toString()}`;
   };
 
   const handleManual = () => {

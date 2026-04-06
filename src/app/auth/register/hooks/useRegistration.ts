@@ -208,7 +208,6 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     if (primarySkills.length < 1) { setError("Please add at least one primary skill"); return; }
     if (!availability) { setError("Please enter your weekly availability (hours)"); return; }
-    if (!mentorAck) { setError("Please acknowledge the Reviewer / Mentor requirement to proceed"); return; }
     setError("");
     setStep(3);
   }

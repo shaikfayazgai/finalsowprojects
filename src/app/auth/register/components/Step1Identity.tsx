@@ -196,10 +196,10 @@ export function Step1Identity({
                 value={confirm}
                 onChange={e => setConfirm(e.target.value)}
                 onBlur={() => validateField("confirm", confirm)} />
-              {confirm && password !== confirm && (
-                <p className="text-xs text-red-500">Passwords do not match</p>
+              {fieldErrors.confirm && (
+                <p className="text-xs text-red-500">{fieldErrors.confirm}</p>
               )}
-              {confirm && password === confirm && password.length > 0 && (
+              {!fieldErrors.confirm && confirm && password === confirm && password.length > 0 && (
                 <p className="text-xs text-teal-600 flex items-center gap-1">
                   <CheckCircle className="w-3 h-3" /> Passwords match
                 </p>
