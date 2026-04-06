@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   PanelLeftClose,
@@ -11,7 +11,10 @@ import {
   X,
   ChevronDown,
   AlertCircle,
+  Settings,
+  LogOut,
 } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils/cn";
 import { useSidebarStore } from "@/lib/stores/sidebar-store";
 import { useSowBadges, useSowAlerts, type SOWAlert } from "@/lib/hooks/use-sow-badges";
@@ -22,6 +25,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface SidebarProps {
   config: ModuleConfig;
@@ -29,7 +40,13 @@ interface SidebarProps {
 
 export function Sidebar({ config }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session } = useSession();
   const { isCollapsed, isMobileOpen, toggle, closeMobile } = useSidebarStore();
+
+  const userName = session?.user?.name || "User";
+  const userEmail = session?.user?.email || "";
+  const userInitials = (session?.user as any)?.initials || userName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
   const dynamicBadges = useSowBadges();
   const alertMap = useSowAlerts();
   const [openAlertHref, setOpenAlertHref] = React.useState<string | null>(null);
@@ -139,7 +156,7 @@ export function Sidebar({ config }: SidebarProps) {
         </div>
       </div>
 
-      {/* Navigation */}
+      {/* Navigation — flex-1 so footer stays at bottom */}
       <nav
         className={cn(
           "flex-1 overflow-y-auto pb-6",
@@ -357,6 +374,83 @@ export function Sidebar({ config }: SidebarProps) {
           })}
         </TooltipProvider>
       </nav>
+
+      {/* Settings footer — mirrors top bar avatar dropdown */}
+      <div
+        className={cn(
+          "shrink-0 border-t border-black/[0.05]",
+          isCollapsed ? "px-2 py-2" : "px-3 py-2.5"
+        )}
+      >
+        <TooltipProvider delayDuration={0}>
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    suppressHydrationWarning
+                    className={cn(
+                      "w-full flex items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-white/50",
+                      isCollapsed && "justify-center px-0"
+                    )}
+                  >
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white text-[10px] font-semibold"
+                      style={{ background: "linear-gradient(135deg, #A67763, #D0B060)" }}
+                    >
+                      {userInitials}
+                    </div>
+                    <AnimatePresence>
+                      {!isCollapsed && (
+                        <motion.div
+                          initial={{ opacity: 0, width: 0 }}
+                          animate={{ opacity: 1, width: "auto" }}
+                          exit={{ opacity: 0, width: 0 }}
+                          className="min-w-0 overflow-hidden"
+                        >
+                          <p className="text-[12px] font-semibold text-gray-800 truncate leading-tight">{userName}</p>
+                          <p className="text-[10px] text-gray-400 truncate leading-tight">{userEmail}</p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              {isCollapsed && (
+                <TooltipContent side="right">{userName}</TooltipContent>
+              )}
+            </Tooltip>
+
+            <DropdownMenuContent side="right" align="end" className="w-64 mb-1">
+              <DropdownMenuLabel>
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-semibold"
+                    style={{ background: "linear-gradient(135deg, #A67763, #D0B060)" }}
+                  >
+                    {userInitials}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{userName}</p>
+                    <p className="text-xs text-gray-400">{userEmail}</p>
+                  </div>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => router.push(config.basePath + "/settings")}>
+                <Settings className="w-4 h-4" /><span>Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-[var(--danger)] focus:text-[var(--danger-hover)] focus:bg-[var(--danger-light)]"
+                onClick={() => signOut({ callbackUrl: "/auth/login" })}
+              >
+                <LogOut className="w-4 h-4" /><span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TooltipProvider>
+      </div>
     </div>
   );
 

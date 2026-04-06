@@ -9,7 +9,6 @@ import {
   Search,
   Bell,
   LogOut,
-  User,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -90,7 +89,6 @@ export function TopBar({ config }: TopBarProps) {
   const { data: session } = useSession();
   const { openMobile } = useSidebarStore();
   const [searchFocused, setSearchFocused] = React.useState(false);
-
   const userName = session?.user?.name || "User";
   const userEmail = session?.user?.email || "";
   const userInitials = (session?.user as any)?.initials || userName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
@@ -180,6 +178,7 @@ export function TopBar({ config }: TopBarProps) {
           {/* Notification Bell (FSD 6.7) */}
           <NotificationBell />
 
+
           {/* Avatar */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -195,19 +194,18 @@ export function TopBar({ config }: TopBarProps) {
                 </div>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-84">
+            <DropdownMenuContent align="end" className="w-84" style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.08)" }}>
               <DropdownMenuLabel>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-semibold"
                     style={{ background: "linear-gradient(135deg, #5B9BA2, #4D5741)" }}>{userInitials}</div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">{userName}</p>
-                    <p className="text-xs text-gray-400">{userEmail}</p>
+                    <p className="text-sm font-semibold text-gray-900">{userName}</p>
+                    <p className="text-xs text-gray-500 lowercase">{userEmail}</p>
                   </div>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push(config.basePath + "/profile")}><User className="w-4 h-4" /> <span>Profile</span></DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push(config.basePath + "/settings")}><Settings className="w-4 h-4" /> <span>Settings</span></DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

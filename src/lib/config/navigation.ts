@@ -22,7 +22,6 @@ import {
   PieChart,
   UserCog,
   KeyRound,
-  Building2,
   ShieldCheck,
   Plug,
   UsersRound,
@@ -117,7 +116,7 @@ export const enterpriseNav: ModuleConfig = {
     {
       title: "Organization",
       items: [
-        { label: "Settings", href: "/enterprise/admin/config", icon: Building2 },
+        { label: "Settings", href: "/enterprise/settings", icon: Settings },
         { label: "Roles & Access", href: "/enterprise/admin/roles", icon: KeyRound },
         { label: "Policies", href: "/enterprise/admin/config/apg", icon: ShieldCheck },
         { label: "Integrations", href: "/enterprise/admin/config/integrations", icon: Plug },
