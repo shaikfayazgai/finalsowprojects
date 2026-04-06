@@ -3,7 +3,7 @@
    All mock entities cross-reference by ID for seamless drill-down
    ══════════════════════════════════════════════════════════════ */
 
-export type SowStatus = "draft" | "parsing" | "review" | "approval" | "approved" | "rejected" | "changes_requested" | "archived";
+export type SowStatus = "draft" | "parsing" | "review" | "approval" | "approved" | "rejected" | "changes_requested" | "archived" | "pending_commercial_review";
 export type SowIntakeMode = "ai_generated" | "manual_upload";
 export type DataSensitivity = "public" | "internal" | "confidential" | "restricted";
 export type ConfidentialityLevel = "public" | "internal" | "confidential" | "restricted";
