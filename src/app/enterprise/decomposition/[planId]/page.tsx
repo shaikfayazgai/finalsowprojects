@@ -18,11 +18,10 @@ import {
 } from "@/mocks/data/enterprise-projects";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import type {
-  DecompositionTask, PlanMilestone, PlanStatus, TaskStatus, AIRecommendation,
+  DecompositionTask, DecompositionPlan, PlanMilestone, PlanStatus, TaskStatus, AIRecommendation,
 } from "@/types/enterprise";
-import { Gantt, Willow } from "@svar-ui/react-gantt";
-import "@svar-ui/react-gantt/style.css";
 import { PaymentReleaseTab } from "@/components/enterprise/decomposition/PaymentReleaseTab";
+import { useProjectHoldStore } from "@/lib/stores/project-hold-store";
 
 /* ═══ Badge ═══ */
 
@@ -85,6 +84,275 @@ const tabs = [
   { id: "commercial", label: "Commercial", icon: BarChart2 },
 ];
 
+/* ═══ Task Breakdown Gantt ═══ */
+const GANTT_PALETTE = [
+  { border: "#0d9488", track: "rgba(13,148,136,0.14)", fill: "#0d9488", rowBg: "rgba(13,148,136,0.04)", label: "#0f766e" },
+  { border: "#b45309", track: "rgba(180,83,9,0.12)",   fill: "#b45309", rowBg: "rgba(180,83,9,0.03)",   label: "#92400e" },
+  { border: "#16a34a", track: "rgba(22,163,74,0.12)",  fill: "#16a34a", rowBg: "rgba(22,163,74,0.03)",  label: "#15803d" },
+  { border: "#7c3aed", track: "rgba(124,58,237,0.12)", fill: "#7c3aed", rowBg: "rgba(124,58,237,0.03)", label: "#6d28d9" },
+];
+
+type TooltipData = { x: number; y: number; content: React.ReactNode } | null;
+
+function TaskBreakdownGantt({ milestones, tasks, plan }: { milestones: PlanMilestone[]; tasks: DecompositionTask[]; plan: DecompositionPlan }) {
+  const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(milestones.map(m => m.id)));
+  const toggle = (id: string) => setExpanded(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const [tooltip, setTooltip] = React.useState<TooltipData>(null);
+
+  const showTooltip = (e: React.MouseEvent, content: React.ReactNode) => {
+    setTooltip({ x: e.clientX, y: e.clientY, content });
+  };
+  const moveTooltip = (e: React.MouseEvent) => {
+    if (tooltip) setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null);
+  };
+  const hideTooltip = () => setTooltip(null);
+
+  // Real dates: start from plan.createdAt, each milestone's duration = estimatedHours / 40h per week
+  const planStart = React.useMemo(() => {
+    const d = new Date(plan.createdAt);
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  }, [plan.createdAt]);
+
+  const msTimeline = React.useMemo(() => {
+    const out: { id: string; start: Date; end: Date; durationWeeks: number }[] = [];
+    let cursor = new Date(planStart);
+    for (const ms of milestones) {
+      const days = Math.ceil((ms.estimatedHours / 40) * 7);
+      const start = new Date(cursor);
+      const end = new Date(cursor.getTime() + days * 86400000);
+      out.push({ id: ms.id, start, end, durationWeeks: Math.round(ms.estimatedHours / 40) });
+      cursor = new Date(end.getTime() + 86400000);
+    }
+    return out;
+  }, [milestones, planStart]);
+
+  const planEnd = msTimeline.length > 0
+    ? new Date(msTimeline[msTimeline.length - 1].end.getTime() + 14 * 86400000)
+    : new Date(planStart.getFullYear(), planStart.getMonth() + 4, 1);
+
+  const totalMs = planEnd.getTime() - planStart.getTime();
+  const toPct = (d: Date) => Math.min(100, Math.max(0, (d.getTime() - planStart.getTime()) / totalMs * 100));
+  const today = new Date();
+  const todayPct = toPct(today);
+  const todayVisible = today >= planStart && today <= planEnd;
+
+  // Month column labels
+  const months: { label: string }[] = [];
+  { const c = new Date(planStart); while (c < planEnd) { months.push({ label: c.toLocaleDateString("en-US", { month: "short", year: "2-digit" }) }); c.setMonth(c.getMonth() + 1); } }
+
+  const totalWeeks = Math.round(milestones.reduce((s, m) => s + m.estimatedHours, 0) / 40);
+  const LEFT_W = 230;
+
+  const tooltipEl = tooltip
+    ? <div className="fixed z-[9999] pointer-events-none" style={{ left: tooltip.x + 14, top: tooltip.y - 10 }}>{tooltip.content}</div>
+    : null;
+
+  return (
+    <div>
+      {/* Fixed tooltip — outside overflow containers */}
+      {typeof window !== "undefined" && tooltipEl}
+
+      {/* ── Chart description + legend ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3 px-1">
+        <p className="text-[11px] text-gray-500">
+          Estimated schedule · <span className="font-semibold text-gray-700">{totalWeeks} weeks</span> total ·
+          milestones run <span className="font-semibold text-gray-700">sequentially</span> · bars show estimated duration & completion
+        </p>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-10 h-2.5 rounded-full" style={{ background: "rgba(13,148,136,0.16)" }} />
+            <span className="text-[10px] text-gray-400">Planned window</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-5 h-2.5 rounded-full" style={{ background: "#0d9488" }} />
+            <span className="text-[10px] text-gray-400">Completed %</span>
+          </div>
+          {todayVisible && (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block w-px h-3.5 bg-teal-500" />
+              <span className="text-[10px] text-gray-400">Today</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Chart ── */}
+      <div className="overflow-x-auto rounded-2xl" style={{ border: "1px solid var(--border-soft)" }}>
+        {/* Month header */}
+        <div className="flex min-w-[700px]" style={{ borderBottom: "1px solid var(--border-soft)", background: "rgba(0,0,0,0.018)" }}>
+          <div className="shrink-0 px-4 py-3 flex items-end" style={{ width: LEFT_W }}>
+            <span className="text-[9px] font-semibold tracking-widest uppercase text-gray-400">Milestone / Task</span>
+          </div>
+          <div className="flex-1 flex">
+            {months.map((m, i) => (
+              <div key={m.label} className="flex-1 py-3 text-center"
+                style={{ background: i % 2 === 1 ? "rgba(0,0,0,0.016)" : "transparent", borderLeft: "1px solid var(--border-hair)" }}>
+                <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-400">{m.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Milestone + task rows */}
+        <div className="min-w-[700px]">
+          {milestones.map((ms, msIdx) => {
+            const c = GANTT_PALETTE[msIdx % GANTT_PALETTE.length];
+            const timeline = msTimeline.find(t => t.id === ms.id)!;
+            const msTasks = tasks.filter(t => t.milestoneId === ms.id).slice(0, 6);
+            const done = msTasks.filter(t => t.status === "accepted").length;
+            const pctDone = msTasks.length ? Math.round(done / msTasks.length * 100) : 0;
+            const isOpen = expanded.has(ms.id);
+
+            if (!timeline) return null;
+            const bLeft = toPct(timeline.start);
+            const bWidth = Math.max(4, toPct(timeline.end) - bLeft);
+
+            return (
+              <React.Fragment key={ms.id}>
+                {/* ── Milestone row ── */}
+                <div className="flex items-center cursor-pointer select-none transition-all hover:brightness-[0.97]"
+                  style={{ background: c.rowBg, borderBottom: "1px solid var(--border-hair)", borderLeft: `3px solid ${c.border}` }}
+                  onClick={() => toggle(ms.id)}>
+
+                  {/* Left: label */}
+                  <div className="flex items-center gap-2.5 px-4 py-3.5 shrink-0" style={{ width: LEFT_W }}>
+                    <motion.span animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.18 }} className="shrink-0" style={{ color: c.border }}>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </motion.span>
+                    <div className="min-w-0">
+                      <p className="text-[12.5px] font-semibold text-gray-800 truncate leading-snug">{ms.title}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        {timeline.durationWeeks}w · {ms.estimatedHours}h · {msTasks.length} tasks
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right: timeline */}
+                  <div className="flex-1 relative h-16 overflow-hidden">
+                    {/* Column shading */}
+                    {months.map((_, i) => (
+                      <div key={i} className="absolute inset-y-0" style={{ left: `${(i / months.length) * 100}%`, width: `${100 / months.length}%`, background: i % 2 === 1 ? "rgba(0,0,0,0.016)" : "transparent", borderLeft: "1px solid var(--border-hair)" }} />
+                    ))}
+                    {todayVisible && <div className="absolute inset-y-0 w-px z-20" style={{ left: `${todayPct}%`, background: c.border, opacity: 0.5 }} />}
+
+                    {/* Milestone bar */}
+                    <div className="absolute top-1/2 -translate-y-1/2 h-7 rounded-lg overflow-hidden cursor-pointer z-10"
+                      style={{ left: `${bLeft}%`, width: `${bWidth}%`, background: c.track }}
+                      onMouseEnter={(e) => showTooltip(e, (
+                        <div className="rounded-xl px-3 py-2.5 shadow-xl min-w-[180px]" style={{ background: "#1c1917", border: "1px solid rgba(255,255,255,0.08)" }}>
+                          <p className="text-[12px] font-semibold text-white mb-1.5">{ms.title}</p>
+                          <div className="space-y-1 text-[10.5px] text-gray-400">
+                            <div className="flex justify-between gap-4"><span>Start</span><span className="text-gray-200">{timeline.start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span></div>
+                            <div className="flex justify-between gap-4"><span>End</span><span className="text-gray-200">{timeline.end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span></div>
+                            <div className="flex justify-between gap-4"><span>Duration</span><span className="text-gray-200">{timeline.durationWeeks}w · {ms.estimatedHours}h</span></div>
+                            <div className="flex justify-between gap-4"><span>Tasks</span><span className="text-gray-200">{msTasks.length}</span></div>
+                            <div className="flex justify-between gap-4 pt-1 border-t border-white/10"><span>Progress</span><span style={{ color: c.fill }} className="font-semibold">{pctDone}%</span></div>
+                          </div>
+                        </div>
+                      ))}
+                      onMouseMove={moveTooltip}
+                      onMouseLeave={hideTooltip}
+                    >
+                      <motion.div className="h-full rounded-lg"
+                        initial={{ width: 0 }} animate={{ width: `${pctDone}%` }}
+                        transition={{ duration: 0.8, ease: "easeOut" }}
+                        style={{ background: c.fill, opacity: 0.85 }} />
+                      {bWidth > 14 && (
+                        <div className="absolute inset-0 flex items-center px-2.5">
+                          <span className="text-[10px] font-semibold text-white truncate" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>
+                            {pctDone > 0 ? `${pctDone}% done` : "Not started"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Start / end date chips */}
+                    <div className="absolute z-10 flex items-center gap-1" style={{ left: `${bLeft}%`, bottom: 4, transform: "translateX(-2px)" }}>
+                      <span className="text-[8px] font-medium text-gray-400">
+                        {timeline.start.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                    <div className="absolute z-10" style={{ left: `${Math.min(bLeft + bWidth, 98)}%`, bottom: 4 }}>
+                      <span className="text-[8px] font-medium text-gray-400">
+                        {timeline.end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Task rows ── */}
+                <AnimatePresence initial={false}>
+                  {isOpen && msTasks.map((task, ti) => {
+                    const ts = taskStatusMap[task.status];
+                    const tProg = task.status === "accepted" ? 100 : task.status === "in_progress" || task.status === "in_review" ? 60 : task.status === "rework" ? 35 : 0;
+                    // Spread tasks evenly within the milestone window
+                    const slotSize = (timeline.end.getTime() - timeline.start.getTime()) / Math.max(msTasks.length, 1);
+                    const tStart = new Date(timeline.start.getTime() + ti * slotSize);
+                    const tEnd   = new Date(tStart.getTime() + slotSize * 0.85);
+                    const tLeft  = toPct(tStart);
+                    const tWidth = Math.max(3, toPct(tEnd) - tLeft);
+
+                    return (
+                      <motion.div key={task.id}
+                        initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.14, delay: ti * 0.03 }}
+                        className="flex items-center"
+                        style={{ borderBottom: "1px solid var(--border-hair)" }}>
+
+                        {/* Left: label */}
+                        <div className="flex items-center gap-2 shrink-0 pl-11 pr-3 py-2.5" style={{ width: LEFT_W }}>
+                          <span className={cn("w-2 h-2 rounded-full shrink-0", ts.dotColor)} />
+                          <div className="min-w-0">
+                            <p className="text-[11.5px] font-medium text-gray-700 truncate">{task.title}</p>
+                            <p className="text-[9.5px] text-gray-400">{task.estimatedHours}h · <span className="capitalize">{task.priority}</span></p>
+                          </div>
+                        </div>
+
+                        {/* Right: timeline */}
+                        <div className="flex-1 relative h-10 overflow-hidden">
+                          {months.map((_, i) => (
+                            <div key={i} className="absolute inset-y-0" style={{ left: `${(i / months.length) * 100}%`, width: `${100 / months.length}%`, background: i % 2 === 1 ? "rgba(0,0,0,0.016)" : "transparent", borderLeft: "1px solid var(--border-hair)" }} />
+                          ))}
+                          {todayVisible && <div className="absolute inset-y-0 w-px" style={{ left: `${todayPct}%`, background: c.border, opacity: 0.25 }} />}
+                          {/* Task bar */}
+                          <div className="absolute top-1/2 -translate-y-1/2 h-4 rounded-md overflow-hidden cursor-pointer z-10"
+                            style={{ left: `${tLeft}%`, width: `${tWidth}%`, background: c.track }}
+                            onMouseEnter={(e) => showTooltip(e, (
+                              <div className="rounded-xl px-3 py-2.5 shadow-xl min-w-[170px]" style={{ background: "#1c1917", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                <p className="text-[11.5px] font-semibold text-white mb-1">{task.title}</p>
+                                <div className="space-y-1 text-[10px] text-gray-400">
+                                  <div className="flex justify-between gap-4"><span>Status</span><span className="text-gray-200 capitalize">{ts.label}</span></div>
+                                  <div className="flex justify-between gap-4"><span>Hours</span><span className="text-gray-200">{task.estimatedHours}h</span></div>
+                                  <div className="flex justify-between gap-4"><span>Priority</span><span className="text-gray-200 capitalize">{task.priority}</span></div>
+                                  <div className="flex justify-between gap-4 pt-1 border-t border-white/10"><span>Progress</span><span style={{ color: c.fill }} className="font-semibold">{tProg}%</span></div>
+                                </div>
+                              </div>
+                            ))}
+                            onMouseMove={moveTooltip}
+                            onMouseLeave={hideTooltip}
+                          >
+                            <div className="h-full rounded-md" style={{ width: `${tProg}%`, background: c.fill, opacity: 0.75 }} />
+                          </div>
+                          {/* % label next to bar */}
+                          {tProg > 0 && (
+                            <div className="absolute top-1/2 -translate-y-1/2" style={{ left: `${Math.min(tLeft + tWidth + 1, 92)}%` }}>
+                              <span className="text-[9px] font-semibold tabular-nums" style={{ color: c.label }}>{tProg}%</span>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══ PAGE ═══ */
 
 export default function PlanDetailPage() {
@@ -97,6 +365,9 @@ export default function PlanDetailPage() {
   const tasks = mockTasks.filter((t) => t.planId === plan.id);
   const milestones = mockPlanMilestones.filter((m) => m.planId === plan.id).sort((a, b) => a.order - b.order);
   const recommendations = mockAIRecommendations.filter((r) => r.planId === plan.id);
+
+  const effectiveProjectId = (plan as { projectId?: string }).projectId ?? "proj-001";
+  const { holdProject } = useProjectHoldStore();
 
   const [expandedMilestones, setExpandedMilestones] = React.useState<Set<string>>(() => new Set(milestones.slice(0, 2).map((m) => m.id)));
   const [expandedTasks, setExpandedTasks] = React.useState<Set<string>>(new Set());
@@ -113,29 +384,6 @@ export default function PlanDetailPage() {
   const totalSubtasks = tasks.reduce((s, t) => s + t.subtasks.length, 0);
   const activeRecCount = recommendations.filter((r) => !dismissedRecs.has(r.id)).length;
 
-  /* ═══ Gantt Data — Static M1/M2/M3 ═══ */
- const ganttTasks = React.useMemo(() => {
-  if (!milestones || milestones.length === 0) return [];
-  const today = new Date();
-  const m1Start = new Date(today.getFullYear(), today.getMonth(), 1);
-  const m2Start = new Date(today.getFullYear(), today.getMonth(), 15);
-  const m3Start = new Date(today.getFullYear(), today.getMonth() + 1, 15);
-
-  const m1Tasks = tasks.filter((t) => t.milestoneId === milestones[0]?.id).slice(0, 3);
-  const m2Tasks = tasks.filter((t) => t.milestoneId === milestones[1]?.id).slice(0, 3);
-  const m3Tasks = tasks.filter((t) => t.milestoneId === milestones[2]?.id).slice(0, 3);
-
-  return [
-    { id: 1, text: "M1 — Before Project Starts (35%)", start: m1Start, end: new Date(today.getFullYear(), today.getMonth(), 15), duration: 14, progress: 35, type: "summary", open: true },
-    ...m1Tasks.map((t, i) => ({ id: 10 + i, text: t.title, start: new Date(m1Start.getTime() + i * 4 * 24 * 60 * 60 * 1000), end: new Date(m1Start.getTime() + (i + 1) * 4 * 24 * 60 * 60 * 1000), duration: 4, progress: t.status === "accepted" ? 100 : t.status === "in_progress" ? 50 : 0, type: "task", parent: 1 })),
-
-    { id: 2, text: "M2 — Development Closure (35%)", start: m2Start, end: new Date(today.getFullYear(), today.getMonth() + 1, 15), duration: 30, progress: 35, type: "summary", open: true },
-    ...m2Tasks.map((t, i) => ({ id: 20 + i, text: t.title, start: new Date(m2Start.getTime() + i * 8 * 24 * 60 * 60 * 1000), end: new Date(m2Start.getTime() + (i + 1) * 8 * 24 * 60 * 60 * 1000), duration: 8, progress: t.status === "accepted" ? 100 : t.status === "in_progress" ? 50 : 0, type: "task", parent: 2 })),
-
-    { id: 3, text: "M3 — UAT Sign-off (30%)", start: m3Start, end: new Date(today.getFullYear(), today.getMonth() + 2, 5), duration: 21, progress: 30, type: "summary", open: true },
-    ...m3Tasks.map((t, i) => ({ id: 30 + i, text: t.title, start: new Date(m3Start.getTime() + i * 6 * 24 * 60 * 60 * 1000), end: new Date(m3Start.getTime() + (i + 1) * 6 * 24 * 60 * 60 * 1000), duration: 6, progress: t.status === "accepted" ? 100 : t.status === "in_progress" ? 50 : 0, type: "task", parent: 3 })),
-  ];
-}, [milestones]);
 
   /* ═══ Review Checklist items ═══ */
   const checklistItems = [
@@ -279,6 +527,8 @@ export default function PlanDetailPage() {
             planId={plan.id}
             planTitle={plan.title}
             estimatedCost={plan.estimatedCost}
+            projectId={effectiveProjectId}
+            onProjectHold={(pid) => holdProject(pid, "payment_overdue")}
           />
         </motion.div>
       )}
@@ -334,16 +584,7 @@ export default function PlanDetailPage() {
 
             {/* ═══ GANTT VIEW ═══ */}
             {viewMode === "gantt" && (
-              <div className="card-parchment overflow-hidden" style={{ height: 400 }}>
-              <style>{`
-                .wx-gantt-task:nth-child(1) .wx-gantt-bar { background: #0d9488 !important; }
-                .wx-gantt-task:nth-child(4) .wx-gantt-bar { background: #b45309 !important; }
-                .wx-gantt-task:nth-child(8) .wx-gantt-bar { background: #166534 !important; }
-                `}</style>
-                <Willow>
-                  <Gantt tasks={ganttTasks} scales={[{ unit: "month", step: 1, format: "%F %Y" }, { unit: "day", step: 1, format: "%j" }]} />
-                </Willow>
-              </div>
+              <TaskBreakdownGantt milestones={milestones} tasks={tasks} plan={plan} />
             )}
             
             {/* ═══ LIST VIEW ═══ */}

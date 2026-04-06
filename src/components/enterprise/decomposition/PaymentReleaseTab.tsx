@@ -8,6 +8,7 @@ import {
   BadgeCheck, Banknote, Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useProjectHoldStore } from "@/lib/stores/project-hold-store";
 
 declare global {
   interface Window { Razorpay: any; }
@@ -192,14 +193,24 @@ function TrustPill({ icon, label }: { icon: React.ReactNode; label: string }) {
 
 /* ── Props ── */
 interface Props {
-  planId:        string;
-  planTitle:     string;
-  estimatedCost: number;
-  currency?:     string;
+  planId:          string;
+  planTitle:       string;
+  estimatedCost:   number;
+  currency?:       string;
+  projectId?:      string;
+  onProjectHold?:  (projectId: string) => void;
 }
 
-export function PaymentReleaseTab({ planId, planTitle, estimatedCost, currency = "INR" }: Props) {
+const M2_DEADLINE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export function PaymentReleaseTab({ planId, planTitle, estimatedCost, currency = "INR", projectId, onProjectHold }: Props) {
   const scriptLoaded = useRazorpayScript();
+  const effectiveProjectId = projectId ?? planId;
+  const { setM1Paid, holdProject, m1PaidTimestamps } = useProjectHoldStore();
+
+  /* M2 deadline countdown after M1 is paid */
+  const m1PaidAt = m1PaidTimestamps[effectiveProjectId];
+  const [m2DaysLeft, setM2DaysLeft] = React.useState<number | null>(null);
 
   const m1Amount = Math.round(estimatedCost * 0.35);
   const m2Amount = Math.round(estimatedCost * 0.35);
@@ -214,6 +225,29 @@ export function PaymentReleaseTab({ planId, planTitle, estimatedCost, currency =
   const [confirmingMilestone, setConfirmingMilestone] = React.useState<MilestonePayment | null>(null);
   const [paymentStatus, setPaymentStatus]             = React.useState<PaymentStatus>("idle");
   const [paidMilestone, setPaidMilestone]             = React.useState<string | null>(null);
+
+  /* Track M2 deadline: after M1 is paid, check every minute if 7 days elapsed */
+  React.useEffect(() => {
+    const m2 = milestones.find((m) => m.id === "m2");
+    if (!m1PaidAt || m2?.status === "paid") { setM2DaysLeft(null); return; }
+
+    const compute = () => {
+      const elapsed = Date.now() - m1PaidAt;
+      const remaining = M2_DEADLINE_MS - elapsed;
+      const days = Math.ceil(remaining / (1000 * 60 * 60 * 24));
+      setM2DaysLeft(days);
+
+      if (remaining <= 0) {
+        holdProject(effectiveProjectId, "payment_overdue");
+        onProjectHold?.(effectiveProjectId);
+      }
+    };
+
+    compute();
+    const id = setInterval(compute, 60_000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [m1PaidAt, effectiveProjectId]);
 
   const formatAmount = (amt: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 0 }).format(amt);
@@ -253,6 +287,7 @@ export function PaymentReleaseTab({ planId, planTitle, estimatedCost, currency =
           setPaymentStatus("success");
           setPaidMilestone(milestone.id);
           setConfirmingMilestone(null);
+          if (milestone.id === "m1") setM1Paid(effectiveProjectId);
           setMilestones((prev) =>
             prev.map((m, i, arr) => {
               if (m.id === milestone.id) return { ...m, status: "paid" };
@@ -335,6 +370,25 @@ export function PaymentReleaseTab({ planId, planTitle, estimatedCost, currency =
             </p>
           </div>
         </div>
+
+        {/* ── M2 deadline countdown banner (shown after M1 is paid) ── */}
+        {m1PaidAt && milestones.find((m) => m.id === "m2")?.status !== "paid" && m2DaysLeft !== null && (
+          <div className={cn(
+            "flex items-center gap-3 px-4 py-3 rounded-xl border text-[12px]",
+            m2DaysLeft <= 0
+              ? "bg-red-50 border-red-200 text-red-700"
+              : m2DaysLeft <= 2
+              ? "bg-gold-50 border-gold-200 text-gold-700"
+              : "bg-teal-50 border-teal-200 text-teal-700",
+          )}>
+            <Clock className="w-4 h-4 shrink-0" />
+            {m2DaysLeft <= 0 ? (
+              <span><span className="font-semibold">M2 payment overdue.</span> This project has been automatically placed on hold. Release M2 to resume project activities.</span>
+            ) : (
+              <span><span className="font-semibold">{m2DaysLeft} day{m2DaysLeft !== 1 ? "s" : ""} remaining</span> to release M2 payment. Project will be put on hold if M2 is not released by the deadline.</span>
+            )}
+          </div>
+        )}
 
         {/* ── Milestone cards ── */}
         <div className="space-y-3">
@@ -465,6 +519,7 @@ export function PaymentReleaseTab({ planId, planTitle, estimatedCost, currency =
             M2 unlocks after M1 is confirmed. M3 unlocks after M2 is confirmed.
           </p>
         </div>
+
       </div>
     </>
   );

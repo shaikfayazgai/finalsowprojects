@@ -7,9 +7,9 @@ import {
   Network, Clock, Layers, ArrowRight, Boxes, Sparkles, Download,
   Milestone as MilestoneIcon, BrainCircuit, CheckCircle2, Search, X,
   ChevronRight, ChevronLeft, ArrowUp, ArrowDown, ExternalLink,
-  AlertTriangle, CreditCard,
+  AlertTriangle,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
@@ -17,9 +17,9 @@ import { mockPlans, mockTasks } from "@/mocks/data/enterprise-projects";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import type { DecompositionPlan, PlanStatus } from "@/types/enterprise";
 import {
-  PaymentConfirmModal, useRazorpayScript,
-  type MilestonePayment, type PaymentStatus,
+  useRazorpayScript,
 } from "@/components/enterprise/decomposition/PaymentReleaseTab";
+import { MilestonePaymentModal } from "@/components/enterprise/decomposition/MilestonePaymentModal";
 
 /* ═══ Badge ═══ */
 
@@ -179,73 +179,9 @@ export default function DecompositionPlansPage() {
   const [searchFocused, setSearchFocused] = React.useState(false);
   const [sortField, setSortField] = React.useState<SortField>("updated");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
-  const scriptLoaded = useRazorpayScript();
-  const [showM1Snackbar, setShowM1Snackbar]         = React.useState(false);
-  const [snackbarPlan, setSnackbarPlan]             = React.useState<DecompositionPlan | null>(null);
-  const [paymentMilestone, setPaymentMilestone]     = React.useState<MilestonePayment | null>(null);
-  const [paymentStatus, setPaymentStatus]           = React.useState<PaymentStatus>("idle");
+  const [paymentPlan, setPaymentPlan] = React.useState<DecompositionPlan | null>(null);
 
-  const handleKickoff = (plan: DecompositionPlan) => {
-    setSnackbarPlan(plan);
-    setShowM1Snackbar(true);
-  };
-
-  const openM1Payment = () => {
-    if (!snackbarPlan) return;
-    const m1Amount = Math.round(snackbarPlan.estimatedCost * 0.35);
-    setPaymentMilestone({
-      id: "m1", label: "M1 — Project Onboarding",
-      description: "Released before project starts. Unlocks contributor onboarding and team formation.",
-      percent: 35, amount: m1Amount,
-      trigger: "Before project kick-off", status: "pending",
-    });
-    setShowM1Snackbar(false);
-    setPaymentStatus("idle");
-  };
-
-  const handleM1Pay = async () => {
-    if (!paymentMilestone || !snackbarPlan || !scriptLoaded) return;
-    setPaymentStatus("creating_order");
-    try {
-      const res = await fetch("/api/razorpay/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: paymentMilestone.amount, currency: "INR",
-          receipt: `${snackbarPlan.id}-m1`,
-          notes: { planId: snackbarPlan.id, milestone: "m1", planTitle: snackbarPlan.title },
-        }),
-      });
-      const order = await res.json();
-      if (!res.ok || !order.orderId) throw new Error(order.error ?? "Order creation failed");
-      setPaymentStatus("processing");
-      const rzp = new window.Razorpay({
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount: order.amount, currency: order.currency,
-        name: "GlimmoraTeam",
-        description: `M1 — Project Onboarding — ${snackbarPlan.title}`,
-        order_id: order.orderId,
-        theme: { color: "#A67763" },
-        prefill: { name: "Enterprise Admin", email: "" },
-        handler: () => {
-          setPaymentStatus("idle");
-          setPaymentMilestone(null);
-          setSnackbarPlan(null);
-        },
-        modal: {
-          ondismiss: () => {
-            setPaymentStatus("idle");
-            setPaymentMilestone(null);
-          },
-        },
-      });
-      rzp.open();
-    } catch (err: any) {
-      console.error("Payment error:", err);
-      setPaymentStatus("failed");
-      setTimeout(() => setPaymentStatus("idle"), 3000);
-    }
-  };
+  const handleKickoff = (plan: DecompositionPlan) => setPaymentPlan(plan);
 
   function handleSort(field: SortField) {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -291,15 +227,14 @@ export default function DecompositionPlansPage() {
 
   return (
     <>
-    {paymentMilestone && snackbarPlan && (
-      <PaymentConfirmModal
-        milestone={paymentMilestone}
-        planTitle={snackbarPlan.title}
-        currency="INR"
-        formatAmount={formatAmount}
-        status={paymentStatus}
-        onConfirm={handleM1Pay}
-        onClose={() => { setPaymentMilestone(null); setPaymentStatus("idle"); }}
+    {paymentPlan && (
+      <MilestonePaymentModal
+        title={paymentPlan.title}
+        budget={paymentPlan.estimatedCost}
+        pendingId="m1"
+        entityId={paymentPlan.id}
+        onSuccess={() => setPaymentPlan(null)}
+        onClose={() => setPaymentPlan(null)}
       />
     )}
     <motion.div variants={stagger} initial="hidden" animate="show">
@@ -485,51 +420,6 @@ export default function DecompositionPlansPage() {
         </div>
       </motion.div>
 
-      {/* M1 Payment Snackbar */}
-      <AnimatePresence>
-        {showM1Snackbar && (
-          <motion.div
-            initial={{ opacity: 0, y: -40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -40 }}
-            transition={{ type: "spring", stiffness: 300, damping: 28 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-5 py-3.5 rounded-2xl shadow-2xl"
-            style={{
-              minWidth: 420, maxWidth: 560,
-              background: "#ffffff",
-              border: "1px solid #e5e7eb",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.10)",
-            }}
-          >
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-brown-50 border border-brown-200 shrink-0">
-              <CreditCard className="w-4 h-4 text-brown-500" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-gray-800 leading-snug">
-                M1 Payment Required to Kick-Off
-              </p>
-              <p className="text-[11.5px] text-gray-500 mt-0.5 leading-snug">
-                Please release the M1 payment to kick-off this project and begin execution.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={openM1Payment}
-              className="flex items-center gap-1.5 shrink-0 text-[11.5px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-3.5 py-2 rounded-xl transition-all"
-            >
-              <CreditCard className="w-3.5 h-3.5" />
-              Progress M1 Payment
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowM1Snackbar(false)}
-              className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
     </>
   );
