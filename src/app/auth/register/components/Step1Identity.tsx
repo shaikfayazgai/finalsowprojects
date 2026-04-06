@@ -20,6 +20,7 @@ interface Props {
   password: string;        setPassword: (v: string) => void;
   confirm: string;         setConfirm: (v: string) => void;
   showPw: boolean;         setShowPw: (v: boolean) => void;
+  showCon?: boolean;       setShowCon?: (v: boolean) => void;
   contribType: ContributorType; setContribType: (v: ContributorType) => void;
   country: string;         setCountry: (v: string) => void;
   passwordStrength: PasswordStrength;

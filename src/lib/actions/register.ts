@@ -35,7 +35,7 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
       primarySkills:           v.primarySkills,
       secondarySkills:         v.secondarySkills,
       otherSkills:             v.otherSkills,
-      phone:                   v.phone,
+      phone:                   v.phone ?? "",
       degree:                  v.degree,
       branch:                  v.branch,
       linkedin:                v.linkedin,

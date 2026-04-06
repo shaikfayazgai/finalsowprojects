@@ -10,6 +10,8 @@ interface DocumentViewerProps {
   highlightText?: string;
   highlightPage?: number;
   className?: string;
+  fileUrl?: string;
+  fileType?: string;
 }
 
 export function DocumentViewer({ sections, highlightText, highlightPage, className }: DocumentViewerProps) {

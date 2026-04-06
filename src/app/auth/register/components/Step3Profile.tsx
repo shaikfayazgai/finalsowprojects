@@ -543,6 +543,7 @@ interface Props {
   degree: string;                setDegree: (v: string) => void;
   branch: string;                setBranch: (v: string) => void;
   linkedin: string;              setLinkedin: (v: string) => void;
+  mentorAck?: boolean;           setMentorAck?: (v: boolean) => void;
   // Primary skills
   primarySkills: string[];
   skillInput: string;            setSkillInput: (v: string) => void;

@@ -108,7 +108,7 @@ function CountryDialPicker({
 
 interface Props {
   registrationEmail: string;
-  setEmail: (v: string) => void;
+  setEmail?: (v: string) => void;
   phoneCountry: string;
   setPhoneCountry: (v: string) => void;
   phone: string;
@@ -131,8 +131,8 @@ interface Props {
   setNdaAccepted: (v: boolean) => void;
   ndaSignature: string;
   setNdaSignature: (v: string) => void;
-  ndaSignedFile: File | null;
-  setNdaSignedFile: (v: File | null) => void;
+  ndaSignedFile?: File | null;
+  setNdaSignedFile?: (v: File | null) => void;
   error: string;
   onSendOTP: () => void;
   onVerifyOTP: () => void;
@@ -165,7 +165,7 @@ export function Step2Verification({
 
   // Sync verified email back to Step 1 only after successful verification
   useEffect(() => {
-    if (emailVerified) setEmail(verificationEmail);
+    if (emailVerified) setEmail?.(verificationEmail);
   }, [emailVerified]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const validateEmail = (val: string) => {
@@ -203,7 +203,7 @@ export function Step2Verification({
       alert("File size must be under 5MB");
       return;
     }
-    setNdaSignedFile(file);
+    setNdaSignedFile?.(file);
   };
 
   const ndaSigned = ndaAccepted && !!ndaSignedFile;
@@ -294,7 +294,7 @@ export function Step2Verification({
                   )}
                 </label>
                 {ndaSignedFile && (
-                  <button type="button" onClick={() => setNdaSignedFile(null)}
+                  <button type="button" onClick={() => setNdaSignedFile?.(null)}
                     className="mt-1.5 text-xs text-red-500 hover:text-red-700 font-medium">
                     Remove file
                   </button>

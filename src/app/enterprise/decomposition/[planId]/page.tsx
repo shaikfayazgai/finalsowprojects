@@ -20,7 +20,7 @@ import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import type {
   DecompositionTask, PlanMilestone, PlanStatus, TaskStatus, AIRecommendation,
 } from "@/types/enterprise";
-import { Gantt } from "@svar-ui/react-gantt";
+import { Gantt, Willow } from "@svar-ui/react-gantt";
 import "@svar-ui/react-gantt/style.css";
 import { PaymentReleaseTab } from "@/components/enterprise/decomposition/PaymentReleaseTab";
 

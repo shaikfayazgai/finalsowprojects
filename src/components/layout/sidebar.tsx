@@ -10,6 +10,7 @@ import {
   Sparkles,
   X,
   ChevronDown,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useSidebarStore } from "@/lib/stores/sidebar-store";

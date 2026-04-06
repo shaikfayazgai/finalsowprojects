@@ -256,7 +256,7 @@ export default function OnboardingModal() {
       {ob.previewOpen && (
         <ReviewPreviewModal
           onClose={() => ob.setPreviewOpen(false)}
-          onEditStep={(step) => { ob.setStep(step); ob.setError(""); }}
+          onEditStep={(step) => { ob.setStep(step as import("../hooks/useContributorOnboarding").OnboardingStep); ob.setError(""); }}
           firstName={ob.firstName}
           lastName={ob.lastName}
           email={ob.email}

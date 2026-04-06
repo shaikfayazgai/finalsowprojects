@@ -114,7 +114,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Initial sign-in — user object only present on first call
       if (user) {
         token.id = user.id;
-        token.role = (user as { role?: string }).role || "contributor";
+        token.role = ((user as { role?: string }).role || "contributor") as UserRole;
         token.glimmoraAccessToken = (user as { accessToken?: string }).accessToken;
         token.glimmoraRefreshToken = (user as { refreshToken?: string }).refreshToken;
         const expiresIn = (user as { expiresIn?: number }).expiresIn;
