@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Building2,
   Users,
@@ -29,8 +29,16 @@ import {
   AlertCircle,
   ChevronRight,
   Send,
+  User,
+  Pencil,
+  UserPlus,
+  Loader2,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useAuthStore } from "@/lib/stores/auth-store";
+import { toast } from "@/lib/stores/toast-store";
 import { cn } from "@/lib/utils/cn";
+import ProfilePage from "@/app/enterprise/profile/page";
 import {
   GlassCard,
   GlassCardContent,
@@ -64,7 +72,7 @@ import {
    Types
    ══════════════════════════════════════════ */
 
-type TabId = "company" | "team" | "compliance" | "notifications" | "billing";
+type TabId = "profile" | "company" | "team" | "compliance" | "notifications" | "billing";
 
 interface TeamMember {
   id: string;
@@ -117,6 +125,7 @@ const initialNotifications: NotificationSetting[] = [
    ══════════════════════════════════════════ */
 
 const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "profile", label: "My Profile", icon: User },
   { id: "company", label: "Company Profile", icon: Building2 },
   { id: "team", label: "Team Members", icon: Users },
   { id: "compliance", label: "Compliance", icon: ShieldCheck },
@@ -146,26 +155,35 @@ function StatusBadge({ status }: { status: TeamMember["status"] }) {
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("company");
 
-  /* ── Load saved company profile from localStorage ── */
-const saved = typeof window !== "undefined"
-  ? JSON.parse(localStorage.getItem("companyProfile") || "{}")
-  : {};
+  /* ── Session + store data (backend API) ── */
+  const { data: session } = useSession();
+  const { registrationData, onboardingProgress } = useAuthStore();
 
-  const [companyName, setCompanyName] = useState(saved.companyName || "");
+  /* ── Company Profile state — seeded from API / onboarding store ── */
+  const [companyName, setCompanyName] = useState(registrationData?.companyName || "");
   const [logo, setLogo] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(saved.logoPreview || null);
-  const [industryType, setIndustryType] = useState(saved.industryType || "Technology");
-  const [companySize, setCompanySize] = useState(saved.companySize || "51-200");
-  const [addressLine1, setAddressLine1] = useState(saved.addressLine1 || "");
-  const [addressLine2, setAddressLine2] = useState(saved.addressLine2 || "");
-  const [city, setCity] = useState(saved.city || "");
-  const [addrState, setAddrState] = useState(saved.addrState || "");
-  const [postalCode, setPostalCode] = useState(saved.postalCode || "");
-  const [country, setCountry] = useState(saved.country || "");
-  const [website, setWebsite] = useState(saved.website || "");
-  const [primaryEmail, setPrimaryEmail] = useState(saved.primaryEmail || "");
-  const [taxId, setTaxId] = useState(saved.taxId || "");
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [industryType, setIndustryType] = useState("Technology");
+  const [companySize, setCompanySize] = useState("51-200");
+  const [addressLine1, setAddressLine1] = useState(onboardingProgress?.step1?.addressLine1 || "");
+  const [addressLine2, setAddressLine2] = useState(onboardingProgress?.step1?.addressLine2 || "");
+  const [city, setCity] = useState(onboardingProgress?.step1?.city || "");
+  const [addrState, setAddrState] = useState(onboardingProgress?.step1?.stateProvince || "");
+  const [postalCode, setPostalCode] = useState(onboardingProgress?.step1?.postalCode || "");
+  const [country, setCountry] = useState(registrationData?.countryOfIncorporation || "");
+  const [website, setWebsite] = useState("");
+  const [primaryEmail, setPrimaryEmail] = useState(registrationData?.adminEmail || "");
+  const [taxId, setTaxId] = useState(onboardingProgress?.step1?.taxId || "");
   const [verificationStatus] = useState<"verified" | "pending" | "rejected">("verified");
+  const [isEditingCompany, setIsEditingCompany] = useState(false);
+
+  /* ── Sync primaryEmail from session once loaded ── */
+  useEffect(() => {
+    if (!primaryEmail && session?.user?.email) {
+      setPrimaryEmail(session.user.email);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.email]);
 
   /* ── Team Members state ── */
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialTeamMembers);
@@ -173,11 +191,17 @@ const saved = typeof window !== "undefined"
   const [newEmail, setNewEmail] = useState("");
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
-  const [newProjectAccess, setNewProjectAccess] = useState<string[]>([]);
+  const [newDesignation, setNewDesignation] = useState("");
+  const [newDepartment, setNewDepartment] = useState("");
+  const [newUsername, setNewUsername] = useState("");
+  const [newStatus, setNewStatus] = useState<"active" | "inactive">("active");
+  const [newLanguage, setNewLanguage] = useState("");
+  const [newTimeZone, setNewTimeZone] = useState("");
   const [editAccessOpen, setEditAccessOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [editProjectAccess, setEditProjectAccess] = useState<string[]>([]);
   const [addError, setAddError] = useState("");
+  const [addSaving, setAddSaving] = useState(false);
 
   /* ── Compliance state ── */
   const [retentionPolicy, setRetentionPolicy] = useState("3 years");
@@ -203,9 +227,16 @@ const saved = typeof window !== "undefined"
     reader.readAsDataURL(file);
   };
 
+  const resetAddForm = () => {
+    setNewEmail(""); setNewFirstName(""); setNewLastName("");
+    setNewDesignation(""); setNewDepartment(""); setNewUsername("");
+    setNewStatus("active"); setNewLanguage(""); setNewTimeZone("");
+    setAddError("");
+  };
+
   const handleAddReviewer = () => {
     setAddError("");
-    if (!newEmail || !newFirstName || !newLastName) {
+    if (!newEmail || !newFirstName || !newLastName || !newDesignation || !newDepartment || !newUsername || !newLanguage || !newTimeZone) {
       setAddError("All fields are required.");
       return;
     }
@@ -217,21 +248,22 @@ const saved = typeof window !== "undefined"
       setAddError("A team member with this email already exists.");
       return;
     }
-    const member: TeamMember = {
-      id: String(Date.now()),
-      name: `${newFirstName} ${newLastName}`,
-      email: newEmail,
-      role: "Reviewer",
-      status: "Invited",
-      lastActive: "Never",
-      projectAccess: newProjectAccess,
-    };
-    setTeamMembers((prev) => [...prev, member]);
-    setNewEmail("");
-    setNewFirstName("");
-    setNewLastName("");
-    setNewProjectAccess([]);
-    setAddReviewerOpen(false);
+    setAddSaving(true);
+    setTimeout(() => {
+      const member: TeamMember = {
+        id: String(Date.now()),
+        name: `${newFirstName} ${newLastName}`,
+        email: newEmail,
+        role: "Reviewer",
+        status: newStatus === "active" ? "Active" : "Deactivated",
+        lastActive: "Never",
+        projectAccess: [],
+      };
+      setTeamMembers((prev) => [...prev, member]);
+      resetAddForm();
+      setAddSaving(false);
+      setAddReviewerOpen(false);
+    }, 600);
   };
 
   const handleDeactivate = (id: string) => {
@@ -329,31 +361,54 @@ const saved = typeof window !== "undefined"
         {/* ── RIGHT CONTENT ── */}
         <div className="flex-1 min-w-0">
           {/* ═══════════════════════════════════
+             TAB 0: My Profile
+             ═══════════════════════════════════ */}
+          {activeTab === "profile" && <ProfilePage />}
+
+          {/* ═══════════════════════════════════
              TAB 1: Company Profile
              ═══════════════════════════════════ */}
           {activeTab === "company" && (
             <GlassCard variant="heavy" padding="lg">
               <GlassCardContent>
                 {/* Section header */}
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-brown-100 text-brown-600">
-                    <Building2 className="h-6 w-6" />
+                <div className="flex items-start justify-between gap-4 mb-8">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-brown-100 text-brown-600">
+                      <Building2 className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h2 className="font-heading text-lg font-semibold text-brown-950">Company Profile</h2>
+                      <p className="text-sm text-beige-600">Manage your organization&apos;s details and verification status.</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="font-heading text-lg font-semibold text-brown-950">Company Profile</h2>
-                    <p className="text-sm text-beige-600">Manage your organization&apos;s details and verification status.</p>
-                  </div>
+                  {!isEditingCompany ? (
+                    <Button variant="outline" size="sm" onClick={() => setIsEditingCompany(true)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button variant="outline" size="sm" onClick={() => setIsEditingCompany(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="primary" size="sm" onClick={() => { setIsEditingCompany(false); toast.success("Company profile saved successfully."); }}>
+                        Save
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-6">
-                  {/* Company Name (read-only) */}
+                  {/* Company Name */}
                   <div className="space-y-2">
                     <Label className="text-brown-800">Company Name</Label>
-                    {/*<Input value={companyName} disabled className="bg-beige-50/50" />
-                    <p className="text-xs text-beige-500 flex items-center gap-1">
-                      <Info className="h-3 w-3" /> Edit via support — contact support@glimmora.com
-                    </p>*/}
-                    <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Enter company name" />
+                    {isEditingCompany ? (
+                      <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Enter company name" />
+                    ) : (
+                      <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                        {companyName || "—"}
+                      </div>
+                    )}
                   </div>
 
                   {/* Company Logo */}
@@ -367,20 +422,17 @@ const saved = typeof window !== "undefined"
                           <Upload className="h-6 w-6 text-beige-400" />
                         )}
                       </div>
-                      <div className="space-y-2">
-                        <label className="cursor-pointer">
-                          <input
-                            type="file"
-                            accept=".png,.svg"
-                            className="hidden"
-                            onChange={handleLogoUpload}
-                          />
-                          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brown-300 text-sm font-medium text-brown-600 hover:bg-brown-50 transition-colors">
-                            <Upload className="h-4 w-4" /> Upload Logo
-                          </span>
-                        </label>
-                        <p className="text-xs text-beige-500">PNG or SVG, max 2MB, 200x200 to 2000x2000 px</p>
-                      </div>
+                      {isEditingCompany && (
+                        <div className="space-y-2">
+                          <label className="cursor-pointer">
+                            <input type="file" accept=".png,.svg" className="hidden" onChange={handleLogoUpload} />
+                            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brown-300 text-sm font-medium text-brown-600 hover:bg-brown-50 transition-colors">
+                              <Upload className="h-4 w-4" /> Upload Logo
+                            </span>
+                          </label>
+                          <p className="text-xs text-beige-500">PNG or SVG, max 2MB, 200x200 to 2000x2000 px</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -390,29 +442,33 @@ const saved = typeof window !== "undefined"
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-brown-800">Industry Type</Label>
-                      <Select value={industryType} onValueChange={setIndustryType}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["Technology", "Healthcare", "Finance", "Manufacturing", "Retail", "Education", "Real Estate", "Other"].map((v) => (
-                            <SelectItem key={v} value={v}>{v}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {isEditingCompany ? (
+                        <Select value={industryType} onValueChange={setIndustryType}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {["Technology", "Healthcare", "Finance", "Manufacturing", "Retail", "Education", "Real Estate", "Other"].map((v) => (
+                              <SelectItem key={v} value={v}>{v}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">{industryType}</div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label className="text-brown-800">Company Size</Label>
-                      <Select value={companySize} onValueChange={setCompanySize}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["1-50", "51-200", "201-1000", "1000+"].map((v) => (
-                            <SelectItem key={v} value={v}>{v}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {isEditingCompany ? (
+                        <Select value={companySize} onValueChange={setCompanySize}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {["1-50", "51-200", "201-1000", "1000+"].map((v) => (
+                              <SelectItem key={v} value={v}>{v}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">{companySize}</div>
+                      )}
                     </div>
                   </div>
 
@@ -425,30 +481,25 @@ const saved = typeof window !== "undefined"
                       <Label className="text-brown-800 text-base font-semibold">Headquarters Address</Label>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2 md:col-span-2">
-                        <Label className="text-brown-700 text-xs">Address Line 1</Label>
-                        <Input value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} />
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <Label className="text-brown-700 text-xs">Address Line 2</Label>
-                        <Input value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-brown-700 text-xs">City</Label>
-                        <Input value={city} onChange={(e) => setCity(e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-brown-700 text-xs">State</Label>
-                        <Input value={addrState} onChange={(e) => setAddrState(e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-brown-700 text-xs">Postal Code</Label>
-                        <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-brown-700 text-xs">Country</Label>
-                        <Input value={country} onChange={(e) => setCountry(e.target.value)} />
-                      </div>
+                      {(
+                        [
+                          { label: "Address Line 1", value: addressLine1, set: setAddressLine1, span: true },
+                          { label: "Address Line 2", value: addressLine2, set: setAddressLine2, span: true },
+                          { label: "City",        value: city,       set: setCity },
+                          { label: "State",       value: addrState,  set: setAddrState },
+                          { label: "Postal Code", value: postalCode, set: setPostalCode },
+                          { label: "Country",     value: country,    set: setCountry },
+                        ] as { label: string; value: string; set: (v: string) => void; span?: boolean }[]
+                      ).map(({ label, value, set, span }) => (
+                        <div key={label} className={cn("space-y-2", span && "md:col-span-2")}>
+                          <Label className="text-brown-700 text-xs">{label}</Label>
+                          {isEditingCompany ? (
+                            <Input value={value} onChange={(e) => set(e.target.value)} />
+                          ) : (
+                            <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">{value || "—"}</div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -460,30 +511,32 @@ const saved = typeof window !== "undefined"
                       <Label className="text-brown-800 flex items-center gap-1.5">
                         <Globe className="h-3.5 w-3.5" /> Website URL
                       </Label>
-                      <Input
-                        value={website}
-                        onChange={(e) => setWebsite(e.target.value)}
-                        placeholder="https://..."
-                      />
-                      {website && !website.startsWith("https://") && (
-                        <p className="text-xs text-red-500">URL must begin with https://</p>
+                      {isEditingCompany ? (
+                        <>
+                          <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://..." />
+                          {website && !website.startsWith("https://") && (
+                            <p className="text-xs text-red-500">URL must begin with https://</p>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">{website || "—"}</div>
                       )}
                     </div>
                     <div className="space-y-2">
                       <Label className="text-brown-800 flex items-center gap-1.5">
                         <Mail className="h-3.5 w-3.5" /> Primary Contact Email
                       </Label>
-                      <Input
-                        type="email"
-                        value={primaryEmail}
-                        onChange={(e) => setPrimaryEmail(e.target.value)}
-                      />
+                      {isEditingCompany ? (
+                        <Input type="email" value={primaryEmail} onChange={(e) => setPrimaryEmail(e.target.value)} />
+                      ) : (
+                        <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">{primaryEmail || "—"}</div>
+                      )}
                     </div>
                   </div>
 
                   <Separator className="bg-beige-200/50" />
 
-                  {/* Tax ID & Verification */}
+                  {/* Tax ID & Verification — always readonly */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-brown-800">Tax ID / GSTIN</Label>
@@ -514,22 +567,6 @@ const saved = typeof window !== "undefined"
                         )}
                       </div>
                     </div>
-                  </div>
-
-                  <Separator className="bg-beige-200/50" />
-
-                  {/* Save */}
-                  <div className="flex justify-end">
-                    <Button variant="primary" size="lg" onClick={() => {
-                      localStorage.setItem("companyProfile", JSON.stringify({
-                        companyName, logoPreview, industryType, companySize,
-                        addressLine1, addressLine2, city, addrState,
-                        postalCode, country, website, primaryEmail, taxId,
-                        }));
-                        alert("Company profile saved successfully!");
-                      }}>
-                      Save Changes
-                    </Button>
                   </div>
                 </div>
               </GlassCardContent>
@@ -932,85 +969,136 @@ const saved = typeof window !== "undefined"
          ═══════════════════════════════════ */}
 
       {/* Add Reviewer Dialog */}
-      <Dialog open={addReviewerOpen} onOpenChange={setAddReviewerOpen}>
-        <DialogContent className="sm:max-w-lg">
+      <Dialog open={addReviewerOpen} onOpenChange={(open) => { if (!open) { setAddReviewerOpen(false); resetAddForm(); } }}>
+        <DialogContent className="sm:max-w-[420px] bg-[#F9F7F5] border border-beige-200">
           <DialogHeader>
-            <DialogTitle>Add Reviewer</DialogTitle>
-            <DialogDescription>
-              Invite a new reviewer to your organization. They will receive an email invitation.
-            </DialogDescription>
+            <div className="flex items-center gap-3 mb-1">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0"
+                style={{ background: "linear-gradient(135deg, #A67763, #D0B060)" }}
+              >
+                <UserPlus className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-brown-900 font-heading">Add Reviewer</DialogTitle>
+                <DialogDescription className="text-beige-500 text-[12px]">
+                  Invite a new reviewer to your organization. They will receive an email invitation.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-3 py-2">
             {addError && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-                <AlertCircle className="h-4 w-4 shrink-0" />
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                 {addError}
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label className="text-brown-800">Email Address</Label>
-              <Input
-                type="email"
-                placeholder="reviewer@company.com"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-brown-800">First Name</Label>
-                <Input
-                  placeholder="First name"
-                  value={newFirstName}
-                  onChange={(e) => setNewFirstName(e.target.value)}
-                />
+            {/* Row 1: First Name + Last Name */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-brown-700 block">First Name <span className="text-red-400">*</span></label>
+                <Input placeholder="First name" value={newFirstName} onChange={(e) => { setNewFirstName(e.target.value); setAddError(""); }} className="h-8 text-[12px]" />
               </div>
-              <div className="space-y-2">
-                <Label className="text-brown-800">Last Name</Label>
-                <Input
-                  placeholder="Last name"
-                  value={newLastName}
-                  onChange={(e) => setNewLastName(e.target.value)}
-                />
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-brown-700 block">Last Name <span className="text-red-400">*</span></label>
+                <Input placeholder="Last name" value={newLastName} onChange={(e) => { setNewLastName(e.target.value); setAddError(""); }} className="h-8 text-[12px]" />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-brown-800">Role</Label>
-              <Input value="Reviewer" disabled className="bg-beige-50/50" />
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-brown-800">Project Access</Label>
-              <div className="space-y-2">
-                {mockProjects.map((project) => (
-                  <label key={project} className="flex items-center gap-2.5 cursor-pointer">
-                    <Checkbox
-                      checked={newProjectAccess.includes(project)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setNewProjectAccess((prev) => [...prev, project]);
-                        } else {
-                          setNewProjectAccess((prev) => prev.filter((p) => p !== project));
-                        }
-                      }}
-                    />
-                    <span className="text-sm text-brown-700">{project}</span>
-                  </label>
-                ))}
+            {/* Row 2: Email + Role */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-brown-700 block">Email <span className="text-red-400">*</span></label>
+                <Input type="email" placeholder="user@company.com" value={newEmail} onChange={(e) => { setNewEmail(e.target.value); setAddError(""); }} className="h-8 text-[12px]" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-brown-700 block">Role</label>
+                <Input value="Reviewer" disabled className="h-8 text-[12px] bg-beige-50/50 text-beige-500" />
               </div>
             </div>
+
+            {/* Row 3: Designation + Department */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-brown-700 block">Designation <span className="text-red-400">*</span></label>
+                <Input placeholder="e.g. Senior Reviewer" value={newDesignation} onChange={(e) => { setNewDesignation(e.target.value); setAddError(""); }} className="h-8 text-[12px]" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-brown-700 block">Department <span className="text-red-400">*</span></label>
+                <Input placeholder="e.g. Engineering" value={newDepartment} onChange={(e) => { setNewDepartment(e.target.value); setAddError(""); }} className="h-8 text-[12px]" />
+              </div>
+            </div>
+
+            {/* Row 4: Username + Status */}
+            <div className="grid grid-cols-2 gap-3 items-start">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-brown-700 block">Username <span className="text-red-400">*</span></label>
+                <Input placeholder="username" value={newUsername} onChange={(e) => { setNewUsername(e.target.value); setAddError(""); }} className="h-8 text-[12px]" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-brown-700 block">Status</label>
+                <div className="flex items-center gap-4 h-8 rounded-lg border border-beige-200 bg-white/60 px-3">
+                  {(["active", "inactive"] as const).map((val) => (
+                    <label key={val} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="ar-status"
+                        value={val}
+                        checked={newStatus === val}
+                        onChange={() => setNewStatus(val)}
+                        className="accent-[#A67763] w-3 h-3"
+                      />
+                      <span className="text-[12px] text-brown-700 capitalize">{val}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Row 5: Language + Time Zone */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-brown-700 block">Language <span className="text-red-400">*</span></label>
+                <Select value={newLanguage} onValueChange={(v) => { setNewLanguage(v); setAddError(""); }}>
+                  <SelectTrigger className="h-8 text-[12px]"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="es">Spanish</SelectItem>
+                    <SelectItem value="fr">French</SelectItem>
+                    <SelectItem value="de">German</SelectItem>
+                    <SelectItem value="hi">Hindi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-brown-700 block">Time Zone <span className="text-red-400">*</span></label>
+                <Select value={newTimeZone} onValueChange={(v) => { setNewTimeZone(v); setAddError(""); }}>
+                  <SelectTrigger className="h-8 text-[12px]"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UTC">UTC</SelectItem>
+                    <SelectItem value="UTC+05:30">UTC +05:30 (IST)</SelectItem>
+                    <SelectItem value="UTC-05:00">UTC -05:00 (ET)</SelectItem>
+                    <SelectItem value="UTC+01:00">UTC +01:00 (CET)</SelectItem>
+                    <SelectItem value="UTC+08:00">UTC +08:00 (SGT)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddReviewerOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => { setAddReviewerOpen(false); resetAddForm(); }}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleAddReviewer}>
-              <Plus className="h-4 w-4" /> Send Invitation
+            <Button variant="gradient-primary" size="sm" onClick={handleAddReviewer} disabled={addSaving}>
+              {addSaving
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Sending…</>
+                : <><Mail className="w-3.5 h-3.5" />Send Invitation</>
+              }
             </Button>
           </DialogFooter>
         </DialogContent>

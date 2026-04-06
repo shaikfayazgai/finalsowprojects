@@ -21,6 +21,11 @@ import {
   QrCode,
   KeyRound,
   Info,
+
+
+
+  
+  Pencil,
 } from "lucide-react";
 import {
   GlassCard,
@@ -108,6 +113,7 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [displayNameCustomized, setDisplayNameCustomized] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [personalErrors, setPersonalErrors] = useState<Record<string, string>>(
     {}
   );
@@ -233,10 +239,12 @@ export default function ProfilePage() {
     return Object.keys(errors).length === 0;
   }, [firstName, lastName, displayName, jobTitle]);
 
-  const handleSavePersonalInfo = useCallback(() => {
+  const handleSavePersonalInfo = useCallback((): boolean => {
     if (validatePersonalInfo()) {
       toast.success("Personal information updated.");
+      return true;
     }
+    return false;
   }, [validatePersonalInfo]);
 
   const handleUpdatePassword = useCallback(() => {
@@ -352,18 +360,34 @@ export default function ProfilePage() {
       <GlassCard variant="heavy" padding="lg">
         <GlassCardContent>
           {/* Section Header */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-100 text-teal-600">
-              <User className="h-5 w-5" />
+          <div className="flex items-start justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-100 text-teal-600">
+                <User className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg font-semibold text-brown-950">
+                  Personal Information
+                </h2>
+                <p className="text-sm text-beige-600">
+                  Your account details. Contact support to change name or email.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-heading text-lg font-semibold text-brown-950">
-                Personal Information
-              </h2>
-              <p className="text-sm text-beige-600">
-                Update your personal details and contact information.
-              </p>
-            </div>
+            {!isEditing ? (
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 shrink-0">
+                <Button variant="outline" size="sm" onClick={() => { setIsEditing(false); setPersonalErrors({}); }}>
+                  Cancel
+                </Button>
+                <Button variant="primary" size="sm" onClick={() => { if (handleSavePersonalInfo()) setIsEditing(false); }}>
+                  Save
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Profile Photo */}
@@ -402,62 +426,31 @@ export default function ProfilePage() {
 
           {/* Form Fields */}
           <div className="space-y-5">
-            {/* First Name + Last Name */}
+            {/* First Name + Last Name — readonly */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="firstName">
-                  First Name <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="firstName"
-                  value={firstName}
-                  onChange={(e) => handleFirstNameChange(e.target.value)}
-                  placeholder="First name"
-                  maxLength={50}
-                />
-                {personalErrors.firstName && (
-                  <p className="text-xs text-red-500">
-                    {personalErrors.firstName}
-                  </p>
-                )}
+                <Label>First Name</Label>
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {firstName || "—"}
+                </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="lastName">
-                  Last Name <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="lastName"
-                  value={lastName}
-                  onChange={(e) => handleLastNameChange(e.target.value)}
-                  placeholder="Last name"
-                  maxLength={50}
-                />
-                {personalErrors.lastName && (
-                  <p className="text-xs text-red-500">
-                    {personalErrors.lastName}
-                  </p>
-                )}
+                <Label>Last Name</Label>
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {lastName || "—"}
+                </div>
               </div>
             </div>
 
-            {/* Display Name */}
+            {/* Username — readonly */}
             <div className="space-y-1.5">
-              <Label htmlFor="displayName">Display Name</Label>
-              <Input
-                id="displayName"
-                value={displayName}
-                onChange={(e) => handleDisplayNameChange(e.target.value)}
-                placeholder="Display name (auto-populated)"
-                maxLength={100}
-              />
-              {personalErrors.displayName && (
-                <p className="text-xs text-red-500">
-                  {personalErrors.displayName}
-                </p>
-              )}
+              <Label>Username</Label>
+              <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                {displayName || "—"}
+              </div>
             </div>
 
-            {/* Work Email (read-only) */}
+            {/* Work Email — readonly */}
             <div className="space-y-1.5">
               <Label htmlFor="email">Work Email</Label>
               <Input
@@ -472,40 +465,45 @@ export default function ProfilePage() {
               </p>
             </div>
 
-            {/* Job Title */}
+            {/* Job Title / Role — editable */}
             <div className="space-y-1.5">
               <Label htmlFor="jobTitle">Job Title / Role</Label>
-              <Input
-                id="jobTitle"
-                value={jobTitle}
-                onChange={(e) => setJobTitle(e.target.value)}
-                placeholder="e.g. Engineering Manager"
-                maxLength={100}
-              />
-              {personalErrors.jobTitle && (
-                <p className="text-xs text-red-500">
-                  {personalErrors.jobTitle}
-                </p>
+              {isEditing ? (
+                <>
+                  <Input
+                    id="jobTitle"
+                    value={jobTitle}
+                    onChange={(e) => setJobTitle(e.target.value)}
+                    placeholder="e.g. Engineering Manager"
+                    maxLength={100}
+                  />
+                  {personalErrors.jobTitle && (
+                    <p className="text-xs text-red-500">{personalErrors.jobTitle}</p>
+                  )}
+                </>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {jobTitle || "—"}
+                </div>
               )}
             </div>
 
-            {/* Phone Number */}
+            {/* Phone Number — editable */}
             <div className="space-y-1.5">
               <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+1 234 567 8900"
-              />
-            </div>
-
-            {/* Save Button */}
-            <div className="flex justify-end pt-2">
-              <Button variant="primary" onClick={handleSavePersonalInfo}>
-                Save Personal Information
-              </Button>
+              {isEditing ? (
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+1 234 567 8900"
+                />
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {phone || "—"}
+                </div>
+              )}
             </div>
           </div>
         </GlassCardContent>
@@ -759,7 +757,6 @@ export default function ProfilePage() {
                   <SelectItem value="totp">
                     Authenticator App (TOTP)
                   </SelectItem>
-                  <SelectItem value="sms">SMS OTP</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -825,22 +822,6 @@ export default function ProfilePage() {
                   />
                   <p className="text-xs text-beige-500">
                     Enter the code from your authenticator app to verify setup.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* SMS OTP info */}
-            {mfaMethod === "sms" && (
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-beige-100/40 border border-beige-200/50">
-                <Smartphone className="h-5 w-5 text-beige-500 mt-0.5 flex-shrink-0" />
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-brown-800">
-                    SMS OTP will be sent to your registered phone number.
-                  </p>
-                  <p className="text-xs text-beige-500">
-                    Make sure your phone number is up to date in Personal
-                    Information above.
                   </p>
                 </div>
               </div>
