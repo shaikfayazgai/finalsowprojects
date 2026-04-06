@@ -17,7 +17,8 @@ export async function apiCall<T>(
   const { token, headers: extraHeaders, ...rest } = options ?? {};
 
   try {
-    const res = await fetch(`${process.env.GLIMMORA_API_URL}${path}`, {
+    const baseUrl = process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? process.env.GLIMMORA_API_URL;
+    const res = await fetch(`${baseUrl}${path}`, {
       ...rest,
       headers: {
         "Content-Type": "application/json",

@@ -29,14 +29,31 @@ const step0Schema = z.object({
   projectVision: z
     .string()
     .min(50, "Project vision must be at least 50 characters"),
-  businessObjectives: nonEmptyList(1, "Add at least one business objective"),
-  painPoints: nonEmptyList(1, "Add at least one pain point"),
+  businessObjectives: z
+    .array(z.object({ objective: z.string(), measurableTarget: z.string(), timeline: z.string() }))
+    .refine(
+      (arr) => arr.some((o) => o.objective.trim().length > 0),
+      { message: "Add at least one business objective" },
+    ),
+  painPoints: z
+    .array(z.object({ problemDescription: z.string(), whoExperiences: z.string() }))
+    .refine(
+      (arr) => arr.some((p) => p.problemDescription.trim().length > 0 && p.whoExperiences.trim().length > 0),
+      { message: "Add at least one pain point with both fields filled" },
+    ),
   businessCriticality: nonEmptyString("Select a business criticality level"),
   desiredFutureState: z
     .string()
     .min(30, "Desired future state must be at least 30 characters"),
-  endUserProfiles: nonEmptyList(1, "Add at least one end user profile"),
-  successMetrics: nonEmptyList(1, "Add at least one success metric"),
+  endUserProfiles: z
+    .array(z.object({ roleName: z.string(), count: z.string(), ageRange: z.string(), techLiteracy: z.string(), primaryDevice: z.string(), geography: z.string(), accessibilityNeeds: z.string() }))
+    .refine(
+      (arr) => arr.some((p) => p.roleName.trim().length > 0),
+      { message: "Add at least one end user profile" },
+    ),
+  currentState: z
+    .string()
+    .min(1, "Current state is required"),
   definitionOfSuccess: z
     .string()
     .min(30, "Definition of success must be at least 30 characters"),
@@ -52,9 +69,24 @@ const step1Schema = z.object({
   industry: nonEmptyString("Select an industry"),
   projectCategory: nonEmptyString("Select a project category"),
   platformType: nonEmptyString("Select a platform type"),
-  featureModules: nonEmptyList(2, "Add at least 2 feature modules"),
-  userRoles: nonEmptyList(1, "Add at least one user role"),
-  businessWorkflows: nonEmptyList(1, "Add at least one business workflow"),
+  featureModules: z
+    .array(z.object({ moduleName: z.string(), description: z.string(), priority: z.string() }))
+    .refine(
+      (arr) => arr.filter((m) => m.moduleName.trim().length > 0).length >= 2,
+      { message: "Add at least 2 feature modules" },
+    ),
+  userRoles: z
+    .array(z.object({ roleName: z.string(), primaryActions: z.string() }))
+    .refine(
+      (arr) => arr.some((r) => r.roleName.trim().length > 0),
+      { message: "Add at least one user role" },
+    ),
+  businessWorkflows: z
+    .array(z.object({ name: z.string(), steps: z.string(), outcome: z.string() }))
+    .refine(
+      (arr) => arr.some((w) => w.name.trim().length > 0),
+      { message: "Add at least one business workflow" },
+    ),
   outOfScope: nonEmptyList(1, "Add at least one out-of-scope item"),
 });
 
@@ -95,10 +127,14 @@ const step5Schema = z
   .object({
     budgetMin: z.coerce
       .number()
-      .refine((n) => n > 0, {
-        message: "Minimum budget must be greater than 0",
+      .refine((n) => n >= 0, {
+        message: "Minimum budget is required",
       }),
-    budgetMax: z.coerce.number(),
+    budgetMax: z.coerce
+      .number()
+      .refine((n) => n > 0, {
+        message: "Maximum budget must be greater than 0",
+      }),
     pricingModel: nonEmptyString("Select a pricing model"),
     knownRisks: nonEmptyList(1, "Add at least one known risk"),
   })
@@ -118,11 +154,9 @@ const step5Schema = z
 // ---------------------------------------------------------------------------
 
 const step7Schema = z.object({
-  nonDiscriminationConfirm: z.literal(true, {
-    error: "Non-discrimination confirmation is required",
-  }),
-  dataSensitivity: nonEmptyString("Select data sensitivity level"),
-  labourStandards: nonEmptyString("Select labour standards"),
+  complianceStandards: z.array(z.string()).min(1, "Select at least one compliance standard"),
+  reportingFrequency: nonEmptyString("Select reporting frequency"),
+  communicationChannels: nonEmptyString("Select communication channels"),
 });
 
 // ---------------------------------------------------------------------------
@@ -130,12 +164,10 @@ const step7Schema = z.object({
 // ---------------------------------------------------------------------------
 
 const step8Schema = z.object({
-  ipOwnership: nonEmptyString("Select IP ownership model"),
-  sourceCodeOwnership: nonEmptyString("Select source code ownership"),
-  referenceRights: nonEmptyString("Select reference rights"),
-  thirdPartyCosts: nonEmptyString("Select third-party costs model"),
+  paymentTerms: nonEmptyString("Select payment terms"),
   warrantyPeriod: nonEmptyString("Select warranty period"),
-  changeRequestProcess: nonEmptyString("Select change request process"),
+  ipOwnership: nonEmptyString("Select IP ownership"),
+  terminationNoticePeriod: nonEmptyString("Select termination notice period"),
 });
 
 // ---------------------------------------------------------------------------
@@ -199,13 +231,27 @@ export function validateStep(step: number, formData: any): StepErrors {
 
   const errors: StepErrors = {};
 
+  // Friendly fallback messages for fields with structured types
+  const friendlyMessages: Record<string, string> = {
+    businessObjectives: "Add at least one business objective",
+    painPoints: "Add at least one pain point with both fields filled",
+    endUserProfiles: "Add at least one end user profile",
+    featureModules: "Add at least 2 feature modules",
+    userRoles: "Add at least one user role",
+    businessWorkflows: "Add at least one business workflow",
+  };
+
   for (const issue of result.error.issues) {
-    // Use the deepest path segment as the field key.
-    const key = issue.path.length > 0 ? String(issue.path[issue.path.length - 1]) : "_root";
+    // Use the top-level field name as the key (first path segment).
+    const key = issue.path.length > 0 ? String(issue.path[0]) : "_root";
 
     // Keep only the first error per field.
     if (!errors[key]) {
-      errors[key] = issue.message;
+      // Use friendly message for type-mismatch errors on structured fields
+      const isFriendly = friendlyMessages[key] && (
+        issue.code === "invalid_type" || issue.message.startsWith("Invalid input")
+      );
+      errors[key] = isFriendly ? friendlyMessages[key] : issue.message;
     }
   }
 

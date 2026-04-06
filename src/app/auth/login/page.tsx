@@ -207,8 +207,7 @@ function LoginPageContent() {
 
         setUserRole(role || "enterprise");
 
-        // Manual (credentials) registration users have already completed their
-        // profile during sign-up — send them straight to the dashboard.
+        // Login = returning user — send straight to dashboard.
         // Onboarding wizard is only for first-time SSO users (handled in auth.ts signIn callback).
         const dest = callbackUrl || (
           role === "contributor" ? "/contributor/dashboard" :

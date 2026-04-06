@@ -11,8 +11,16 @@ export async function POST(req: NextRequest) {
       password,
     );
 
-    // MFA required — return the pending token so the login page can show the TOTP step
+    // MFA pending — distinguish between "verify existing TOTP" and "setup required"
     if (isMfaPending(response)) {
+      const mfaFlow = (response as Record<string, unknown>).status;
+
+      // MFA setup required but not yet configured — let them through for now
+      if (mfaFlow === "mfa_setup_required") {
+        return NextResponse.json({ ok: true });
+      }
+
+      // MFA verify required (user has TOTP set up) — return pending token
       return NextResponse.json({
         ok: true,
         mfaRequired: true,
@@ -20,7 +28,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ ok: true });
+    // Return the Glimmora API tokens so the login page can pass them
+    // into the NextAuth session (stored in the JWT via the jwt callback).
+    return NextResponse.json({
+      ok: true,
+      accessToken: response.access_token,
+      refreshToken: response.refresh_token,
+      expiresIn: response.expires_in,
+    });
   } catch (err) {
     if (err instanceof ApiError) {
       if (err.status === 401 || err.status === 404) {

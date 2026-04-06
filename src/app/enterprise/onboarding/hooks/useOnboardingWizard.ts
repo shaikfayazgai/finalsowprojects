@@ -226,7 +226,7 @@ export function useOnboardingWizard() {
     setAcceptTos(true);
     setAcceptDpa(true);
     setError("");
-    setStep(3);
+    setStep(4);
   }
 
   function goToStep4() {
@@ -242,12 +242,12 @@ export function useOnboardingWizard() {
       }
     }
     setError("");
-    setStep(4);
+    setStep(5);
   }
 
   function skipStep3() {
     setError("");
-    setStep(4);
+    setStep(5);
   }
 
   async function handleComplete() {

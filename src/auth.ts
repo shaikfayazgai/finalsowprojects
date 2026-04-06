@@ -85,8 +85,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           const response = await authApi.login(email, password);
 
-          // MFA required — not fully authenticated yet (Step 5 will wire MFA verify)
-          if (isMfaPending(response)) return null;
+          // MFA pending (code required) — block login until verified
+          if (isMfaPending(response) && (response as any).mfa_flow !== "setup") {
+            return null;
+          }
+
+          // MFA setup required or fully authenticated — allow login
+          // If MFA setup is required, tokens may not be present yet but user can still access the app
+          if (isMfaPending(response)) {
+            const u = (response as any).user ?? {};
+            return {
+              id: u.id ?? "",
+              name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim(),
+              email: u.email ?? email,
+              role: (u.role ?? "enterprise") as UserRole,
+            };
+          }
 
           const role = (response.user.role ?? "contributor") as UserRole;
 

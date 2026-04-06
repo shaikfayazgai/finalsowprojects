@@ -4,20 +4,25 @@ import * as React from "react";
 import * as ReactDOM from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Sparkles, CheckCircle2, FileText, Target, Code2,
   Calendar, DollarSign, Users, ShieldCheck, Lock, AlertTriangle,
   ClipboardCheck, Plus, X, Zap, Check, Loader2, SkipForward, Circle, Lightbulb,
-  Link2, Scale, Gavel,
+  Link2, Scale, Gavel, Upload, Eye, Pencil,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils/cn";
+
+const SOWAIDraftReviewPage = dynamic(() => import("../upload/generate/page"), { ssr: false });
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { validateStep, validateField, type StepErrors } from "@/lib/validations/sow-generate";
 import {
   Button, Input, Textarea, Label, Select, SelectTrigger, SelectContent,
   SelectItem, SelectValue,
 } from "@/components/ui";
+import { useCreateWizard, useSaveStep, useSkipStep, useGenerateSOW, useReviewSummary } from "@/lib/hooks/use-sow-wizard";
 
 /* ══════════════════════════════════════════ Steps ══════════════════════════════════════════ */
 
@@ -47,87 +52,109 @@ const GENERATION_STAGES = [
 /* ══════════════════════════════════════════ Form data ══════════════════════════════════════════ */
 
 interface FormData {
-  // Section 1: Strategic Context & Vision
+  // Section 1: Strategic Context & Vision (FSD §7.3.2)
   projectVision: string;
-  businessObjectives: string[];
-  painPoints: string[];
+  businessObjectives: { objective: string; measurableTarget: string; timeline: string }[];
+  painPoints: { problemDescription: string; whoExperiences: string }[];
   businessCriticality: string;
   strategicContext: string;
   currentState: string;
   currentStateType: string;
   desiredFutureState: string;
   previousAttempts: string;
-  endUserProfiles: string[];
+  endUserProfiles: { roleName: string; count: string; ageRange: string; techLiteracy: string; primaryDevice: string; geography: string; accessibilityNeeds: string }[];
   languageRequirements: string[];
   customLanguages: string[];
   userExpectations: string[];
-  successMetrics: string[];
+  successMetrics: { metricName: string; baseline: string; target: string; measurementMethod: string; timeframe: string }[];
   enterpriseExpectations: string;
   definitionOfSuccess: string;
 
-  // Section 2: Project Identity & Scope
+  // Section 2: Project Identity & Scope (FSD §7.3.3)
   title: string;
   client: string;
   industry: string;
   projectCategory: string;
   platformType: string;
   existingTechLandscape: string;
-  featureModules: string[];
-  userRoles: string[];
-  businessWorkflows: string[];
+  featureModules: { moduleName: string; description: string; priority: string }[];
+  userRoles: { roleName: string; primaryActions: string }[];
+  businessWorkflows: { name: string; steps: string; outcome: string }[];
   estimatedScreenCount: string;
   criticalBusinessRules: string[];
   outOfScope: string[];
   assumptions: string[];
   constraints: string[];
   dataMigrationScope: string;
-  dataMigrationDetails: string;
+  dataMigrationSource: string;
+  dataMigrationVolume: string;
+  dataMigrationApproach: string;
+  dataMigrationExtractOwnership: string;
+  dataMigrationValidation: string;
+  dataMigrationRollback: string;
 
   // Section 3: Delivery Scope & Technical Architecture
   developmentScope: string[];
   uiuxDesignScope: string;
-  uiuxDesignDetails: string;
+  uiuxDesignDeliverables: string[];
+  clientDesignAssets: { type: "file" | "url"; value: string }[];
   deploymentScope: string;
-  deploymentDetails: string;
+  deploymentProvider: string;
+  deploymentServices: string[];
+  deploymentContainerisation: boolean;
+  deploymentEnvironments: string[];
+  onPremiseServices: string[];
   goLiveScope: string;
-  goLiveDetails: string;
+  hypercareDuration: string;
+  hypercareSupport: string;
   techStack: string;
   scalabilityRequirements: string;
   etlApproach: string;
   transformationComplexity: string;
   dataValidationMethod: string;
-  integrations: string[];
+  integrationPoints: { name: string; direction: string; protocol: string; authentication: string; dataFormat: string; sandboxCredentials: string; testingResponsibility: string; errorHandlingSLA: string }[];
   ssoRequired: string;
-  ssoDetails: string;
+  ssoProviderName: string;
+  ssoProtocol: string;
   userRegistrationModel: string;
   passwordPolicy: string;
-  passwordPolicyDetails: string;
+  passwordMinLength: string;
+  passwordComplexity: string;
+  passwordExpiry: string;
+  sessionTimeout: string;
+  lockoutAttempts: string;
   auditLogging: string;
+  auditLogEvents: string[];
   approvalWorkflows: string;
   notifications: string;
-  scheduledJobs: string[];
+  notificationEvents: { trigger: string; channel: string }[];
+  scheduledJobsScope: string;
+  scheduledJobItems: { jobName: string; frequency: string; triggerCondition: string }[];
 
-  // Section 4: Timeline, Team & Budget
+  // Section 4: Timeline, Team & Budget (FSD §7.3.6)
   startDate: string;
   endDate: string;
   phasingStrategy: string;
-  milestones: string[];
+  milestones: { name: string; targetDate: string; acceptanceCriteria: string }[];
   clientDependencies: string[];
   teamSize: string;
   workModel: string;
-  roles: string[];
+  roles: { roleName: string; seniority: string }[];
   skillPriorities: string;
   knowledgeTransfer: string;
 
   // Section 5: Quality Assurance & Testing
-  sitScope: string;
-  uatOwnership: string;
-  uatDuration: string;
-  uatSignoffAuthority: string;
-  preProductionTesting: string;
-  performanceTesting: string;
-  securityTesting: string;
-  defectSLA: string;
+  testingTypes: string[];
+  targetEnvironments: string[];
+  testingToolsPreference: string;
+  testingAcceptanceCriteria: string;
+  uatPeriod: string;
+  bugSeverityDefinitions: string;
+  travelRequirements: string;
+  onboardingProcess: string;
+  teamLocation: string;
+  workingHoursTimezone: string;
+  testDataProvisioning: string;
 
   // Section 6: Budget & Risk
   budgetMin: string;
@@ -140,43 +167,47 @@ interface FormData {
   contingencyBudget: string;
   escalationProcess: string;
 
-  // Section 7: Acceptance & SLA
-  acceptanceCriteria: string;
-  slaUptime: string;
-  codeReviewPolicy: string;
-  documentationRequirements: string[];
-  browserCompatibility: string[];
-  deviceCompatibility: string[];
-  reportingScope: string;
-  offlineSupport: string;
-  localisation: string;
+  // Section 7: Quality Assurance Standards
+  codingStandards: string;
+  documentationLevel: string;
+  testCoverageTarget: string;
+  securityTestingRequirements: string;
+  codeReviewProcess: string;
+  performanceKpis: string;
+  browserDeviceSupport: string[];
+  accessibilityStandard: string;
+  qaResponsibility: string;
+  defectManagementTool: string;
+  postLaunchSupportPeriod: string;
+  maintenanceScope: string;
 
-  // Section 8: Governance & Ethics
-  nonDiscriminationConfirm: boolean;
-  labourStandards: string;
-  accessibilityRequirements: string;
-  prohibitedCategories: string[];
-  personalDataInvolved: string;
-  privacyLaws: string[];
-  dpaRequired: string;
-  privacyImpactStatus: string;
-  dataSensitivity: string;
-  encryptionRequirements: string;
-  regulatoryFrameworks: string[];
-  dataResidency: string;
-  accessControl: string;
+  // Section 8: Governance & Compliance
+  reportingFrequency: string;
+  communicationChannels: string;
+  steeringCommitteeFrequency: string;
+  changeManagementProcess: string;
+  projectMethodology: string;
+  dataRetentionPolicy: string;
+  complianceStandards: string[];
+  auditFrequency: string;
+  securityAuditFrequency: string;
+  dataPrivacyOfficer: string;
+  dpaRequired: boolean;
+  slaUptimeCommitment: string;
 
-  // Section 9: Commercial & IP
-  ipOwnership: string;
-  sourceCodeOwnership: string;
-  referenceRights: string;
-  openSourcePolicy: string;
-  thirdPartyCosts: string;
+  // Section 9: Commercial & Legal
+  paymentTerms: string;
   warrantyPeriod: string;
-  postWarrantySupport: string;
-  changeRequestProcess: string;
-  changeRequestApprover: string;
-  environmentCosts: string;
+  invoicingSchedule: string;
+  ipOwnership: string;
+  terminationNoticePeriod: string;
+  liabilityCap: string;
+  governingLaw: string;
+  disputeResolution: string;
+  nonSolicitationPeriod: string;
+  insuranceRequirements: string;
+  confidentialityTerms: string;
+  expensesPolicy: string;
 
   // Section 10: Sign-off
   businessOwnerApprover: string;
@@ -186,87 +217,109 @@ interface FormData {
 }
 
 const initialFormData: FormData = {
-  // Section 1: Strategic Context & Vision
+  // Section 1: Strategic Context & Vision (FSD §7.3.2)
   projectVision: "",
-  businessObjectives: [""],
-  painPoints: [""],
+  businessObjectives: [{ objective: "", measurableTarget: "", timeline: "" }],
+  painPoints: [{ problemDescription: "", whoExperiences: "" }],
   businessCriticality: "",
   strategicContext: "",
   currentState: "",
   currentStateType: "",
   desiredFutureState: "",
   previousAttempts: "",
-  endUserProfiles: [""],
+  endUserProfiles: [{ roleName: "", count: "", ageRange: "", techLiteracy: "", primaryDevice: "", geography: "", accessibilityNeeds: "" }],
   languageRequirements: [""],
   customLanguages: [],
   userExpectations: [""],
-  successMetrics: [""],
+  successMetrics: [{ metricName: "", baseline: "", target: "", measurementMethod: "", timeframe: "" }],
   enterpriseExpectations: "",
   definitionOfSuccess: "",
 
-  // Section 2: Project Identity & Scope
+  // Section 2: Project Identity & Scope (FSD §7.3.3)
   title: "",
   client: "",
   industry: "",
   projectCategory: "",
   platformType: "",
   existingTechLandscape: "",
-  featureModules: [""],
-  userRoles: [""],
-  businessWorkflows: [""],
+  featureModules: [{ moduleName: "", description: "", priority: "" }],
+  userRoles: [{ roleName: "", primaryActions: "" }],
+  businessWorkflows: [{ name: "", steps: "", outcome: "" }],
   estimatedScreenCount: "",
   criticalBusinessRules: [""],
   outOfScope: [""],
   assumptions: [""],
   constraints: [""],
   dataMigrationScope: "",
-  dataMigrationDetails: "",
+  dataMigrationSource: "",
+  dataMigrationVolume: "",
+  dataMigrationApproach: "",
+  dataMigrationExtractOwnership: "",
+  dataMigrationValidation: "",
+  dataMigrationRollback: "",
 
   // Section 3: Delivery Scope & Technical Architecture
   developmentScope: [""],
   uiuxDesignScope: "",
-  uiuxDesignDetails: "",
+  uiuxDesignDeliverables: [],
+  clientDesignAssets: [],
   deploymentScope: "",
-  deploymentDetails: "",
+  deploymentProvider: "",
+  deploymentServices: [],
+  deploymentContainerisation: false,
+  deploymentEnvironments: [],
+  onPremiseServices: [],
   goLiveScope: "",
-  goLiveDetails: "",
+  hypercareDuration: "",
+  hypercareSupport: "",
   techStack: "",
   scalabilityRequirements: "",
   etlApproach: "",
   transformationComplexity: "",
   dataValidationMethod: "",
-  integrations: [""],
+  integrationPoints: [{ name: "", direction: "", protocol: "", authentication: "", dataFormat: "", sandboxCredentials: "", testingResponsibility: "", errorHandlingSLA: "" }],
   ssoRequired: "",
-  ssoDetails: "",
+  ssoProviderName: "",
+  ssoProtocol: "",
   userRegistrationModel: "",
   passwordPolicy: "",
-  passwordPolicyDetails: "",
+  passwordMinLength: "8",
+  passwordComplexity: "Standard",
+  passwordExpiry: "90",
+  sessionTimeout: "30",
+  lockoutAttempts: "5",
   auditLogging: "",
+  auditLogEvents: [],
   approvalWorkflows: "",
   notifications: "",
-  scheduledJobs: [""],
+  notificationEvents: [{ trigger: "", channel: "Email" }],
+  scheduledJobsScope: "",
+  scheduledJobItems: [{ jobName: "", frequency: "", triggerCondition: "" }],
 
   // Section 4: Timeline, Team & Budget
   startDate: "",
   endDate: "",
   phasingStrategy: "",
-  milestones: [""],
+  milestones: [{ name: "", targetDate: "", acceptanceCriteria: "" }],
   clientDependencies: [""],
   teamSize: "",
   workModel: "",
-  roles: [""],
+  roles: [{ roleName: "", seniority: "" }],
   skillPriorities: "",
   knowledgeTransfer: "",
 
   // Section 5: Quality Assurance & Testing
-  sitScope: "",
-  uatOwnership: "",
-  uatDuration: "",
-  uatSignoffAuthority: "",
-  preProductionTesting: "",
-  performanceTesting: "",
-  securityTesting: "",
-  defectSLA: "",
+  testingTypes: [],
+  targetEnvironments: [],
+  testingToolsPreference: "",
+  testingAcceptanceCriteria: "",
+  uatPeriod: "",
+  bugSeverityDefinitions: "",
+  travelRequirements: "",
+  onboardingProcess: "",
+  teamLocation: "",
+  workingHoursTimezone: "",
+  testDataProvisioning: "",
 
   // Section 6: Budget & Risk
   budgetMin: "",
@@ -279,43 +332,47 @@ const initialFormData: FormData = {
   contingencyBudget: "",
   escalationProcess: "",
 
-  // Section 7: Acceptance & SLA
-  acceptanceCriteria: "",
-  slaUptime: "",
-  codeReviewPolicy: "",
-  documentationRequirements: [""],
-  browserCompatibility: [""],
-  deviceCompatibility: [""],
-  reportingScope: "",
-  offlineSupport: "",
-  localisation: "",
+  // Section 7: Quality Assurance Standards
+  codingStandards: "",
+  documentationLevel: "",
+  testCoverageTarget: "",
+  securityTestingRequirements: "",
+  codeReviewProcess: "",
+  performanceKpis: "",
+  browserDeviceSupport: [],
+  accessibilityStandard: "",
+  qaResponsibility: "",
+  defectManagementTool: "",
+  postLaunchSupportPeriod: "",
+  maintenanceScope: "",
 
-  // Section 8: Governance & Ethics
-  nonDiscriminationConfirm: false,
-  labourStandards: "",
-  accessibilityRequirements: "",
-  prohibitedCategories: [""],
-  personalDataInvolved: "",
-  privacyLaws: [""],
-  dpaRequired: "",
-  privacyImpactStatus: "",
-  dataSensitivity: "",
-  encryptionRequirements: "",
-  regulatoryFrameworks: [""],
-  dataResidency: "",
-  accessControl: "",
+  // Section 8: Governance & Compliance
+  reportingFrequency: "",
+  communicationChannels: "",
+  steeringCommitteeFrequency: "",
+  changeManagementProcess: "",
+  projectMethodology: "",
+  dataRetentionPolicy: "",
+  complianceStandards: [],
+  auditFrequency: "",
+  securityAuditFrequency: "",
+  dataPrivacyOfficer: "",
+  dpaRequired: false,
+  slaUptimeCommitment: "",
 
-  // Section 9: Commercial & IP
-  ipOwnership: "",
-  sourceCodeOwnership: "",
-  referenceRights: "",
-  openSourcePolicy: "",
-  thirdPartyCosts: "",
+  // Section 9: Commercial & Legal
+  paymentTerms: "",
   warrantyPeriod: "",
-  postWarrantySupport: "",
-  changeRequestProcess: "",
-  changeRequestApprover: "",
-  environmentCosts: "",
+  invoicingSchedule: "",
+  ipOwnership: "",
+  terminationNoticePeriod: "",
+  liabilityCap: "",
+  governingLaw: "",
+  disputeResolution: "",
+  nonSolicitationPeriod: "",
+  insuranceRequirements: "",
+  confidentialityTerms: "",
+  expensesPolicy: "",
 
   // Section 10: Sign-off
   businessOwnerApprover: "",
@@ -447,9 +504,9 @@ interface StepListProps {
   blurField?: (field: string) => void;
 }
 
-function FieldError({ error }: { error?: string }) {
+function FieldError({ error, field }: { error?: string; field?: string }) {
   if (!error) return null;
-  return <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</p>;
+  return <p data-field-error={field} style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: 500 }}>{error}</p>;
 }
 
 const tipVariants = {
@@ -480,7 +537,7 @@ function ListField({ label, items, fieldKey, placeholder, addListItem, removeLis
   addLabel?: string; icon?: React.ElementType; numbered?: boolean; prefix?: string; error?: string; onBlur?: () => void;
 }) {
   return (
-    <div>
+    <div data-field={fieldKey}>
       <div className="flex items-center justify-between mb-2">
         <label className="text-[13px] font-semibold text-gray-800">{label}</label>
         <button onClick={() => addListItem(fieldKey)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors">
@@ -638,8 +695,8 @@ function CheckboxGroup({ values, onChange, options }: {
               fontSize: 12,
               fontWeight: active ? 600 : 400,
               color: active ? '#FFFFFF' : 'var(--ink-mid)',
-              background: active ? 'linear-gradient(135deg, #4D5741, #3F4735)' : 'rgba(166,119,99,0.04)',
-              border: `1px solid ${active ? 'rgba(77,87,65,0.40)' : 'var(--border-soft)'}`,
+              background: active ? 'linear-gradient(135deg, var(--primary), var(--primary))' : 'rgba(166,119,99,0.04)',
+              border: `1px solid ${active ? '' : 'var(--border-soft)'}`,
               cursor: 'pointer',
             }}
           >
@@ -657,11 +714,20 @@ function CheckboxGroup({ values, onChange, options }: {
    ══════════════════════════════════════════ */
 const SOW_STORAGE_KEY = "sow-generator-draft";
 
+const SOW_DRAFT_VERSION = 7; // Increment when FormData structure changes
+
 function loadDraft(): { formData: FormData; currentStep: number; skippedSteps: number[] } | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(SOW_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // If draft is from an older version with different field structures, discard it
+    if (!parsed.version || parsed.version < SOW_DRAFT_VERSION) {
+      sessionStorage.removeItem(SOW_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
   } catch { return null; }
 }
 
@@ -669,6 +735,7 @@ function saveDraft(formData: FormData, currentStep: number, skippedSteps: Set<nu
   if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem(SOW_STORAGE_KEY, JSON.stringify({
+      version: SOW_DRAFT_VERSION,
       formData,
       currentStep,
       skippedSteps: [...skippedSteps],
@@ -678,14 +745,108 @@ function saveDraft(formData: FormData, currentStep: number, skippedSteps: Set<nu
 
 export default function SOWGenerateWizardPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const draft = React.useRef(loadDraft());
   const [currentStep, setCurrentStep] = React.useState(draft.current?.currentStep ?? 0);
-  const [formData, setFormData] = React.useState<FormData>(draft.current?.formData ?? initialFormData);
+  const [formData, setFormData] = React.useState<FormData>(() => {
+    // Merge initialFormData as base to ensure all fields exist (handles HMR + draft migration)
+    const merged = { ...initialFormData, ...draft.current?.formData };
+    // Ensure array fields that changed from string[] to object[] are properly typed
+    if (merged.integrationPoints && typeof merged.integrationPoints[0] === "string") {
+      merged.integrationPoints = initialFormData.integrationPoints;
+    }
+    if (merged.scheduledJobItems && typeof merged.scheduledJobItems[0] === "string") {
+      merged.scheduledJobItems = initialFormData.scheduledJobItems;
+    }
+    if (merged.notificationEvents && typeof merged.notificationEvents[0] === "string") {
+      merged.notificationEvents = initialFormData.notificationEvents;
+    }
+    return merged;
+  });
   const [skippedSteps, setSkippedSteps] = React.useState<Set<number>>(new Set(draft.current?.skippedSteps ?? []));
   const [generating, setGenerating] = React.useState(false);
   const [genStage, setGenStage] = React.useState(0);
+  const [genLayer, setGenLayer] = React.useState(0);
   const [stepErrors, setStepErrors] = React.useState<StepErrors>({});
   const [touchedFields, setTouchedFields] = React.useState<Set<string>>(new Set());
+  const [showStepCompleteModal, setShowStepCompleteModal] = React.useState(false);
+  const [cameFromReview, setCameFromReview] = React.useState(false);
+  const [generationComplete, setGenerationComplete] = React.useState(false);
+
+  // ── API integration (wizard session + step mutations) ──
+  const [wizardId, setWizardId] = React.useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return sessionStorage.getItem("sow-wizard-id");
+  });
+  const createWizard = useCreateWizard();
+  const saveStepMutation = useSaveStep(wizardId);
+  const skipStepMutation = useSkipStep(wizardId);
+  const generateMutation = useGenerateSOW(wizardId);
+  const reviewSummary = useReviewSummary(wizardId, currentStep === 9);
+  const [apiError, setApiError] = React.useState("");
+
+  // Persist wizardId to sessionStorage
+  React.useEffect(() => {
+    if (wizardId) sessionStorage.setItem("sow-wizard-id", wizardId);
+  }, [wizardId]);
+
+  // If review summary returns 404, wizard is stale — recreate
+  React.useEffect(() => {
+    if (reviewSummary.error && (reviewSummary.error as Error).message?.includes("404")) {
+      sessionStorage.removeItem("sow-wizard-id");
+      setWizardId(null);
+    }
+  }, [reviewSummary.error]);
+
+  // Create wizard session on mount if none exists
+  const createNewWizard = React.useCallback(() => {
+    if (createWizard.isPending) return;
+    const enterpriseId = (session?.user as { id?: string })?.id;
+    if (!enterpriseId) return;
+    createWizard.mutate(enterpriseId, {
+      onSuccess: (data) => {
+        setWizardId(data.wizard_id);
+        setApiError("");
+      },
+      onError: (err) => setApiError(err.message),
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user]);
+
+  React.useEffect(() => {
+    if (!wizardId) createNewWizard();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user, wizardId]);
+
+  // Auto-fill businessOwnerApprover from logged-in user's name
+  React.useEffect(() => {
+    if (session?.user?.name && !formData.businessOwnerApprover) {
+      updateField("businessOwnerApprover", session.user.name);
+    }
+  }, [session?.user?.name]);
+
+  // Scroll to top on page load and step change
+  React.useEffect(() => {
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
+    // Find the main scrollable area — the <main> tag in AppShell
+    const mainEl = document.querySelector("main");
+    if (mainEl) {
+      mainEl.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    // Retry after render
+    const t = setTimeout(() => {
+      if (mainEl) mainEl.scrollTop = 0;
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }, 100);
+    return () => clearTimeout(t);
+  }, [currentStep]);
 
   // Persist draft to sessionStorage on every change
   React.useEffect(() => {
@@ -695,7 +856,58 @@ export default function SOWGenerateWizardPage() {
   const updateField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
     setFormData((prev) => {
       const next = { ...prev, [key]: value };
-      // Re-validate on change if field was already touched
+      // Re-validate ALL touched fields so remaining errors stay visible
+      if (touchedFields.size > 0) {
+        const allErrors = validateStep(currentStep, next);
+        setStepErrors(() => {
+          // Only show errors for fields that have been touched
+          const filtered: StepErrors = {};
+          for (const [field, msg] of Object.entries(allErrors)) {
+            if (touchedFields.has(field)) {
+              filtered[field] = msg;
+            }
+          }
+          return filtered;
+        });
+      }
+      return next;
+    });
+  };
+
+  const blurField = (field: string) => {
+    const newTouched = new Set(touchedFields).add(field);
+    setTouchedFields(newTouched);
+    // Re-validate all touched fields so all errors stay visible
+    const allErrors = validateStep(currentStep, formData);
+    const filtered: StepErrors = {};
+    for (const [key, msg] of Object.entries(allErrors)) {
+      if (newTouched.has(key)) {
+        filtered[key] = msg;
+      }
+    }
+    setStepErrors(filtered);
+  };
+  const addListItem = (key: keyof FormData) => {
+    setFormData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }));
+  };
+  const removeListItem = (key: keyof FormData, idx: number) => {
+    setFormData((prev) => {
+      const next = { ...prev, [key]: (prev[key] as string[]).filter((_: string, i: number) => i !== idx) };
+      if (touchedFields.has(key as string)) {
+        const err = validateField(currentStep, key as string, next);
+        setStepErrors((prev) => {
+          const updated = { ...prev };
+          if (err) updated[key as string] = err;
+          else delete updated[key as string];
+          return updated;
+        });
+      }
+      return next;
+    });
+  };
+  const updateListItem = (key: keyof FormData, idx: number, value: string) => {
+    setFormData((prev) => {
+      const next = { ...prev, [key]: (prev[key] as string[]).map((item: string, i: number) => (i === idx ? value : item)) };
       if (touchedFields.has(key as string)) {
         const err = validateField(currentStep, key as string, next);
         setStepErrors((prev) => {
@@ -709,36 +921,16 @@ export default function SOWGenerateWizardPage() {
     });
   };
 
-  const blurField = (field: string) => {
-    setTouchedFields((prev) => new Set(prev).add(field));
-    const err = validateField(currentStep, field, formData);
-    if (err) {
-      setStepErrors((prev) => ({ ...prev, [field]: err }));
-    } else {
-      setStepErrors((prev) => { const next = { ...prev }; delete next[field]; return next; });
-    }
-  };
-  const addListItem = (key: keyof FormData) => {
-    setFormData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }));
-  };
-  const removeListItem = (key: keyof FormData, idx: number) => {
-    setFormData((prev) => ({ ...prev, [key]: (prev[key] as string[]).filter((_: string, i: number) => i !== idx) }));
-  };
-  const updateListItem = (key: keyof FormData, idx: number, value: string) => {
-    setFormData((prev) => ({ ...prev, [key]: (prev[key] as string[]).map((item: string, i: number) => (i === idx ? value : item)) }));
-  };
-
   /* ── Confidence calculation ── */
   const calculateConfidence = React.useCallback(() => {
     const checks: boolean[] = [
       /* Step 0 */
       formData.projectVision.trim().length >= 50,
-      formData.businessObjectives.some(x => x.trim().length > 0),
-      formData.painPoints.some(x => x.trim().length > 0),
+      formData.businessObjectives.some(x => (x?.objective ?? "").trim().length > 0),
+      formData.painPoints.some(p => (p?.problemDescription ?? "").trim().length > 0 && (p?.whoExperiences ?? "").trim().length > 0),
       formData.businessCriticality.length > 0,
       formData.desiredFutureState.trim().length >= 30,
-      formData.endUserProfiles.some(x => x.trim().length > 0),
-      formData.successMetrics.some(x => x.trim().length > 0),
+      formData.endUserProfiles.some(x => (x?.roleName ?? "").trim().length > 0),
       formData.definitionOfSuccess.trim().length >= 30,
       /* Step 1 */
       formData.title.trim().length >= 3,
@@ -746,9 +938,9 @@ export default function SOWGenerateWizardPage() {
       formData.industry.length > 0,
       formData.projectCategory.length > 0,
       formData.platformType.length > 0,
-      formData.featureModules.filter(x => x.trim().length > 0).length >= 2,
-      formData.userRoles.some(x => x.trim().length > 0),
-      formData.businessWorkflows.some(x => x.trim().length > 0),
+      formData.featureModules.filter(x => (x?.moduleName ?? "").trim().length > 0).length >= 2,
+      formData.userRoles.some(x => (x?.roleName ?? "").trim().length > 0),
+      formData.businessWorkflows.some(x => (x?.name ?? "").trim().length > 0),
       formData.outOfScope.some(x => x.trim().length > 0),
       /* Step 2 */
       formData.developmentScope.length > 0,
@@ -762,14 +954,14 @@ export default function SOWGenerateWizardPage() {
       formData.pricingModel.length > 0,
       formData.knownRisks.some(x => x.trim().length > 0),
       /* Step 7 */
-      formData.nonDiscriminationConfirm === true,
-      formData.dataSensitivity.length > 0,
-      formData.labourStandards.length > 0,
+      formData.reportingFrequency.length > 0,
+      formData.communicationChannels.length > 0,
+      (formData.complianceStandards ?? []).length > 0,
       /* Step 8 */
+      formData.paymentTerms.length > 0,
       formData.ipOwnership.length > 0,
-      formData.sourceCodeOwnership.length > 0,
       formData.warrantyPeriod.length > 0,
-      formData.changeRequestProcess.length > 0,
+      formData.terminationNoticePeriod.length > 0,
       /* Step 9 */
       formData.businessOwnerApprover.trim().length > 0,
       formData.finalApprover.trim().length > 0,
@@ -785,12 +977,11 @@ export default function SOWGenerateWizardPage() {
       switch (step) {
         case 0:
           return formData.projectVision.trim().length >= 50
-            && formData.businessObjectives.some(x => x.trim().length > 0)
-            && formData.painPoints.some(x => x.trim().length > 0)
+            && formData.businessObjectives.some(x => (x?.objective ?? "").trim().length > 0)
+            && formData.painPoints.some(p => (p?.problemDescription ?? "").trim().length > 0 && (p?.whoExperiences ?? "").trim().length > 0)
             && formData.businessCriticality.length > 0
             && formData.desiredFutureState.trim().length >= 30
-            && formData.endUserProfiles.some(x => x.trim().length > 0)
-            && formData.successMetrics.some(x => x.trim().length > 0)
+            && formData.endUserProfiles.some(x => (x?.roleName ?? "").trim().length > 0)
             && formData.definitionOfSuccess.trim().length >= 30;
         case 1:
           return formData.title.trim().length >= 3
@@ -798,9 +989,9 @@ export default function SOWGenerateWizardPage() {
             && formData.industry.length > 0
             && formData.projectCategory.length > 0
             && formData.platformType.length > 0
-            && formData.featureModules.filter(x => x.trim().length > 0).length >= 2
-            && formData.userRoles.some(x => x.trim().length > 0)
-            && formData.businessWorkflows.some(x => x.trim().length > 0)
+            && formData.featureModules.filter(x => (x?.moduleName ?? "").trim().length > 0).length >= 2
+            && formData.userRoles.some(x => (x?.roleName ?? "").trim().length > 0)
+            && formData.businessWorkflows.some(x => (x?.name ?? "").trim().length > 0)
             && formData.outOfScope.some(x => x.trim().length > 0);
         case 2:
           return formData.developmentScope.length > 0
@@ -809,7 +1000,7 @@ export default function SOWGenerateWizardPage() {
             && formData.goLiveScope.length > 0
             && formData.techStack.trim().length >= 10;
         case 3: // Integrations — skippable, complete if user has set at least one value
-          return formData.ssoRequired.length > 0 || formData.integrations.some(x => x.trim().length > 0);
+          return formData.ssoRequired.length > 0 || (formData.integrationPoints ?? []).some(x => x.name.trim().length > 0);
         case 4: // Timeline & Team — skippable, complete if dates are set
           return formData.startDate.length > 0 && formData.endDate.length > 0 && formData.teamSize.length > 0;
         case 5:
@@ -817,19 +1008,17 @@ export default function SOWGenerateWizardPage() {
             && parseFloat(formData.budgetMax) >= parseFloat(formData.budgetMin)
             && formData.pricingModel.length > 0
             && formData.knownRisks.some(x => x.trim().length > 0);
-        case 6: // Quality — skippable, complete if at least acceptance criteria is set
-          return formData.acceptanceCriteria.trim().length > 0 || formData.sitScope.length > 0;
+        case 6: // Quality — skippable, complete if at least one field is set
+          return (formData.codingStandards ?? "").length > 0 || (formData.browserDeviceSupport ?? []).length > 0;
         case 7:
-          return formData.nonDiscriminationConfirm === true
-            && formData.dataSensitivity.length > 0
-            && formData.labourStandards.length > 0;
+          return formData.reportingFrequency.length > 0
+            && formData.communicationChannels.length > 0
+            && (formData.complianceStandards ?? []).length > 0;
         case 8:
-          return formData.ipOwnership.length > 0
-            && formData.sourceCodeOwnership.length > 0
-            && formData.referenceRights.length > 0
-            && formData.thirdPartyCosts.length > 0
+          return formData.paymentTerms.length > 0
+            && formData.ipOwnership.length > 0
             && formData.warrantyPeriod.length > 0
-            && formData.changeRequestProcess.length > 0;
+            && formData.terminationNoticePeriod.length > 0;
         case 9:
           return aiConfidence >= 60
             && formData.businessOwnerApprover.trim().length > 0
@@ -840,35 +1029,30 @@ export default function SOWGenerateWizardPage() {
     [formData, aiConfidence]
   );
 
-  /* ── canAdvance: must complete current step before moving forward ── */
+  /* ── canAdvance: always visually enabled ── */
   const canAdvance = React.useCallback(
-    (step: number): boolean => {
-      return isStepComplete(step);
+    (_step: number): boolean => {
+      return true;
     },
-    [isStepComplete]
+    []
   );
 
-  /* ── canGenerate: all mandatory complete + approvers ── */
+  /* ── canGenerate: always visually enabled ── */
   const canGenerate = React.useCallback((): boolean => {
-    const mandatoryIndices = [0, 1, 2, 5, 7, 8];
-    const allMandatoryComplete = mandatoryIndices.every(i => isStepComplete(i));
-    return allMandatoryComplete
-      && formData.nonDiscriminationConfirm
-      && formData.businessOwnerApprover.trim().length > 0
-      && formData.finalApprover.trim().length > 0;
-  }, [isStepComplete, formData]);
+    return true;
+  }, []);
 
   /* ── Hallucination layer status ── */
   const hallucinationLayerActive = React.useCallback((idx: number): boolean => {
     switch (idx) {
       case 0: return isStepComplete(1); // Scope boundary
       case 1: return parseFloat(formData.budgetMin) > 0 && formData.startDate.length > 0; // Budget-timeline
-      case 2: return formData.nonDiscriminationConfirm && formData.dataSensitivity.length > 0; // Regulatory
+      case 2: return (formData.complianceStandards ?? []).length > 0 && formData.reportingFrequency.length > 0; // Governance
       case 3: return formData.techStack.trim().length >= 10 && formData.developmentScope.length > 0; // Tech stack
       case 4: return formData.knownRisks.some(x => x.trim().length > 0); // Risk-mitigation
-      case 5: return formData.roles.some(x => x.trim().length > 0) && formData.featureModules.some(x => x.trim().length > 0); // Role-deliverable
-      case 6: return formData.acceptanceCriteria.trim().length > 0 || formData.slaUptime.length > 0; // SLA-quality
-      case 7: return formData.ipOwnership.length > 0 && formData.sourceCodeOwnership.length > 0; // IP & commercial
+      case 5: return formData.roles.some(x => (x?.roleName ?? "").trim().length > 0) && formData.featureModules.some(x => (x?.moduleName ?? "").trim().length > 0); // Role-deliverable
+      case 6: return (formData.codingStandards ?? "").length > 0 || (formData.browserDeviceSupport ?? []).length > 0; // Quality standards
+      case 7: return formData.ipOwnership.length > 0 && formData.paymentTerms.length > 0; // Commercial
       default: return false;
     }
   }, [formData, isStepComplete]);
@@ -876,23 +1060,67 @@ export default function SOWGenerateWizardPage() {
   /* ── Skip handler ── */
   const handleSkip = () => {
     if (STEPS[currentStep].skippable) {
-      setSkippedSteps(prev => new Set(prev).add(currentStep));
-      setCurrentStep(s => Math.min(STEPS.length - 1, s + 1));
+      setApiError("");
+      if (wizardId) {
+        skipStepMutation.mutate(currentStep, {
+          onSettled: () => {
+            setSkippedSteps(prev => new Set(prev).add(currentStep));
+            setCurrentStep(s => Math.min(STEPS.length - 1, s + 1));
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          },
+        });
+      } else {
+        setSkippedSteps(prev => new Set(prev).add(currentStep));
+        setCurrentStep(s => Math.min(STEPS.length - 1, s + 1));
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     }
   };
 
-  /* ── Generate handler ── */
+  /* ── Generate handler with validation + API ── */
   const handleGenerate = () => {
-    if (!canGenerate()) return;
+    if (formData.businessOwnerApprover.trim().length === 0) {
+      setStepErrors({ businessOwnerApprover: "Business owner approver is required" });
+      setTouchedFields((prev) => new Set(prev).add("businessOwnerApprover"));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    setApiError("");
     setGenerating(true);
     setGenStage(0);
+    setGenLayer(0);
+
+    // Fire the API generation call in parallel with the animation
+    if (wizardId) {
+      generateMutation.mutate(
+        formData as unknown as Record<string, unknown>,
+        {
+          onError: (err) => setApiError(err.message),
+        },
+      );
+    }
+
+    let layer = 0;
     let stage = 0;
-    const interval = setInterval(() => {
+    // Cycle hallucination layers (8 layers, ~900ms each)
+    const layerInterval = setInterval(() => {
+      layer++;
+      if (layer >= HALLUCINATION_LAYERS.length) {
+        clearInterval(layerInterval);
+      } else {
+        setGenLayer(layer);
+      }
+    }, 900);
+    // Cycle generation stages (6 stages, ~1200ms each)
+    const stageInterval = setInterval(() => {
       stage++;
       if (stage >= GENERATION_STAGES.length) {
-        clearInterval(interval);
+        clearInterval(stageInterval);
+        clearInterval(layerInterval);
         setTimeout(() => {
-          router.push("/enterprise/sow/generate/review");
+          setGenerating(false);
+          setGenerationComplete(true);
         }, 800);
       } else {
         setGenStage(stage);
@@ -900,16 +1128,73 @@ export default function SOWGenerateWizardPage() {
     }, 1200);
   };
 
-  /* ── Next handler with validation ── */
+  /* ── Next handler with validation + API save ── */
   const handleNext = () => {
     if (currentStep < STEPS.length - 1) {
+      // Validate ALL fields in the current step at once
       const errors = validateStep(currentStep, formData);
-      setStepErrors(errors);
-      if (Object.keys(errors).length > 0) return;
+
+      if (Object.keys(errors).length > 0) {
+        // Show ALL errors at once and mark ALL fields as touched
+        setStepErrors(errors);
+        setTouchedFields(() => {
+          const all = new Set<string>();
+          Object.keys(errors).forEach((k) => all.add(k));
+          return all;
+        });
+        // Scroll to the first field with an error after React renders
+        setTimeout(() => {
+          const firstErrorKey = Object.keys(errors)[0];
+          const el = document.querySelector(`[data-field="${firstErrorKey}"], [data-field-error="${firstErrorKey}"]`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+            setTimeout(() => { window.scrollBy({ top: -100, behavior: "smooth" }); }, 400);
+          }
+        }, 200);
+        return;
+      }
+
+      // All valid — save step to API, then show success modal
+      setStepErrors({});
       setTouchedFields(new Set());
-      setCurrentStep(s => s + 1);
+      setApiError("");
+
+      // Step 9 is the review step (no save, just generate) — skip API call
+      if (currentStep <= 8 && wizardId) {
+        saveStepMutation.mutate(
+          { step: currentStep, formData: formData as unknown as Record<string, unknown> },
+          {
+            onSuccess: () => {
+              setApiError("");
+              setShowStepCompleteModal(true);
+            },
+            onError: (err) => {
+              // If wizard not found (404), clear stale ID and create a new one
+              if (err.message.includes("404") || err.message.includes("not found")) {
+                sessionStorage.removeItem("sow-wizard-id");
+                setWizardId(null);
+                createNewWizard();
+              }
+              setApiError(err.message);
+              setShowStepCompleteModal(true);
+            },
+          },
+        );
+      } else {
+        // No wizard session yet — proceed locally
+        setShowStepCompleteModal(true);
+      }
     }
   };
+
+  const handleConfirmNextStep = () => {
+    setShowStepCompleteModal(false);
+    setCurrentStep(s => s + 1);
+  };
+
+  if (generationComplete) {
+    return <SOWAIDraftReviewPage />;
+  }
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
@@ -962,8 +1247,8 @@ export default function SOWGenerateWizardPage() {
         <div className="flex items-start">
           {STEPS.map((step, idx, arr) => {
             const isActive = idx === currentStep;
-            const isDone = isStepComplete(idx) && idx !== currentStep;
-            const isSkipped = skippedSteps.has(idx) && !isDone;
+            const isDone = idx < currentStep && !isActive;
+            const isSkipped = skippedSteps.has(idx) && !isDone && idx !== currentStep;
             const isReachable = idx <= currentStep || isStepComplete(idx - 1);
             const StepIcon = step.icon;
 
@@ -971,7 +1256,7 @@ export default function SOWGenerateWizardPage() {
               <React.Fragment key={idx}>
                 {/* Step node — fixed width so connectors get the remaining space */}
                 <button
-                  onClick={() => { if (isReachable) { setStepErrors({}); setTouchedFields(new Set()); setCurrentStep(idx); } }}
+                  onClick={() => { if (isReachable) { setStepErrors({}); setTouchedFields(new Set()); if (idx === 9) setCameFromReview(false); setCurrentStep(idx); window.scrollTo({ top: 0, behavior: "smooth" }); } }}
                   spellCheck={false}
                   className="flex flex-col items-center transition-all duration-200"
                   style={{ width: 52, flexShrink: 0, cursor: isReachable ? 'pointer' : 'default', gap: 6, padding: 0 }}
@@ -987,30 +1272,25 @@ export default function SOWGenerateWizardPage() {
                         ? 'linear-gradient(135deg, #A67763, #C4956E)'
                         : isDone
                           ? 'rgba(77,87,65,0.12)'
-                          : isSkipped
-                            ? 'rgba(208,176,96,0.12)'
-                            : 'rgba(166,119,99,0.06)',
+                          : 'rgba(166,119,99,0.06)',
                       border: `1.5px solid ${
                         isActive
                           ? 'rgba(166,119,99,0.40)'
                           : isDone
                             ? 'rgba(77,87,65,0.25)'
-                            : isSkipped
-                              ? 'rgba(208,176,96,0.30)'
-                              : 'rgba(166,119,99,0.18)'
+                            : 'rgba(166,119,99,0.18)'
                       }`,
                       boxShadow: isActive ? '0 2px 10px rgba(166,119,99,0.25)' : 'none',
                     }}
                   >
                     {isDone ? (
                       <CheckCircle2 style={{ width: 12, height: 12, color: '#4D5741' }} />
-                    ) : isSkipped ? (
-                      <SkipForward style={{ width: 11, height: 11, color: '#C4A24E' }} />
                     ) : (
                       <StepIcon style={{
                         width: isActive ? 14 : 11,
                         height: isActive ? 14 : 11,
                         color: isActive ? '#FFFFFF' : 'var(--ink-faint)',
+                        strokeWidth: 1.5,
                       }} />
                     )}
                   </div>
@@ -1064,14 +1344,16 @@ export default function SOWGenerateWizardPage() {
                       <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
                         {STEPS[currentStep].label}
                       </div>
+                      {!STEPS[currentStep].mandatory && (
                       <span className="rounded-md" style={{
                         padding: '3px 10px', fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
-                        background: STEPS[currentStep].mandatory ? 'rgba(166,119,99,0.08)' : 'rgba(208,176,96,0.08)',
-                        color: STEPS[currentStep].mandatory ? '#A67763' : '#86713D',
-                        border: `1px solid ${STEPS[currentStep].mandatory ? 'rgba(166,119,99,0.14)' : 'rgba(208,176,96,0.14)'}`,
+                        background: 'rgba(208,176,96,0.08)',
+                        color: '#86713D',
+                        border: '1px solid rgba(208,176,96,0.14)',
                       }}>
-                        {STEPS[currentStep].mandatory ? 'REQUIRED' : 'OPTIONAL'}
+                        OPTIONAL
                       </span>
+                      )}
                     </div>
                   </div>
 
@@ -1085,14 +1367,25 @@ export default function SOWGenerateWizardPage() {
                     {currentStep === 6 && <Step6QualityStandards formData={formData} updateField={updateField} errors={stepErrors} blurField={blurField} />}
                     {currentStep === 7 && <Step7GovernanceCompliance formData={formData} updateField={updateField} addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} errors={stepErrors} blurField={blurField} />}
                     {currentStep === 8 && <Step8CommercialLegal formData={formData} updateField={updateField} errors={stepErrors} blurField={blurField} />}
-                    {currentStep === 9 && <Step9ReviewGenerate formData={formData} updateField={updateField} aiConfidence={aiConfidence} isStepComplete={isStepComplete} skippedSteps={skippedSteps} setCurrentStep={setCurrentStep} errors={stepErrors} blurField={blurField} />}
+                    {currentStep === 9 && <Step9ReviewGenerate formData={formData} updateField={updateField} aiConfidence={aiConfidence} isStepComplete={isStepComplete} skippedSteps={skippedSteps} setCurrentStep={(step) => { setCameFromReview(true); setCurrentStep(step); }} errors={stepErrors} blurField={blurField} reviewSummaryData={reviewSummary.data?.data ?? null} reviewSummaryLoading={reviewSummary.isLoading} />}
                   </div>
+
+                  {/* API error banner */}
+                  {apiError && (
+                    <div style={{ padding: '10px 26px' }}>
+                      <div className="flex items-center gap-2 rounded-xl px-4 py-2.5 bg-red-50 border border-red-100 text-[12px] text-red-600">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{apiError}</span>
+                        <button onClick={() => setApiError("")} className="ml-auto text-red-400 hover:text-red-600"><X className="w-3 h-3" /></button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Navigation footer */}
                   <div style={{ padding: '16px 26px 20px', borderTop: '1px solid var(--border-hair)' }}>
                     <div className="flex items-center justify-between">
                       <button
-                        onClick={() => { setStepErrors({}); setTouchedFields(new Set()); setCurrentStep((s) => Math.max(0, s - 1)); }}
+                        onClick={() => { setStepErrors({}); setTouchedFields(new Set()); setCurrentStep((s) => Math.max(0, s - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         disabled={currentStep === 0}
                         className="flex items-center gap-1.5 rounded-lg transition-all duration-200"
                         style={{
@@ -1108,6 +1401,23 @@ export default function SOWGenerateWizardPage() {
                       </button>
 
                       <div className="flex items-center gap-2">
+                        {/* Back to Review button — only when user navigated from Review step */}
+                        {cameFromReview && currentStep !== 9 && (
+                          <button
+                            onClick={() => { setCameFromReview(false); setStepErrors({}); setTouchedFields(new Set()); setCurrentStep(9); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                            className="flex items-center gap-1.5 rounded-lg transition-all duration-200"
+                            style={{
+                              padding: '7px 16px', fontSize: 12, fontWeight: 600,
+                              color: '#A67763',
+                              background: 'rgba(166,119,99,0.06)',
+                              border: '1px solid rgba(166,119,99,0.18)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <ClipboardCheck style={{ width: 12, height: 12 }} /> Back to Review
+                          </button>
+                        )}
+
                         {/* Skip button for skippable steps */}
                         {STEPS[currentStep].skippable && currentStep < STEPS.length - 1 && (
                           <button
@@ -1143,7 +1453,7 @@ export default function SOWGenerateWizardPage() {
                             onMouseEnter={(e) => { if (canAdvance(currentStep)) { e.currentTarget.style.boxShadow = '0 3px 12px rgba(166,119,99,0.30), inset 0 1px 0 rgba(255,255,255,0.2)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
                             onMouseLeave={(e) => { if (canAdvance(currentStep)) { e.currentTarget.style.boxShadow = '0 1px 6px rgba(166,119,99,0.20), inset 0 1px 0 rgba(255,255,255,0.15)'; e.currentTarget.style.transform = ''; } }}
                           >
-                            Next <ArrowRight style={{ width: 12, height: 12 }} />
+                            {saveStepMutation.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Saving...</> : <>Next <ArrowRight style={{ width: 12, height: 12 }} /></>}
                           </button>
                         ) : (
                           <button
@@ -1289,7 +1599,7 @@ export default function SOWGenerateWizardPage() {
       </motion.div>
 
       {/* ═══════════════════════════════════
-          GENERATION OVERLAY
+          GENERATION OVERLAY — AI Drafting Popup
           ═══════════════════════════════════ */}
       <AnimatePresence>
         {generating && (
@@ -1298,56 +1608,202 @@ export default function SOWGenerateWizardPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center"
-            style={{ background: 'rgba(249,245,241,0.95)', backdropFilter: 'blur(8px)' }}
+            style={{ background: 'rgba(33,23,19,0.35)', backdropFilter: 'blur(10px)' }}
           >
-            <div className="flex flex-col items-center" style={{ gap: 32 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink)', fontFamily: 'var(--font-heading)' }}>
-                Generating SOW
-              </div>
-              <div className="space-y-4" style={{ width: 320 }}>
-                {GENERATION_STAGES.map((stage, idx) => {
-                  const done = idx < genStage;
-                  const active = idx === genStage;
-                  return (
-                    <div key={idx} className="flex items-center gap-3">
-                      <div className="shrink-0" style={{ width: 24, height: 24 }}>
-                        {done ? (
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: 'rgba(77,87,65,0.12)' }}>
-                            <Check style={{ width: 12, height: 12, color: '#4D5741' }} />
-                          </div>
-                        ) : active ? (
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: 'rgba(166,119,99,0.10)' }}>
-                            <Loader2 className="animate-spin" style={{ width: 12, height: 12, color: '#A67763' }} />
-                          </div>
-                        ) : (
-                          <div className="w-6 h-6 rounded-full" style={{ border: '1.5px solid var(--border-soft)' }} />
-                        )}
-                      </div>
-                      <span style={{
-                        fontSize: 13,
-                        fontWeight: active ? 600 : 400,
-                        color: done ? '#4D5741' : active ? 'var(--ink)' : 'var(--ink-faint)',
-                      }}>
-                        {stage}
-                      </span>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 30 }}
+              transition={{ type: "spring", stiffness: 350, damping: 28 }}
+              className="rounded-2xl"
+              style={{
+                background: '#FEFEFE',
+                boxShadow: '0 40px 100px rgba(33,23,19,0.12), 0 8px 32px rgba(33,23,19,0.08), 0 0 0 1px var(--border-soft)',
+                padding: '48px 56px 44px',
+                width: 520,
+                maxWidth: '92vw',
+              }}
+            >
+              <div className="flex flex-col items-center" style={{ gap: 28 }}>
+
+                {/* Animated ring + sparkle icon */}
+                <div style={{ position: 'relative', width: 140, height: 140 }}>
+                  {/* Outer rotating ring */}
+                  <svg viewBox="0 0 140 140" style={{ position: 'absolute', inset: 0, width: 140, height: 140 }}>
+                    <defs>
+                      <linearGradient id="gen-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#A67763" />
+                        <stop offset="50%" stopColor="#C4956E" />
+                        <stop offset="100%" stopColor="transparent" />
+                      </linearGradient>
+                    </defs>
+                    <circle cx="70" cy="70" r="64" fill="none" stroke="var(--border-soft)" strokeWidth="2" />
+                    <motion.circle
+                      cx="70" cy="70" r="64" fill="none"
+                      stroke="url(#gen-ring-grad)" strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeDasharray="200 400"
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
+                      style={{ transformOrigin: "70px 70px" }}
+                    />
+                  </svg>
+                  {/* Inner glow circle */}
+                  <div className="flex items-center justify-center" style={{
+                    position: 'absolute',
+                    top: 20, left: 20, width: 100, height: 100,
+                    borderRadius: '50%',
+                    background: 'rgba(166,119,99,0.06)',
+                    border: '1px solid rgba(166,119,99,0.15)',
+                  }}>
+                    <motion.div
+                      animate={{ scale: [1, 1.1, 1] }}
+                      transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                    >
+                      <Sparkles style={{ width: 32, height: 32, color: '#A67763' }} />
+                    </motion.div>
+                  </div>
+                </div>
+
+                {/* Title */}
+                <div style={{ textAlign: 'center' }}>
+                  <h2 style={{
+                    fontSize: 20, fontWeight: 700, letterSpacing: '0.04em',
+                    color: 'var(--ink)',
+                    fontFamily: 'var(--font-heading)',
+                    marginBottom: 8,
+                    textTransform: 'uppercase',
+                  }}>
+                    AI Drafting Engine Active
+                  </h2>
+                  <p style={{
+                    fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.7,
+                    maxWidth: 360, margin: '0 auto',
+                  }}>
+                    Our AI is processing your inputs through {HALLUCINATION_LAYERS.length} hallucination prevention layers to generate a production-ready Statement of Work.
+                  </p>
+                </div>
+
+                {/* Hallucination layer progress bar */}
+                <div style={{ width: '100%', maxWidth: 360 }}>
+                  <div className="rounded-full" style={{
+                    width: '100%', height: 5,
+                    background: 'var(--color-beige-200)',
+                    overflow: 'hidden',
+                  }}>
+                    <motion.div
+                      style={{
+                        height: '100%', borderRadius: 4,
+                        background: 'linear-gradient(90deg, #A67763, #C4956E)',
+                      }}
+                      animate={{ width: `${((genLayer + 1) / HALLUCINATION_LAYERS.length) * 100}%` }}
+                      transition={{ duration: 0.6, ease: "easeOut" }}
+                    />
+                  </div>
+                  <div style={{ textAlign: 'center', marginTop: 10 }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+                      color: '#A67763', textTransform: 'uppercase',
+                    }}>
+                      Layer {genLayer + 1}/{HALLUCINATION_LAYERS.length}: Active
+                    </span>
+                    <div style={{
+                      fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
+                      color: 'var(--ink-mid)', marginTop: 3,
+                      textTransform: 'uppercase',
+                    }}>
+                      {HALLUCINATION_LAYERS[genLayer]}
+                      {genLayer < 3 ? " & Clause Alignment" : genLayer < 6 ? " & Validation" : " & Finalisation"}
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
+
+                {/* Generation stages — horizontal bars */}
+                <div className="flex items-center gap-2" style={{ width: '100%', maxWidth: 360 }}>
+                  {GENERATION_STAGES.map((stage, idx) => {
+                    const done = idx < genStage;
+                    const active = idx === genStage;
+                    return (
+                      <div key={idx} style={{ flex: 1 }} title={stage}>
+                        <div className="rounded-full" style={{
+                          height: 5,
+                          background: 'var(--color-beige-200)',
+                          overflow: 'hidden',
+                        }}>
+                          <motion.div
+                            style={{
+                              height: '100%', borderRadius: 4,
+                              background: done
+                                ? 'linear-gradient(90deg, #A67763, #C4956E)'
+                                : active
+                                  ? 'linear-gradient(90deg, rgba(166,119,99,0.5), rgba(196,149,110,0.5))'
+                                  : 'transparent',
+                            }}
+                            animate={{ width: done ? '100%' : active ? '60%' : '0%' }}
+                            transition={{ duration: 0.8, ease: "easeOut" }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
               </div>
-              <div className="rounded-full" style={{
-                width: 240, height: 4, background: 'var(--border-hair)', overflow: 'hidden',
-              }}>
-                <div style={{
-                  height: '100%', borderRadius: 4,
-                  background: 'linear-gradient(135deg, #A67763, #886151)',
-                  width: `${((genStage + 1) / GENERATION_STAGES.length) * 100}%`,
-                  transition: 'width 0.8s ease',
-                }} />
-              </div>
-            </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ═══════════════════════════════════
+          STEP COMPLETE MODAL
+          ═══════════════════════════════════ */}
+      {showStepCompleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowStepCompleteModal(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4"
+            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative flex flex-col items-center text-center px-8 py-8">
+              <button
+                onClick={() => setShowStepCompleteModal(false)}
+                className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
+                style={{ background: "linear-gradient(135deg, #A67763, #886151)" }}>
+                <CheckCircle2 className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-[16px] font-semibold text-gray-900 mb-1">
+                Step {currentStep + 1} Complete
+              </h3>
+              <p className="text-[13px] text-gray-500 mb-1">
+                {STEPS[currentStep].label}
+              </p>
+              <p className="text-[12px] text-gray-400 mb-6">
+                Moving to: <span className="font-medium text-gray-600">{currentStep + 1 < STEPS.length ? STEPS[currentStep + 1].label : "Review"}</span>
+              </p>
+              <button
+                onClick={handleConfirmNextStep}
+                className="flex items-center gap-2 rounded-xl text-white text-[13px] font-medium px-6 py-2.5 transition-all hover:-translate-y-0.5"
+                style={{
+                  background: "linear-gradient(135deg, #A67763, #886151)",
+                  boxShadow: "0 4px 12px rgba(166,119,99,0.3)",
+                }}
+              >
+                Continue to {currentStep + 1 < STEPS.length ? `Step ${currentStep + 2}` : "Review"} <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
     </motion.div>
   );
@@ -1361,114 +1817,304 @@ function Step0ContextDiscovery({ formData, updateField, addListItem, removeListI
   const onBlur = (field: string) => () => blurField?.(field);
   return (
     <div className="space-y-5">
+      <SectionHeading>Section A — Project Vision &amp; Business Context</SectionHeading>
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
-        Start by providing the strategic context and discovery details. This grounds the AI and prevents
-        generic boilerplate in the generated SOW.
+        Step 0 captures the WHY before any WHAT. Every clause in the output is anchored to these inputs.
       </p>
 
-      {/* Project Vision */}
-      <div>
-        <FieldLabel required>Project Vision</FieldLabel>
+      {/* Project Vision / Elevator Pitch — FSD: min 50 / max 500 chars */}
+      <div data-field="projectVision">
+        <FieldLabel required>Project Vision / Elevator Pitch</FieldLabel>
         <Textarea
-          placeholder="Describe the overarching vision for this project (min 50 characters)..."
+          placeholder="Describe the overarching vision for this project (min 50, max 500 characters)..."
           value={formData.projectVision}
-          onChange={(e) => updateField("projectVision", e.target.value)}
+          onChange={(e) => updateField("projectVision", e.target.value.slice(0, 500))}
           onBlur={onBlur("projectVision")}
           className="min-h-[100px]"
         />
-        <FieldError error={errors.projectVision} />
+        <FieldError error={errors.projectVision} field="projectVision" />
       </div>
 
-      {/* Business Objectives */}
-      <ListField label="Business Objectives *" items={formData.businessObjectives} fieldKey="businessObjectives" placeholder="e.g., Increase user retention by 30%" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Objective" icon={Target} error={errors.businessObjectives} onBlur={onBlur("businessObjectives")} />
+      {/* Business Objectives (SMART) — FSD: Objective + Measurable Target + Timeline, min 1, max 6 */}
+      <div data-field="businessObjectives">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-[13px] font-semibold text-gray-800">Business Objectives (SMART) *</label>
+          {formData.businessObjectives.length < 6 && (
+            <button
+              onClick={() => updateField("businessObjectives", [...formData.businessObjectives, { objective: "", measurableTarget: "", timeline: "" }])}
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Objective
+            </button>
+          )}
+        </div>
+        <div className="space-y-3">
+          {formData.businessObjectives.map((obj, idx) => (
+            <div key={idx} className="relative p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+              {formData.businessObjectives.length > 1 && (
+                <button onClick={() => updateField("businessObjectives", formData.businessObjectives.filter((_, i) => i !== idx))}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <FieldLabel required>Objective (max 200 chars)</FieldLabel>
+                  <Input placeholder="e.g., Increase user retention by 30%" value={obj.objective ?? ""}
+                    onChange={(e) => updateField("businessObjectives", formData.businessObjectives.map((o, i) => i === idx ? { ...o, objective: e.target.value.slice(0, 200) } : o))}
+                    onBlur={onBlur("businessObjectives")} />
+                </div>
+                <div>
+                  <FieldLabel>Timeline (max 50 chars)</FieldLabel>
+                  <Input placeholder="e.g., By Q3 2026" value={obj.timeline ?? ""}
+                    onChange={(e) => updateField("businessObjectives", formData.businessObjectives.map((o, i) => i === idx ? { ...o, timeline: e.target.value.slice(0, 50) } : o))} />
+                </div>
+              </div>
+              <div className="mt-2">
+                <FieldLabel>Measurable Target (max 100 chars)</FieldLabel>
+                <Input placeholder="e.g., Retention rate from 60% to 78%" value={obj.measurableTarget ?? ""}
+                  onChange={(e) => updateField("businessObjectives", formData.businessObjectives.map((o, i) => i === idx ? { ...o, measurableTarget: e.target.value.slice(0, 100) } : o))} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <FieldError error={errors.businessObjectives} field="businessObjectives" />
+      </div>
 
-      {/* Pain Points */}
-      <ListField label="Pain Points *" items={formData.painPoints} fieldKey="painPoints" placeholder="e.g., Current onboarding takes 14 days" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Pain Point" icon={AlertTriangle} error={errors.painPoints} onBlur={onBlur("painPoints")} />
+      {/* Pain Points / Problems Being Solved — FSD: Problem (max 300) + Who experiences it, min 1, max 8 */}
+      <div data-field="painPoints">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-[13px] font-semibold text-gray-800">Pain Points / Problems Being Solved *</label>
+          {formData.painPoints.length < 8 && (
+            <button
+              onClick={() => updateField("painPoints", [...formData.painPoints, { problemDescription: "", whoExperiences: "" }])}
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Pain Point
+            </button>
+          )}
+        </div>
+        <div className="space-y-3">
+          {formData.painPoints.map((point, idx) => (
+            <div key={idx} className="relative grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+              {formData.painPoints.length > 1 && (
+                <button onClick={() => updateField("painPoints", formData.painPoints.filter((_, i) => i !== idx))}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <div>
+                <FieldLabel required>Problem Description (Max 300 Chars)</FieldLabel>
+                <Textarea placeholder="e.g., Patients cannot check appointment availability..." value={point.problemDescription ?? ""}
+                  onChange={(e) => updateField("painPoints", formData.painPoints.map((p, i) => i === idx ? { ...p, problemDescription: e.target.value.slice(0, 300) } : p))}
+                  onBlur={onBlur("painPoints")} className="min-h-[80px] resize-none" />
+              </div>
+              <div>
+                <FieldLabel required>Who Experiences It?</FieldLabel>
+                <Input placeholder="e.g., Patients" value={point.whoExperiences ?? ""}
+                  onChange={(e) => updateField("painPoints", formData.painPoints.map((p, i) => i === idx ? { ...p, whoExperiences: e.target.value } : p))}
+                  onBlur={onBlur("painPoints")} />
+              </div>
+            </div>
+          ))}
+        </div>
+        {errors.painPoints && (
+          <p data-field-error="painPoints" className="mt-2" style={{ fontSize: 11, color: '#dc2626', fontWeight: 500 }}>{errors.painPoints}</p>
+        )}
+      </div>
 
-      {/* Strategic Context & Business Criticality */}
+      {/* Strategic / Competitive Context — FSD options */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <FieldLabel>Strategic Context</FieldLabel>
+          <FieldLabel>Strategic / Competitive Context</FieldLabel>
           <Select value={formData.strategicContext} onValueChange={(v) => updateField("strategicContext", v)}>
             <SelectTrigger><SelectValue placeholder="Select context" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="digital_transformation">Digital Transformation</SelectItem>
+              <SelectItem value="new_market_opportunity">New Market Opportunity</SelectItem>
+              <SelectItem value="regulatory_obligation">Regulatory Obligation</SelectItem>
+              <SelectItem value="competitive_catchup">Competitive Catch-up</SelectItem>
+              <SelectItem value="internal_efficiency">Internal Efficiency</SelectItem>
               <SelectItem value="cost_reduction">Cost Reduction</SelectItem>
-              <SelectItem value="revenue_growth">Revenue Growth</SelectItem>
-              <SelectItem value="compliance_mandate">Compliance Mandate</SelectItem>
-              <SelectItem value="competitive_response">Competitive Response</SelectItem>
-              <SelectItem value="innovation">Innovation Initiative</SelectItem>
-              <SelectItem value="operational_excellence">Operational Excellence</SelectItem>
+              <SelectItem value="revenue_generation">Revenue Generation</SelectItem>
+              <SelectItem value="digital_transformation">Digital Transformation</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <div>
+        <div data-field="businessCriticality">
           <FieldLabel required>Business Criticality</FieldLabel>
           <Select value={formData.businessCriticality} onValueChange={(v) => updateField("businessCriticality", v)}>
             <SelectTrigger><SelectValue placeholder="Select criticality" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="mission_critical">Mission Critical</SelectItem>
-              <SelectItem value="business_critical">Business Critical</SelectItem>
-              <SelectItem value="important">Important</SelectItem>
-              <SelectItem value="nice_to_have">Nice to Have</SelectItem>
+              <SelectItem value="mission_critical">Mission-critical</SelectItem>
+              <SelectItem value="business_important">Business-important</SelectItem>
+              <SelectItem value="standard">Standard</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
             </SelectContent>
           </Select>
-          <FieldError error={errors.businessCriticality} />
+          <FieldError error={errors.businessCriticality} field="businessCriticality" />
         </div>
       </div>
 
-      {/* Current State */}
-      <div>
-        <FieldLabel required>Current State Description</FieldLabel>
-        <Textarea
-          placeholder="Describe the current state of the system/process (min 30 chars)..."
-          value={formData.currentState}
-          onChange={(e) => updateField("currentState", e.target.value)}
-          className="min-h-[80px]"
-        />
-      </div>
+      <SectionHeading>Section B — Current State &amp; Desired Future State</SectionHeading>
 
-      {/* Current State Type */}
-      <div>
-        <FieldLabel>Current State Type</FieldLabel>
+      {/* Current State (As-Is) — FSD: Radio "Not applicable — greenfield" or free text min 30 / max 1000 */}
+      <div data-field="currentState">
+        <FieldLabel required>Current State (As-Is)</FieldLabel>
         <RadioGroup
           value={formData.currentStateType}
-          onChange={(v) => updateField("currentStateType", v)}
+          onChange={(v) => {
+            updateField("currentStateType", v);
+            if (v === "greenfield") updateField("currentState", "Not applicable — greenfield");
+          }}
           options={[
-            { value: "greenfield", label: "Greenfield (No existing system)" },
-            { value: "existing", label: "Existing System" },
+            { value: "greenfield", label: "Not applicable — greenfield" },
+            { value: "existing", label: "Existing system (describe below)" },
           ]}
         />
+        {formData.currentStateType !== "greenfield" && (
+          <div className="mt-2">
+            <Textarea
+              placeholder="Describe the current state of the system/process (min 30, max 1000 chars)..."
+              value={formData.currentStateType === "greenfield" ? "" : formData.currentState}
+              onChange={(e) => updateField("currentState", e.target.value.slice(0, 1000))}
+              onBlur={onBlur("currentState")}
+              className="min-h-[80px]"
+            />
+            <FieldError error={errors.currentState} field="currentState" />
+          </div>
+        )}
       </div>
 
-      {/* Desired Future State */}
-      <div>
-        <FieldLabel required>Desired Future State</FieldLabel>
+      {/* Desired Future State (To-Be) — FSD: min 30 / max 1000 */}
+      <div data-field="desiredFutureState">
+        <FieldLabel required>Desired Future State (To-Be)</FieldLabel>
         <Textarea
           placeholder="Describe the desired end state after project completion (min 30, max 1000 chars)..."
           value={formData.desiredFutureState}
-          onChange={(e) => updateField("desiredFutureState", e.target.value)}
+          onChange={(e) => updateField("desiredFutureState", e.target.value.slice(0, 1000))}
           onBlur={onBlur("desiredFutureState")}
           className="min-h-[80px]"
         />
-        <FieldError error={errors.desiredFutureState} />
+        <FieldError error={errors.desiredFutureState} field="desiredFutureState" />
       </div>
 
-      {/* Previous Attempts */}
+      {/* Previous Attempts / Lessons Learned — FSD: max 500 */}
       <div>
-        <FieldLabel>Previous Attempts</FieldLabel>
+        <FieldLabel>Previous Attempts / Lessons Learned</FieldLabel>
         <Textarea
-          placeholder="Describe any previous attempts to solve this problem (optional)..."
+          placeholder="Describe any previous attempts to solve this problem (optional, max 500 chars)..."
           value={formData.previousAttempts}
-          onChange={(e) => updateField("previousAttempts", e.target.value)}
+          onChange={(e) => updateField("previousAttempts", e.target.value.slice(0, 500))}
           className="min-h-[70px]"
         />
       </div>
 
-      {/* End User Profiles */}
-      <ListField label="End User Profiles *" items={formData.endUserProfiles} fieldKey="endUserProfiles" placeholder="e.g., Enterprise admin, Field technician, End customer" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Profile" error={errors.endUserProfiles} onBlur={onBlur("endUserProfiles")} />
+      <SectionHeading>Section C — Target End Users</SectionHeading>
 
-      {/* Language Requirements */}
+      {/* End User Profiles — FSD: Role name + Count + Age range + Technical literacy + Primary device + Geography + Accessibility needs, min 1, max 10 */}
+      <div data-field="endUserProfiles">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-[13px] font-semibold text-gray-800">End User Profiles *</label>
+          {formData.endUserProfiles.length < 10 && (
+            <button
+              onClick={() => updateField("endUserProfiles", [...formData.endUserProfiles, { roleName: "", count: "", ageRange: "", techLiteracy: "", primaryDevice: "", geography: "", accessibilityNeeds: "" }])}
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Profile
+            </button>
+          )}
+        </div>
+        <div className="space-y-3">
+          {formData.endUserProfiles.map((profile, idx) => (
+            <div key={idx} className="relative p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+              {formData.endUserProfiles.length > 1 && (
+                <button onClick={() => updateField("endUserProfiles", formData.endUserProfiles.filter((_, i) => i !== idx))}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="col-span-2">
+                  <FieldLabel required>Role Name</FieldLabel>
+                  <Input placeholder="e.g., Enterprise Admin" value={profile.roleName ?? ""}
+                    onChange={(e) => updateField("endUserProfiles", formData.endUserProfiles.map((p, i) => i === idx ? { ...p, roleName: e.target.value } : p))}
+                    onBlur={onBlur("endUserProfiles")} />
+                </div>
+                <div>
+                  <FieldLabel>User Count</FieldLabel>
+                  <Input placeholder="e.g., 500" value={profile.count ?? ""}
+                    onChange={(e) => updateField("endUserProfiles", formData.endUserProfiles.map((p, i) => i === idx ? { ...p, count: e.target.value } : p))} />
+                </div>
+                <div>
+                  <FieldLabel>Age Range</FieldLabel>
+                  <Select value={profile.ageRange ?? ""} onValueChange={(v) => updateField("endUserProfiles", formData.endUserProfiles.map((p, i) => i === idx ? { ...p, ageRange: v } : p))}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="under_18">Under 18</SelectItem>
+                      <SelectItem value="18-25">18–25</SelectItem>
+                      <SelectItem value="25-35">25–35</SelectItem>
+                      <SelectItem value="35-45">35–45</SelectItem>
+                      <SelectItem value="45-55">45–55</SelectItem>
+                      <SelectItem value="55-65">55–65</SelectItem>
+                      <SelectItem value="65+">65+</SelectItem>
+                      <SelectItem value="all_ages">All Ages</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <FieldLabel>Technical Literacy</FieldLabel>
+                  <Select value={profile.techLiteracy ?? ""} onValueChange={(v) => updateField("endUserProfiles", formData.endUserProfiles.map((p, i) => i === idx ? { ...p, techLiteracy: v } : p))}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <FieldLabel>Primary Device</FieldLabel>
+                  <Input placeholder="e.g., Mobile" value={profile.primaryDevice ?? ""}
+                    onChange={(e) => updateField("endUserProfiles", formData.endUserProfiles.map((p, i) => i === idx ? { ...p, primaryDevice: e.target.value } : p))} />
+                </div>
+                <div>
+                  <FieldLabel>Geography</FieldLabel>
+                  <Input placeholder="e.g., India, US" value={profile.geography ?? ""}
+                    onChange={(e) => updateField("endUserProfiles", formData.endUserProfiles.map((p, i) => i === idx ? { ...p, geography: e.target.value } : p))} />
+                </div>
+                <div>
+                  <FieldLabel>Accessibility Needs</FieldLabel>
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { value: "yes", label: "Yes" },
+                      { value: "no", label: "No" },
+                      { value: "unknown", label: "Unknown" },
+                    ].map((opt) => {
+                      const selected = (profile.accessibilityNeeds ?? "") === opt.value;
+                      return (
+                        <button key={opt.value} type="button"
+                          onClick={() => updateField("endUserProfiles", formData.endUserProfiles.map((p, i) => i === idx ? { ...p, accessibilityNeeds: opt.value } : p))}
+                          className="flex-1 rounded-lg text-[12px] font-medium py-2 transition-all"
+                          style={{
+                            background: selected ? "linear-gradient(135deg, var(--primary), var(--primary))" : "white",
+                            color: selected ? "white" : "var(--ink-mid)",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <FieldError error={errors.endUserProfiles} field="endUserProfiles" />
+      </div>
+
+      {/* Language Requirements — FSD: Multi-select + conditional */}
       <div>
         <FieldLabel>Language Requirements</FieldLabel>
         <CheckboxGroup
@@ -1492,45 +2138,39 @@ function Step0ContextDiscovery({ formData, updateField, addListItem, removeListI
           ]}
         />
         {formData.languageRequirements.includes("other") && (
-          <OtherLanguageTagInput
-            languages={formData.customLanguages}
-            onChange={(v) => updateField("customLanguages", v)}
-          />
+          <OtherLanguageTagInput languages={formData.customLanguages} onChange={(v) => updateField("customLanguages", v)} />
         )}
       </div>
 
-      {/* User Expectations */}
-      <ListField label="User Expectations" items={formData.userExpectations} fieldKey="userExpectations" placeholder="e.g., Sub-second page load times" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Expectation" />
+      {/* User Expectations & Non-Negotiables — FSD: each max 200 chars */}
+      <ListField label="User Expectations & Non-Negotiables" items={formData.userExpectations} fieldKey="userExpectations" placeholder="e.g., Sub-second page load times (max 200 chars)" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Expectation" />
 
-      {/* Success Metrics */}
-      <ListField label="Success Metrics *" items={formData.successMetrics} fieldKey="successMetrics" placeholder="e.g., 99.9% uptime, <2s response time" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Metric" error={errors.successMetrics} onBlur={onBlur("successMetrics")} />
-
-      {/* Enterprise Expectations */}
+      {/* Enterprise's Expectations of GlimmoraTeam — FSD: max 500 */}
       <div>
-        <FieldLabel>Enterprise Expectations</FieldLabel>
+        <FieldLabel>Enterprise&apos;s Expectations of GlimmoraTeam</FieldLabel>
         <Textarea
-          placeholder="Any additional enterprise-level expectations (optional)..."
+          placeholder="Open field — what does the enterprise expect from GlimmoraTeam? (max 500 chars)"
           value={formData.enterpriseExpectations}
-          onChange={(e) => updateField("enterpriseExpectations", e.target.value)}
+          onChange={(e) => updateField("enterpriseExpectations", e.target.value.slice(0, 500))}
           className="min-h-[60px]"
         />
       </div>
 
-      {/* Definition of Success */}
-      <div>
-        <FieldLabel required>Definition of Success</FieldLabel>
+      {/* Definition of Project Success — FSD: min 30 / max 500 */}
+      <div data-field="definitionOfSuccess">
+        <FieldLabel required>Definition of Project Success</FieldLabel>
         <Textarea
-          placeholder="How will you measure if this project is successful? (min 30, max 500 chars)"
+          placeholder="Enterprise's subjective measure of success (min 30, max 500 chars)"
           value={formData.definitionOfSuccess}
-          onChange={(e) => updateField("definitionOfSuccess", e.target.value)}
+          onChange={(e) => updateField("definitionOfSuccess", e.target.value.slice(0, 500))}
           onBlur={onBlur("definitionOfSuccess")}
           className="min-h-[80px]"
         />
-        <FieldError error={errors.definitionOfSuccess} />
+        <FieldError error={errors.definitionOfSuccess} field="definitionOfSuccess" />
       </div>
 
-      <TipBox icon={Lightbulb} variant="teal" title="Why this matters:">
-        Specifying strategic context and business criticality enables the AI to prioritize deliverables, calibrate timelines, and apply domain-specific compliance requirements.
+      <TipBox icon={Lightbulb} variant="teal" title="Why this step is first:">
+        Without declared business context — vision, objectives, pain points, current state, end user characteristics, success metrics — the AI generates technically correct features that may solve the wrong problem.
       </TipBox>
     </div>
   );
@@ -1550,21 +2190,21 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
 
       {/* Title + Client */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+        <div data-field="title">
           <FieldLabel required>Project Title</FieldLabel>
           <Input placeholder="e.g., Enterprise Resource Planning Platform v2.0" value={formData.title} onChange={(e) => updateField("title", e.target.value)} onBlur={onBlur("title")} />
-          <FieldError error={errors.title} />
+          <FieldError error={errors.title} field="title" />
         </div>
-        <div>
+        <div data-field="client">
           <FieldLabel required>Client / Organization</FieldLabel>
           <Input placeholder="e.g., TechVista Solutions" value={formData.client} onChange={(e) => updateField("client", e.target.value)} onBlur={onBlur("client")} />
-          <FieldError error={errors.client} />
+          <FieldError error={errors.client} field="client" />
         </div>
       </div>
 
       {/* Industry, Project Category, Platform Type */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
+        <div data-field="industry">
           <FieldLabel required>Industry</FieldLabel>
           <Select value={formData.industry} onValueChange={(v) => updateField("industry", v)}>
             <SelectTrigger><SelectValue placeholder="Select industry" /></SelectTrigger>
@@ -1581,9 +2221,9 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
-          <FieldError error={errors.industry} />
+          <FieldError error={errors.industry} field="industry" />
         </div>
-        <div>
+        <div data-field="projectCategory">
           <FieldLabel required>Project Category</FieldLabel>
           <Select value={formData.projectCategory} onValueChange={(v) => updateField("projectCategory", v)}>
             <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
@@ -1596,9 +2236,9 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
-          <FieldError error={errors.projectCategory} />
+          <FieldError error={errors.projectCategory} field="projectCategory" />
         </div>
-        <div>
+        <div data-field="platformType">
           <FieldLabel required>Platform Type</FieldLabel>
           <Select value={formData.platformType} onValueChange={(v) => updateField("platformType", v)}>
             <SelectTrigger><SelectValue placeholder="Select platform" /></SelectTrigger>
@@ -1614,7 +2254,7 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
-          <FieldError error={errors.platformType} />
+          <FieldError error={errors.platformType} field="platformType" />
         </div>
       </div>
 
@@ -1624,36 +2264,152 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
         <Textarea placeholder="Describe any existing systems, tools, or tech the project must work with (optional)..." value={formData.existingTechLandscape} onChange={(e) => updateField("existingTechLandscape", e.target.value)} className="min-h-[70px]" />
       </div>
 
-      {/* Feature Modules */}
-      <ListField label="Feature Modules * (min 2)" items={formData.featureModules} fieldKey="featureModules" placeholder="e.g., User authentication, Dashboard analytics, Reporting engine" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Module" icon={Target} error={errors.featureModules} onBlur={onBlur("featureModules")} />
+      <SectionHeading>Section B — Functional Requirements</SectionHeading>
 
-      {/* User Roles */}
-      <ListField label="User Roles *" items={formData.userRoles} fieldKey="userRoles" placeholder="e.g., Admin, Manager, Viewer, API Consumer" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Role" error={errors.userRoles} onBlur={onBlur("userRoles")} />
-
-      {/* Business Workflows */}
-      <ListField label="Business Workflows *" items={formData.businessWorkflows} fieldKey="businessWorkflows" placeholder="e.g., Order-to-fulfillment, Approval chain, Onboarding flow" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Workflow" error={errors.businessWorkflows} onBlur={onBlur("businessWorkflows")} />
-
-      {/* Estimated Screen Count */}
-      <div>
-        <FieldLabel>Estimated Screen Count</FieldLabel>
-        <Input type="number" placeholder="e.g., 25" value={formData.estimatedScreenCount} onChange={(e) => updateField("estimatedScreenCount", e.target.value)} />
+      {/* Feature / Module List — FSD: Module Name + Description + Priority, min 2 */}
+      <div data-field="featureModules">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-[13px] font-semibold text-gray-800">Feature / Module List * (min 2)</label>
+          <button onClick={() => updateField("featureModules", [...formData.featureModules, { moduleName: "", description: "", priority: "" }])}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add Module
+          </button>
+        </div>
+        <div className="space-y-3">
+          {formData.featureModules.map((mod, idx) => (
+            <div key={idx} className="relative p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+              {formData.featureModules.length > 1 && (
+                <button onClick={() => updateField("featureModules", formData.featureModules.filter((_, i) => i !== idx))}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <FieldLabel required>Module Name (max 100)</FieldLabel>
+                  <Input placeholder="e.g., User Authentication" value={mod.moduleName ?? ""}
+                    onChange={(e) => updateField("featureModules", formData.featureModules.map((m, i) => i === idx ? { ...m, moduleName: e.target.value.slice(0, 100) } : m))}
+                    onBlur={onBlur("featureModules")} />
+                </div>
+                <div>
+                  <FieldLabel>Description (max 300)</FieldLabel>
+                  <Input placeholder="e.g., JWT-based auth with SSO support" value={mod.description ?? ""}
+                    onChange={(e) => updateField("featureModules", formData.featureModules.map((m, i) => i === idx ? { ...m, description: e.target.value.slice(0, 300) } : m))} />
+                </div>
+                <div>
+                  <FieldLabel>Priority</FieldLabel>
+                  <Select value={mod.priority ?? ""} onValueChange={(v) => updateField("featureModules", formData.featureModules.map((m, i) => i === idx ? { ...m, priority: v } : m))}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="must_have">Must Have</SelectItem>
+                      <SelectItem value="should_have">Should Have</SelectItem>
+                      <SelectItem value="nice_to_have">Nice to Have</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <FieldError error={errors.featureModules} field="featureModules" />
       </div>
 
-      {/* Critical Business Rules */}
-      <ListField label="Critical Business Rules" items={formData.criticalBusinessRules} fieldKey="criticalBusinessRules" placeholder="e.g., Orders above $10k require manager approval" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Rule" />
+      {/* User Roles / Personas — FSD: Role Name + Primary Actions, min 1, max 20 */}
+      <div data-field="userRoles">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-[13px] font-semibold text-gray-800">User Roles / Personas *</label>
+          {formData.userRoles.length < 20 && (
+            <button onClick={() => updateField("userRoles", [...formData.userRoles, { roleName: "", primaryActions: "" }])}
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors">
+              <Plus className="w-3.5 h-3.5" /> Add Role
+            </button>
+          )}
+        </div>
+        <div className="space-y-3">
+          {formData.userRoles.map((role, idx) => (
+            <div key={idx} className="relative grid grid-cols-1 md:grid-cols-2 gap-3 p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+              {formData.userRoles.length > 1 && (
+                <button onClick={() => updateField("userRoles", formData.userRoles.filter((_, i) => i !== idx))}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <div>
+                <FieldLabel required>Role Name</FieldLabel>
+                <Input placeholder="e.g., Admin" value={role.roleName ?? ""}
+                  onChange={(e) => updateField("userRoles", formData.userRoles.map((r, i) => i === idx ? { ...r, roleName: e.target.value } : r))}
+                  onBlur={onBlur("userRoles")} />
+              </div>
+              <div>
+                <FieldLabel>Primary Actions (max 200)</FieldLabel>
+                <Input placeholder="e.g., Manage users, configure settings" value={role.primaryActions ?? ""}
+                  onChange={(e) => updateField("userRoles", formData.userRoles.map((r, i) => i === idx ? { ...r, primaryActions: e.target.value.slice(0, 200) } : r))} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <FieldError error={errors.userRoles} field="userRoles" />
+      </div>
 
-      {/* Out of Scope */}
-      <ListField label="Out of Scope *" items={formData.outOfScope} fieldKey="outOfScope" placeholder="e.g., Legacy data migration, Mobile app, Ongoing maintenance" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Item" error={errors.outOfScope} onBlur={onBlur("outOfScope")} />
+      {/* Key Business Workflows — FSD: Name + numbered steps + outcome, min 1 */}
+      <div data-field="businessWorkflows">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-[13px] font-semibold text-gray-800">Key Business Workflows *</label>
+          <button onClick={() => updateField("businessWorkflows", [...formData.businessWorkflows, { name: "", steps: "", outcome: "" }])}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add Workflow
+          </button>
+        </div>
+        <div className="space-y-3">
+          {formData.businessWorkflows.map((wf, idx) => (
+            <div key={idx} className="relative p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+              {formData.businessWorkflows.length > 1 && (
+                <button onClick={() => updateField("businessWorkflows", formData.businessWorkflows.filter((_, i) => i !== idx))}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <FieldLabel required>Workflow Name</FieldLabel>
+                  <Input placeholder="e.g., Order-to-fulfillment" value={wf.name ?? ""}
+                    onChange={(e) => updateField("businessWorkflows", formData.businessWorkflows.map((w, i) => i === idx ? { ...w, name: e.target.value } : w))}
+                    onBlur={onBlur("businessWorkflows")} />
+                </div>
+                <div>
+                  <FieldLabel>Steps</FieldLabel>
+                  <Input placeholder="e.g., 1. Submit → 2. Review → 3. Approve" value={wf.steps ?? ""}
+                    onChange={(e) => updateField("businessWorkflows", formData.businessWorkflows.map((w, i) => i === idx ? { ...w, steps: e.target.value } : w))} />
+                </div>
+                <div>
+                  <FieldLabel>Outcome</FieldLabel>
+                  <Input placeholder="e.g., Order dispatched" value={wf.outcome ?? ""}
+                    onChange={(e) => updateField("businessWorkflows", formData.businessWorkflows.map((w, i) => i === idx ? { ...w, outcome: e.target.value } : w))} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <FieldError error={errors.businessWorkflows} field="businessWorkflows" />
+      </div>
+
+      {/* Critical Business Rules — FSD: each max 200 chars */}
+      <ListField label="Critical Business Rules" items={formData.criticalBusinessRules} fieldKey="criticalBusinessRules" placeholder="e.g., Orders above $10k require manager approval (max 200)" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Rule" />
+
+      <SectionHeading>Section C — Scope Boundaries</SectionHeading>
+
+      {/* Out of Scope — Exclusions */}
+      <ListField label="Out of Scope — Exclusions *" items={formData.outOfScope} fieldKey="outOfScope" placeholder="e.g., Legacy data migration, Mobile app (max 200)" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Item" error={errors.outOfScope} onBlur={onBlur("outOfScope")} />
 
       {/* Assumptions */}
-      <ListField label="Assumptions" items={formData.assumptions} fieldKey="assumptions" placeholder="e.g., Client will provide API documentation by Week 2" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Assumption" />
+      <ListField label="Assumptions" items={formData.assumptions} fieldKey="assumptions" placeholder="e.g., Client will provide API documentation by Week 2 (max 200)" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Assumption" />
 
       {/* Constraints */}
       <ListField label="Constraints" items={formData.constraints} fieldKey="constraints" placeholder="e.g., Must use client's existing AWS account" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Constraint" />
 
-      {/* Data Migration Scope */}
-      <div>
-        <FieldLabel>Data Migration Scope</FieldLabel>
+      {/* Data Migration Scope — FSD: Radio + conditional 6 sub-fields */}
+      <div data-field="dataMigrationScope">
+        <FieldLabel required>Data Migration Scope</FieldLabel>
         <RadioGroup
           value={formData.dataMigrationScope}
           onChange={(v) => updateField("dataMigrationScope", v)}
@@ -1664,9 +2420,31 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
         />
       </div>
       {formData.dataMigrationScope === "in_scope" && (
-        <div>
-          <FieldLabel>Data Migration Details</FieldLabel>
-          <Textarea placeholder="Describe the data migration requirements..." value={formData.dataMigrationDetails} onChange={(e) => updateField("dataMigrationDetails", e.target.value)} className="min-h-[70px]" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+          <div>
+            <FieldLabel>Source System</FieldLabel>
+            <Input placeholder="e.g., Oracle ERP, SAP" value={formData.dataMigrationSource} onChange={(e) => updateField("dataMigrationSource", e.target.value)} />
+          </div>
+          <div>
+            <FieldLabel>Data Volume</FieldLabel>
+            <Input placeholder="e.g., 2TB, 50M records" value={formData.dataMigrationVolume} onChange={(e) => updateField("dataMigrationVolume", e.target.value)} />
+          </div>
+          <div>
+            <FieldLabel>Migration Approach</FieldLabel>
+            <Input placeholder="e.g., Big-bang, phased" value={formData.dataMigrationApproach} onChange={(e) => updateField("dataMigrationApproach", e.target.value)} />
+          </div>
+          <div>
+            <FieldLabel>Extract Ownership</FieldLabel>
+            <Input placeholder="e.g., Client / GlimmoraTeam" value={formData.dataMigrationExtractOwnership} onChange={(e) => updateField("dataMigrationExtractOwnership", e.target.value)} />
+          </div>
+          <div>
+            <FieldLabel>Validation Responsibility</FieldLabel>
+            <Input placeholder="e.g., Joint validation" value={formData.dataMigrationValidation} onChange={(e) => updateField("dataMigrationValidation", e.target.value)} />
+          </div>
+          <div>
+            <FieldLabel>Rollback Plan</FieldLabel>
+            <Input placeholder="e.g., Full rollback capability" value={formData.dataMigrationRollback} onChange={(e) => updateField("dataMigrationRollback", e.target.value)} />
+          </div>
         </div>
       )}
 
@@ -1689,8 +2467,10 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
         Specify delivery scope, technical architecture, and deployment approach. This ensures the AI generates technically viable deliverables.
       </p>
 
-      {/* Development Scope */}
-      <div>
+      <SectionHeading>Section A — Delivery Scope Boundary</SectionHeading>
+
+      {/* Development Scope — FSD: Frontend / Backend / Database / Third-party integration / CI/CD */}
+      <div data-field="developmentScope">
         <FieldLabel required>Development Scope</FieldLabel>
         <CheckboxGroup
           values={formData.developmentScope}
@@ -1698,17 +2478,18 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
           options={[
             { value: "frontend", label: "Frontend" },
             { value: "backend", label: "Backend" },
-            { value: "database", label: "Database" },
-            { value: "integration", label: "Integration" },
-            { value: "cicd", label: "CI/CD" },
+            { value: "integration", label: "Third-party Integration" },
+            { value: "cicd", label: "CI/CD Pipeline" },
           ]}
         />
-        <FieldError error={errors.developmentScope} />
+        <FieldError error={errors.developmentScope} field="developmentScope" />
       </div>
 
-      {/* UI/UX Design Scope */}
-      <div>
-        <FieldLabel required>UI/UX Design Scope</FieldLabel>
+      {/* UI/UX Design Scope — FSD: Not in scope / In scope / Client provides designs */}
+      <div data-field="uiuxDesignScope">
+        <label className="mb-2 block" style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-mid)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          UI/UX Design Scope *
+        </label>
         <RadioGroup
           value={formData.uiuxDesignScope}
           onChange={(v) => updateField("uiuxDesignScope", v)}
@@ -1718,17 +2499,140 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
             { value: "client_provides", label: "Client Provides" },
           ]}
         />
-        <FieldError error={errors.uiuxDesignScope} />
+        <FieldError error={errors.uiuxDesignScope} field="uiuxDesignScope" />
       </div>
       {formData.uiuxDesignScope === "in_scope" && (
-        <div>
-          <FieldLabel>UI/UX Design Details</FieldLabel>
-          <Textarea placeholder="Describe UI/UX design requirements..." value={formData.uiuxDesignDetails} onChange={(e) => updateField("uiuxDesignDetails", e.target.value)} className="min-h-[70px]" />
+        <div className="rounded-xl p-5" style={{ background: "rgba(166,119,99,0.06)", border: "1px solid rgba(166,119,99,0.15)" }}>
+          <label className="mb-3 block" style={{ fontSize: 11, fontWeight: 700, color: '#A67763', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Design Deliverables
+          </label>
+          <div className="space-y-2.5">
+            {[
+              { value: "wireframes", label: "Wireframes" },
+              { value: "high_fidelity", label: "High-fidelity mockups" },
+              { value: "design_system", label: "Design system" },
+              { value: "prototype", label: "Clickable prototype" },
+              { value: "brand_identity", label: "Brand identity work" },
+            ].map((opt) => {
+              const checked = (formData.uiuxDesignDeliverables ?? []).includes(opt.value);
+              return (
+                <label key={opt.value} className="flex items-center gap-3 cursor-pointer group">
+                  <div className="w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-all"
+                    style={{
+                      borderColor: checked ? "#A67763" : "var(--border-soft)",
+                      background: checked ? "#A67763" : "white",
+                    }}>
+                    {checked && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <input type="checkbox" className="sr-only" checked={checked}
+                    onChange={() => {
+                      const current = formData.uiuxDesignDeliverables ?? [];
+                      const next = checked ? current.filter((v) => v !== opt.value) : [...current, opt.value];
+                      updateField("uiuxDesignDeliverables", next);
+                    }} />
+                  <span className="text-[13px] text-gray-700 group-hover:text-gray-900">{opt.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {formData.uiuxDesignScope === "client_provides" && (
+        <div className="rounded-xl p-5" style={{ background: "rgba(166,119,99,0.06)", border: "1px solid rgba(166,119,99,0.15)" }}>
+          <label className="mb-4 block" style={{ fontSize: 11, fontWeight: 700, color: '#A67763', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Provide Design Assets
+          </label>
+
+          {/* Upload or URL — two cards with OR in between */}
+          <div className="flex items-stretch gap-0 mb-4">
+            {/* Upload File Card */}
+            <label className="flex-1 flex flex-col items-center justify-center gap-2 rounded-l-xl bg-white p-5 cursor-pointer transition-all hover:shadow-md"
+              style={{ border: "2px dashed rgba(166,119,99,0.25)", borderRight: "none" }}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(166,119,99,0.08)" }}>
+                <Upload className="w-5 h-5" style={{ color: "#A67763" }} />
+              </div>
+              <span className="text-[13px] font-medium text-gray-700">Upload File</span>
+              <span className="text-[10px] text-gray-400">PDF, PNG, JPG, Figma, Sketch, XD</span>
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg,.fig,.sketch,.xd,.zip" className="sr-only"
+                onChange={(e) => {
+                  const fileName = e.target.files?.[0]?.name ?? "";
+                  if (fileName) updateField("clientDesignAssets", [...(formData.clientDesignAssets ?? []), { type: "file" as const, value: fileName }]);
+                }}
+              />
+            </label>
+
+            {/* OR divider — vertical between cards */}
+            <div className="flex flex-col items-center justify-center px-3 bg-white" style={{ borderTop: "2px dashed rgba(166,119,99,0.25)", borderBottom: "2px dashed rgba(166,119,99,0.25)" }}>
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#A67763" }}>OR</span>
+            </div>
+
+            {/* Add URL Card */}
+            <div className="flex-1 flex flex-col items-center justify-center gap-2 rounded-r-xl bg-white p-5"
+              style={{ border: "2px dashed rgba(166,119,99,0.25)", borderLeft: "none" }}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(166,119,99,0.08)" }}>
+                <Link2 className="w-5 h-5" style={{ color: "#A67763" }} />
+              </div>
+              <span className="text-[13px] font-medium text-gray-700">Add URL</span>
+              <div className="w-full flex items-center gap-2 mt-1">
+                <Input
+                  placeholder="https://figma.com/file/..."
+                  className="!text-[12px] !py-1.5 flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const val = (e.target as HTMLInputElement).value.trim();
+                      if (val) {
+                        updateField("clientDesignAssets", [...(formData.clientDesignAssets ?? []), { type: "url" as const, value: val }]);
+                        (e.target as HTMLInputElement).value = "";
+                      }
+                    }
+                  }}
+                />
+                <button type="button"
+                  onClick={(e) => {
+                    const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                    const val = input?.value.trim() ?? "";
+                    if (val) {
+                      updateField("clientDesignAssets", [...(formData.clientDesignAssets ?? []), { type: "url" as const, value: val }]);
+                      input.value = "";
+                    }
+                  }}
+                  className="rounded-lg px-3 py-1.5 text-[11px] font-medium text-white shrink-0"
+                  style={{ background: "#A67763" }}>
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Added assets list */}
+          {(formData.clientDesignAssets ?? []).length > 0 && (
+            <div className="space-y-2">
+              {(formData.clientDesignAssets ?? []).map((asset, idx) => (
+                <div key={idx} className="flex items-center gap-3 bg-white rounded-lg px-4 py-2.5" style={{ border: "1px solid var(--border-soft)" }}>
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ background: "rgba(166,119,99,0.08)" }}>
+                    {asset.type === "file"
+                      ? <FileText className="w-3.5 h-3.5" style={{ color: "#A67763" }} />
+                      : <Link2 className="w-3.5 h-3.5" style={{ color: "#A67763" }} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[12px] text-gray-700 truncate block">{asset.value || "Untitled"}</span>
+                    <span className="text-[10px] text-gray-400">{asset.type === "file" ? "Uploaded file" : "URL link"}</span>
+                  </div>
+                  <button type="button"
+                    onClick={() => updateField("clientDesignAssets", (formData.clientDesignAssets ?? []).filter((_, i) => i !== idx))}
+                    className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all shrink-0">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* Deployment Scope */}
-      <div>
+      <div data-field="deploymentScope">
         <FieldLabel required>Deployment Scope</FieldLabel>
         <RadioGroup
           value={formData.deploymentScope}
@@ -1740,17 +2644,125 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
             { value: "both", label: "Both" },
           ]}
         />
-        <FieldError error={errors.deploymentScope} />
+        <FieldError error={errors.deploymentScope} field="deploymentScope" />
       </div>
-      {(formData.deploymentScope === "cloud" || formData.deploymentScope === "on_premise" || formData.deploymentScope === "both") && (
-        <div>
-          <FieldLabel>Deployment Details</FieldLabel>
-          <Textarea placeholder="Describe deployment requirements, environments, etc." value={formData.deploymentDetails} onChange={(e) => updateField("deploymentDetails", e.target.value)} className="min-h-[70px]" />
+      {(formData.deploymentScope === "cloud" || formData.deploymentScope === "both") && (
+        <div className="rounded-xl p-5 space-y-5" style={{ background: "rgba(166,119,99,0.04)", border: "1px solid rgba(166,119,99,0.12)" }}>
+          <label className="block" style={{ fontSize: 11, fontWeight: 700, color: '#A67763', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Cloud Deployment Details
+          </label>
+
+          {/* Cloud Provider */}
+          <div>
+            <label className="mb-2 block" style={{ fontSize: 10, fontWeight: 700, color: 'var(--ink-mid)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Cloud Provider</label>
+            <div className="flex items-center gap-2">
+              {["AWS", "Azure", "GCP", "Other"].map((p) => {
+                const selected = formData.deploymentProvider === p;
+                return (
+                  <button key={p} type="button" onClick={() => updateField("deploymentProvider", p)}
+                    className="rounded-lg px-4 py-2 text-[12px] font-medium transition-all"
+                    style={{
+                      background: selected ? "#A67763" : "white",
+                      color: selected ? "white" : "var(--ink-mid)",
+                      border: selected ? "1px solid #A67763" : "1px solid var(--border-soft)",
+                    }}>
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Service Specification */}
+          <div>
+            <label className="mb-2 block" style={{ fontSize: 10, fontWeight: 700, color: 'var(--ink-mid)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Service Specification</label>
+            <div className="grid grid-cols-2 gap-2">
+              {["EC2/ECS/EKS", "RDS/Aurora", "S3", "CloudFront", "Lambda", "API Gateway", "Load Balancer"].map((svc) => {
+                const checked = (formData.deploymentServices ?? []).includes(svc);
+                return (
+                  <label key={svc} className="flex items-center gap-2.5 cursor-pointer">
+                    <div className="w-4.5 h-4.5 rounded border flex items-center justify-center shrink-0 transition-all"
+                      style={{ width: 18, height: 18, borderColor: checked ? "#A67763" : "var(--border-soft)", background: checked ? "#A67763" : "white" }}>
+                      {checked && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={checked}
+                      onChange={() => {
+                        const curr = formData.deploymentServices ?? [];
+                        updateField("deploymentServices", checked ? curr.filter((v) => v !== svc) : [...curr, svc]);
+                      }} />
+                    <span className="text-[12px] text-gray-700">{svc}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Containerisation */}
+          <div className="flex items-center justify-between">
+            <label className="block" style={{ fontSize: 10, fontWeight: 700, color: 'var(--ink-mid)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Containerisation (Docker/K8s)</label>
+            <button type="button" onClick={() => updateField("deploymentContainerisation", !formData.deploymentContainerisation)}
+              className="relative w-11 h-6 rounded-full transition-all"
+              style={{ background: formData.deploymentContainerisation ? "#A67763" : "var(--color-gray-200)" }}>
+              <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+                style={{ left: formData.deploymentContainerisation ? 22 : 2 }} />
+            </button>
+          </div>
+
+          {/* Environments */}
+          <div>
+            <label className="mb-2 block" style={{ fontSize: 10, fontWeight: 700, color: 'var(--ink-mid)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Environments to Create</label>
+            <div className="flex items-center gap-2">
+              {["Dev", "Staging", "Pre-Prod", "Production"].map((env) => {
+                const checked = (formData.deploymentEnvironments ?? []).includes(env);
+                return (
+                  <label key={env} className="flex items-center gap-2 cursor-pointer">
+                    <div className="w-4.5 h-4.5 rounded border flex items-center justify-center shrink-0 transition-all"
+                      style={{ width: 18, height: 18, borderColor: checked ? "#A67763" : "var(--border-soft)", background: checked ? "#A67763" : "white" }}>
+                      {checked && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={checked}
+                      onChange={() => {
+                        const curr = formData.deploymentEnvironments ?? [];
+                        updateField("deploymentEnvironments", checked ? curr.filter((v) => v !== env) : [...curr, env]);
+                      }} />
+                    <span className="text-[12px] text-gray-700">{env}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(formData.deploymentScope === "on_premise" || formData.deploymentScope === "both") && (
+        <div className="rounded-xl p-5" style={{ background: "rgba(166,119,99,0.04)", border: "1px solid rgba(166,119,99,0.12)" }}>
+          <label className="mb-4 block" style={{ fontSize: 11, fontWeight: 700, color: '#A67763', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            On-Premise Deployment Details
+          </label>
+          <div className="space-y-3">
+            {["Server installation", "SSL certificates", "Monitoring & alerting", "Backup configuration"].map((svc) => {
+              const checked = (formData.onPremiseServices ?? []).includes(svc);
+              return (
+                <label key={svc} className="flex items-center gap-3 cursor-pointer">
+                  <div className="rounded border flex items-center justify-center shrink-0 transition-all"
+                    style={{ width: 18, height: 18, borderColor: checked ? "#A67763" : "var(--border-soft)", background: checked ? "#A67763" : "white" }}>
+                    {checked && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <input type="checkbox" className="sr-only" checked={checked}
+                    onChange={() => {
+                      const curr = formData.onPremiseServices ?? [];
+                      updateField("onPremiseServices", checked ? curr.filter((v) => v !== svc) : [...curr, svc]);
+                    }} />
+                  <span className="text-[13px] text-gray-700">{svc}</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {/* Go-Live Scope */}
-      <div>
+      <div data-field="goLiveScope">
         <FieldLabel required>Go-Live Scope</FieldLabel>
         <RadioGroup
           value={formData.goLiveScope}
@@ -1761,42 +2773,97 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
             { value: "go_live_hypercare", label: "Go-Live + Hypercare" },
           ]}
         />
-        <FieldError error={errors.goLiveScope} />
+        <FieldError error={errors.goLiveScope} field="goLiveScope" />
       </div>
-      {(formData.goLiveScope === "go_live" || formData.goLiveScope === "go_live_hypercare") && (
-        <div>
-          <FieldLabel>Go-Live Details</FieldLabel>
-          <Textarea placeholder="Describe go-live and hypercare requirements..." value={formData.goLiveDetails} onChange={(e) => updateField("goLiveDetails", e.target.value)} className="min-h-[70px]" />
+      {formData.goLiveScope === "go_live_hypercare" && (
+        <div className="rounded-xl p-5 space-y-5" style={{ background: "rgba(166,119,99,0.04)", border: "1px solid rgba(166,119,99,0.12)" }}>
+          <label className="block" style={{ fontSize: 11, fontWeight: 700, color: '#A67763', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Hypercare Details
+          </label>
+
+          {/* Duration */}
+          <div>
+            <label className="mb-2 block" style={{ fontSize: 10, fontWeight: 700, color: 'var(--ink-mid)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Duration</label>
+            <div className="flex items-center gap-2">
+              {[
+                { value: "1_week", label: "1 week" },
+                { value: "2_weeks", label: "2 weeks" },
+                { value: "1_month", label: "1 month" },
+                { value: "custom", label: "Custom" },
+              ].map((opt) => {
+                const selected = formData.hypercareDuration === opt.value;
+                return (
+                  <button key={opt.value} type="button" onClick={() => updateField("hypercareDuration", opt.value)}
+                    className="rounded-lg px-4 py-2 text-[12px] font-medium transition-all"
+                    style={{
+                      background: selected ? "#A67763" : "white",
+                      color: selected ? "white" : "var(--ink-mid)",
+                      border: selected ? "1px solid #A67763" : "1px solid var(--border-soft)",
+                    }}>
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Support Level */}
+          <div>
+            <label className="mb-2 block" style={{ fontSize: 10, fontWeight: 700, color: 'var(--ink-mid)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Support Level</label>
+            <div className="flex items-center gap-2">
+              {[
+                { value: "bug_fixes", label: "Bug fixes only" },
+                { value: "bug_fixes_enhancements", label: "Bug fixes + minor enhancements" },
+              ].map((opt) => {
+                const selected = formData.hypercareSupport === opt.value;
+                return (
+                  <button key={opt.value} type="button" onClick={() => updateField("hypercareSupport", opt.value)}
+                    className="flex-1 rounded-lg px-4 py-2.5 text-[12px] font-medium transition-all"
+                    style={{
+                      background: selected ? "#A67763" : "white",
+                      color: selected ? "white" : "var(--ink-mid)",
+                      border: selected ? "1px solid #A67763" : "1px solid var(--border-soft)",
+                    }}>
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Tech Stack */}
-      <div>
+      <SectionHeading>Section B — Technical Architecture</SectionHeading>
+
+      {/* Technology Stack — FSD: min 10 / max 1000 */}
+      <div data-field="techStack">
         <FieldLabel required>Technology Stack</FieldLabel>
-        <Textarea placeholder="e.g., React + TypeScript frontend, Node.js/NestJS backend, PostgreSQL, Redis, Docker/K8s" value={formData.techStack} onChange={(e) => updateField("techStack", e.target.value)} onBlur={onBlur("techStack")} className="min-h-[80px]" />
-        <FieldError error={errors.techStack} />
+        <Textarea placeholder="e.g., React + TypeScript frontend, Node.js/NestJS backend, PostgreSQL, Redis, Docker/K8s (min 10, max 1000 chars)" value={formData.techStack} onChange={(e) => updateField("techStack", e.target.value.slice(0, 1000))} onBlur={onBlur("techStack")} className="min-h-[80px]" />
+        <FieldError error={errors.techStack} field="techStack" />
       </div>
 
-      {/* Scalability Requirements */}
+      {/* Scalability & Performance Requirements — FSD: Concurrent users + Response time SLA + Data volume */}
       <div>
-        <FieldLabel>Scalability Requirements</FieldLabel>
-        <Textarea placeholder="e.g., Must support 10,000 concurrent users, auto-scaling enabled" value={formData.scalabilityRequirements} onChange={(e) => updateField("scalabilityRequirements", e.target.value)} className="min-h-[60px]" />
+        <FieldLabel>Scalability &amp; Performance Requirements</FieldLabel>
+        <Textarea placeholder="e.g., Concurrent users: 10,000 · Response time p95: <200ms · Data volume at launch: 500GB" value={formData.scalabilityRequirements} onChange={(e) => updateField("scalabilityRequirements", e.target.value)} className="min-h-[60px]" />
       </div>
 
-      {/* Conditional: ETL/Migration fields */}
+      {/* Section C — Data Migration Technical Detail (conditional) — FSD §7.3.4 */}
       {formData.dataMigrationScope === "in_scope" && (
         <>
-          <SectionHeading>Data Migration Details</SectionHeading>
+          <SectionHeading>Section C — Data Migration Technical Detail</SectionHeading>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <FieldLabel>ETL Approach</FieldLabel>
               <Select value={formData.etlApproach} onValueChange={(v) => updateField("etlApproach", v)}>
-                <SelectTrigger><SelectValue placeholder="Select ETL approach" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select approach" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="batch">Batch Processing</SelectItem>
-                  <SelectItem value="streaming">Real-time Streaming</SelectItem>
-                  <SelectItem value="hybrid">Hybrid (Batch + Stream)</SelectItem>
-                  <SelectItem value="manual">Manual Migration</SelectItem>
+                  <SelectItem value="custom_scripts">Custom Scripts</SelectItem>
+                  <SelectItem value="aws_dms">AWS DMS</SelectItem>
+                  <SelectItem value="talend">Talend</SelectItem>
+                  <SelectItem value="azure_data_factory">Azure Data Factory</SelectItem>
+                  <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1805,9 +2872,10 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
               <Select value={formData.transformationComplexity} onValueChange={(v) => updateField("transformationComplexity", v)}>
                 <SelectTrigger><SelectValue placeholder="Select complexity" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low (Simple mapping)</SelectItem>
-                  <SelectItem value="medium">Medium (Some transformations)</SelectItem>
-                  <SelectItem value="high">High (Complex transformations)</SelectItem>
+                  <SelectItem value="no_transformation">No Transformation</SelectItem>
+                  <SelectItem value="simple_mapping">Simple Mapping</SelectItem>
+                  <SelectItem value="complex_business_logic">Complex Business Logic</SelectItem>
+                  <SelectItem value="data_cleansing">Data Cleansing</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1818,9 +2886,9 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
               value={formData.dataValidationMethod}
               onChange={(v) => updateField("dataValidationMethod", v)}
               options={[
-                { value: "automated", label: "Automated" },
-                { value: "manual", label: "Manual" },
-                { value: "hybrid", label: "Hybrid" },
+                { value: "automated", label: "Automated Scripts" },
+                { value: "manual", label: "Manual Spot-check" },
+                { value: "both", label: "Both" },
               ]}
             />
           </div>
@@ -1838,35 +2906,196 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
 /* ================================================================
    STEP 3 — Integrations & User Management (SKIPPABLE)
    ================================================================ */
-function Step3IntegrationsUserMgmt({ formData, updateField, addListItem, removeListItem, updateListItem, errors = {}, blurField }: StepListProps) {
+function Step3IntegrationsUserMgmt({ formData, updateField, errors = {}, blurField }: StepListProps) {
   const onBlur = (field: string) => () => blurField?.(field);
+
+  const addIntegration = () => updateField("integrationPoints", [...formData.integrationPoints, { name: "", direction: "", protocol: "", authentication: "", dataFormat: "", sandboxCredentials: "", testingResponsibility: "", errorHandlingSLA: "" }]);
+  const removeIntegration = (idx: number) => updateField("integrationPoints", formData.integrationPoints.filter((_, i) => i !== idx));
+  const updateIntegration = (idx: number, key: string, value: string) => updateField("integrationPoints", formData.integrationPoints.map((item, i) => i === idx ? { ...item, [key]: value } : item));
+
+  const addNotificationEvent = () => updateField("notificationEvents", [...formData.notificationEvents, { trigger: "", channel: "Email" }]);
+  const removeNotificationEvent = (idx: number) => updateField("notificationEvents", formData.notificationEvents.filter((_, i) => i !== idx));
+  const updateNotificationEvent = (idx: number, key: string, value: string) => updateField("notificationEvents", formData.notificationEvents.map((item, i) => i === idx ? { ...item, [key]: value } : item));
+
+  const addScheduledJob = () => updateField("scheduledJobItems", [...formData.scheduledJobItems, { jobName: "", frequency: "", triggerCondition: "" }]);
+  const removeScheduledJob = (idx: number) => updateField("scheduledJobItems", formData.scheduledJobItems.filter((_, i) => i !== idx));
+  const updateScheduledJob = (idx: number, key: string, value: string) => updateField("scheduledJobItems", formData.scheduledJobItems.map((item, i) => i === idx ? { ...item, [key]: value } : item));
+
+  const toggleAuditEvent = (event: string) => {
+    if (event === "all") {
+      const allEvents = ["login_logout", "data_access", "record_modifications", "configuration_changes", "all"];
+      const hasAll = formData.auditLogEvents.includes("all");
+      updateField("auditLogEvents", hasAll ? [] : allEvents);
+    } else {
+      const current = formData.auditLogEvents.filter(e => e !== "all");
+      const updated = current.includes(event) ? current.filter(e => e !== event) : [...current, event];
+      const allIndividual = ["login_logout", "data_access", "record_modifications", "configuration_changes"];
+      const hasAllIndividual = allIndividual.every(e => updated.includes(e));
+      updateField("auditLogEvents", hasAllIndividual ? [...updated, "all"] : updated);
+    }
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
         Define third-party integrations, authentication, and user management requirements. This step is optional but improves SOW accuracy.
       </p>
 
-      {/* Integrations */}
-      <ListField label="Third-Party Integrations" items={formData.integrations} fieldKey="integrations" placeholder="e.g., Stripe Payments API, Salesforce CRM, SendGrid" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} icon={Zap} addLabel="Add Integration" />
+      {/* ── SECTION A — External Integrations ── */}
+      <SectionHeading>Section A — External Integrations</SectionHeading>
 
-      {/* SSO */}
-      <div>
-        <FieldLabel>SSO Required</FieldLabel>
-        <RadioGroup
-          value={formData.ssoRequired}
-          onChange={(v) => updateField("ssoRequired", v)}
-          options={[
-            { value: "yes", label: "Yes" },
-            { value: "no", label: "No" },
-          ]}
-        />
-      </div>
-      {formData.ssoRequired === "yes" && (
-        <div>
-          <FieldLabel>SSO Details</FieldLabel>
-          <Textarea placeholder="e.g., SAML 2.0 with Azure AD, Google Workspace" value={formData.ssoDetails} onChange={(e) => updateField("ssoDetails", e.target.value)} className="min-h-[60px]" />
+      <div data-field="integrationPoints">
+        <FieldLabel>Integration Points*</FieldLabel>
+        <div className="space-y-4">
+          {formData.integrationPoints.map((intg, idx) => (
+            <div key={idx} className="relative p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white" style={{ background: 'linear-gradient(135deg, #A67763, #886151)' }}>{idx + 1}</span>
+                <span className="text-[13px] font-semibold text-gray-800">INTEGRATION #{idx + 1}</span>
+              </div>
+              {formData.integrationPoints.length > 1 && (
+                <button onClick={() => removeIntegration(idx)}
+                  className="absolute top-3 right-3 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel>Integration Name (Max 100 Chars)*</FieldLabel>
+                  <Input placeholder="e.g. Stripe Payment Gateway" value={intg.name} onChange={(e) => updateIntegration(idx, "name", e.target.value.slice(0, 100))} />
+                </div>
+                <div>
+                  <FieldLabel>Direction*</FieldLabel>
+                  <Select value={intg.direction} onValueChange={(v) => updateIntegration(idx, "direction", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select direction" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="inbound">Inbound</SelectItem>
+                      <SelectItem value="outbound">Outbound</SelectItem>
+                      <SelectItem value="bidirectional">Bidirectional</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <FieldLabel>Protocol*</FieldLabel>
+                  <Select value={intg.protocol} onValueChange={(v) => updateIntegration(idx, "protocol", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select protocol" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="REST">REST</SelectItem>
+                      <SelectItem value="GraphQL">GraphQL</SelectItem>
+                      <SelectItem value="SOAP">SOAP</SelectItem>
+                      <SelectItem value="gRPC">gRPC</SelectItem>
+                      <SelectItem value="Webhook">Webhook</SelectItem>
+                      <SelectItem value="SFTP">SFTP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <FieldLabel>Authentication*</FieldLabel>
+                  <Select value={intg.authentication} onValueChange={(v) => updateIntegration(idx, "authentication", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select authentication" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="OAuth 2.0">OAuth 2.0</SelectItem>
+                      <SelectItem value="API Key">API Key</SelectItem>
+                      <SelectItem value="Basic Auth">Basic Auth</SelectItem>
+                      <SelectItem value="JWT">JWT</SelectItem>
+                      <SelectItem value="HMAC">HMAC</SelectItem>
+                      <SelectItem value="None">None</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <FieldLabel>Data Format*</FieldLabel>
+                  <Select value={intg.dataFormat} onValueChange={(v) => updateIntegration(idx, "dataFormat", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select format" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="JSON">JSON</SelectItem>
+                      <SelectItem value="XML">XML</SelectItem>
+                      <SelectItem value="CSV">CSV</SelectItem>
+                      <SelectItem value="Binary">Binary</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <FieldLabel>Sandbox Credentials Provided By*</FieldLabel>
+                  <Select value={intg.sandboxCredentials} onValueChange={(v) => updateIntegration(idx, "sandboxCredentials", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Client">Client</SelectItem>
+                      <SelectItem value="Vendor">Vendor</SelectItem>
+                      <SelectItem value="Not Required">Not Required</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <FieldLabel>Testing Responsibility*</FieldLabel>
+                  <Select value={intg.testingResponsibility} onValueChange={(v) => updateIntegration(idx, "testingResponsibility", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select responsibility" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Joint">Joint</SelectItem>
+                      <SelectItem value="Client">Client</SelectItem>
+                      <SelectItem value="Vendor">Vendor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <FieldLabel>Error Handling SLA*</FieldLabel>
+                  <Select value={intg.errorHandlingSLA} onValueChange={(v) => updateIntegration(idx, "errorHandlingSLA", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select SLA" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Same-day">Same-day</SelectItem>
+                      <SelectItem value="Next business day">Next business day</SelectItem>
+                      <SelectItem value="48 hours">48 hours</SelectItem>
+                      <SelectItem value="72 hours">72 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+        <button onClick={addIntegration}
+          className="mt-3 w-full py-2.5 rounded-lg border-2 border-dashed border-gray-200 text-[12px] font-semibold text-gray-500 hover:border-gray-300 hover:text-gray-600 transition-all flex items-center justify-center gap-1.5">
+          <Plus className="w-3.5 h-3.5" /> ADD INTEGRATION
+        </button>
+      </div>
+
+      {/* ── SECTION B — User Management Scope ── */}
+      <SectionHeading>Section B — User Management Scope</SectionHeading>
+
+      {/* SSO Required */}
+      <div className="p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(77,87,65,0.10)' }}>
+              <ShieldCheck className="w-5 h-5" style={{ color: '#4D5741' }} />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-gray-800">SSO Required</p>
+              <p className="text-[11px] text-gray-500">SINGLE SIGN-ON INTEGRATION</p>
+            </div>
+          </div>
+          <RadioGroup
+            value={formData.ssoRequired}
+            onChange={(v) => updateField("ssoRequired", v)}
+            options={[
+              { value: "not_required", label: "Not Required" },
+              { value: "required", label: "Required" },
+            ]}
+          />
+        </div>
+        {formData.ssoRequired === "required" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+            <div>
+              <FieldLabel>Provider Name*</FieldLabel>
+              <Input placeholder="e.g. Okta, Azure AD, Google" value={formData.ssoProviderName} onChange={(e) => updateField("ssoProviderName", e.target.value)} />
+            </div>
+            <div>
+              <FieldLabel>Protocol*</FieldLabel>
+              <Input placeholder="SAML 2.0" value={formData.ssoProtocol} onChange={(e) => updateField("ssoProtocol", e.target.value)} />
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* User Registration Model */}
       <div>
@@ -1875,6 +3104,7 @@ function Step3IntegrationsUserMgmt({ formData, updateField, addListItem, removeL
           <SelectTrigger><SelectValue placeholder="Select registration model" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="self_registration">Self Registration</SelectItem>
+            <SelectItem value="admin_only">Admin-only</SelectItem>
             <SelectItem value="admin_invite">Admin Invite Only</SelectItem>
             <SelectItem value="sso_only">SSO Only</SelectItem>
             <SelectItem value="hybrid">Hybrid</SelectItem>
@@ -1882,68 +3112,273 @@ function Step3IntegrationsUserMgmt({ formData, updateField, addListItem, removeL
         </Select>
       </div>
 
-      {/* Password Policy */}
-      <div>
-        <FieldLabel>Password Policy</FieldLabel>
-        <RadioGroup
-          value={formData.passwordPolicy}
-          onChange={(v) => updateField("passwordPolicy", v)}
-          options={[
-            { value: "platform_defaults", label: "Platform Defaults" },
-            { value: "custom", label: "Custom" },
-          ]}
-        />
-      </div>
-      {formData.passwordPolicy === "custom" && (
-        <div>
-          <FieldLabel>Password Policy Details</FieldLabel>
-          <Textarea placeholder="Describe custom password requirements..." value={formData.passwordPolicyDetails} onChange={(e) => updateField("passwordPolicyDetails", e.target.value)} className="min-h-[60px]" />
+      {/* Password & Session Policy */}
+      <div className="p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(166,119,99,0.10)' }}>
+              <Lock className="w-5 h-5" style={{ color: '#A67763' }} />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-gray-800">Password &amp; Session Policy</p>
+              <p className="text-[11px] text-gray-500">SECURITY CONSTRAINTS</p>
+            </div>
+          </div>
+          <RadioGroup
+            value={formData.passwordPolicy}
+            onChange={(v) => updateField("passwordPolicy", v)}
+            options={[
+              { value: "platform_defaults", label: "Use Platform Defaults" },
+              { value: "custom", label: "Custom" },
+            ]}
+          />
         </div>
-      )}
-
-      {/* Audit Logging */}
-      <div>
-        <FieldLabel>Audit Logging</FieldLabel>
-        <RadioGroup
-          value={formData.auditLogging}
-          onChange={(v) => updateField("auditLogging", v)}
-          options={[
-            { value: "yes", label: "Yes" },
-            { value: "no", label: "No" },
-          ]}
-        />
+        {formData.passwordPolicy === "custom" && (
+          <div className="space-y-3 mt-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <FieldLabel>Min Length</FieldLabel>
+                <Input type="number" value={formData.passwordMinLength} onChange={(e) => updateField("passwordMinLength", e.target.value)} />
+              </div>
+              <div>
+                <FieldLabel>Complexity</FieldLabel>
+                <Select value={formData.passwordComplexity} onValueChange={(v) => updateField("passwordComplexity", v)}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Standard">Standard</SelectItem>
+                    <SelectItem value="Strong">Strong</SelectItem>
+                    <SelectItem value="Very Strong">Very Strong</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <FieldLabel>Expiry (Days)</FieldLabel>
+                <Input type="number" value={formData.passwordExpiry} onChange={(e) => updateField("passwordExpiry", e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <FieldLabel>Session Timeout (Min)</FieldLabel>
+                <Input type="number" value={formData.sessionTimeout} onChange={(e) => updateField("sessionTimeout", e.target.value)} />
+              </div>
+              <div>
+                <FieldLabel>Lockout Attempts</FieldLabel>
+                <Input type="number" value={formData.lockoutAttempts} onChange={(e) => updateField("lockoutAttempts", e.target.value)} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Approval Workflows */}
-      <div>
-        <FieldLabel>Approval Workflows</FieldLabel>
-        <RadioGroup
-          value={formData.approvalWorkflows}
-          onChange={(v) => updateField("approvalWorkflows", v)}
-          options={[
-            { value: "not_in_scope", label: "Not in Scope" },
-            { value: "in_scope", label: "In Scope" },
-          ]}
-        />
+      {/* User Action Audit Logging */}
+      <div className="p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(77,87,65,0.10)' }}>
+              <ShieldCheck className="w-5 h-5" style={{ color: '#4D5741' }} />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-gray-800">User Action Audit Logging</p>
+              <p className="text-[11px] text-gray-500">COMPLIANCE &amp; TRACKING</p>
+            </div>
+          </div>
+          <RadioGroup
+            value={formData.auditLogging}
+            onChange={(v) => updateField("auditLogging", v)}
+            options={[
+              { value: "no", label: "No" },
+              { value: "yes", label: "Yes" },
+            ]}
+          />
+        </div>
+        {formData.auditLogging === "yes" && (
+          <div className="mt-3">
+            <FieldLabel>Events to Log*</FieldLabel>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+              {[
+                { value: "login_logout", label: "Login/Logout" },
+                { value: "data_access", label: "Data Access" },
+                { value: "record_modifications", label: "Record Modifications" },
+                { value: "configuration_changes", label: "Configuration Changes" },
+                { value: "all", label: "All" },
+              ].map((opt) => (
+                <label key={opt.value} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 bg-white cursor-pointer hover:border-gray-200 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={formData.auditLogEvents.includes(opt.value)}
+                    onChange={() => toggleAuditEvent(opt.value)}
+                    className="w-4 h-4 rounded border-gray-300 accent-[#A67763]"
+                  />
+                  <span className="text-[13px] text-gray-700">{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Notifications */}
-      <div>
-        <FieldLabel>Notifications</FieldLabel>
-        <RadioGroup
-          value={formData.notifications}
-          onChange={(v) => updateField("notifications", v)}
-          options={[
-            { value: "not_in_scope", label: "Not in Scope" },
-            { value: "in_scope", label: "In Scope" },
-          ]}
-        />
+      {/* ── SECTION C — Workflow Automation Scope ── */}
+      <SectionHeading>Section C — Workflow Automation Scope</SectionHeading>
+
+      {/* Multi-Step Approval Workflows */}
+      <div className="p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(166,119,99,0.10)' }}>
+              <Users className="w-5 h-5" style={{ color: '#A67763' }} />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-gray-800">Multi-Step Approval Workflows</p>
+              <p className="text-[11px] text-gray-500">HUMAN-IN-THE-LOOP ROUTING</p>
+            </div>
+          </div>
+          <RadioGroup
+            value={formData.approvalWorkflows}
+            onChange={(v) => updateField("approvalWorkflows", v)}
+            options={[
+              { value: "not_in_scope", label: "Not in Scope" },
+              { value: "in_scope", label: "In Scope" },
+            ]}
+          />
+        </div>
+        {formData.approvalWorkflows === "in_scope" && (
+          <div className="mt-3">
+            <FieldLabel>Select Workflows Requiring Approval*</FieldLabel>
+            {formData.businessWorkflows.some(w => w.name.trim().length > 0) ? (
+              <div className="space-y-2 mt-2">
+                {formData.businessWorkflows.filter(w => w.name.trim().length > 0).map((w, idx) => (
+                  <label key={idx} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 bg-white cursor-pointer hover:border-gray-200 transition-all">
+                    <input type="checkbox" className="w-4 h-4 rounded border-gray-300 accent-[#4D5741]" />
+                    <span className="text-[13px] text-gray-700">{w.name}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 rounded-lg px-4 py-3" style={{ background: 'rgba(255, 193, 7, 0.12)' }}>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" style={{ color: '#E65100' }} />
+                  <p className="text-[12px] font-semibold" style={{ color: '#E65100' }}>No workflows defined in Step 1 yet.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Scheduled Jobs */}
-      {(formData.notifications === "in_scope" || formData.approvalWorkflows === "in_scope") && (
-        <ListField label="Scheduled Jobs" items={formData.scheduledJobs} fieldKey="scheduledJobs" placeholder="e.g., Daily report generation at 6am UTC" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Job" />
-      )}
+      {/* Email / Push Notifications */}
+      <div className="p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(166,119,99,0.10)' }}>
+              <AlertTriangle className="w-5 h-5" style={{ color: '#A67763' }} />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-gray-800">Email / Push Notifications</p>
+              <p className="text-[11px] text-gray-500">USER ENGAGEMENT</p>
+            </div>
+          </div>
+          <RadioGroup
+            value={formData.notifications}
+            onChange={(v) => updateField("notifications", v)}
+            options={[
+              { value: "not_in_scope", label: "Not in Scope" },
+              { value: "in_scope", label: "In Scope" },
+            ]}
+          />
+        </div>
+        {formData.notifications === "in_scope" && (
+          <div className="mt-3">
+            <FieldLabel>Notification Events (Max 10)*</FieldLabel>
+            <div className="space-y-2 mt-2">
+              {formData.notificationEvents.map((evt, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Input placeholder="Event trigger (e.g. New Order Received)" value={evt.trigger} onChange={(e) => updateNotificationEvent(idx, "trigger", e.target.value)} className="flex-1" />
+                  <div className="w-32">
+                    <Select value={evt.channel} onValueChange={(v) => updateNotificationEvent(idx, "channel", v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Email">Email</SelectItem>
+                        <SelectItem value="Push">Push</SelectItem>
+                        <SelectItem value="SMS">SMS</SelectItem>
+                        <SelectItem value="In-App">In-App</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {formData.notificationEvents.length > 1 && (
+                    <button onClick={() => removeNotificationEvent(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {formData.notificationEvents.length < 10 && (
+              <button onClick={addNotificationEvent}
+                className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors">
+                <Plus className="w-3.5 h-3.5" /> ADD EVENT
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Scheduled / Automated Jobs */}
+      <div className="p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(77,87,65,0.10)' }}>
+              <Calendar className="w-5 h-5" style={{ color: '#4D5741' }} />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-gray-800">Scheduled / Automated Jobs</p>
+              <p className="text-[11px] text-gray-500">BACKGROUND PROCESSING</p>
+            </div>
+          </div>
+          <RadioGroup
+            value={formData.scheduledJobsScope}
+            onChange={(v) => updateField("scheduledJobsScope", v)}
+            options={[
+              { value: "not_in_scope", label: "Not in Scope" },
+              { value: "in_scope", label: "In Scope" },
+            ]}
+          />
+        </div>
+        {formData.scheduledJobsScope === "in_scope" && (
+          <div className="mt-3">
+            <FieldLabel>Automated Jobs*</FieldLabel>
+            <div className="space-y-3 mt-2">
+              {formData.scheduledJobItems.map((job, idx) => (
+                <div key={idx} className="relative p-4 rounded-lg border border-gray-100 bg-white">
+                  {formData.scheduledJobItems.length > 1 && (
+                    <button onClick={() => removeScheduledJob(idx)}
+                      className="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <FieldLabel>Job Name*</FieldLabel>
+                      <Input placeholder="e.g. Daily Data Backup" value={job.jobName} onChange={(e) => updateScheduledJob(idx, "jobName", e.target.value)} />
+                    </div>
+                    <div>
+                      <FieldLabel>Frequency*</FieldLabel>
+                      <Input placeholder="e.g. Every 24 hours" value={job.frequency} onChange={(e) => updateScheduledJob(idx, "frequency", e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <FieldLabel>Trigger Condition (Max 200 Chars)*</FieldLabel>
+                    <Textarea placeholder="Describe what triggers this job..." value={job.triggerCondition} onChange={(e) => updateScheduledJob(idx, "triggerCondition", e.target.value.slice(0, 200))} className="min-h-[60px]" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={addScheduledJob}
+              className="mt-3 w-full py-2.5 rounded-lg border-2 border-dashed border-gray-200 text-[12px] font-semibold text-gray-500 hover:border-gray-300 hover:text-gray-600 transition-all flex items-center justify-center gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> ADD AUTOMATED JOB
+            </button>
+          </div>
+        )}
+      </div>
 
       <TipBox icon={Link2} variant="teal" title="Integration tip:">
         Even if you skip this step, the AI will still generate basic integration placeholders. Completing it produces more accurate API-level deliverables.
@@ -1984,18 +3419,53 @@ function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeLi
         <Select value={formData.phasingStrategy} onValueChange={(v) => updateField("phasingStrategy", v)}>
           <SelectTrigger><SelectValue placeholder="Select phasing approach" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="waterfall">Waterfall (Sequential)</SelectItem>
-            <SelectItem value="agile_sprints_2w">Agile Sprints (2-week)</SelectItem>
-            <SelectItem value="agile_sprints_3w">Agile Sprints (3-week)</SelectItem>
-            <SelectItem value="kanban">Kanban (Continuous Flow)</SelectItem>
-            <SelectItem value="hybrid">Hybrid (Phases + Sprints)</SelectItem>
-            <SelectItem value="milestone">Milestone-Driven</SelectItem>
+            <SelectItem value="sequential">Sequential</SelectItem>
+            <SelectItem value="parallel">Parallel Workstreams</SelectItem>
+            <SelectItem value="sprint_based">Sprint-based</SelectItem>
+            <SelectItem value="milestone_only">Milestone-only</SelectItem>
+            <SelectItem value="not_decided">Not Decided</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Milestones */}
-      <ListField label="Key Milestones" items={formData.milestones} fieldKey="milestones" placeholder="e.g., Phase 1 Complete - Core API & Auth" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} numbered prefix="M" />
+      {/* Key Milestones — FSD: Name + Target Date + Acceptance Criteria (min 50 chars) */}
+      <div data-field="milestones">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-[13px] font-semibold text-gray-800">Key Milestones with Acceptance Criteria</label>
+          <button onClick={() => updateField("milestones", [...formData.milestones, { name: "", targetDate: "", acceptanceCriteria: "" }])}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add Milestone
+          </button>
+        </div>
+        <div className="space-y-3">
+          {formData.milestones.map((ms, idx) => (
+            <div key={idx} className="relative p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+              {formData.milestones.length > 1 && (
+                <button onClick={() => updateField("milestones", formData.milestones.filter((_, i) => i !== idx))}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <FieldLabel>Milestone Name (max 100)</FieldLabel>
+                  <Input placeholder="e.g., Phase 1 Complete" value={ms.name ?? ""}
+                    onChange={(e) => updateField("milestones", formData.milestones.map((m, i) => i === idx ? { ...m, name: e.target.value.slice(0, 100) } : m))} />
+                </div>
+                <div>
+                  <FieldLabel>Target Date</FieldLabel>
+                  <DateInput value={ms.targetDate ?? ""} onChange={(v) => updateField("milestones", formData.milestones.map((m, i) => i === idx ? { ...m, targetDate: v } : m))} placeholder="Select date" />
+                </div>
+                <div>
+                  <FieldLabel>Acceptance Criteria (min 50)</FieldLabel>
+                  <Input placeholder="Specific, testable criteria..." value={ms.acceptanceCriteria ?? ""}
+                    onChange={(e) => updateField("milestones", formData.milestones.map((m, i) => i === idx ? { ...m, acceptanceCriteria: e.target.value } : m))} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Client Dependencies */}
       <ListField label="Client Dependencies" items={formData.clientDependencies} fieldKey="clientDependencies" placeholder="e.g., API documentation, Design assets by Week 2" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Dependency" />
@@ -2008,12 +3478,12 @@ function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeLi
           <Select value={formData.teamSize} onValueChange={(v) => updateField("teamSize", v)}>
             <SelectTrigger><SelectValue placeholder="Select team size" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="1-3">Micro (1-3 contributors)</SelectItem>
-              <SelectItem value="4-8">Small (4-8 contributors)</SelectItem>
-              <SelectItem value="9-15">Medium (9-15 contributors)</SelectItem>
-              <SelectItem value="16-30">Large (16-30 contributors)</SelectItem>
-              <SelectItem value="30+">Enterprise (30+ contributors)</SelectItem>
-              <SelectItem value="auto">Auto (AI Recommended)</SelectItem>
+              <SelectItem value="1-3">1–3</SelectItem>
+              <SelectItem value="4-8">4–8</SelectItem>
+              <SelectItem value="9-15">9–15</SelectItem>
+              <SelectItem value="16-25">16–25</SelectItem>
+              <SelectItem value="25+">25+</SelectItem>
+              <SelectItem value="not_decided">Not Decided</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -2031,13 +3501,51 @@ function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeLi
         </div>
       </div>
 
-      {/* Roles */}
-      <ListField label="Required Roles *" items={formData.roles} fieldKey="roles" placeholder="e.g., Senior React Developer, DevOps Engineer" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} addLabel="Add Role" />
+      {/* Required Roles — FSD: Role Name + Seniority, min 1 */}
+      <div data-field="roles">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-[13px] font-semibold text-gray-800">Required Roles *</label>
+          <button onClick={() => updateField("roles", [...formData.roles, { roleName: "", seniority: "" }])}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add Role
+          </button>
+        </div>
+        <div className="space-y-3">
+          {formData.roles.map((role, idx) => (
+            <div key={idx} className="relative grid grid-cols-1 md:grid-cols-2 gap-3 p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+              {formData.roles.length > 1 && (
+                <button onClick={() => updateField("roles", formData.roles.filter((_, i) => i !== idx))}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <div>
+                <FieldLabel required>Role Name</FieldLabel>
+                <Input placeholder="e.g., Senior React Developer" value={role.roleName ?? ""}
+                  onChange={(e) => updateField("roles", formData.roles.map((r, i) => i === idx ? { ...r, roleName: e.target.value } : r))} />
+              </div>
+              <div>
+                <FieldLabel>Seniority</FieldLabel>
+                <Select value={role.seniority ?? ""} onValueChange={(v) => updateField("roles", formData.roles.map((r, i) => i === idx ? { ...r, seniority: v } : r))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="junior">Junior</SelectItem>
+                    <SelectItem value="mid">Mid</SelectItem>
+                    <SelectItem value="senior">Senior</SelectItem>
+                    <SelectItem value="lead">Lead</SelectItem>
+                    <SelectItem value="any">Any</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-      {/* Skill Priorities */}
+      {/* Skill Priorities & Preferences — FSD: max 500 */}
       <div>
-        <FieldLabel>Skill Priorities & Preferences</FieldLabel>
-        <Textarea placeholder="e.g., Must have TypeScript expertise, prefer contributors with fintech experience" value={formData.skillPriorities} onChange={(e) => updateField("skillPriorities", e.target.value)} className="min-h-[70px]" />
+        <FieldLabel>Skill Priorities &amp; Preferences</FieldLabel>
+        <Textarea placeholder="e.g., Must have TypeScript expertise, prefer contributors with fintech experience (max 500)" value={formData.skillPriorities} onChange={(e) => updateField("skillPriorities", e.target.value.slice(0, 500))} className="min-h-[70px]" />
       </div>
 
       {/* Knowledge Transfer */}
@@ -2054,78 +3562,183 @@ function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeLi
         />
       </div>
 
-      <SectionHeading>Testing</SectionHeading>
+      <SectionHeading>Section C — Testing Strategy</SectionHeading>
 
-      {/* SIT Scope */}
-      <div>
-        <FieldLabel>System Integration Testing (SIT)</FieldLabel>
-        <RadioGroup
-          value={formData.sitScope}
-          onChange={(v) => updateField("sitScope", v)}
-          options={[
-            { value: "not_in_scope", label: "Not in Scope" },
-            { value: "in_scope", label: "In Scope" },
-          ]}
-        />
+      {/* Testing Types & Target Environments */}
+      <div className="p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Testing Types Included */}
+          <div>
+            <FieldLabel required>Testing Types Included</FieldLabel>
+            <div className="space-y-2 mt-2">
+              {[
+                { value: "unit_testing", label: "Unit Testing" },
+                { value: "integration_testing", label: "Integration Testing" },
+                { value: "uat_testing", label: "Uat Testing" },
+                { value: "security_testing", label: "Security Testing" },
+                { value: "performance_testing", label: "Performance Testing" },
+              ].map((opt) => (
+                <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer group">
+                  <span
+                    className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
+                    style={{
+                      borderColor: formData.testingTypes.includes(opt.value) ? '#4D5741' : '#d1d5db',
+                      background: formData.testingTypes.includes(opt.value) ? '#4D5741' : 'transparent',
+                    }}
+                    onClick={() => {
+                      const current = formData.testingTypes;
+                      updateField("testingTypes", current.includes(opt.value) ? current.filter(v => v !== opt.value) : [...current, opt.value]);
+                    }}
+                  >
+                    {formData.testingTypes.includes(opt.value) && <Check className="w-3 h-3 text-white" />}
+                  </span>
+                  <span
+                    className="text-[13px] text-gray-700 cursor-pointer"
+                    onClick={() => {
+                      const current = formData.testingTypes;
+                      updateField("testingTypes", current.includes(opt.value) ? current.filter(v => v !== opt.value) : [...current, opt.value]);
+                    }}
+                  >{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Target Environments */}
+          <div>
+            <FieldLabel required>Target Environments</FieldLabel>
+            <div className="space-y-2 mt-2">
+              {[
+                { value: "dev", label: "DEV Environment" },
+                { value: "staging", label: "STAGING Environment" },
+                { value: "uat", label: "UAT Environment" },
+                { value: "prod", label: "PROD Environment" },
+              ].map((opt) => (
+                <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer group">
+                  <span
+                    className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
+                    style={{
+                      borderColor: formData.targetEnvironments.includes(opt.value) ? '#4D5741' : '#d1d5db',
+                      background: formData.targetEnvironments.includes(opt.value) ? '#4D5741' : 'transparent',
+                    }}
+                    onClick={() => {
+                      const current = formData.targetEnvironments;
+                      updateField("targetEnvironments", current.includes(opt.value) ? current.filter(v => v !== opt.value) : [...current, opt.value]);
+                    }}
+                  >
+                    {formData.targetEnvironments.includes(opt.value) && <Check className="w-3 h-3 text-white" />}
+                  </span>
+                  <span
+                    className="text-[13px] text-gray-700 cursor-pointer"
+                    onClick={() => {
+                      const current = formData.targetEnvironments;
+                      updateField("targetEnvironments", current.includes(opt.value) ? current.filter(v => v !== opt.value) : [...current, opt.value]);
+                    }}
+                  >{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* UAT */}
+      {/* Testing Tools Preference & Acceptance Criteria */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Testing Tools Preference</FieldLabel>
+          <Textarea placeholder="e.g. Jest, Cypress, Selenium, JMeter..." value={formData.testingToolsPreference} onChange={(e) => updateField("testingToolsPreference", e.target.value)} className="min-h-[80px]" />
+        </div>
+        <div>
+          <FieldLabel>Acceptance Criteria</FieldLabel>
+          <Textarea placeholder="What constitutes a successful delivery for each phase?" value={formData.testingAcceptanceCriteria} onChange={(e) => updateField("testingAcceptanceCriteria", e.target.value)} className="min-h-[80px]" />
+        </div>
+      </div>
+
+      {/* UAT Period & Bug Severity */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>UAT Period</FieldLabel>
+          <Input placeholder="e.g. 10 business days after delivery" value={formData.uatPeriod} onChange={(e) => updateField("uatPeriod", e.target.value)} />
+        </div>
+        <div>
+          <FieldLabel>Bug Severity Definitions</FieldLabel>
+          <Select value={formData.bugSeverityDefinitions} onValueChange={(v) => updateField("bugSeverityDefinitions", v)}>
+            <SelectTrigger><SelectValue placeholder="Select severity model" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard_p0_p4">Standard (P0-P4)</SelectItem>
+              <SelectItem value="critical_high_med_low">Critical / High / Medium / Low</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Travel Requirements & Onboarding Process */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Travel Requirements</FieldLabel>
+          <Select value={formData.travelRequirements} onValueChange={(v) => updateField("travelRequirements", v)}>
+            <SelectTrigger><SelectValue placeholder="Select travel requirement" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none_remote">None / Remote Only</SelectItem>
+              <SelectItem value="occasional">Occasional (Quarterly)</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="as_needed">As Needed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Onboarding Process</FieldLabel>
+          <Select value={formData.onboardingProcess} onValueChange={(v) => updateField("onboardingProcess", v)}>
+            <SelectTrigger><SelectValue placeholder="Select onboarding process" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard_access">Standard (Access to Jira, Slack, Repo)</SelectItem>
+              <SelectItem value="extended">Extended (Includes training sessions)</SelectItem>
+              <SelectItem value="minimal">Minimal</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Team Location, Working Hours, Test Data Provisioning */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <FieldLabel>UAT Ownership</FieldLabel>
-          <Input value={formData.uatOwnership} disabled className="bg-gray-50" />
+          <FieldLabel>Team Location</FieldLabel>
+          <Select value={formData.teamLocation} onValueChange={(v) => updateField("teamLocation", v)}>
+            <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="remote">Remote</SelectItem>
+              <SelectItem value="hybrid">Hybrid</SelectItem>
+              <SelectItem value="on_site">On-Site</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
-          <FieldLabel>UAT Duration</FieldLabel>
-          <Input placeholder="e.g., 2 weeks" value={formData.uatDuration} onChange={(e) => updateField("uatDuration", e.target.value)} />
+          <FieldLabel>Working Hours / Timezone</FieldLabel>
+          <Select value={formData.workingHoursTimezone} onValueChange={(v) => updateField("workingHoursTimezone", v)}>
+            <SelectTrigger><SelectValue placeholder="Select hours" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="9am_6pm_local">9 AM - 6 PM (Local Time)</SelectItem>
+              <SelectItem value="flexible">Flexible / Async</SelectItem>
+              <SelectItem value="overlap_us">US Overlap (4 hrs)</SelectItem>
+              <SelectItem value="overlap_eu">EU Overlap (4 hrs)</SelectItem>
+              <SelectItem value="24_7">24/7 Coverage</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
-          <FieldLabel>UAT Sign-off Authority</FieldLabel>
-          <Input placeholder="e.g., Product Owner" value={formData.uatSignoffAuthority} onChange={(e) => updateField("uatSignoffAuthority", e.target.value)} />
+          <FieldLabel>Test Data Provisioning</FieldLabel>
+          <Select value={formData.testDataProvisioning} onValueChange={(v) => updateField("testDataProvisioning", v)}>
+            <SelectTrigger><SelectValue placeholder="Select provisioning" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="client_provided">Client Provided</SelectItem>
+              <SelectItem value="vendor_generated">Vendor Generated</SelectItem>
+              <SelectItem value="shared">Shared Responsibility</SelectItem>
+              <SelectItem value="not_applicable">Not Applicable</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      </div>
-
-      {/* Pre-production, Performance, Security testing */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <FieldLabel>Pre-Production Testing</FieldLabel>
-          <RadioGroup
-            value={formData.preProductionTesting}
-            onChange={(v) => updateField("preProductionTesting", v)}
-            options={[
-              { value: "yes", label: "Yes" },
-              { value: "no", label: "No" },
-            ]}
-          />
-        </div>
-        <div>
-          <FieldLabel>Performance Testing</FieldLabel>
-          <RadioGroup
-            value={formData.performanceTesting}
-            onChange={(v) => updateField("performanceTesting", v)}
-            options={[
-              { value: "yes", label: "Yes" },
-              { value: "no", label: "No" },
-            ]}
-          />
-        </div>
-        <div>
-          <FieldLabel>Security Testing</FieldLabel>
-          <RadioGroup
-            value={formData.securityTesting}
-            onChange={(v) => updateField("securityTesting", v)}
-            options={[
-              { value: "yes", label: "Yes" },
-              { value: "no", label: "No" },
-            ]}
-          />
-        </div>
-      </div>
-
-      {/* Defect SLA */}
-      <div>
-        <FieldLabel>Defect SLA</FieldLabel>
-        <Input placeholder="e.g., Critical: 4hrs, High: 24hrs, Medium: 3 days" value={formData.defectSLA} onChange={(e) => updateField("defectSLA", e.target.value)} />
       </div>
     </div>
   );
@@ -2146,7 +3759,7 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
       <SectionHeading>Budget</SectionHeading>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
+        <div data-field="budgetMin">
           <FieldLabel required>Budget Minimum</FieldLabel>
           <Input
             type="number"
@@ -2163,9 +3776,9 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
           {formData.budgetMin && Number(formData.budgetMin) < 0 && (
             <p style={{ fontSize: 11, color: "#983030", marginTop: 4 }}>Budget cannot be negative</p>
           )}
-          <FieldError error={errors.budgetMin} />
+          <FieldError error={errors.budgetMin} field="budgetMin" />
         </div>
-        <div>
+        <div data-field="budgetMax">
           <FieldLabel required>Budget Maximum</FieldLabel>
           <Input
             type="number"
@@ -2190,51 +3803,57 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
           {formData.budgetMin && formData.budgetMax && Number(formData.budgetMin) >= 0 && Number(formData.budgetMax) >= 0 && Number(formData.budgetMax) < Number(formData.budgetMin) && (
             <p style={{ fontSize: 11, color: "#983030", marginTop: 4 }}>Maximum must be greater than or equal to minimum</p>
           )}
-          <FieldError error={errors.budgetMax} />
+          <FieldError error={errors.budgetMax} field="budgetMax" />
         </div>
         <div>
-          <FieldLabel>Currency</FieldLabel>
+          <FieldLabel required>Currency</FieldLabel>
           <Select value={formData.currency} onValueChange={(v) => updateField("currency", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="USD">USD ($)</SelectItem>
-              <SelectItem value="EUR">EUR (&#8364;)</SelectItem>
-              <SelectItem value="GBP">GBP (&#163;)</SelectItem>
-              <SelectItem value="AED">AED</SelectItem>
               <SelectItem value="INR">INR (&#8377;)</SelectItem>
-              <SelectItem value="PKR">PKR</SelectItem>
+              <SelectItem value="GBP">GBP (&#163;)</SelectItem>
+              <SelectItem value="EUR">EUR (&#8364;)</SelectItem>
+              <SelectItem value="AED">AED</SelectItem>
+              <SelectItem value="SGD">SGD</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Pricing Model */}
-      <div>
+      {/* Pricing Model — FSD: Fixed Price / T&M / Outcome-Based / Hybrid. Default: Fixed Price */}
+      <div data-field="pricingModel">
         <FieldLabel required>Pricing Model</FieldLabel>
-        <RadioGroup
-          value={formData.pricingModel}
-          onChange={(v) => updateField("pricingModel", v)}
-          options={[
-            { value: "fixed_price", label: "Fixed Price" },
-            { value: "t_and_m", label: "T&M" },
-            { value: "outcome_based", label: "Outcome-Based" },
-            { value: "hybrid", label: "Hybrid" },
-          ]}
-        />
-        <FieldError error={errors.pricingModel} />
+        <Select value={formData.pricingModel} onValueChange={(v) => updateField("pricingModel", v)}>
+          <SelectTrigger><SelectValue placeholder="Select pricing model" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fixed_price">Fixed Price</SelectItem>
+            <SelectItem value="t_and_m">T&M</SelectItem>
+            <SelectItem value="outcome_based">Outcome-Based</SelectItem>
+            <SelectItem value="hybrid">Hybrid</SelectItem>
+          </SelectContent>
+        </Select>
+        <FieldError error={errors.pricingModel} field="pricingModel" />
       </div>
 
-      {/* Breakdown Preference */}
+      {/* Payment Schedule — FSD: Display only, not configurable */}
+      <div className="p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+        <FieldLabel>Payment Schedule (Platform Standard)</FieldLabel>
+        <p className="text-[12px] text-gray-600 leading-relaxed">
+          30% on SOW onboarding (M1) &middot; 35% on development (M2) &middot; 35% on UAT sign-off (M3). All before production go-live.
+        </p>
+      </div>
+
+      {/* Budget Breakdown Preference */}
       <div>
-        <FieldLabel>Breakdown Preference</FieldLabel>
+        <FieldLabel>Budget Breakdown Preference</FieldLabel>
         <Select value={formData.breakdownPreference} onValueChange={(v) => updateField("breakdownPreference", v)}>
-          <SelectTrigger><SelectValue placeholder="How should budget be broken down?" /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="Select breakdown preference" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="by_phase">By Phase / Milestone</SelectItem>
-            <SelectItem value="by_team">By Team / Role</SelectItem>
-            <SelectItem value="by_deliverable">By Deliverable</SelectItem>
-            <SelectItem value="fixed_monthly">Fixed Monthly Allocation</SelectItem>
-            <SelectItem value="time_materials">Time & Materials</SelectItem>
+            <SelectItem value="milestone">Milestone-based</SelectItem>
+            <SelectItem value="phase">Phase-based</SelectItem>
+            <SelectItem value="monthly">Monthly</SelectItem>
+            <SelectItem value="fixed_total">Fixed Total</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -2270,10 +3889,10 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
           <Select value={formData.escalationProcess} onValueChange={(v) => updateField("escalationProcess", v)}>
             <SelectTrigger><SelectValue placeholder="Select escalation model" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="tiered">{"Tiered (L1 \u2192 L2 \u2192 L3)"}</SelectItem>
-              <SelectItem value="direct">Direct to Stakeholder</SelectItem>
-              <SelectItem value="committee">Steering Committee</SelectItem>
-              <SelectItem value="apg_governed">APG-Governed Auto-Escalation</SelectItem>
+              <SelectItem value="direct_admin">Direct to GlimmoraTeam Admin</SelectItem>
+              <SelectItem value="client_executive">Client Executive</SelectItem>
+              <SelectItem value="joint_committee">Joint Committee</SelectItem>
+              <SelectItem value="not_defined">Not Defined</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -2291,127 +3910,201 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
    STEP 6 — Quality Standards (SKIPPABLE)
    ================================================================ */
 function Step6QualityStandards({ formData, updateField, errors = {}, blurField }: { formData: FormData; updateField: <K extends keyof FormData>(key: K, value: FormData[K]) => void; errors?: StepErrors; blurField?: (field: string) => void }) {
-  const onBlur = (field: string) => () => blurField?.(field);
+  const toggleBrowserDevice = (value: string) => {
+    const current = formData.browserDeviceSupport ?? [];
+    updateField("browserDeviceSupport", current.includes(value) ? current.filter(v => v !== value) : [...current, value]);
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
-        Define acceptance criteria, SLA targets, and quality gates. These become enforceable checkpoints in the generated SOW and feed into APG governance.
+        Define coding standards, quality gates, and support expectations. These become enforceable checkpoints in the generated SOW.
       </p>
 
-      {/* Acceptance Criteria */}
-      <div>
-        <FieldLabel required>Acceptance Criteria</FieldLabel>
-        <Textarea placeholder="Describe what constitutes acceptable delivery. e.g., code coverage > 80%, WCAG 2.1 AA (min 30, max 3000 chars)" value={formData.acceptanceCriteria} onChange={(e) => updateField("acceptanceCriteria", e.target.value)} className="min-h-[100px]" />
-      </div>
+      {/* ── SECTION A — Quality Assurance Standards ── */}
+      <SectionHeading>Section A — Quality Assurance Standards</SectionHeading>
 
-      {/* SLA & Code Review */}
+      {/* Coding Standards & Documentation Level */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <FieldLabel>SLA / Uptime Target</FieldLabel>
-          <Select value={formData.slaUptime} onValueChange={(v) => updateField("slaUptime", v)}>
-            <SelectTrigger><SelectValue placeholder="Select SLA target" /></SelectTrigger>
+          <FieldLabel required>Coding Standards</FieldLabel>
+          <Select value={formData.codingStandards} onValueChange={(v) => updateField("codingStandards", v)}>
+            <SelectTrigger><SelectValue placeholder="Select coding standards" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="99.9">99.9% (Three Nines)</SelectItem>
-              <SelectItem value="99.95">99.95%</SelectItem>
-              <SelectItem value="99.99">99.99% (Four Nines)</SelectItem>
-              <SelectItem value="best_effort">Best Effort</SelectItem>
-              <SelectItem value="na">Not Applicable</SelectItem>
+              <SelectItem value="clean_code_solid">Clean Code / SOLID</SelectItem>
+              <SelectItem value="google_style">Google Style Guide</SelectItem>
+              <SelectItem value="airbnb_style">Airbnb Style Guide</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <FieldLabel>Code Review Policy</FieldLabel>
-          <Select value={formData.codeReviewPolicy} onValueChange={(v) => updateField("codeReviewPolicy", v)}>
-            <SelectTrigger><SelectValue placeholder="Select code review approach" /></SelectTrigger>
+          <FieldLabel required>Documentation Level</FieldLabel>
+          <Select value={formData.documentationLevel} onValueChange={(v) => updateField("documentationLevel", v)}>
+            <SelectTrigger><SelectValue placeholder="Select documentation level" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="peer">Peer Review (1 reviewer)</SelectItem>
-              <SelectItem value="senior">Senior Review Required</SelectItem>
-              <SelectItem value="two_reviewers">Two Reviewers Required</SelectItem>
-              <SelectItem value="mentor_review">Mentor-Guided Review</SelectItem>
-              <SelectItem value="ai_assisted">AI-Assisted + Human Review</SelectItem>
+              <SelectItem value="high_technical_user">High (Technical + User)</SelectItem>
+              <SelectItem value="medium_technical">Medium (Technical Only)</SelectItem>
+              <SelectItem value="low_inline">Low (Inline Comments Only)</SelectItem>
+              <SelectItem value="minimal">Minimal</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Documentation Requirements */}
-      <div>
-        <FieldLabel>Documentation Requirements</FieldLabel>
-        <CheckboxGroup
-          values={formData.documentationRequirements}
-          onChange={(v) => updateField("documentationRequirements", v)}
-          options={[
-            { value: "technical", label: "Technical Docs" },
-            { value: "user", label: "User Guide" },
-            { value: "deployment", label: "Deployment Guide" },
-            { value: "none", label: "None" },
-            { value: "custom", label: "Custom" },
-          ]}
-        />
-      </div>
-
-      {/* Browser Compatibility */}
-      <div>
-        <FieldLabel>Browser Compatibility</FieldLabel>
-        <CheckboxGroup
-          values={formData.browserCompatibility}
-          onChange={(v) => updateField("browserCompatibility", v)}
-          options={[
-            { value: "chrome", label: "Chrome" },
-            { value: "firefox", label: "Firefox" },
-            { value: "safari", label: "Safari" },
-            { value: "edge", label: "Edge" },
-          ]}
-        />
-      </div>
-
-      {/* Device Compatibility */}
-      <div>
-        <FieldLabel>Device Compatibility</FieldLabel>
-        <CheckboxGroup
-          values={formData.deviceCompatibility}
-          onChange={(v) => updateField("deviceCompatibility", v)}
-          options={[
-            { value: "desktop", label: "Desktop" },
-            { value: "tablet", label: "Tablet" },
-            { value: "mobile", label: "Mobile" },
-          ]}
-        />
-      </div>
-
-      {/* Reporting, Offline, Localisation */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Test Coverage & Security Testing */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <FieldLabel>Reporting Scope</FieldLabel>
-          <RadioGroup
-            value={formData.reportingScope}
-            onChange={(v) => updateField("reportingScope", v)}
-            options={[
-              { value: "not_in_scope", label: "Not in Scope" },
-              { value: "in_scope", label: "In Scope" },
-            ]}
-          />
+          <FieldLabel>Test Coverage Target (%)</FieldLabel>
+          <Select value={formData.testCoverageTarget} onValueChange={(v) => updateField("testCoverageTarget", v)}>
+            <SelectTrigger><SelectValue placeholder="Select coverage target" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="80">80%</SelectItem>
+              <SelectItem value="85">85%</SelectItem>
+              <SelectItem value="90">90%</SelectItem>
+              <SelectItem value="95">95%</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
-          <FieldLabel>Offline Support</FieldLabel>
-          <RadioGroup
-            value={formData.offlineSupport}
-            onChange={(v) => updateField("offlineSupport", v)}
-            options={[
-              { value: "yes", label: "Yes" },
-              { value: "no", label: "No" },
-            ]}
-          />
+          <FieldLabel>Security Testing Requirements</FieldLabel>
+          <Select value={formData.securityTestingRequirements} onValueChange={(v) => updateField("securityTestingRequirements", v)}>
+            <SelectTrigger><SelectValue placeholder="Select security testing" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="owasp_top10">OWASP Top 10 Compliance</SelectItem>
+              <SelectItem value="penetration_testing">Penetration Testing</SelectItem>
+              <SelectItem value="sast_dast">SAST + DAST</SelectItem>
+              <SelectItem value="basic">Basic Security Review</SelectItem>
+              <SelectItem value="none">None</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Code Review Process */}
+      <div>
+        <FieldLabel>Code Review Process</FieldLabel>
+        <Textarea
+          placeholder="Describe the peer review process, required approvals, etc..."
+          value={formData.codeReviewProcess}
+          onChange={(e) => updateField("codeReviewProcess", e.target.value)}
+          className="min-h-[100px]"
+        />
+      </div>
+
+      {/* ── SECTION B — Performance & Accessibility ── */}
+      <SectionHeading>Section B — Performance &amp; Accessibility</SectionHeading>
+
+      {/* Performance KPIs */}
+      <div>
+        <FieldLabel>Performance KPIs</FieldLabel>
+        <Select value={formData.performanceKpis} onValueChange={(v) => updateField("performanceKpis", v)}>
+          <SelectTrigger><SelectValue placeholder="Select performance target" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="lighthouse_90">Lighthouse &gt; 90</SelectItem>
+            <SelectItem value="lighthouse_80">Lighthouse &gt; 80</SelectItem>
+            <SelectItem value="core_web_vitals">Core Web Vitals Pass</SelectItem>
+            <SelectItem value="custom">Custom</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Browser / Device Support */}
+      <div className="p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+        <FieldLabel required>Browser / Device Support</FieldLabel>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+          {[
+            { value: "chrome_latest", label: "Chrome (Latest)" },
+            { value: "safari_latest", label: "Safari (Latest)" },
+            { value: "firefox_latest", label: "Firefox (Latest)" },
+            { value: "edge_latest", label: "Edge (Latest)" },
+            { value: "ios_safari", label: "iOS Safari" },
+            { value: "android_chrome", label: "Android Chrome" },
+          ].map((opt) => (
+            <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer group">
+              <span
+                className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
+                style={{
+                  borderColor: (formData.browserDeviceSupport ?? []).includes(opt.value) ? '#A67763' : '#d1d5db',
+                  background: (formData.browserDeviceSupport ?? []).includes(opt.value) ? '#A67763' : 'transparent',
+                }}
+                onClick={() => toggleBrowserDevice(opt.value)}
+              >
+                {(formData.browserDeviceSupport ?? []).includes(opt.value) && <Check className="w-3 h-3 text-white" />}
+              </span>
+              <span className="text-[13px] text-gray-700 cursor-pointer" onClick={() => toggleBrowserDevice(opt.value)}>{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Accessibility Standard */}
+      <div>
+        <FieldLabel>Accessibility Standard</FieldLabel>
+        <Select value={formData.accessibilityStandard} onValueChange={(v) => updateField("accessibilityStandard", v)}>
+          <SelectTrigger><SelectValue placeholder="Select accessibility standard" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="wcag_21_aa">WCAG 2.1 AA</SelectItem>
+            <SelectItem value="wcag_21_aaa">WCAG 2.1 AAA</SelectItem>
+            <SelectItem value="wcag_22_aa">WCAG 2.2 AA</SelectItem>
+            <SelectItem value="section_508">Section 508</SelectItem>
+            <SelectItem value="none">None</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* QA Responsibility & Defect Management Tool */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>QA Responsibility</FieldLabel>
+          <Select value={formData.qaResponsibility} onValueChange={(v) => updateField("qaResponsibility", v)}>
+            <SelectTrigger><SelectValue placeholder="Select QA responsibility" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="glimmorateam">GlimmoraTeam</SelectItem>
+              <SelectItem value="client">Client</SelectItem>
+              <SelectItem value="shared">Shared</SelectItem>
+              <SelectItem value="third_party">Third Party</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
-          <FieldLabel>Localisation</FieldLabel>
-          <RadioGroup
-            value={formData.localisation}
-            onChange={(v) => updateField("localisation", v)}
-            options={[
-              { value: "yes", label: "Yes" },
-              { value: "no", label: "No" },
-            ]}
+          <FieldLabel>Defect Management Tool</FieldLabel>
+          <Select value={formData.defectManagementTool} onValueChange={(v) => updateField("defectManagementTool", v)}>
+            <SelectTrigger><SelectValue placeholder="Select tool" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="jira">Jira</SelectItem>
+              <SelectItem value="linear">Linear</SelectItem>
+              <SelectItem value="github_issues">GitHub Issues</SelectItem>
+              <SelectItem value="azure_devops">Azure DevOps</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Post-Launch Support & Maintenance */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Post-Launch Support Period</FieldLabel>
+          <Select value={formData.postLaunchSupportPeriod} onValueChange={(v) => updateField("postLaunchSupportPeriod", v)}>
+            <SelectTrigger><SelectValue placeholder="Select support period" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="15_days">15 Days</SelectItem>
+              <SelectItem value="30_days">30 Days</SelectItem>
+              <SelectItem value="60_days">60 Days</SelectItem>
+              <SelectItem value="90_days">90 Days</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Maintenance Scope</FieldLabel>
+          <Textarea
+            placeholder="Describe what is included in post-launch maintenance (e.g. security patches, minor UI tweaks)..."
+            value={formData.maintenanceScope}
+            onChange={(e) => updateField("maintenanceScope", e.target.value)}
+            className="min-h-[80px]"
           />
         </div>
       </div>
@@ -2427,231 +4120,209 @@ function Step6QualityStandards({ formData, updateField, errors = {}, blurField }
 /* ================================================================
    STEP 7 — Governance & Compliance (MANDATORY)
    ================================================================ */
-function Step7GovernanceCompliance({ formData, updateField, addListItem, removeListItem, updateListItem, errors = {}, blurField }: StepListProps) {
+function Step7GovernanceCompliance({ formData, updateField, errors = {}, blurField }: StepListProps) {
   const onBlur = (field: string) => () => blurField?.(field);
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
-        Specify governance framework, compliance requirements, and data protection standards. The AI will embed compliance clauses into the generated SOW.
+        Specify project governance, compliance requirements, and audit standards. The AI will embed governance clauses into the generated SOW.
       </p>
 
-      {/* Non-Discrimination Confirm — HARD BLOCK */}
-      <div className="rounded-xl" style={{
-        padding: 16,
-        background: formData.nonDiscriminationConfirm ? 'rgba(77,87,65,0.04)' : 'rgba(166,119,99,0.04)',
-        border: `1px solid ${formData.nonDiscriminationConfirm ? 'rgba(77,87,65,0.18)' : 'rgba(166,119,99,0.18)'}`,
-      }}>
-        <div className="flex items-start gap-3">
-          <div style={{ marginTop: 2 }}>
+      {/* ── SECTION A — Project Governance ── */}
+      <SectionHeading>Section A — Project Governance</SectionHeading>
+
+      {/* Reporting Frequency & Communication Channels */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div data-field="reportingFrequency">
+          <FieldLabel required>Reporting Frequency</FieldLabel>
+          <Select value={formData.reportingFrequency} onValueChange={(v) => updateField("reportingFrequency", v)}>
+            <SelectTrigger><SelectValue placeholder="Select frequency" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="bi_weekly">Bi-Weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+            </SelectContent>
+          </Select>
+          <FieldError error={errors.reportingFrequency} field="reportingFrequency" />
+        </div>
+        <div data-field="communicationChannels">
+          <FieldLabel required>Primary Communication Channels</FieldLabel>
+          <Select value={formData.communicationChannels} onValueChange={(v) => updateField("communicationChannels", v)}>
+            <SelectTrigger><SelectValue placeholder="Select channels" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="slack_email">Slack/Email</SelectItem>
+              <SelectItem value="teams">Microsoft Teams</SelectItem>
+              <SelectItem value="slack">Slack Only</SelectItem>
+              <SelectItem value="email">Email Only</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+          <FieldError error={errors.communicationChannels} field="communicationChannels" />
+        </div>
+      </div>
+
+      {/* Steering Committee & Change Management */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Steering Committee Frequency</FieldLabel>
+          <Select value={formData.steeringCommitteeFrequency} onValueChange={(v) => updateField("steeringCommitteeFrequency", v)}>
+            <SelectTrigger><SelectValue placeholder="Select frequency" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="bi_weekly">Bi-Weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="quarterly">Quarterly</SelectItem>
+              <SelectItem value="as_needed">As Needed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Change Management Process</FieldLabel>
+          <Textarea
+            placeholder="How will scope changes be requested, reviewed, and approved?"
+            value={formData.changeManagementProcess}
+            onChange={(e) => updateField("changeManagementProcess", e.target.value)}
+            className="min-h-[80px]"
+          />
+        </div>
+      </div>
+
+      {/* Project Methodology & Data Retention */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Project Methodology</FieldLabel>
+          <Select value={formData.projectMethodology} onValueChange={(v) => updateField("projectMethodology", v)}>
+            <SelectTrigger><SelectValue placeholder="Select methodology" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="agile_scrum">Agile / Scrum</SelectItem>
+              <SelectItem value="agile_kanban">Agile / Kanban</SelectItem>
+              <SelectItem value="waterfall">Waterfall</SelectItem>
+              <SelectItem value="hybrid">Hybrid</SelectItem>
+              <SelectItem value="safe">SAFe</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Data Retention Policy</FieldLabel>
+          <Select value={formData.dataRetentionPolicy} onValueChange={(v) => updateField("dataRetentionPolicy", v)}>
+            <SelectTrigger><SelectValue placeholder="Select retention policy" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1_year">1 Year</SelectItem>
+              <SelectItem value="3_years">3 Years</SelectItem>
+              <SelectItem value="5_years">5 Years</SelectItem>
+              <SelectItem value="7_years">7 Years</SelectItem>
+              <SelectItem value="10_years">10 Years</SelectItem>
+              <SelectItem value="indefinite">Indefinite</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* ── SECTION B — Compliance & Audits ── */}
+      <SectionHeading>Section B — Compliance &amp; Audits</SectionHeading>
+
+      {/* Compliance Standards */}
+      <div className="p-4 rounded-lg border border-gray-100 bg-gray-50/50">
+        <FieldLabel required>Compliance Standards</FieldLabel>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+          {[
+            { value: "gdpr", label: "GDPR" },
+            { value: "hipaa", label: "HIPAA" },
+            { value: "pci_dss", label: "PCI-DSS" },
+            { value: "soc2", label: "SOC2" },
+            { value: "iso_27001", label: "ISO 27001" },
+            { value: "local_data_laws", label: "Local Data Laws" },
+          ].map((opt) => (
+            <label key={opt.value} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 bg-white cursor-pointer hover:border-gray-200 transition-all">
+              <input
+                type="checkbox"
+                checked={(formData.complianceStandards ?? []).includes(opt.value)}
+                onChange={() => {
+                  const current = formData.complianceStandards ?? [];
+                  updateField("complianceStandards", current.includes(opt.value) ? current.filter(v => v !== opt.value) : [...current, opt.value]);
+                  blurField?.("complianceStandards");
+                }}
+                className="w-4 h-4 rounded border-gray-300 accent-[#A67763]"
+              />
+              <span className="text-[13px] text-gray-700">{opt.label}</span>
+            </label>
+          ))}
+        </div>
+        <FieldError error={errors.complianceStandards} field="complianceStandards" />
+      </div>
+
+      {/* Audit Frequency & Security Audit Frequency */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Audit Frequency</FieldLabel>
+          <Select value={formData.auditFrequency} onValueChange={(v) => updateField("auditFrequency", v)}>
+            <SelectTrigger><SelectValue placeholder="Select audit frequency" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="quarterly">Quarterly</SelectItem>
+              <SelectItem value="bi_annually">Bi-Annually</SelectItem>
+              <SelectItem value="annually">Annually</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Security Audit Frequency</FieldLabel>
+          <Select value={formData.securityAuditFrequency} onValueChange={(v) => updateField("securityAuditFrequency", v)}>
+            <SelectTrigger><SelectValue placeholder="Select security audit frequency" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="quarterly">Quarterly</SelectItem>
+              <SelectItem value="bi_annually">Bi-Annually</SelectItem>
+              <SelectItem value="annually">Annually</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Data Privacy Officer & DPA Required */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Data Privacy Officer (DPO)</FieldLabel>
+          <Input placeholder="Contact name or email" value={formData.dataPrivacyOfficer} onChange={(e) => updateField("dataPrivacyOfficer", e.target.value)} />
+        </div>
+        <div className="flex items-end">
+          <div className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 bg-gray-50/50 w-full">
+            <span className="text-[12px] font-semibold text-gray-600 uppercase tracking-wider">DPA Required?</span>
             <button
               type="button"
-              onClick={() => updateField("nonDiscriminationConfirm", !formData.nonDiscriminationConfirm)}
-              className="flex items-center justify-center rounded-md transition-all"
+              onClick={() => updateField("dpaRequired", !formData.dpaRequired)}
+              className="relative ml-auto w-11 h-6 rounded-full transition-all duration-200"
               style={{
-                width: 20, height: 20,
-                border: `2px solid ${formData.nonDiscriminationConfirm ? '#4D5741' : '#A67763'}`,
-                background: formData.nonDiscriminationConfirm ? '#4D5741' : 'transparent',
-                cursor: 'pointer',
+                background: formData.dpaRequired ? '#4D5741' : '#d1d5db',
               }}
             >
-              {formData.nonDiscriminationConfirm && <Check style={{ width: 12, height: 12, color: '#FFFFFF' }} />}
+              <span
+                className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
+                style={{ transform: formData.dpaRequired ? 'translateX(20px)' : 'translateX(0)' }}
+              />
             </button>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)', marginBottom: 4 }}>
-              Non-Discrimination Confirmation *
-            </div>
-            <p style={{ fontSize: 11, color: 'var(--ink-muted)', lineHeight: 1.6 }}>
-              I confirm that this project complies with all applicable non-discrimination laws and will not discriminate based on race, gender, religion, disability, or any other protected characteristic.
-            </p>
-            {!formData.nonDiscriminationConfirm && (
-              <p style={{ fontSize: 10, color: '#A67763', fontWeight: 600, marginTop: 6 }}>
-                This confirmation is mandatory to proceed with SOW generation.
-              </p>
-            )}
-            <FieldError error={errors.nonDiscriminationConfirm} />
           </div>
         </div>
       </div>
 
-      {/* Labour Standards */}
+      {/* SLA Uptime Commitment */}
       <div>
-        <FieldLabel required>Labour Standards</FieldLabel>
-        <Select value={formData.labourStandards} onValueChange={(v) => updateField("labourStandards", v)}>
-          <SelectTrigger><SelectValue placeholder="Select labour standards" /></SelectTrigger>
+        <FieldLabel>SLA Uptime Commitment</FieldLabel>
+        <Select value={formData.slaUptimeCommitment} onValueChange={(v) => updateField("slaUptimeCommitment", v)}>
+          <SelectTrigger><SelectValue placeholder="Select SLA uptime" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="ilo_compliant">ILO Compliant</SelectItem>
-            <SelectItem value="local_law">Local Law Only</SelectItem>
-            <SelectItem value="enhanced">Enhanced Standards</SelectItem>
-            <SelectItem value="fair_trade">Fair Trade Certified</SelectItem>
-          </SelectContent>
-        </Select>
-        <FieldError error={errors.labourStandards} />
-      </div>
-
-      {/* Accessibility */}
-      <div>
-        <FieldLabel>Accessibility Requirements</FieldLabel>
-        <Select value={formData.accessibilityRequirements} onValueChange={(v) => updateField("accessibilityRequirements", v)}>
-          <SelectTrigger><SelectValue placeholder="Select accessibility level" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="wcag_aa">WCAG 2.1 AA</SelectItem>
-            <SelectItem value="wcag_aaa">WCAG 2.1 AAA</SelectItem>
-            <SelectItem value="section_508">Section 508</SelectItem>
-            <SelectItem value="basic">Basic Accessibility</SelectItem>
-            <SelectItem value="none">None Required</SelectItem>
+            <SelectItem value="99.9">99.9%</SelectItem>
+            <SelectItem value="99.95">99.95%</SelectItem>
+            <SelectItem value="99.99">99.99%</SelectItem>
+            <SelectItem value="best_effort">Best Effort</SelectItem>
+            <SelectItem value="na">Not Applicable</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Prohibited Categories */}
-      <div>
-        <FieldLabel>Prohibited Categories</FieldLabel>
-        <CheckboxGroup
-          values={formData.prohibitedCategories}
-          onChange={(v) => updateField("prohibitedCategories", v)}
-          options={[
-            { value: "weapons", label: "Weapons" },
-            { value: "gambling", label: "Gambling" },
-            { value: "tobacco", label: "Tobacco" },
-            { value: "adult_content", label: "Adult Content" },
-            { value: "surveillance", label: "Surveillance" },
-            { value: "cryptocurrency", label: "Cryptocurrency" },
-          ]}
-        />
-      </div>
-
-      <SectionHeading>Data Privacy</SectionHeading>
-
-      {/* Personal Data Involved */}
-      <div>
-        <FieldLabel required>Personal Data Involved</FieldLabel>
-        <RadioGroup
-          value={formData.personalDataInvolved}
-          onChange={(v) => updateField("personalDataInvolved", v)}
-          options={[
-            { value: "yes", label: "Yes" },
-            { value: "no", label: "No" },
-          ]}
-        />
-      </div>
-
-      {/* Conditional: Privacy Laws */}
-      {formData.personalDataInvolved === "yes" && (
-        <>
-          <div>
-            <FieldLabel>Applicable Privacy Laws</FieldLabel>
-            <CheckboxGroup
-              values={formData.privacyLaws}
-              onChange={(v) => updateField("privacyLaws", v)}
-              options={[
-                { value: "gdpr", label: "GDPR" },
-                { value: "ccpa", label: "CCPA" },
-                { value: "hipaa", label: "HIPAA" },
-                { value: "pdpa", label: "PDPA" },
-                { value: "lgpd", label: "LGPD" },
-                { value: "popia", label: "POPIA" },
-              ]}
-            />
-          </div>
-          <div>
-            <FieldLabel>DPA Required</FieldLabel>
-            <RadioGroup
-              value={formData.dpaRequired}
-              onChange={(v) => updateField("dpaRequired", v)}
-              options={[
-                { value: "yes", label: "Yes" },
-                { value: "no", label: "No" },
-              ]}
-            />
-          </div>
-        </>
-      )}
-
-      {/* Privacy Impact Status */}
-      <div>
-        <FieldLabel>Privacy Impact Assessment Status</FieldLabel>
-        <Select value={formData.privacyImpactStatus} onValueChange={(v) => updateField("privacyImpactStatus", v)}>
-          <SelectTrigger><SelectValue placeholder="Select PIA status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="not_started">Not Started</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="not_required">Not Required</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <SectionHeading>Data Security</SectionHeading>
-
-      {/* Data Sensitivity */}
-      <div>
-        <FieldLabel required>Data Sensitivity Level</FieldLabel>
-        <Select value={formData.dataSensitivity} onValueChange={(v) => updateField("dataSensitivity", v)}>
-          <SelectTrigger><SelectValue placeholder="Select sensitivity level" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="public">Public Data</SelectItem>
-            <SelectItem value="internal">Internal / Confidential</SelectItem>
-            <SelectItem value="sensitive">Sensitive (PII/PHI)</SelectItem>
-            <SelectItem value="restricted">Restricted / Top Secret</SelectItem>
-            <SelectItem value="regulated">Regulated Industry Data</SelectItem>
-          </SelectContent>
-        </Select>
-        <FieldError error={errors.dataSensitivity} />
-      </div>
-
-      {/* Encryption */}
-      <div>
-        <FieldLabel>Encryption Requirements</FieldLabel>
-        <Select value={formData.encryptionRequirements} onValueChange={(v) => updateField("encryptionRequirements", v)}>
-          <SelectTrigger><SelectValue placeholder="Select encryption level" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="standard">Standard (TLS 1.2+)</SelectItem>
-            <SelectItem value="enhanced">Enhanced (TLS 1.3 + AES-256)</SelectItem>
-            <SelectItem value="e2e">End-to-End Encryption</SelectItem>
-            <SelectItem value="fips">FIPS 140-2 Compliant</SelectItem>
-            <SelectItem value="custom">Custom Requirements</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Regulatory Frameworks */}
-      <ListField label="Regulatory Frameworks" items={formData.regulatoryFrameworks} fieldKey="regulatoryFrameworks" placeholder="e.g., SOC 2 Type II, PCI-DSS, ISO 27001" addListItem={addListItem} removeListItem={removeListItem} updateListItem={updateListItem} icon={ShieldCheck} addLabel="Add Framework" />
-
-      {/* Data Residency */}
-      <div>
-        <FieldLabel>Data Residency</FieldLabel>
-        <Select value={formData.dataResidency} onValueChange={(v) => updateField("dataResidency", v)}>
-          <SelectTrigger><SelectValue placeholder="Select data residency" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="us">United States</SelectItem>
-            <SelectItem value="eu">European Union</SelectItem>
-            <SelectItem value="uk">United Kingdom</SelectItem>
-            <SelectItem value="india">India</SelectItem>
-            <SelectItem value="uae">UAE</SelectItem>
-            <SelectItem value="multi_region">Multi-Region</SelectItem>
-            <SelectItem value="no_restriction">No Restriction</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Access Control */}
-      <div>
-        <FieldLabel>Access Control Model</FieldLabel>
-        <Select value={formData.accessControl} onValueChange={(v) => updateField("accessControl", v)}>
-          <SelectTrigger><SelectValue placeholder="Select access control approach" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="rbac">Role-Based (RBAC)</SelectItem>
-            <SelectItem value="abac">Attribute-Based (ABAC)</SelectItem>
-            <SelectItem value="zero_trust">Zero Trust Architecture</SelectItem>
-            <SelectItem value="mfa_required">MFA Required for All Users</SelectItem>
-            <SelectItem value="sso">SSO / Federated Identity</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <TipBox icon={Scale} variant="forest" title="Compliance:">
-        The non-discrimination confirmation is a hard gate. SOW generation cannot proceed without it. All governance fields are embedded as compliance clauses.
+      <TipBox icon={Scale} variant="forest" title="Governance:">
+        These governance and compliance settings are embedded as enforceable clauses in the generated SOW, ensuring regulatory alignment throughout the project lifecycle.
       </TipBox>
     </div>
   );
@@ -2662,166 +4333,185 @@ function Step7GovernanceCompliance({ formData, updateField, addListItem, removeL
    STEP 8 — Commercial & Legal (MANDATORY)
    ================================================================ */
 function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }: { formData: FormData; updateField: <K extends keyof FormData>(key: K, value: FormData[K]) => void; errors?: StepErrors; blurField?: (field: string) => void }) {
-  const onBlur = (field: string) => () => blurField?.(field);
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
-        Define intellectual property, commercial terms, and legal provisions. These clauses are critical for the generated SOW&apos;s enforceability.
+        Define commercial terms, IP ownership, and legal provisions. These clauses are critical for the generated SOW&apos;s enforceability.
       </p>
 
-      <SectionHeading>Intellectual Property</SectionHeading>
+      {/* ── SECTION A — Commercial Terms ── */}
+      <SectionHeading>Section A — Commercial Terms</SectionHeading>
 
-      {/* IP Ownership */}
-      <div>
-        <FieldLabel required>IP Ownership</FieldLabel>
-        <RadioGroup
-          value={formData.ipOwnership}
-          onChange={(v) => updateField("ipOwnership", v)}
-          options={[
-            { value: "client", label: "Client Owns All IP" },
-            { value: "vendor", label: "Vendor Retains IP" },
-            { value: "shared", label: "Shared / Joint IP" },
-            { value: "license", label: "License to Client" },
-          ]}
-        />
-        <FieldError error={errors.ipOwnership} />
-      </div>
-
-      {/* Source Code Ownership */}
-      <div>
-        <FieldLabel required>Source Code Ownership</FieldLabel>
-        <RadioGroup
-          value={formData.sourceCodeOwnership}
-          onChange={(v) => updateField("sourceCodeOwnership", v)}
-          options={[
-            { value: "client", label: "Client" },
-            { value: "vendor", label: "Vendor" },
-            { value: "escrow", label: "Escrow" },
-          ]}
-        />
-        <FieldError error={errors.sourceCodeOwnership} />
-      </div>
-
-      {/* Reference Rights */}
-      <div>
-        <FieldLabel required>Reference Rights</FieldLabel>
-        <RadioGroup
-          value={formData.referenceRights}
-          onChange={(v) => updateField("referenceRights", v)}
-          options={[
-            { value: "allowed", label: "Allowed" },
-            { value: "with_approval", label: "With Approval" },
-            { value: "not_allowed", label: "Not Allowed" },
-          ]}
-        />
-        <FieldError error={errors.referenceRights} />
-      </div>
-
-      {/* Open Source Policy */}
-      <div>
-        <FieldLabel>Open Source Policy</FieldLabel>
-        <RadioGroup
-          value={formData.openSourcePolicy}
-          onChange={(v) => updateField("openSourcePolicy", v)}
-          options={[
-            { value: "permissive_only", label: "Permissive Only (MIT/Apache)" },
-            { value: "copyleft_allowed", label: "Copyleft Allowed" },
-            { value: "no_open_source", label: "No Open Source" },
-            { value: "case_by_case", label: "Case by Case" },
-          ]}
-        />
-      </div>
-
-      <SectionHeading>Commercial Terms</SectionHeading>
-
-      {/* Third Party Costs */}
-      <div>
-        <FieldLabel required>Third-Party Costs</FieldLabel>
-        <RadioGroup
-          value={formData.thirdPartyCosts}
-          onChange={(v) => updateField("thirdPartyCosts", v)}
-          options={[
-            { value: "included", label: "Included in Budget" },
-            { value: "client_pays", label: "Client Pays Directly" },
-            { value: "pass_through", label: "Pass-Through" },
-            { value: "not_applicable", label: "Not Applicable" },
-          ]}
-        />
-        <FieldError error={errors.thirdPartyCosts} />
-      </div>
-
-      {/* Warranty Period */}
-      <div>
-        <FieldLabel required>Warranty Period</FieldLabel>
-        <Select value={formData.warrantyPeriod} onValueChange={(v) => updateField("warrantyPeriod", v)}>
-          <SelectTrigger><SelectValue placeholder="Select warranty period" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="30_days">30 Days</SelectItem>
-            <SelectItem value="60_days">60 Days</SelectItem>
-            <SelectItem value="90_days">90 Days</SelectItem>
-            <SelectItem value="6_months">6 Months</SelectItem>
-            <SelectItem value="12_months">12 Months</SelectItem>
-            <SelectItem value="none">No Warranty</SelectItem>
-          </SelectContent>
-        </Select>
-        <FieldError error={errors.warrantyPeriod} />
-      </div>
-
-      {/* Post-Warranty Support */}
-      <div>
-        <FieldLabel>Post-Warranty Support</FieldLabel>
-        <RadioGroup
-          value={formData.postWarrantySupport}
-          onChange={(v) => updateField("postWarrantySupport", v)}
-          options={[
-            { value: "not_required", label: "Not Required" },
-            { value: "optional", label: "Optional (Separate Contract)" },
-            { value: "included", label: "Included" },
-          ]}
-        />
-      </div>
-
-      <SectionHeading>Change Management</SectionHeading>
-
-      {/* Change Request Process */}
-      <div>
-        <FieldLabel required>Change Request Process</FieldLabel>
-        <RadioGroup
-          value={formData.changeRequestProcess}
-          onChange={(v) => updateField("changeRequestProcess", v)}
-          options={[
-            { value: "formal_cr", label: "Formal CR Process" },
-            { value: "agile_backlog", label: "Agile Backlog Adjustment" },
-            { value: "steering_committee", label: "Steering Committee Approval" },
-          ]}
-        />
-        <FieldError error={errors.changeRequestProcess} />
-      </div>
-
-      {/* Conditional: Change Request Approver */}
-      {formData.changeRequestProcess && (
-        <div>
-          <FieldLabel>Change Request Approver</FieldLabel>
-          <Input placeholder="e.g., Project Director, CTO" value={formData.changeRequestApprover} onChange={(e) => updateField("changeRequestApprover", e.target.value)} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div data-field="paymentTerms">
+          <FieldLabel required>Payment Terms</FieldLabel>
+          <Select value={formData.paymentTerms} onValueChange={(v) => updateField("paymentTerms", v)}>
+            <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="net_15">Net 15</SelectItem>
+              <SelectItem value="net_30">Net 30</SelectItem>
+              <SelectItem value="net_45">Net 45</SelectItem>
+              <SelectItem value="net_60">Net 60</SelectItem>
+              <SelectItem value="upon_delivery">Upon Delivery</SelectItem>
+              <SelectItem value="milestone_based">Milestone-Based</SelectItem>
+            </SelectContent>
+          </Select>
+          <FieldError error={errors.paymentTerms} field="paymentTerms" />
         </div>
-      )}
+        <div data-field="warrantyPeriod">
+          <FieldLabel required>Warranty Period</FieldLabel>
+          <Select value={formData.warrantyPeriod} onValueChange={(v) => updateField("warrantyPeriod", v)}>
+            <SelectTrigger><SelectValue placeholder="Select warranty period" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="30_days">30 Days</SelectItem>
+              <SelectItem value="60_days">60 Days</SelectItem>
+              <SelectItem value="90_days">90 Days</SelectItem>
+              <SelectItem value="6_months">6 Months</SelectItem>
+              <SelectItem value="12_months">12 Months</SelectItem>
+            </SelectContent>
+          </Select>
+          <FieldError error={errors.warrantyPeriod} field="warrantyPeriod" />
+        </div>
+      </div>
 
-      {/* Environment Costs */}
       <div>
-        <FieldLabel>Environment Costs</FieldLabel>
-        <RadioGroup
-          value={formData.environmentCosts}
-          onChange={(v) => updateField("environmentCosts", v)}
-          options={[
-            { value: "included", label: "Included" },
-            { value: "client_pays", label: "Client Pays" },
-            { value: "shared", label: "Shared" },
-          ]}
+        <FieldLabel>Invoicing Schedule</FieldLabel>
+        <Textarea
+          placeholder="Describe when invoices will be issued (e.g. at the end of each milestone)..."
+          value={formData.invoicingSchedule}
+          onChange={(e) => updateField("invoicingSchedule", e.target.value)}
+          className="min-h-[100px]"
+        />
+      </div>
+
+      {/* ── SECTION B — Legal & IP Clauses ── */}
+      <SectionHeading>Section B — Legal &amp; IP Clauses</SectionHeading>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div data-field="ipOwnership">
+          <FieldLabel required>IP Ownership</FieldLabel>
+          <Select value={formData.ipOwnership} onValueChange={(v) => updateField("ipOwnership", v)}>
+            <SelectTrigger><SelectValue placeholder="Select IP ownership" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="client">Client</SelectItem>
+              <SelectItem value="vendor">Vendor</SelectItem>
+              <SelectItem value="shared">Shared / Licensed</SelectItem>
+            </SelectContent>
+          </Select>
+          <FieldError error={errors.ipOwnership} field="ipOwnership" />
+        </div>
+        <div data-field="terminationNoticePeriod">
+          <FieldLabel required>Termination Notice Period</FieldLabel>
+          <Select value={formData.terminationNoticePeriod} onValueChange={(v) => updateField("terminationNoticePeriod", v)}>
+            <SelectTrigger><SelectValue placeholder="Select notice period" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="15_days">15 Days</SelectItem>
+              <SelectItem value="30_days">30 Days</SelectItem>
+              <SelectItem value="60_days">60 Days</SelectItem>
+              <SelectItem value="90_days">90 Days</SelectItem>
+            </SelectContent>
+          </Select>
+          <FieldError error={errors.terminationNoticePeriod} field="terminationNoticePeriod" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Liability Cap</FieldLabel>
+          <Select value={formData.liabilityCap} onValueChange={(v) => updateField("liabilityCap", v)}>
+            <SelectTrigger><SelectValue placeholder="Select liability cap" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="100_percent_fees">100% of Fees</SelectItem>
+              <SelectItem value="200_percent_fees">200% of Fees</SelectItem>
+              <SelectItem value="fixed_amount">Fixed Amount</SelectItem>
+              <SelectItem value="unlimited">Unlimited</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Governing Law</FieldLabel>
+          <Select value={formData.governingLaw} onValueChange={(v) => updateField("governingLaw", v)}>
+            <SelectTrigger><SelectValue placeholder="Select governing law" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="delaware_usa">Delaware, USA</SelectItem>
+              <SelectItem value="california_usa">California, USA</SelectItem>
+              <SelectItem value="new_york_usa">New York, USA</SelectItem>
+              <SelectItem value="england_wales">England &amp; Wales</SelectItem>
+              <SelectItem value="india">India</SelectItem>
+              <SelectItem value="singapore">Singapore</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Dispute Resolution</FieldLabel>
+          <Select value={formData.disputeResolution} onValueChange={(v) => updateField("disputeResolution", v)}>
+            <SelectTrigger><SelectValue placeholder="Select dispute resolution" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="arbitration">Arbitration</SelectItem>
+              <SelectItem value="mediation">Mediation</SelectItem>
+              <SelectItem value="litigation">Litigation</SelectItem>
+              <SelectItem value="mediation_then_arbitration">Mediation then Arbitration</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Non-Solicitation Period</FieldLabel>
+          <Select value={formData.nonSolicitationPeriod} onValueChange={(v) => updateField("nonSolicitationPeriod", v)}>
+            <SelectTrigger><SelectValue placeholder="Select period" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="6_months">6 Months</SelectItem>
+              <SelectItem value="12_months">12 Months</SelectItem>
+              <SelectItem value="18_months">18 Months</SelectItem>
+              <SelectItem value="24_months">24 Months</SelectItem>
+              <SelectItem value="none">None</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Insurance Requirements</FieldLabel>
+          <Select value={formData.insuranceRequirements} onValueChange={(v) => updateField("insuranceRequirements", v)}>
+            <SelectTrigger><SelectValue placeholder="Select insurance" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard_pi">Standard Professional Indemnity</SelectItem>
+              <SelectItem value="enhanced_pi">Enhanced Professional Indemnity</SelectItem>
+              <SelectItem value="cyber_liability">Cyber Liability</SelectItem>
+              <SelectItem value="none">None Required</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Confidentiality Terms</FieldLabel>
+          <Select value={formData.confidentialityTerms} onValueChange={(v) => updateField("confidentialityTerms", v)}>
+            <SelectTrigger><SelectValue placeholder="Select confidentiality" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard_nda">Standard NDA applies</SelectItem>
+              <SelectItem value="mutual_nda">Mutual NDA</SelectItem>
+              <SelectItem value="custom_nda">Custom NDA</SelectItem>
+              <SelectItem value="none">None</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <FieldLabel>Expenses Policy</FieldLabel>
+        <Textarea
+          placeholder="Describe the expenses policy (e.g. reimbursable with prior approval)..."
+          value={formData.expensesPolicy}
+          onChange={(e) => updateField("expensesPolicy", e.target.value)}
+          className="min-h-[60px]"
         />
       </div>
 
       <TipBox icon={Gavel} variant="brown" title="Legal note:">
-        IP ownership and change request clauses are critical for contract enforceability. The AI will structure these as formal contract sections.
+        IP ownership and termination clauses are critical for contract enforceability. The AI will structure these as formal contract sections.
       </TipBox>
     </div>
   );
@@ -2831,7 +4521,7 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
 /* ================================================================
    STEP 9 — Review & Generate
    ================================================================ */
-function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComplete, skippedSteps, setCurrentStep, errors = {}, blurField }: {
+function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComplete, skippedSteps, setCurrentStep, errors = {}, blurField, reviewSummaryData, reviewSummaryLoading }: {
   formData: FormData;
   updateField: <K extends keyof FormData>(key: K, value: FormData[K]) => void;
   aiConfidence: number;
@@ -2840,13 +4530,97 @@ function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComple
   setCurrentStep: (step: number) => void;
   errors?: StepErrors;
   blurField?: (field: string) => void;
+  reviewSummaryData?: any;
+  reviewSummaryLoading?: boolean;
 }) {
   const onBlur = (field: string) => () => blurField?.(field);
+
+  // Use API confidence if available, otherwise fall back to local
+  const apiConfidence = reviewSummaryData?.confidence_score ?? null;
+  const displayConfidence = apiConfidence ?? aiConfidence;
+  const confidenceStatus = reviewSummaryData?.confidence_status ?? (displayConfidence >= 90 ? "high" : displayConfidence >= 60 ? "medium" : "low");
+  const canGenerate = reviewSummaryData?.can_generate ?? displayConfidence >= 60;
+  const blockingErrors: string[] = reviewSummaryData?.blocking_errors ?? [];
+  const apiStepIndicators: Record<string, string> = reviewSummaryData?.step_indicators ?? {};
+  const hallucinationLayers: any[] = reviewSummaryData?.hallucination_layers ?? [];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
         Review your inputs, assign approvers, and generate the SOW. All mandatory steps must be complete before generation.
       </p>
+
+      {/* API Confidence Score */}
+      {reviewSummaryLoading ? (
+        <div className="flex items-center gap-2 rounded-xl px-4 py-3 bg-gray-50 border border-gray-100">
+          <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+          <span className="text-[12px] text-gray-500">Loading review summary from API...</span>
+        </div>
+      ) : apiConfidence !== null ? (
+        <div className="rounded-xl px-5 py-4 border" style={{
+          background: confidenceStatus === "high" ? "rgba(77,87,65,0.04)" : confidenceStatus === "medium" ? "rgba(166,119,99,0.04)" : "rgba(192,68,68,0.04)",
+          borderColor: confidenceStatus === "high" ? "rgba(77,87,65,0.15)" : confidenceStatus === "medium" ? "rgba(166,119,99,0.15)" : "rgba(192,68,68,0.15)",
+        }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[13px] font-semibold" style={{ color: confidenceStatus === "high" ? "#4D5741" : confidenceStatus === "medium" ? "#A67763" : "#c04444" }}>
+              API Confidence Score
+            </span>
+            <span className="text-[22px] font-bold" style={{ color: confidenceStatus === "high" ? "#4D5741" : confidenceStatus === "medium" ? "#A67763" : "#c04444" }}>
+              {displayConfidence}%
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+            <div className="h-full rounded-full transition-all duration-500" style={{
+              width: `${displayConfidence}%`,
+              background: confidenceStatus === "high" ? "#4D5741" : confidenceStatus === "medium" ? "#A67763" : "#c04444",
+            }} />
+          </div>
+          {reviewSummaryData?.confidence_advisory && (
+            <p className="text-[11px] mt-2" style={{ color: 'var(--ink-muted)' }}>{reviewSummaryData.confidence_advisory}</p>
+          )}
+          {!canGenerate && (
+            <p className="text-[11px] mt-1 font-semibold text-red-500">Generation blocked — confidence too low or missing mandatory steps.</p>
+          )}
+        </div>
+      ) : null}
+
+      {/* Blocking errors from API */}
+      {blockingErrors.length > 0 && (
+        <div className="rounded-xl px-4 py-3 bg-red-50 border border-red-100">
+          <p className="text-[12px] font-semibold text-red-600 mb-1">Blocking Issues</p>
+          {blockingErrors.map((err, i) => (
+            <p key={i} className="text-[11px] text-red-500">• {err}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Hallucination Layers from API */}
+      {hallucinationLayers.length > 0 && (
+        <>
+          <SectionHeading>Hallucination Prevention Layers</SectionHeading>
+          <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-soft)' }}>
+            {hallucinationLayers.map((layer: any, idx: number) => (
+              <div key={layer.layer_id ?? idx} className="flex items-center" style={{
+                padding: '8px 16px',
+                background: idx % 2 === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(249,245,241,0.25)',
+                borderBottom: idx < hallucinationLayers.length - 1 ? '1px solid var(--border-hair)' : 'none',
+                gap: 10,
+              }}>
+                <div className="shrink-0" style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: layer.status === "green" ? "#4D5741" : layer.status === "amber" ? "#C4A24E" : layer.status === "red" ? "#c04444" : "#ccc",
+                }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-mid)' }}>{layer.name}</span>
+                <span className="ml-auto text-[10px] font-semibold" style={{
+                  color: layer.status === "green" ? "#4D5741" : layer.status === "amber" ? "#C4A24E" : layer.status === "red" ? "#c04444" : "#999",
+                }}>
+                  {layer.active ? (layer.status === "green" ? "PASSED" : layer.status === "amber" ? "WARNING" : "FAILED") : "INACTIVE"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Approvers */}
       <SectionHeading>Approvers</SectionHeading>
@@ -2854,60 +4628,32 @@ function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComple
         <div>
           <FieldLabel required>Business Owner / Approver</FieldLabel>
           <Input placeholder="e.g., John Smith, VP Engineering" value={formData.businessOwnerApprover} onChange={(e) => updateField("businessOwnerApprover", e.target.value)} onBlur={onBlur("businessOwnerApprover")} />
-          <FieldError error={errors.businessOwnerApprover} />
+          <FieldError error={errors.businessOwnerApprover} field="businessOwnerApprover" />
         </div>
-        <div>
-          <FieldLabel required>Final Approver</FieldLabel>
-          <Input placeholder="e.g., Jane Doe, CTO" value={formData.finalApprover} onChange={(e) => updateField("finalApprover", e.target.value)} onBlur={onBlur("finalApprover")} />
-          <FieldError error={errors.finalApprover} />
-        </div>
-        <div>
-          <FieldLabel>Legal Reviewer</FieldLabel>
-          <Input placeholder="e.g., Legal Department (optional)" value={formData.legalReviewer} onChange={(e) => updateField("legalReviewer", e.target.value)} />
-        </div>
-        <div>
-          <FieldLabel>Security Reviewer</FieldLabel>
-          <Input placeholder="e.g., CISO / Security Team (optional)" value={formData.securityReviewer} onChange={(e) => updateField("securityReviewer", e.target.value)} />
-        </div>
-      </div>
-
-      {/* AI Confidence line */}
-      <div className="flex items-center justify-between" style={{
-        padding: '10px 16px', borderRadius: 8,
-        background: aiConfidence >= 70 ? 'rgba(77,87,65,0.05)' : aiConfidence >= 40 ? 'rgba(208,176,96,0.05)' : 'rgba(166,119,99,0.04)',
-        border: `1px solid ${aiConfidence >= 70 ? 'rgba(77,87,65,0.14)' : aiConfidence >= 40 ? 'rgba(208,176,96,0.18)' : 'rgba(166,119,99,0.14)'}`,
-      }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: aiConfidence >= 70 ? '#344028' : aiConfidence >= 40 ? '#7A6030' : '#6A4C3F' }}>
-          {aiConfidence >= 70 ? "High Confidence" : aiConfidence >= 40 ? "Moderate Confidence" : "Low Confidence"}
-        </span>
-        <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
-          AI Confidence: {aiConfidence}%
-        </span>
       </div>
 
       {/* Step completion indicators */}
       <SectionHeading>Step Completion</SectionHeading>
       <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-soft)' }}>
         {STEPS.map((step, idx) => {
-          const complete = isStepComplete(idx);
-          const skipped = skippedSteps.has(idx) && !complete;
+          // Use API step indicator if available
+          const apiIndicator = apiStepIndicators[String(idx)];
+          const complete = apiIndicator === "green" || isStepComplete(idx);
+          const skipped = apiIndicator === "amber" || (skippedSteps.has(idx) && !complete);
           const isMandatory = step.mandatory;
           const incomplete = !complete && !skipped;
           const statusColor = complete ? '#4D5741' : skipped ? '#C4A24E' : isMandatory ? '#A67763' : 'var(--ink-faint)';
           const statusLabel = complete ? 'Complete' : skipped ? 'Skipped' : (isMandatory && incomplete) ? 'Incomplete' : 'Not filled';
 
           return (
-            <button
+            <div
               key={idx}
-              onClick={() => setCurrentStep(idx)}
-              className="flex items-center w-full transition-colors"
+              className="flex items-center w-full"
               style={{
                 padding: '9px 16px',
                 background: idx % 2 === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(249,245,241,0.25)',
                 borderBottom: idx < STEPS.length - 1 ? '1px solid var(--border-hair)' : 'none',
                 gap: 10,
-                cursor: 'pointer',
-                border: 'none',
               }}
             >
               {/* Status dot */}
@@ -2923,17 +4669,44 @@ function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComple
               <span className="truncate" style={{ fontSize: 11, color: statusColor, fontWeight: 500 }}>
                 {statusLabel}
               </span>
-              {/* Mandatory badge */}
-              {isMandatory && (
-                <span style={{
-                  marginLeft: 'auto', fontSize: 8, fontWeight: 700, color: '#A67763',
-                  padding: '1px 5px', borderRadius: 3, background: 'rgba(166,119,99,0.06)',
-                  letterSpacing: '0.04em',
-                }}>
-                  REQ
-                </span>
-              )}
-            </button>
+              {/* Action buttons */}
+              <div className="flex items-center gap-1.5" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                {/* View button */}
+                <button
+                  onClick={() => setCurrentStep(idx)}
+                  title={`View ${step.label}`}
+                  className="flex items-center gap-1 rounded-md transition-all duration-150"
+                  style={{
+                    padding: '3px 8px', fontSize: 10, fontWeight: 600,
+                    color: '#4D5741', background: 'rgba(77,87,65,0.07)',
+                    border: '1px solid rgba(77,87,65,0.15)',
+                    cursor: 'pointer', letterSpacing: '0.02em',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(77,87,65,0.14)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(77,87,65,0.07)'; }}
+                >
+                  <Eye style={{ width: 11, height: 11 }} />
+                  View
+                </button>
+                {/* Edit button */}
+                <button
+                  onClick={() => setCurrentStep(idx)}
+                  title={`Edit ${step.label}`}
+                  className="flex items-center gap-1 rounded-md transition-all duration-150"
+                  style={{
+                    padding: '3px 8px', fontSize: 10, fontWeight: 600,
+                    color: '#A67763', background: 'rgba(166,119,99,0.07)',
+                    border: '1px solid rgba(166,119,99,0.15)',
+                    cursor: 'pointer', letterSpacing: '0.02em',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(166,119,99,0.14)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(166,119,99,0.07)'; }}
+                >
+                  <Pencil style={{ width: 11, height: 11 }} />
+                  Edit
+                </button>
+              </div>
+            </div>
           );
         })}
       </div>
@@ -2948,9 +4721,8 @@ function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComple
           { label: "Platform", value: formData.platformType ? formData.platformType.replace(/_/g, ' ') : "\u2014", filled: formData.platformType.length > 0 },
           { label: "Vision", value: formData.projectVision ? formData.projectVision.slice(0, 60) + (formData.projectVision.length > 60 ? "\u2026" : "") : "\u2014", filled: formData.projectVision.trim().length >= 50 },
           { label: "Tech Stack", value: formData.techStack ? formData.techStack.slice(0, 60) + (formData.techStack.length > 60 ? "\u2026" : "") : "\u2014", filled: formData.techStack.trim().length >= 10 },
-          { label: "Budget", value: formData.budgetMin || formData.budgetMax ? `${formData.currency} ${formData.budgetMin || "?"} \u2013 ${formData.budgetMax || "?"}` : "\u2014", filled: parseFloat(formData.budgetMin) > 0 },
+          { label: "Budget", value: parseFloat(formData.budgetMin) > 0 || parseFloat(formData.budgetMax) > 0 ? `${formData.currency} ${formData.budgetMin || "?"} \u2013 ${formData.budgetMax || "?"}` : "\u2014", filled: parseFloat(formData.budgetMin) > 0 && parseFloat(formData.budgetMax) > 0 },
           { label: "Pricing", value: formData.pricingModel ? formData.pricingModel.replace(/_/g, ' ') : "\u2014", filled: formData.pricingModel.length > 0 },
-          { label: "Governance", value: formData.nonDiscriminationConfirm ? "Confirmed" : "Not confirmed", filled: formData.nonDiscriminationConfirm },
           { label: "IP", value: formData.ipOwnership ? formData.ipOwnership.charAt(0).toUpperCase() + formData.ipOwnership.slice(1) : "\u2014", filled: formData.ipOwnership.length > 0 },
           { label: "Approver", value: formData.businessOwnerApprover || "\u2014", filled: formData.businessOwnerApprover.trim().length > 0 },
         ].map((row, idx, arr) => (

@@ -78,6 +78,8 @@ const SelectContent = React.forwardRef<
         className
       )}
       position={position}
+      side="bottom"
+      sideOffset={4}
       style={{ border: '1px solid var(--border-soft)' }}
       {...props}
     >
