@@ -128,6 +128,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Initial sign-in — user object only present on first call
       if (user) {
         token.id = user.id;
+        // For Google/Microsoft OAuth, default to contributor role
+        // The role can be updated later during onboarding
         token.role = ((user as { role?: string }).role || "contributor") as UserRole;
         token.glimmoraAccessToken = (user as { accessToken?: string }).accessToken;
         token.glimmoraRefreshToken = (user as { refreshToken?: string }).refreshToken;
@@ -135,6 +137,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (expiresIn) {
           token.glimmoraExpiresAt = Math.floor(Date.now() / 1000) + expiresIn;
         }
+        // Store email and name from OAuth provider
+        if (user.email) token.email = user.email;
+        if (user.name) token.name = user.name;
       }
       if (account) {
         token.provider = account.provider;
@@ -172,34 +177,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return session;
     },
-    async signIn({ user, account }) {
-      // Credentials (email/password) and Glimmora OAuth callback — always allow.
-      // Routing is handled by the login page / OAuth callback page.
+    async signIn({ account }) {
+      // Allow all authentication methods - session creation is handled by jwt callback
+      // For Google/Microsoft OAuth, NextAuth will use the callbackUrl from signIn()
+      if (account?.provider === "google" || account?.provider === "microsoft-entra-id") {
+        return true;
+      }
+      // Credentials (email/password) and Glimmora OAuth callback
       if (account?.provider === "credentials" || account?.provider === "glimmora-oauth") {
         return true;
       }
-
-      // Legacy NextAuth Google/Microsoft providers (kept as fallback).
-      // Glimmora OAuth is the primary path; this branch only fires if the user
-      // somehow triggers NextAuth's own OAuth providers directly.
-      try {
-        const existing = user.email
-          ? await prisma.user.findUnique({
-              where: { email: user.email.toLowerCase() },
-              select: { id: true },
-            })
-          : null;
-
-        // Returning user — let NextAuth route via callbackUrl
-        if (existing) return true;
-      } catch {
-        // DB unreachable — proceed, onboarding modal will handle first-time flow
-        return true;
-      }
-
-      // First-time SSO user via legacy NextAuth OAuth — send to enterprise dashboard.
-      // The enterprise layout detects isSSO && !isOnboardingComplete and shows the wizard.
-      return "/enterprise/dashboard";
+      return true;
     },
     async redirect({ url, baseUrl }) {
       // If the url is relative, prefix with baseUrl

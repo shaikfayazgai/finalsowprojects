@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 import {
   Sparkles,
   Briefcase,
@@ -498,8 +499,9 @@ function ContributorRegisterContent() {
     const redirectAfter = role === "enterprise"
       ? "/enterprise/dashboard"
       : "/contributor/onboarding";
-    const params = new URLSearchParams({ provider, redirectAfter, role });
-    window.location.href = `/api/auth/oauth/authorize?${params.toString()}`;
+    // Use NextAuth's built-in OAuth instead of Glimmora's endpoints
+    // Glimmora's callback is locked to glimmora-api.onrender.com and can't redirect back
+    signIn(provider, { callbackUrl: redirectAfter });
   };
 
   const handleManual = () => {

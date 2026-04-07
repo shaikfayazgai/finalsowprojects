@@ -252,8 +252,9 @@ function LoginPageContent() {
     setError("");
     setSsoLoading(provider);
     const redirectAfter = callbackUrl || "/enterprise/dashboard";
-    const params = new URLSearchParams({ provider, redirectAfter, role: "enterprise" });
-    window.location.href = `/api/auth/oauth/authorize?${params.toString()}`;
+    // Use NextAuth's built-in OAuth instead of Glimmora's endpoints
+    // Glimmora's callback is locked to glimmora-api.onrender.com and can't redirect back
+    signIn(provider, { callbackUrl: redirectAfter });
   };
 
   const resetToCredentials = () => {

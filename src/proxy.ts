@@ -13,14 +13,15 @@ export async function proxy(req: NextRequest) {
 
   // Use getToken (Edge-compatible) instead of importing auth (which pulls in bcryptjs)
   let isLoggedIn = false;
-  let userRole = "enterprise";
+  let userRole = "contributor";
   try {
     // secureCookie must be true on HTTPS (Vercel) so getToken reads
     // "__Secure-authjs.session-token" instead of "authjs.session-token"
     const secureCookie = req.nextUrl.protocol === "https:";
     const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
-    isLoggedIn = !!token?.email;
-    userRole = (token?.role as string) || "enterprise";
+    // Check for token existence - email or sub (user id) indicates valid session
+    isLoggedIn = !!(token?.email || token?.sub);
+    userRole = (token?.role as string) || "contributor";
   } catch {
     isLoggedIn = false;
   }
