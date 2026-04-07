@@ -296,11 +296,23 @@ export function useEnterpriseRegistration() {
         adminEmail: adminEmail,
       });
 
-      await signIn("credentials", {
+      const signInResult = await signIn("credentials", {
         email: adminEmail,
         password,
-        callbackUrl: "/enterprise/dashboard",
+        redirect: false,
       });
+
+      if (signInResult?.ok) {
+        const { getSession } = await import("next-auth/react");
+        const session = await getSession();
+        const role = (session?.user as { role?: string })?.role;
+        window.location.href =
+          role === "contributor" ? "/contributor/dashboard" :
+          role === "mentor"      ? "/mentor/dashboard" :
+                                   "/enterprise/dashboard";
+      } else {
+        window.location.href = "/auth/login";
+      }
     } catch {
       setError("Something went wrong. Please try again.");
       setIsLoading(false);

@@ -105,8 +105,8 @@ export default function OnboardingModal() {
                   </div>
                 )}
                 <div>
-                  <p className="text-sm font-semibold text-white">{ob.firstName} {ob.lastName}</p>
-                  <p className="text-xs text-white/40 mt-0.5 truncate">{ob.email}</p>
+                  <p className="text-sm font-semibold text-white">{mounted ? `${ob.firstName} ${ob.lastName}` : ""}</p>
+                  <p className="text-xs text-white/40 mt-0.5 truncate">{mounted ? ob.email : ""}</p>
                 </div>
                 <div className="space-y-1 mt-2">
                   {STEPS.map((s) => (

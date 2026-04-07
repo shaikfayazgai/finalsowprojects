@@ -2,7 +2,6 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
-import { prisma } from "@/lib/db";
 import { authApi, isMfaPending } from "@/lib/api/auth";
 
 export type UserRole = "contributor" | "enterprise" | "admin" | "reviewer";

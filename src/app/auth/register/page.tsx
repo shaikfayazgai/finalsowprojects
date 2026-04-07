@@ -747,7 +747,7 @@ function ContributorRegisterContent() {
     return (
       <div className="w-full flex items-start gap-16 max-w-7xl mx-auto px-8">
         <LeftContent />
-        <div className="w-full max-w-3xl flex flex-col justify-center">
+        <div className="w-full max-w-xl flex flex-col justify-center">
           <div className="mb-6">
             <h1 className="font-heading text-[22px] font-bold text-brown-950">Create your account</h1>
             <p className="text-sm text-gray-500 mt-1">Join the Global Workforce Intelligence Platform</p>
@@ -760,7 +760,7 @@ function ContributorRegisterContent() {
 
   /* ── Auth options + form: logo top-left, form centered ── */
   return (
-    <div className="w-full mx-auto flex flex-col py-8 max-w-3xl">
+    <div className="w-full mx-auto flex flex-col py-8 max-w-5xl">
       <div className="mb-8">{logo}</div>
       {formBody}
     </div>

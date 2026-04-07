@@ -43,6 +43,8 @@ function LoginPageContent() {
       const url = new URL(rawCallbackUrl, window.location.origin);
       // Only allow same-origin redirects to avoid open-redirects
       if (url.origin !== window.location.origin) return undefined;
+      // Do not redirect back to the home page after login
+      if (url.pathname === "/" && !url.search && !url.hash) return undefined;
       return `${url.pathname}${url.search}${url.hash}`;
     } catch {
       return undefined;
@@ -249,7 +251,8 @@ function LoginPageContent() {
   const handleSSO = (provider: "google" | "microsoft") => {
     setError("");
     setSsoLoading(provider);
-    const redirectAfter = callbackUrl || "/enterprise/dashboard";
+    // Fall back to /auth/redirect which reads the session role and routes accordingly
+    const redirectAfter = callbackUrl || "/auth/redirect";
     // Use NextAuth's built-in OAuth instead of Glimmora's endpoints
     // Glimmora's callback is locked to glimmora-api.onrender.com and can't redirect back
     signIn(provider, { callbackUrl: redirectAfter });
