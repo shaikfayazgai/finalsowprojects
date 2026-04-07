@@ -21,6 +21,8 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, slideInRight } from "@/lib/utils/motion-variants";
 import { Badge, Button, Progress, ScrollArea } from "@/components/ui";
+import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { useExtractionItems, useReviewExtractionItem, useAcceptAllExtractionItems } from "@/lib/hooks/use-manual-sow";
 
 /* ────────────────────────────────────────────────────────────
    Types & mock data
@@ -253,11 +255,54 @@ function getStateStyle(state: ReviewState) {
 /* ────────────────────────────────────────────────────────────
    Page component
    ──────────────────────────────────────────────────────────── */
+/* Transform flat API items → grouped ExtractionCategory[] */
+function apiItemsToCategories(
+  items: Array<{ id: string; text?: string; content?: string; category?: string; review_state?: string; state?: string; confidence?: number; source_section?: string; source_page?: number }>,
+): ExtractionCategory[] {
+  const grouped: Record<string, ExtractionCategory> = {};
+  for (const item of items) {
+    const catId = item.category ?? "general";
+    if (!grouped[catId]) {
+      grouped[catId] = { id: catId, label: catId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), items: [] };
+    }
+    grouped[catId].items.push({
+      id: item.id,
+      text: item.text ?? item.content ?? "",
+      state: (item.review_state ?? item.state ?? "pending") as ReviewState,
+      confidence: item.confidence ?? 80,
+      sourceSection: item.source_section ?? "",
+      sourcePage: item.source_page ?? 0,
+    });
+  }
+  return Object.values(grouped);
+}
+
 export default function ParsedReviewPage() {
-  const [categories, setCategories] = React.useState<ExtractionCategory[]>(INITIAL_CATEGORIES);
+  const store = useSOWUploadStore();
+  const sowId = store.uploadedSowId;
+  const { data: itemsRes } = useExtractionItems(sowId);
+  const reviewMutation = useReviewExtractionItem(sowId);
+  const acceptAllMutation = useAcceptAllExtractionItems(sowId);
+
+  const apiItems = (itemsRes?.data as { items?: unknown[] } | null)?.items ?? (Array.isArray(itemsRes?.data) ? itemsRes?.data : null);
+  const initialCategories = React.useMemo(
+    () => (apiItems && (apiItems as unknown[]).length > 0 ? apiItemsToCategories(apiItems as Parameters<typeof apiItemsToCategories>[0]) : INITIAL_CATEGORIES),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [!!apiItems],
+  );
+
+  const [categories, setCategories] = React.useState<ExtractionCategory[]>(initialCategories);
   const [expandedCategory, setExpandedCategory] = React.useState<string>("business-objectives");
   const [editingItem, setEditingItem] = React.useState<string | null>(null);
   const [editText, setEditText] = React.useState("");
+
+  /* Sync if API data loads after initial render */
+  React.useEffect(() => {
+    if (apiItems && (apiItems as unknown[]).length > 0) {
+      setCategories(apiItemsToCategories(apiItems as Parameters<typeof apiItemsToCategories>[0]));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!apiItems]);
 
   // Calculate stats
   const allItems = categories.flatMap((c) => c.items);
@@ -285,6 +330,13 @@ export default function ParsedReviewPage() {
           : cat
       )
     );
+    /* Sync to API — only accepted/edited/excluded map to API states */
+    if (sowId && newState !== "pending") {
+      reviewMutation.mutate({
+        itemId,
+        reviewState: { state: newState as "accepted" | "edited" | "excluded", ...(newText !== undefined ? { edited_value: newText } : {}) },
+      });
+    }
   };
 
   const acceptAllPending = () => {
@@ -296,6 +348,8 @@ export default function ParsedReviewPage() {
         ),
       }))
     );
+    /* Sync to API */
+    if (sowId) acceptAllMutation.mutate();
   };
 
   const startEdit = (item: ExtractionItem) => {

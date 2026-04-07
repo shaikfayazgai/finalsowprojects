@@ -15,6 +15,7 @@ import { StatusBanner } from "@/components/enterprise/sow/StatusBanner";
 import { SowBadge } from "@/components/enterprise/sow/SowBadge";
 import { mockExtractionReport } from "@/mocks/data/sow-upload-flow";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { useExtractionReport, useUploadStatus } from "@/lib/hooks/use-manual-sow";
 
 /* ── Context detection row config ── */
 
@@ -41,7 +42,11 @@ const sensitiveStyles: Record<string, { variant: string; label: string }> = {
 export default function ExtractionReportPage() {
   const router = useRouter();
   const store = useSOWUploadStore();
-  const report = mockExtractionReport;
+  const sowId = store.uploadedSowId;
+  const { data: reportRes } = useExtractionReport(sowId);
+  const { data: statusRes } = useUploadStatus(sowId);
+  const apiReport = (reportRes?.data ?? statusRes?.data ?? null) as typeof mockExtractionReport | null;
+  const report = apiReport ?? mockExtractionReport;
 
   const handleViewParsedSOW = () => {
     store.setFlowStep(3);

@@ -30,6 +30,8 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Button, Badge, Textarea } from "@/components/ui";
+import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { useConfirmAndSubmit } from "@/lib/hooks/use-manual-sow";
 
 /* ═══════════════════════════════════════════════════════════
    TYPES
@@ -283,6 +285,10 @@ function severityStyle(s: "high" | "medium" | "low") {
 
 export default function PreviewConfirmPage() {
   const router = useRouter();
+  const uploadStore = useSOWUploadStore();
+  const sowId = uploadStore.uploadedSowId;
+  const confirmMutation = useConfirmAndSubmit(sowId);
+
   const [activeTab, setActiveTab] = React.useState<TabKey>("generated");
   const [sections, setSections] = React.useState(SOW_SECTIONS);
   const [resolvedFlags, setResolvedFlags] = React.useState<Set<string>>(
@@ -308,9 +314,22 @@ export default function PreviewConfirmPage() {
 
   const handleConfirm = () => {
     setIsSubmitting(true);
-    setTimeout(() => {
-      router.push(`/enterprise/sow/${SOW_META.id}/approve`);
-    }, 1500);
+    const navigateToApprove = (id: string) => router.push(`/enterprise/sow/${id}/approve`);
+
+    if (sowId) {
+      confirmMutation.mutate(
+        { confirms_accuracy: true },
+        {
+          onSuccess: () => navigateToApprove(sowId),
+          onError: () => {
+            /* Fall back to navigating with the stored ID even on API error */
+            navigateToApprove(sowId);
+          },
+        },
+      );
+    } else {
+      setTimeout(() => navigateToApprove(SOW_META.id), 1500);
+    }
   };
 
   const unresolvedCount = HALLUCINATION_FLAGS.filter((f) => !resolvedFlags.has(f.id)).length;

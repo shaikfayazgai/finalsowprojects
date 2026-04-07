@@ -17,6 +17,7 @@ import { aiPoweredFeatures } from "@/mocks/data/sow-upload-flow";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import { useSOWUploadStore, setFileObjectUrl } from "@/lib/stores/sow-upload-store";
 import { validateSOWUploadFields, validateSOWField, type SOWUploadFieldErrors } from "@/lib/validations/sow-upload";
+import { sowApi } from "@/lib/api/sow";
 
 /* ═══ Parsing stages ═══ */
 
@@ -139,7 +140,7 @@ export default function SOWUploadPage() {
     setValidationErrors([]);
   };
 
-  const startParsing = () => {
+  const startParsing = async () => {
     if (!selectedFile || isParsing) return;
     /* Validate required fields with Zod */
     const errors = validateSOWUploadFields({ projectTitle, clientOrg, linkedSowId });
@@ -153,8 +154,26 @@ export default function SOWUploadPage() {
     setFileObjectUrl(URL.createObjectURL(selectedFile));
     store.setFlowStep(1);
 
-    const stages: ParsingStage[] = ["uploading", "extracting", "analyzing", "detecting", "scoring", "complete"];
+    /* Animate the local parsing stages while the upload happens in the background */
+    const stages: ParsingStage[] = ["uploading", "extracting", "analyzing", "detecting", "scoring"];
     stages.forEach((stage, i) => { setTimeout(() => setParsingStage(stage), i * 600); });
+
+    /* Call the real upload API */
+    try {
+      const res = await sowApi.uploadSOW(selectedFile, {
+        title: projectTitle,
+        client: clientOrg,
+      });
+      const sowId = (res.data as { id?: string; sow_id?: string } | null)?.id
+        ?? (res.data as { id?: string; sow_id?: string } | null)?.sow_id
+        ?? null;
+      if (sowId) store.setUploadedSowId(sowId);
+    } catch {
+      /* Non-fatal — store won't have a real ID but the flow can continue with mocks */
+    }
+
+    /* Ensure "complete" fires after all stages */
+    setTimeout(() => setParsingStage("complete"), stages.length * 600);
   };
 
   return (

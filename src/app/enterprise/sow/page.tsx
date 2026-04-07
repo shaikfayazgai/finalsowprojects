@@ -14,6 +14,7 @@ import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { useSowStore } from "@/lib/stores/sow-store";
+import { useManualSOWList, useDeleteManualSOW } from "@/lib/hooks/use-manual-sow";
 
 /* ══════════════════════════════════════════ Status config (per FSD §7.1.4) ══════════════════════════════════════════ */
 
@@ -216,7 +217,15 @@ export default function SOWListPage() {
   const [searchFocused, setSearchFocused] = React.useState(false);
   const [recentViewedOpen, setRecentViewedOpen] = React.useState(false);
 
-  const allSows = useSowStore((s) => s.sows);
+  const storeSows = useSowStore((s) => s.sows);
+  const { data: apiSowListRes } = useManualSOWList();
+  const deleteSow = useDeleteManualSOW();
+  const apiSows = (apiSowListRes?.data as { sows?: typeof storeSows; items?: typeof storeSows } | typeof storeSows | null);
+  /* Prefer API data; fall back to Zustand store (mock) */
+  const allSows: typeof storeSows = Array.isArray(apiSows) ? apiSows
+    : (apiSows as { sows?: typeof storeSows } | null)?.sows
+    ?? (apiSows as { items?: typeof storeSows } | null)?.items
+    ?? storeSows;
   const uniqueClients = React.useMemo(() => [...new Set(allSows.map((s) => s.client))].sort(), [allSows]);
 
   const [sortField, setSortField] = React.useState<SortField>("modified");
@@ -325,7 +334,9 @@ export default function SOWListPage() {
       case "edit": router.push(`/enterprise/sow/${sowId}`); break;
       case "download": break; /* PDF download */
       case "approval": router.push(`/enterprise/sow/${sowId}`); break;
-      case "archive": break; /* Archive confirmation */
+      case "archive":
+        deleteSow.mutate(sowId);
+        break;
     }
   }
 

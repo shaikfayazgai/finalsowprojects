@@ -16,6 +16,7 @@ import { SowBadge, riskVariant } from "@/components/enterprise/sow/SowBadge";
 import { mockPreviewMetrics } from "@/mocks/data/sow-upload-flow";
 import { mockHallucinationLayers } from "@/mocks/data/enterprise-sow-detail";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { useGenerationStatus, useGenerateManualSOW, useHallucinationLayers } from "@/lib/hooks/use-manual-sow";
 
 /* ── Generation stages ── */
 const GEN_STAGES = [
@@ -52,27 +53,55 @@ export default function GeneratePreviewPage() {
   const [processingStageIdx, setProcessingStageIdx] = React.useState(-1);
   const [activeTab, setActiveTab] = React.useState<TabKey>("sow");
 
+  const sowId = store.uploadedSowId;
+  const generateMutation = useGenerateManualSOW(sowId);
+  const { data: genStatusRes } = useGenerationStatus(sowId, genPhase === "generating");
+  const { data: layersRes } = useHallucinationLayers(sowId);
+
+  type HallucinationLayer = { layer?: number | string; name?: string; status?: string; details?: string };
+  const apiGenStatus = (genStatusRes?.data as { status?: string } | null)?.status;
+  const apiLayers = (layersRes?.data as { layers?: HallucinationLayer[] } | null)?.layers
+    ?? (Array.isArray(layersRes?.data) ? layersRes?.data as HallucinationLayer[] : null);
+
   const metrics = mockPreviewMetrics;
-  const hallucinationLayers = mockHallucinationLayers["sow-001"] || [];
+  const hallucinationLayers: HallucinationLayer[] = (apiLayers ?? mockHallucinationLayers["sow-001"] ?? []) as HallucinationLayer[];
   const hasRedLayers = hallucinationLayers.some((l) => l.status === "failed");
   const isStale = store.previewState?.isStaleDocument || false;
   const canSubmit = genPhase === "complete" && !hasRedLayers && !isStale;
+
+  /* When API signals completion, advance local phase */
+  React.useEffect(() => {
+    if (apiGenStatus === "completed" && genPhase !== "complete") {
+      setGenStageIdx(GEN_STAGES.length - 1);
+      setGenPhase("complete");
+      store.setGenerationState("complete");
+      store.setPreviewState({ qualityMetrics: metrics, isStaleDocument: false, hardBlocks: [] });
+      store.setFlowStep(7);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiGenStatus]);
 
   const startGeneration = () => {
     setGenPhase("generating");
     GEN_STAGES.forEach((_, i) => {
       setTimeout(() => setGenStageIdx(i), (i + 1) * 800);
     });
-    setTimeout(() => {
-      setGenPhase("complete");
-      store.setGenerationState("complete");
-      store.setPreviewState({
-        qualityMetrics: metrics,
-        isStaleDocument: false,
-        hardBlocks: hasRedLayers ? ["Hallucination layer failed"] : [],
-      });
-      store.setFlowStep(7);
-    }, (GEN_STAGES.length + 1) * 800);
+    /* Trigger real generation */
+    if (sowId) {
+      generateMutation.mutate({});
+    } else {
+      /* Fallback: advance to complete after animation if no real SOW */
+      setTimeout(() => {
+        setGenPhase("complete");
+        store.setGenerationState("complete");
+        store.setPreviewState({
+          qualityMetrics: metrics,
+          isStaleDocument: false,
+          hardBlocks: hasRedLayers ? ["Hallucination layer failed"] : [],
+        });
+        store.setFlowStep(7);
+      }, (GEN_STAGES.length + 1) * 800);
+    }
   };
 
   React.useEffect(() => {

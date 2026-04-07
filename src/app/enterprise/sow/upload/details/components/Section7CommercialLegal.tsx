@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, User, Scale, Handshake, ShieldCheck } from "lucide-react";
+import { User, Scale, Handshake, ShieldCheck } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 import { SectionHeader, SectionFooter, Field, CustomSelect, inputCls } from "./_shared";
@@ -184,14 +184,6 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
 
         {/* Approval Authorities */}
         <SubSection icon={ShieldCheck} title="Approval Authorities">
-          <div className="rounded-xl border border-gold-200 bg-gold-50/50 px-4 py-3 flex items-start gap-2.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-gold-600 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-gold-700 leading-relaxed">
-              <span className="font-semibold">Business Owner must differ from the SOW submitter.</span>{" "}
-              The platform enforces this — selecting yourself will block submission.
-            </p>
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="SOW Submitter" error={errors.sowSubmitter}>
               <UserInput

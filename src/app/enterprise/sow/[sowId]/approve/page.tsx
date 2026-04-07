@@ -16,6 +16,7 @@ import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import { useSowStore, INITIAL_APPROVAL_STAGES } from "@/lib/stores/sow-store";
 import { useSOWPipelineStore } from "@/lib/stores/sow-pipeline-store";
 import type { ApprovalStage } from "@/types/enterprise";
+import { useApprovalStages, useApproveStage, useRejectStage } from "@/lib/hooks/use-manual-sow";
 
 /* ═══ Badge component (matches detail page) ═══ */
 
@@ -98,6 +99,9 @@ export default function SOWApprovePage() {
   const pipelineSows = useSOWPipelineStore((s) => s.sows);
   const removeSOW = useSOWPipelineStore((s) => s.removeSOW);
   const updatePipelineSOW = useSOWPipelineStore((s) => s.updateSOW);
+  useApprovalStages(sowId); // pre-warms the cache for real-time stage data
+  const approveStageMutation = useApproveStage(sowId);
+  const rejectStageMutation = useRejectStage(sowId);
 
   // Base SOW: prefer store (has live stage progress), fall back to mock
   const rawSow = storeSows.find((s) => s.id === sowId)
@@ -164,8 +168,14 @@ export default function SOWApprovePage() {
       return s;
     });
 
-    const stageNum = activeStageIndex + 1;          // 1-indexed stage just approved
+    const stageNum = activeStageIndex + 1;
     const newCompletedStages = [...(pipelineMeta?.completedStages ?? []).filter(n => n !== stageNum), stageNum];
+
+    /* Sync to API */
+    approveStageMutation.mutate({
+      stageKey: activeStage.stage,
+      data: { reviewer: "Enterprise Admin", comments: comments || undefined },
+    });
 
     if (isFinalStage) {
       addSow({ ...sow, approvalStages: updatedStages, status: "approved", approvedAt: now, updatedAt: now });
@@ -174,7 +184,6 @@ export default function SOWApprovePage() {
       setTimeout(() => router.push("/enterprise/sow"), 2000);
     } else {
       addSow({ ...sow, approvalStages: updatedStages, updatedAt: now });
-      // Sync pipeline store for real-time stage tracker
       updatePipelineSOW(sow.id, {
         currentStage: stageNum + 1,
         completedStages: newCompletedStages,
@@ -191,13 +200,19 @@ export default function SOWApprovePage() {
         ? { ...s, status: "rejected" as const, reviewedAt: now, comments: rejectionReason }
         : s
     );
+
+    /* Sync to API */
+    rejectStageMutation.mutate({
+      stageKey: activeStage.stage,
+      data: { reviewer: "Enterprise Admin", reason: rejectionReason },
+    });
+
     addSow({
       ...sow,
       approvalStages: updatedStages,
       status: "changes_requested",
       updatedAt: now,
     });
-    // Mark the pipeline SOW so it surfaces at the top with a notification
     updatePipelineSOW(sowId, {
       changesRequested: true,
       changeRequestReason: rejectionReason,

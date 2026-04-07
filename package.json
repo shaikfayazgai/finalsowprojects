@@ -40,6 +40,7 @@
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "docx": "^9.6.1",
     "flag-icons": "^7.5.0",
     "framer-motion": "^12.35.0",
     "gantt-task-react": "^0.3.9",
