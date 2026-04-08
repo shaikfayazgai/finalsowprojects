@@ -156,16 +156,27 @@ export function useRegistration(ssoData?: SSOData | null) {
   }
 
   async function sendEmailOTP() {
-    if (!verificationEmail) {
+    if (!verificationEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(verificationEmail)) {
       setError("Please enter a valid email address");
       return;
     }
     setError("");
     setEmailOtpLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setEmailOtpLoading(false);
-    setEmailOtpSent(true);
-    startEmailCooldown();
+    try {
+      const res = await fetch("/api/auth/otp/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message); return; }
+      setEmailOtpSent(true);
+      startEmailCooldown();
+    } catch {
+      setError("Failed to send email. Please check your connection and try again.");
+    } finally {
+      setEmailOtpLoading(false);
+    }
   }
 
   async function verifyEmailOTP() {
@@ -175,9 +186,20 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     setError("");
     setEmailOtpLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setEmailOtpLoading(false);
-    setEmailVerified(true);
+    try {
+      const res = await fetch("/api/auth/otp/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail, code: emailOtp }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message); return; }
+      setEmailVerified(true);
+    } catch {
+      setError("Verification failed. Please try again.");
+    } finally {
+      setEmailOtpLoading(false);
+    }
   }
 
   function goToStep2() {
