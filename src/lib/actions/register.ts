@@ -7,6 +7,10 @@ import {
   contributorRegistrationSchema,
   enterpriseRegistrationSchema,
 } from "@/lib/validations/registration";
+import { sendEmail } from "@/lib/email";
+import { createElement } from "react";
+import WelcomeContributor from "@/emails/welcome-contributor";
+import WelcomeEnterprise from "@/emails/welcome-enterprise";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
@@ -54,6 +58,17 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
       notifyNewTasksOptIn:     false,
       marketingOptIn:          v.marketingOptIn,
     });
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://app.glimmora.com";
+    sendEmail({
+      to: v.email.toLowerCase(),
+      subject: `Welcome to Glimmora, ${v.firstName}!`,
+      react: createElement(WelcomeContributor, {
+        firstName: v.firstName,
+        loginUrl: `${baseUrl}/auth/login`,
+        onboardingUrl: `${baseUrl}/contributor/onboarding`,
+      }),
+    }).catch(() => {/* fire-and-forget */});
 
     return { success: true };
   } catch (err) {
@@ -204,6 +219,17 @@ export async function registerEnterprise(data: unknown): Promise<ActionResult> {
       acceptAhp:            v.acceptAhp,
       marketingOptIn:       v.marketingOptIn,
     });
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://app.glimmora.com";
+    sendEmail({
+      to: v.adminEmail.toLowerCase(),
+      subject: `Welcome to Glimmora — ${v.orgName} is ready`,
+      react: createElement(WelcomeEnterprise, {
+        firstName: v.adminFirstName,
+        orgName: v.orgName,
+        dashboardUrl: `${baseUrl}/enterprise/dashboard`,
+      }),
+    }).catch(() => {/* fire-and-forget */});
 
     return { success: true };
   } catch (err) {
