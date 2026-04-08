@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import { AppShell } from "@/components/layout";
-import { enterpriseNav } from "@/lib/config/navigation";
+import { enterpriseNav, reviewerNav } from "@/lib/config/navigation";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import OnboardingModal from "./onboarding/components/OnboardingModal";
 
@@ -18,6 +18,8 @@ export default function EnterpriseLayout({
   const pendingOnboarding = useAuthStore((s) => s.pendingOnboarding);
   const setPendingOnboarding = useAuthStore((s) => s.setPendingOnboarding);
   const isOnboarding = pathname.startsWith("/enterprise/onboarding");
+  const isReviewer = pathname.startsWith("/enterprise/reviewer");
+  const showOnboarding = isOnboarding || pendingOnboarding;
 
   const provider = (session?.user as { provider?: string })?.provider;
   const isSSO = provider === "google" || provider === "microsoft-entra-id";
@@ -33,7 +35,7 @@ export default function EnterpriseLayout({
 
   return (
     <>
-      <AppShell config={enterpriseNav}>
+      <AppShell config={isReviewer ? reviewerNav : enterpriseNav}>
         {isOnboarding ? null : children}
       </AppShell>
       {showOnboarding && <OnboardingModal />}

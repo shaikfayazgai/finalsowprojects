@@ -24,6 +24,9 @@ import {
   UsersRound,
   BarChart3,
   Bell,
+  Inbox,
+  ClipboardList,
+  LineChart,
   Mail,
   type LucideIcon,
 } from "lucide-react";
@@ -211,6 +214,43 @@ export const mentorNav: ModuleConfig = {
   ],
 };
 
+export const reviewerNav: ModuleConfig = {
+  id: "reviewer",
+  name: "Reviewer Workspace",
+  shortName: "Reviewer",
+  basePath: "/enterprise/reviewer",
+  accentColor: "teal",
+  sections: [
+    {
+      items: [
+        { label: "Dashboard", href: "/enterprise/reviewer", icon: LayoutDashboard },
+      ],
+    },
+    {
+      title: "Active Work",
+      items: [
+        { label: "Review Queue", href: "/enterprise/reviewer/review-queue", icon: ListChecks },
+        { label: "Task Monitor", href: "/enterprise/reviewer/task-monitor", icon: ClipboardList },
+        { label: "Q&A Inbox", href: "/enterprise/reviewer/qa-inbox", icon: Inbox },
+        { label: "Notifications", href: "/enterprise/reviewer/notifications", icon: Bell },
+      ],
+    },
+    {
+      title: "Records",
+      items: [
+        { label: "Review History", href: "/enterprise/reviewer/review-history", icon: History },
+        { label: "Mentoring Log", href: "/enterprise/reviewer/mentoring-log", icon: GraduationCap },
+      ],
+    },
+    {
+      title: "Performance",
+      items: [
+        { label: "My Metrics", href: "/enterprise/reviewer/my-metrics", icon: LineChart },
+      ],
+    },
+  ],
+};
+
 export const analyticsNav: ModuleConfig = {
   id: "analytics",
   name: "Analytics & Intelligence",
@@ -247,6 +287,7 @@ export const analyticsNav: ModuleConfig = {
   ],
 };
 
+export const allModules = [enterpriseNav, contributorNav, mentorNav, reviewerNav, analyticsNav] as const;
 export const adminNav: ModuleConfig = {
   id: "admin",
   name: "Platform Admin Console",

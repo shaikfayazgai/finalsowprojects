@@ -421,6 +421,37 @@ export function Sidebar({ config }: SidebarProps) {
               )}
             </Tooltip>
 
+            <DropdownMenuContent side="right" align="end" className="w-82 mb-1">
+              {/* Role Toggle */}
+              <DropdownMenuLabel>
+                <div className="flex items-center justify-between gap-2 py-1">
+                  <span className="text-[11px] font-medium text-gray-500">Switch Role</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => router.push("/enterprise/dashboard")}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all",
+                        !pathname.startsWith("/enterprise/reviewer")
+                          ? "bg-brown-500 text-white"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                      )}>
+                      Admin
+                    </button>
+                    <button
+                      onClick={() => router.push("/enterprise/reviewer")}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all",
+                        pathname.startsWith("/enterprise/reviewer")
+                          ? "bg-teal-500 text-white"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                      )}>
+                      Reviewer
+                    </button>
+                  </div>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+
             <DropdownMenuContent side="right" align="end" className="w-64 mb-1" style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.08)" }}>
               <DropdownMenuLabel>
                 <div className="flex items-center gap-3">
