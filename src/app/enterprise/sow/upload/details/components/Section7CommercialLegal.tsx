@@ -31,6 +31,14 @@ const CHANGE_REQUEST_OPTIONS = [
   { value: "time_and_materials", label: "Time & Materials",      description: "Work above baseline billed at agreed T&M rate" },
 ];
 
+const WARRANTY_OPTIONS = [
+  { value: "30_days",  label: "30 Days",  description: "Standard 30-day post-launch warranty" },
+  { value: "60_days",  label: "60 Days",  description: "60-day warranty with bug-fix support" },
+  { value: "90_days",  label: "90 Days",  description: "90-day warranty — industry standard" },
+  { value: "6_months", label: "6 Months", description: "Extended 6-month warranty period" },
+  { value: "custom",   label: "Custom",   description: "Custom warranty as per contract" },
+];
+
 function SubSection({ icon: Icon, title, children }: {
   icon: React.ElementType;
   title: string;
@@ -170,6 +178,16 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
               />
             </Field>
 
+            <Field label="Warranty Period" error={errors.warrantyPeriod}>
+              <CustomSelect
+                value={data.warrantyPeriod}
+                onChange={(v) => update({ warrantyPeriod: v as typeof data.warrantyPeriod })}
+                onBlur={() => blurField("warrantyPeriod")}
+                options={WARRANTY_OPTIONS}
+                placeholder="Select warranty period…"
+              />
+            </Field>
+
             <Field label="Change Request Process" error={errors.changeRequestProcess}>
               <CustomSelect
                 value={data.changeRequestProcess}
@@ -200,6 +218,15 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
                 onChange={(v) => updateAuth({ businessOwnerApprover: v })}
                 onBlur={() => blurField("businessOwnerApprover")}
                 placeholder="Full name of Business Owner"
+              />
+            </Field>
+
+            <Field label="Final Approver (Stage 5)" error={errors.finalApprover}>
+              <UserInput
+                value={auth.finalApprover}
+                onChange={(v) => updateAuth({ finalApprover: v })}
+                onBlur={() => blurField("finalApprover")}
+                placeholder="Full name of Final Approver"
               />
             </Field>
           </div>

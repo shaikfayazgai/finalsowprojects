@@ -59,19 +59,38 @@ export default function GeneratePreviewPage() {
   const { data: layersRes } = useHallucinationLayers(sowId);
 
   type HallucinationLayer = { layer?: number | string; name?: string; status?: string; details?: string };
-  const apiGenStatus = (genStatusRes?.data as { status?: string } | null)?.status;
-  const apiLayers = (layersRes?.data as { layers?: HallucinationLayer[] } | null)?.layers
-    ?? (Array.isArray(layersRes?.data) ? layersRes?.data as HallucinationLayer[] : null);
 
-  const metrics = mockPreviewMetrics;
-  const hallucinationLayers: HallucinationLayer[] = (apiLayers ?? mockHallucinationLayers["sow-001"] ?? []) as HallucinationLayer[];
+  /* Robustly extract generation status */
+  const genStatusPayload = (genStatusRes as unknown as Record<string, unknown> | null);
+  const genStatusData = (genStatusPayload?.data ?? genStatusPayload) as Record<string, unknown> | null;
+  const apiGenStatus = (genStatusData?.status as string | undefined);
+
+  /* Robustly extract hallucination layers */
+  const layersPayload = (layersRes as unknown as Record<string, unknown> | null);
+  const layersData = (layersPayload?.data ?? layersPayload) as Record<string, unknown> | null;
+  const apiLayers = (
+    layersData?.layers ?? layersData?.hallucination_layers ?? layersData?.hallucinationLayers
+    ?? (Array.isArray(layersData) ? layersData : null)
+  ) as HallucinationLayer[] | null;
+
+  /* Extract metrics from generation status if available */
+  const apiMetrics = genStatusData ? {
+    confidence: Number(genStatusData.confidence ?? genStatusData.ai_confidence ?? genStatusData.aiConfidence ?? 0),
+    riskScore: Number(genStatusData.riskScore ?? genStatusData.risk_score ?? 0),
+    hallucinationFlags: Number(genStatusData.hallucinationFlags ?? genStatusData.hallucination_flags ?? 0),
+    completeness: Number(genStatusData.completeness ?? genStatusData.completeness_score ?? 0),
+  } : null;
+  const hasApiMetrics = apiMetrics && (apiMetrics.confidence > 0 || apiMetrics.completeness > 0);
+  const metrics = hasApiMetrics ? apiMetrics : mockPreviewMetrics;
+
+  const hallucinationLayers: HallucinationLayer[] = (apiLayers && apiLayers.length > 0 ? apiLayers : mockHallucinationLayers["sow-001"] ?? []) as HallucinationLayer[];
   const hasRedLayers = hallucinationLayers.some((l) => l.status === "failed");
   const isStale = store.previewState?.isStaleDocument || false;
   const canSubmit = genPhase === "complete" && !hasRedLayers && !isStale;
 
   /* When API signals completion, advance local phase */
   React.useEffect(() => {
-    if (apiGenStatus === "completed" && genPhase !== "complete") {
+    if ((apiGenStatus === "completed" || apiGenStatus === "complete") && genPhase !== "complete") {
       setGenStageIdx(GEN_STAGES.length - 1);
       setGenPhase("complete");
       store.setGenerationState("complete");

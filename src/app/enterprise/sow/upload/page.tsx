@@ -161,15 +161,21 @@ export default function SOWUploadPage() {
     /* Call the real upload API */
     try {
       const res = await sowApi.uploadSOW(selectedFile, {
-        title: projectTitle,
-        client: clientOrg,
+        projectTitle,
+        clientOrganisation: clientOrg,
+        linkedSowId: linkedSowId !== "none" ? linkedSowId : null,
       });
-      const sowId = (res.data as { id?: string; sow_id?: string } | null)?.id
-        ?? (res.data as { id?: string; sow_id?: string } | null)?.sow_id
+      // sow_id may live at top-level or nested inside .data
+      const raw = res as unknown as Record<string, unknown>;
+      const sowId =
+        (raw.sow_id as string | undefined)
+        ?? (raw.id as string | undefined)
+        ?? ((raw.data as Record<string, unknown> | null)?.sow_id as string | undefined)
+        ?? ((raw.data as Record<string, unknown> | null)?.id as string | undefined)
         ?? null;
       if (sowId) store.setUploadedSowId(sowId);
     } catch {
-      /* Non-fatal — store won't have a real ID but the flow can continue with mocks */
+      /* Non-fatal — store won't have a real ID but the flow can continue without API data */
     }
 
     /* Ensure "complete" fires after all stages */

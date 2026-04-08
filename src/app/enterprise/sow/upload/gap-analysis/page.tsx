@@ -191,7 +191,13 @@ export default function GapAnalysisPage() {
   const { data: gapRes } = useGapItems(sowId);
   const updateGapMutation = useUpdateGapItem(sowId);
 
-  const apiGaps = (gapRes?.data as { items?: unknown[] } | null)?.items ?? (Array.isArray(gapRes?.data) ? gapRes?.data : null);
+  const apiGaps = React.useMemo(() => {
+    if (!gapRes) return null;
+    const res = gapRes as unknown as Record<string, unknown>;
+    const payload = (res.data !== undefined && res.data !== null ? res.data : res) as Record<string, unknown>;
+    const list = payload.items ?? payload.gaps ?? payload.gap_items ?? payload.gapItems ?? payload.results ?? payload;
+    return Array.isArray(list) && list.length > 0 ? list : null;
+  }, [gapRes]);
   const initialGaps = React.useMemo(
     () => (apiGaps && (apiGaps as unknown[]).length > 0 ? (apiGaps as Record<string, unknown>[]).map(apiToGap) : INITIAL_GAPS),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -247,7 +253,7 @@ export default function GapAnalysisPage() {
         g.id === gapId ? { ...g, status: "resolved" } : g
       )
     );
-    if (sowId) updateGapMutation.mutate({ gapId, data: { status: "resolved" } });
+    if (sowId) updateGapMutation.mutate({ gapId, data: { is_resolved: true } });
   };
 
   const acknowledgeGap = (gapId: string) => {
@@ -256,15 +262,19 @@ export default function GapAnalysisPage() {
         g.id === gapId ? { ...g, status: "acknowledged" } : g
       )
     );
-    if (sowId) updateGapMutation.mutate({ gapId, data: { status: "acknowledged" } });
+    if (sowId) updateGapMutation.mutate({ gapId, data: { is_acknowledged: true } });
   };
 
   const dismissAllOptional = () => {
+    const optIds = gaps.filter((g) => g.severity === "optional" && g.status !== "dismissed").map((g) => g.id);
     setGaps((prev) =>
       prev.map((g) =>
         g.severity === "optional" ? { ...g, status: "dismissed" } : g
       )
     );
+    if (sowId) {
+      optIds.forEach((gapId) => updateGapMutation.mutate({ gapId, data: { is_dismissed: true } }));
+    }
   };
 
   const renderGapCard = (gap: Gap) => {
@@ -413,13 +423,14 @@ export default function GapAnalysisPage() {
                         variant="ghost"
                         size="sm"
                         className="text-red-500 hover:text-red-600"
-                        onClick={() =>
+                        onClick={() => {
                           setGaps((prev) =>
                             prev.map((g) =>
                               g.id === gap.id ? { ...g, status: "dismissed" } : g
                             )
-                          )
-                        }
+                          );
+                          if (sowId) updateGapMutation.mutate({ gapId: gap.id, data: { is_dismissed: true } });
+                        }}
                       >
                         <Ban className="w-3 h-3" />
                         Exclude

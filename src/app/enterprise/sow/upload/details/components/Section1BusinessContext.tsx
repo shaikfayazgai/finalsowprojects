@@ -60,7 +60,7 @@ export function Section1BusinessContext({ onComplete, onBack }: Props) {
           <Field label="Business Criticality" error={errors.businessCriticality}>
             <SelectDropdown
               value={data.businessCriticality ?? ""}
-              onChange={(val) => { update({ businessCriticality: val as typeof data.businessCriticality }); blurField("businessCriticality"); }}
+              onChange={(val) => { touched.current.add("businessCriticality"); update({ businessCriticality: val as typeof data.businessCriticality }); }}
               placeholder="Select…"
               searchable={false}
               dropdownHeight={160}

@@ -77,7 +77,7 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
           <Field label="UI/UX Design Scope" error={errors.uiuxDesignScope}>
             <SelectDropdown
               value={data.uiuxDesignScope ?? ""}
-              onChange={(val) => { update({ uiuxDesignScope: val as typeof data.uiuxDesignScope }); blurField("uiuxDesignScope"); }}
+              onChange={(val) => { touched.current.add("uiuxDesignScope"); update({ uiuxDesignScope: val as typeof data.uiuxDesignScope }); }}
               placeholder="Select…"
               searchable={false}
               dropdownHeight={120}
@@ -93,7 +93,7 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
           <Field label="Deployment Scope" error={errors.deploymentScope}>
             <SelectDropdown
               value={data.deploymentScope ?? ""}
-              onChange={(val) => { update({ deploymentScope: val as typeof data.deploymentScope }); blurField("deploymentScope"); }}
+              onChange={(val) => { touched.current.add("deploymentScope"); update({ deploymentScope: val as typeof data.deploymentScope }); }}
               placeholder="Select…"
               searchable={false}
               dropdownHeight={160}
@@ -112,7 +112,7 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
           <Field label="Go-Live & Hypercare" error={errors.goLiveScope}>
             <SelectDropdown
               value={data.goLiveScope ?? ""}
-              onChange={(val) => { update({ goLiveScope: val as typeof data.goLiveScope }); blurField("goLiveScope"); }}
+              onChange={(val) => { touched.current.add("goLiveScope"); update({ goLiveScope: val as typeof data.goLiveScope }); }}
               placeholder="Select…"
               searchable={false}
               dropdownHeight={120}
@@ -128,7 +128,7 @@ export function Section2DeliveryScope({ onComplete, onBack }: Props) {
           <Field label="Data Migration Scope" error={errors.dataMigrationScope}>
             <SelectDropdown
               value={data.dataMigrationScope ?? ""}
-              onChange={(val) => { update({ dataMigrationScope: val as typeof data.dataMigrationScope }); blurField("dataMigrationScope"); }}
+              onChange={(val) => { touched.current.add("dataMigrationScope"); update({ dataMigrationScope: val as typeof data.dataMigrationScope }); }}
               placeholder="Select…"
               searchable={false}
               dropdownHeight={80}

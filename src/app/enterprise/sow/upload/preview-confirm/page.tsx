@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Button, Badge, Textarea } from "@/components/ui";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { useConfirmAndSubmit } from "@/lib/hooks/use-manual-sow";
+import { useConfirmAndSubmit, useSOWPreview } from "@/lib/hooks/use-manual-sow";
 
 /* ═══════════════════════════════════════════════════════════
    TYPES
@@ -288,9 +288,54 @@ export default function PreviewConfirmPage() {
   const uploadStore = useSOWUploadStore();
   const sowId = uploadStore.uploadedSowId;
   const confirmMutation = useConfirmAndSubmit(sowId);
+  const { data: previewRes } = useSOWPreview(sowId);
+
+  /* Map API preview data → sections */
+  const apiSections: SOWSection[] = React.useMemo(() => {
+    if (!previewRes) return [];
+    const res = previewRes as unknown as Record<string, unknown>;
+    const payload = (res.data ?? res) as Record<string, unknown>;
+    const list = payload.sections ?? payload.sow_sections ?? payload.generated_sections ?? payload;
+    if (!Array.isArray(list) || list.length === 0) return [];
+    return list.map((raw: unknown, i: number) => {
+      const r = raw as Record<string, unknown>;
+      return {
+        id: String(r.id ?? r._id ?? `sec-${i + 1}`),
+        title: String(r.title ?? r.name ?? r.heading ?? `Section ${i + 1}`),
+        content: String(r.content ?? r.text ?? r.body ?? ""),
+        confidence: Number(r.confidence ?? r.confidence_score ?? 0),
+        isExpanded: i === 0,
+      };
+    });
+  }, [previewRes]);
+
+  /* Map API quality metrics */
+  const apiMetrics: QualityMetric[] = React.useMemo(() => {
+    if (!previewRes) return [];
+    const res = previewRes as unknown as Record<string, unknown>;
+    const payload = (res.data ?? res) as Record<string, unknown>;
+    const m = (payload.quality_metrics ?? payload.qualityMetrics ?? payload.metrics ?? payload) as Record<string, unknown>;
+    const confidence = Number(m.confidence ?? m.ai_confidence ?? m.aiConfidence ?? 0);
+    const completeness = Number(m.completeness ?? m.completeness_score ?? 0);
+    const riskScore = Number(m.risk_score ?? m.riskScore ?? 0);
+    const flags = Number(m.hallucination_flags ?? m.hallucinationFlags ?? m.flags ?? 0);
+    if (!confidence && !completeness) return [];
+    return [
+      { label: "AI Confidence", value: `${confidence}%`, subtext: confidence >= 85 ? "Above threshold" : "Below threshold", status: confidence >= 85 ? "good" as const : "warning" as const },
+      { label: "Completeness", value: `${completeness}%`, subtext: "Sections complete", status: completeness >= 80 ? "good" as const : "warning" as const },
+      { label: "Risk Score", value: `${riskScore}/100`, subtext: riskScore < 40 ? "Low risk" : riskScore < 70 ? "Medium risk" : "High risk", status: riskScore < 40 ? "good" as const : "warning" as const },
+      { label: "Flags", value: String(flags), subtext: "Hallucination flags", status: flags > 0 ? "warning" as const : "good" as const },
+    ];
+  }, [previewRes]);
 
   const [activeTab, setActiveTab] = React.useState<TabKey>("generated");
-  const [sections, setSections] = React.useState(SOW_SECTIONS);
+  const [sections, setSections] = React.useState(apiSections.length > 0 ? apiSections : SOW_SECTIONS);
+
+  React.useEffect(() => {
+    if (apiSections.length > 0) setSections(apiSections);
+  }, [apiSections]);
+
+  const qualityMetrics = apiMetrics.length > 0 ? apiMetrics : QUALITY_METRICS;
   const [resolvedFlags, setResolvedFlags] = React.useState<Set<string>>(
     new Set(HALLUCINATION_FLAGS.filter((f) => f.resolved).map((f) => f.id))
   );
@@ -350,7 +395,7 @@ export default function PreviewConfirmPage() {
             <h2 className="text-lg font-semibold">AI Generated Draft Ready</h2>
             <p className="text-sm text-white/80">
               Your SOW has been generated from <span className="font-medium">{SOW_META.sourceDocument}</span> with{" "}
-              {QUALITY_METRICS[0].value} confidence. Review and confirm to proceed to approval.
+              {qualityMetrics[0]?.value ?? "N/A"} confidence. Review and confirm to proceed to approval.
             </p>
           </div>
           <div className="hidden md:flex items-center gap-2">
@@ -366,7 +411,7 @@ export default function PreviewConfirmPage() {
 
       {/* ═══ QUALITY METRICS HEADER ═══ */}
       <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {QUALITY_METRICS.map((metric) => (
+        {qualityMetrics.map((metric) => (
           <div
             key={metric.label}
             className={cn(

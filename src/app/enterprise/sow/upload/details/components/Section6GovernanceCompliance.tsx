@@ -97,7 +97,7 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
             )}
             <SelectDropdown
               value={data.dataSensitivityLevel ?? ""}
-              onChange={(val) => { update({ dataSensitivityLevel: val as typeof data.dataSensitivityLevel }); blurField("dataSensitivityLevel"); }}
+              onChange={(val) => { touched.current.add("dataSensitivityLevel"); update({ dataSensitivityLevel: val as typeof data.dataSensitivityLevel }); }}
               placeholder="Select sensitivity level…"
               searchable={false}
               dropdownHeight={160}
@@ -117,7 +117,7 @@ export function Section6GovernanceCompliance({ onComplete, onBack }: Props) {
           <Field label="Personal Data Involved" error={errors.personalDataInvolved}>
             <SelectDropdown
               value={data.personalDataInvolved ?? ""}
-              onChange={(val) => { update({ personalDataInvolved: val as typeof data.personalDataInvolved }); blurField("personalDataInvolved"); }}
+              onChange={(val) => { touched.current.add("personalDataInvolved"); update({ personalDataInvolved: val as typeof data.personalDataInvolved }); }}
               placeholder="Select…"
               searchable={false}
               dropdownHeight={80}

@@ -12,6 +12,7 @@ import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { mockGapItems } from "@/mocks/data/sow-upload-flow";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { useGapItems } from "@/lib/hooks/use-manual-sow";
 import type { GapItem, GapSeverity } from "@/types/enterprise";
 
 /* ── Severity config ── */
@@ -296,13 +297,48 @@ function ChatBubble({
 
 /* ══ PAGE ══ */
 
+/* ── API → GapItem mapper ── */
+function apiToGapItem(raw: Record<string, unknown>): GapItem {
+  const get = (c: string, s: string, fb: unknown) => raw[c] ?? raw[s] ?? fb;
+  return {
+    id:           String(get("id", "_id", Math.random())),
+    severity:     (String(get("severity", "severity", "important")).toLowerCase()) as GapSeverity,
+    title:        String(get("title", "name", "")),
+    description:  String(get("description", "detail", "")),
+    section:         String(get("section", "affected_section", "")),
+    affectedSection: String(get("affectedSection", "affected_section", "")),
+    isResolved:      Boolean(get("isResolved", "is_resolved", false)),
+    isAcknowledged:  Boolean(get("isAcknowledged", "is_acknowledged", false)),
+    isDismissed:     Boolean(get("isDismissed", "is_dismissed", false)),
+    isProhibited:    Boolean(get("isProhibited", "is_prohibited", false)),
+    remediationSuggestions: (get("remediationSuggestions", "remediation_suggestions", undefined) as string[] | undefined),
+  };
+}
+
 export default function GapAnalysisPage() {
   const router = useRouter();
   const store = useSOWUploadStore();
+  const sowId = store.uploadedSowId;
+  const { data: gapRes } = useGapItems(sowId);
+
+  /* Map API data */
+  const apiGaps: GapItem[] = React.useMemo(() => {
+    if (!gapRes) return [];
+    const res = gapRes as unknown as Record<string, unknown>;
+    const payload = (res.data !== undefined && res.data !== null ? res.data : res) as Record<string, unknown>;
+    const list = payload.items ?? payload.gaps ?? payload.gap_items ?? payload.gapItems ?? payload.results ?? payload;
+    if (Array.isArray(list) && list.length > 0) return list.map((r) => apiToGapItem(r as Record<string, unknown>));
+    return [];
+  }, [gapRes]);
 
   const [gaps, setGaps] = React.useState<GapItem[]>(() =>
     store.gapItems.length > 0 ? store.gapItems : mockGapItems,
   );
+
+  /* Update from API when available */
+  React.useEffect(() => {
+    if (apiGaps.length > 0) setGaps(apiGaps);
+  }, [apiGaps]);
 
   const [selectedGapId, setSelectedGapId] = React.useState<string | null>(null);
   const [chatHistory, setChatHistory] = React.useState<Record<string, ChatMessage[]>>({});
