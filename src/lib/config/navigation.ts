@@ -287,7 +287,6 @@ export const analyticsNav: ModuleConfig = {
   ],
 };
 
-export const allModules = [enterpriseNav, contributorNav, mentorNav, reviewerNav, analyticsNav] as const;
 export const adminNav: ModuleConfig = {
   id: "admin",
   name: "Platform Admin Console",
@@ -332,4 +331,4 @@ export const adminNav: ModuleConfig = {
   ],
 };
 
-export const allModules = [enterpriseNav, contributorNav, mentorNav, analyticsNav, adminNav] as const;
+export const allModules = [enterpriseNav, contributorNav, mentorNav, reviewerNav, analyticsNav, adminNav] as const;

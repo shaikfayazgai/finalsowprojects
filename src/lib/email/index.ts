@@ -1,9 +1,17 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import type { ReactElement } from "react";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
 
-const FROM = process.env.EMAIL_FROM ?? "noreply@glimmora.com";
+const FROM = process.env.EMAIL_FROM ?? `GlimmoraTeam <${process.env.GMAIL_USER}>`;
 
 export interface SendEmailOptions {
   to: string | string[];
@@ -19,23 +27,20 @@ export interface SendEmailResult {
 
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
   try {
-    const payload: Parameters<typeof resend.emails.send>[0] = {
+    const html = options.html ?? (options.react
+      ? (await import("react-dom/server")).renderToStaticMarkup(options.react)
+      : "");
+
+    const info = await transporter.sendMail({
       from: FROM,
-      to: options.to,
+      to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
       subject: options.subject,
-      ...(options.html ? { html: options.html } : { react: options.react! }),
-    };
+      html,
+    });
 
-    const { data, error } = await resend.emails.send(payload);
-
-    if (error) {
-      console.error("[sendEmail] Resend error:", error);
-      return { success: false };
-    }
-
-    return { success: true, messageId: data?.id };
+    return { success: true, messageId: info.messageId };
   } catch (err) {
-    console.error("[sendEmail] unexpected error:", err);
+    console.error("[sendEmail] error:", err);
     return { success: false };
   }
 }

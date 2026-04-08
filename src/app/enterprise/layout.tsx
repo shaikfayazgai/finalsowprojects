@@ -19,7 +19,6 @@ export default function EnterpriseLayout({
   const setPendingOnboarding = useAuthStore((s) => s.setPendingOnboarding);
   const isOnboarding = pathname.startsWith("/enterprise/onboarding");
   const isReviewer = pathname.startsWith("/enterprise/reviewer");
-  const showOnboarding = isOnboarding || pendingOnboarding;
 
   const provider = (session?.user as { provider?: string })?.provider;
   const isSSO = provider === "google" || provider === "microsoft-entra-id";

@@ -218,7 +218,9 @@ export default function SOWListPage() {
   const [recentViewedOpen, setRecentViewedOpen] = React.useState(false);
 
   const storeSows = useSowStore((s) => s.sows);
-  const { data: apiSowListRes } = useManualSOWList();
+  const hasApiUrl = !!process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
+  const { data: apiSowListRes, isLoading: apiSowListLoading, error: apiSowListError } = useManualSOWList();
+  const apiSowList = { isLoading: hasApiUrl && apiSowListLoading, error: hasApiUrl ? apiSowListError : null };
   const deleteSow = useDeleteManualSOW();
   const apiSows = (apiSowListRes?.data as { sows?: typeof storeSows; items?: typeof storeSows } | typeof storeSows | null);
   /* Prefer API data; fall back to Zustand store (mock) */

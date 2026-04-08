@@ -8,9 +8,6 @@ import {
   enterpriseRegistrationSchema,
 } from "@/lib/validations/registration";
 import { sendEmail } from "@/lib/email";
-import { createElement } from "react";
-import WelcomeContributor from "@/emails/welcome-contributor";
-import WelcomeEnterprise from "@/emails/welcome-enterprise";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
@@ -63,11 +60,27 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
     sendEmail({
       to: v.email.toLowerCase(),
       subject: `Welcome to Glimmora, ${v.firstName}!`,
-      react: createElement(WelcomeContributor, {
-        firstName: v.firstName,
-        loginUrl: `${baseUrl}/auth/login`,
-        onboardingUrl: `${baseUrl}/contributor/onboarding`,
-      }),
+      html: `
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#fff;">
+          <div style="text-align:center;margin-bottom:28px;">
+            <div style="display:inline-block;background:linear-gradient(135deg,#7C5C3E,#5C3D1E);border-radius:12px;padding:12px 20px;">
+              <span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:0.5px;">GlimmoraTeam</span>
+            </div>
+          </div>
+          <h2 style="color:#0D1B2A;font-size:22px;font-weight:700;margin:0 0 12px;">Welcome, ${v.firstName}!</h2>
+          <p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 20px;">
+            Your contributor account has been created. You can now log in and complete your onboarding to start working on projects.
+          </p>
+          <div style="text-align:center;margin:28px 0;">
+            <a href="${baseUrl}/contributor/onboarding" style="display:inline-block;background:#007A8A;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:600;">Complete Onboarding</a>
+          </div>
+          <p style="color:#888;font-size:13px;line-height:1.5;margin:0;">
+            Or <a href="${baseUrl}/auth/login" style="color:#007A8A;">log in here</a> to access your dashboard.
+          </p>
+          <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
+          <p style="color:#bbb;font-size:11px;text-align:center;margin:0;">GlimmoraTeam &mdash; AI-Governed Global Workforce Platform</p>
+        </div>
+      `,
     }).catch(() => {/* fire-and-forget */});
 
     return { success: true };
@@ -224,11 +237,24 @@ export async function registerEnterprise(data: unknown): Promise<ActionResult> {
     sendEmail({
       to: v.adminEmail.toLowerCase(),
       subject: `Welcome to Glimmora — ${v.orgName} is ready`,
-      react: createElement(WelcomeEnterprise, {
-        firstName: v.adminFirstName,
-        orgName: v.orgName,
-        dashboardUrl: `${baseUrl}/enterprise/dashboard`,
-      }),
+      html: `
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#fff;">
+          <div style="text-align:center;margin-bottom:28px;">
+            <div style="display:inline-block;background:linear-gradient(135deg,#7C5C3E,#5C3D1E);border-radius:12px;padding:12px 20px;">
+              <span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:0.5px;">GlimmoraTeam</span>
+            </div>
+          </div>
+          <h2 style="color:#0D1B2A;font-size:22px;font-weight:700;margin:0 0 12px;">Welcome, ${v.adminFirstName}!</h2>
+          <p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 20px;">
+            <strong>${v.orgName}</strong> is now set up on GlimmoraTeam. You can access your enterprise dashboard to manage SOWs, team formation, and project delivery.
+          </p>
+          <div style="text-align:center;margin:28px 0;">
+            <a href="${baseUrl}/enterprise/dashboard" style="display:inline-block;background:#007A8A;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:600;">Go to Dashboard</a>
+          </div>
+          <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
+          <p style="color:#bbb;font-size:11px;text-align:center;margin:0;">GlimmoraTeam &mdash; AI-Governed Global Workforce Platform</p>
+        </div>
+      `,
     }).catch(() => {/* fire-and-forget */});
 
     return { success: true };

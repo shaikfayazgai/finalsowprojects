@@ -37,7 +37,7 @@ type TabKey = typeof TABS[number]["key"];
 
 /* ═══ PAGE ═══ */
 
-export default function GeneratePreviewPage({ sowId }: { sowId?: string | null }) {
+export default function GeneratePreviewPage({ sowId: sowIdProp }: { sowId?: string | null }) {
   const router = useRouter();
   const store = useSOWUploadStore();
 
@@ -55,7 +55,7 @@ export default function GeneratePreviewPage({ sowId }: { sowId?: string | null }
   const [processingStageIdx, setProcessingStageIdx] = React.useState(-1);
   const [activeTab, setActiveTab] = React.useState<TabKey>("sow");
 
-  const sowId = store.uploadedSowId;
+  const sowId = sowIdProp ?? store.uploadedSowId;
   const generateMutation = useGenerateManualSOW(sowId);
   const { data: genStatusRes } = useGenerationStatus(sowId, genPhase === "generating");
   const { data: layersRes } = useHallucinationLayers(sowId);
