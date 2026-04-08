@@ -66,9 +66,6 @@ export default function GeneratePreviewPage({ sowId: sowIdProp }: { sowId?: stri
   const sowSectionsPayload = (sowSectionsRes as unknown as Record<string, unknown> | null);
   const apiSowSections = (sowSectionsPayload?.data ?? sowSectionsPayload?.sections ?? null) as any[] | null;
 
-  // riskData comes from generation status payload; falls back to static metrics in render
-  const riskData = genStatusData as (Record<string, unknown> & { factors?: any[]; risk_level?: string; risk_score?: number }) | null;
-
   const [actionError, setActionError] = React.useState("");
   const sowActionMutation = useMutation({
     mutationFn: (payload: { action: "submit" | "request_changes" | "reject_regenerate"; change_notes?: string }) => {
@@ -83,6 +80,7 @@ export default function GeneratePreviewPage({ sowId: sowIdProp }: { sowId?: stri
   const genStatusPayload = (genStatusRes as unknown as Record<string, unknown> | null);
   const genStatusData = (genStatusPayload?.data ?? genStatusPayload) as Record<string, unknown> | null;
   const apiGenStatus = (genStatusData?.status as string | undefined);
+  const riskData = genStatusData as (Record<string, unknown> & { factors?: any[]; risk_level?: string; risk_score?: number }) | null;
 
   /* Robustly extract hallucination layers */
   const layersPayload = (layersRes as unknown as Record<string, unknown> | null);
