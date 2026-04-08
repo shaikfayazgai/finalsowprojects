@@ -93,12 +93,14 @@ interface SOWUploadState {
   projectTitle: string;
   clientOrganisation: string;
   linkedSowId: string | null;
+  uploadedSowId: string | null;
   processingState: UploadProcessingState;
   setFile: (f: UploadedFileInfo) => void;
   clearFile: () => void;
   setProjectTitle: (v: string) => void;
   setClientOrganisation: (v: string) => void;
   setLinkedSowId: (v: string | null) => void;
+  setUploadedSowId: (v: string | null) => void;
   setProcessingState: (s: UploadProcessingState) => void;
 
   /* Extraction Intelligence Report */
@@ -156,11 +158,13 @@ export const useSOWUploadStore = create<SOWUploadState>()(
       clientOrganisation: "",
       linkedSowId: null,
       processingState: "idle",
+      uploadedSowId: null,
       setFile: (f) => set({ uploadedFile: f }),
       clearFile: () => set({ uploadedFile: null, processingState: "idle" }),
       setProjectTitle: (v) => set({ projectTitle: v }),
       setClientOrganisation: (v) => set({ clientOrganisation: v }),
       setLinkedSowId: (v) => set({ linkedSowId: v }),
+      setUploadedSowId: (v) => set({ uploadedSowId: v }),
       setProcessingState: (s) => set({ processingState: s }),
 
       /* Extraction Report */
@@ -240,6 +244,7 @@ export const useSOWUploadStore = create<SOWUploadState>()(
           projectTitle: "",
           clientOrganisation: "",
           linkedSowId: null,
+          uploadedSowId: null,
           processingState: "idle",
           extractionReport: null,
           extractionItems: [],

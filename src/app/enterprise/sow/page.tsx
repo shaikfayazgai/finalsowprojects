@@ -14,6 +14,7 @@ import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { useSowStore } from "@/lib/stores/sow-store";
+import { useManualSOWList, useDeleteManualSOW } from "@/lib/hooks/use-manual-sow";
 
 /* ══════════════════════════════════════════ Status config (per FSD §7.1.4) ══════════════════════════════════════════ */
 
@@ -216,7 +217,15 @@ export default function SOWListPage() {
   const [searchFocused, setSearchFocused] = React.useState(false);
   const [recentViewedOpen, setRecentViewedOpen] = React.useState(false);
 
-  const allSows = useSowStore((s) => s.sows);
+  const storeSows = useSowStore((s) => s.sows);
+  const { data: apiSowListRes } = useManualSOWList();
+  const deleteSow = useDeleteManualSOW();
+  const apiSows = (apiSowListRes?.data as { sows?: typeof storeSows; items?: typeof storeSows } | typeof storeSows | null);
+  /* Prefer API data; fall back to Zustand store (mock) */
+  const allSows: typeof storeSows = Array.isArray(apiSows) ? apiSows
+    : (apiSows as { sows?: typeof storeSows } | null)?.sows
+    ?? (apiSows as { items?: typeof storeSows } | null)?.items
+    ?? storeSows;
   const uniqueClients = React.useMemo(() => [...new Set(allSows.map((s) => s.client))].sort(), [allSows]);
 
   const [sortField, setSortField] = React.useState<SortField>("modified");
@@ -325,7 +334,9 @@ export default function SOWListPage() {
       case "edit": router.push(`/enterprise/sow/${sowId}`); break;
       case "download": break; /* PDF download */
       case "approval": router.push(`/enterprise/sow/${sowId}`); break;
-      case "archive": break; /* Archive confirmation */
+      case "archive":
+        deleteSow.mutate(sowId);
+        break;
     }
   }
 
@@ -342,6 +353,18 @@ export default function SOWListPage() {
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
+
+      {/* API loading/error indicator */}
+      {apiSowList.isLoading && (
+        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 border border-blue-100 text-[12px] text-blue-600">
+          <Clock className="w-3.5 h-3.5 animate-spin" /> Loading SOWs from API...
+        </div>
+      )}
+      {apiSowList.error && (
+        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-[12px] text-red-600">
+          <AlertTriangle className="w-3.5 h-3.5" /> API: {(apiSowList.error as Error).message}
+        </div>
+      )}
 
       {/* ═══ HERO — FSD §7.1.1 ═══ */}
       <motion.div variants={fadeUp} className="mb-7">

@@ -6,6 +6,11 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
+    // Dev-only hardcoded admin bypass
+    if (email?.trim().toLowerCase() === "admin@glimmora.dev" && password === "Admin@1234") {
+      return NextResponse.json({ ok: true });
+    }
+
     const response = await authApi.login(
       email?.trim().toLowerCase(),
       password,

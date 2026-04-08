@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertCircle, ArrowRight, ArrowLeft, CheckCircle,
   Shield, Pencil, RefreshCw,
@@ -259,11 +260,20 @@ export function Step4Consent({
               Preview my answers before submitting
             </button>
 
-            {error && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
-              </div>
-            )}
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  key="step4-error"
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700"
+                >
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <Button
               type="submit"

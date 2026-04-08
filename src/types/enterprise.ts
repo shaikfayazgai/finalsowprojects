@@ -699,6 +699,7 @@ export interface GapItem {
   title: string;
   description: string;
   section: string;
+  affectedSection?: string;
   remediationSuggestions?: string[];
   isResolved: boolean;
   isAcknowledged: boolean;

@@ -39,23 +39,23 @@ const INITIAL_SOWS: PipelineSOW[] = [
     id: "sow-a1",
     title: "AI-Driven Supply Chain Optimizer",
     client: "Luminary Logistics",
-    currentStage: 3,
-    stageApprover: "Sarah Chen (Legal Counsel)",
+    currentStage: 1,
+    stageApprover: "Enterprise Admin",
     slaStatus: "on-track",
     submittedDate: "2026-03-28",
     totalValue: "$450,000",
-    completedStages: [1, 2],
+    completedStages: [],
   },
   {
     id: "sow-b2",
     title: "Cloud-Native EHR Migration",
     client: "HealthBridge Systems",
-    currentStage: 4,
-    stageApprover: "Dr. Alan Reeves (CISO)",
-    slaStatus: "at-risk",
+    currentStage: 1,
+    stageApprover: "Enterprise Admin",
+    slaStatus: "on-track",
     submittedDate: "2026-03-25",
     totalValue: "$680,000",
-    completedStages: [1, 2, 3],
+    completedStages: [],
   },
 ];
 
@@ -79,7 +79,7 @@ export const useSOWPipelineStore = create<SOWPipelineState>()(
     }),
     {
       name: "gt-sow-pipeline",
-      version: 3,
+      version: 4,
       migrate: () => ({ sows: INITIAL_SOWS }),
     }
   )

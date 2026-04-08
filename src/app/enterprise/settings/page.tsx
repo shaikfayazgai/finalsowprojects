@@ -153,7 +153,7 @@ function StatusBadge({ status }: { status: TeamMember["status"] }) {
    ══════════════════════════════════════════ */
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("company");
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
 
   /* ── Session + store data (backend API) ── */
   const { data: session } = useSession();

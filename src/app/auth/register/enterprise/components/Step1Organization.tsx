@@ -583,7 +583,7 @@ export function Step1Organization({
                   {incorporationFile ? (
                     <>
                       <CheckCircle className="w-4 h-4 text-teal-500 shrink-0" />
-                      <p className="text-xs font-medium text-teal-700 flex-1 truncate">
+                      <p className="text-xs font-medium text-teal-700 flex-1 min-w-0 truncate">
                         {incorporationFile.name}
                       </p>
                       <button

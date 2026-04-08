@@ -7,6 +7,10 @@ import {
   contributorRegistrationSchema,
   enterpriseRegistrationSchema,
 } from "@/lib/validations/registration";
+import { sendEmail } from "@/lib/email";
+import { createElement } from "react";
+import WelcomeContributor from "@/emails/welcome-contributor";
+import WelcomeEnterprise from "@/emails/welcome-enterprise";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
@@ -30,7 +34,7 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
       countryOfResidence:      v.country,
       dateOfBirth:             v.dob,
       timeZone:                v.timezone,
-      weeklyAvailabilityHours: v.availability,
+      weeklyAvailabilityHours: String(parseInt(v.availability, 10)),
       departmentCategory:      v.departmentCategory,
       primarySkills:           v.primarySkills,
       secondarySkills:         v.secondarySkills,
@@ -43,8 +47,8 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
       yearsExperience:         v.yearsExperience,
       workStart:               v.workStart,
       workEnd:                 v.workEnd,
-      // Mapped to actual Glimmora API field names
-      ndaSignatoryLegalName:   v.ndaSignature,
+      // Use full name as signatory if no explicit signature provided
+      ndaSignatoryLegalName:   v.ndaSignature || `${v.firstName} ${v.lastName}`,
       mentorGuideAcknowledged: true,
       acceptTermsOfUse:        v.acceptTos,
       acceptCodeOfConduct:     v.acceptCoc,
@@ -55,14 +59,27 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
       marketingOptIn:          v.marketingOptIn,
     });
 
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://app.glimmora.com";
+    sendEmail({
+      to: v.email.toLowerCase(),
+      subject: `Welcome to Glimmora, ${v.firstName}!`,
+      react: createElement(WelcomeContributor, {
+        firstName: v.firstName,
+        loginUrl: `${baseUrl}/auth/login`,
+        onboardingUrl: `${baseUrl}/contributor/onboarding`,
+      }),
+    }).catch(() => {/* fire-and-forget */});
+
     return { success: true };
   } catch (err) {
     if (err instanceof ApiError) {
+      console.error("[registerContributor] API error", err.status, err.message);
       if (err.status === 409) {
         return { success: false, error: "An account with this email already exists" };
       }
       return { success: false, error: err.message };
     }
+    console.error("[registerContributor] unexpected error", err);
     return { success: false, error: "Registration failed. Please try again." };
   }
 }
@@ -202,6 +219,17 @@ export async function registerEnterprise(data: unknown): Promise<ActionResult> {
       acceptAhp:            v.acceptAhp,
       marketingOptIn:       v.marketingOptIn,
     });
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://app.glimmora.com";
+    sendEmail({
+      to: v.adminEmail.toLowerCase(),
+      subject: `Welcome to Glimmora — ${v.orgName} is ready`,
+      react: createElement(WelcomeEnterprise, {
+        firstName: v.adminFirstName,
+        orgName: v.orgName,
+        dashboardUrl: `${baseUrl}/enterprise/dashboard`,
+      }),
+    }).catch(() => {/* fire-and-forget */});
 
     return { success: true };
   } catch (err) {

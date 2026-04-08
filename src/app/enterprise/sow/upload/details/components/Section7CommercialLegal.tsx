@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, User, Scale, Handshake, ShieldCheck } from "lucide-react";
+import { User, Scale, Handshake, ShieldCheck } from "lucide-react";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 import { SectionHeader, SectionFooter, Field, CustomSelect, inputCls } from "./_shared";
@@ -29,6 +29,14 @@ const CHANGE_REQUEST_OPTIONS = [
   { value: "formal_cr",          label: "Formal Change Request", description: "All changes scoped and priced before work begins" },
   { value: "threshold_cr",       label: "Threshold-Based",       description: "Minor changes within contingency budget; larger changes require CR" },
   { value: "time_and_materials", label: "Time & Materials",      description: "Work above baseline billed at agreed T&M rate" },
+];
+
+const WARRANTY_OPTIONS = [
+  { value: "30_days",  label: "30 Days",  description: "Standard 30-day post-launch warranty" },
+  { value: "60_days",  label: "60 Days",  description: "60-day warranty with bug-fix support" },
+  { value: "90_days",  label: "90 Days",  description: "90-day warranty — industry standard" },
+  { value: "6_months", label: "6 Months", description: "Extended 6-month warranty period" },
+  { value: "custom",   label: "Custom",   description: "Custom warranty as per contract" },
 ];
 
 function SubSection({ icon: Icon, title, children }: {
@@ -170,6 +178,16 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
               />
             </Field>
 
+            <Field label="Warranty Period" error={errors.warrantyPeriod}>
+              <CustomSelect
+                value={data.warrantyPeriod}
+                onChange={(v) => update({ warrantyPeriod: v as typeof data.warrantyPeriod })}
+                onBlur={() => blurField("warrantyPeriod")}
+                options={WARRANTY_OPTIONS}
+                placeholder="Select warranty period…"
+              />
+            </Field>
+
             <Field label="Change Request Process" error={errors.changeRequestProcess}>
               <CustomSelect
                 value={data.changeRequestProcess}
@@ -184,14 +202,6 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
 
         {/* Approval Authorities */}
         <SubSection icon={ShieldCheck} title="Approval Authorities">
-          <div className="rounded-xl border border-gold-200 bg-gold-50/50 px-4 py-3 flex items-start gap-2.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-gold-600 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-gold-700 leading-relaxed">
-              <span className="font-semibold">Business Owner must differ from the SOW submitter.</span>{" "}
-              The platform enforces this — selecting yourself will block submission.
-            </p>
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="SOW Submitter" error={errors.sowSubmitter}>
               <UserInput
@@ -208,6 +218,15 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
                 onChange={(v) => updateAuth({ businessOwnerApprover: v })}
                 onBlur={() => blurField("businessOwnerApprover")}
                 placeholder="Full name of Business Owner"
+              />
+            </Field>
+
+            <Field label="Final Approver (Stage 5)" error={errors.finalApprover}>
+              <UserInput
+                value={auth.finalApprover}
+                onChange={(v) => updateAuth({ finalApprover: v })}
+                onBlur={() => blurField("finalApprover")}
+                placeholder="Full name of Final Approver"
               />
             </Field>
           </div>

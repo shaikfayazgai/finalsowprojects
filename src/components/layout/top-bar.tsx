@@ -95,7 +95,7 @@ export function TopBar({ config }: TopBarProps) {
 
   const breadcrumbs = React.useMemo(() => {
     const allSegments = pathname.split("/").filter(Boolean);
-    const moduleRoots = ["enterprise", "contributor", "mentor", "analytics"];
+    const moduleRoots = ["enterprise", "contributor", "mentor", "analytics", "admin"];
     const moduleRoot = allSegments.find((seg) => moduleRoots.includes(seg)) || allSegments[0];
     const hiddenPrefixes = moduleRoots;
     const crumbs = allSegments

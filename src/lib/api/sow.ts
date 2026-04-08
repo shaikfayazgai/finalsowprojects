@@ -213,4 +213,202 @@ export const sowApi = {
     if (organisation) params.set("organisation", organisation);
     return sowCall<BaseResponse>(`/api/v1/users/search?${params.toString()}`);
   },
+
+  // ── Manual SOW ────────────────────────────────────────────────────────────
+
+  listManualSOWs(params?: {
+    status?: string;
+    intake_mode?: string;
+    client?: string;
+    page?: number;
+    limit?: number;
+    sort?: string;
+    order?: "asc" | "desc";
+  }): Promise<BaseResponse> {
+    const qs = params ? `?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString()}` : "";
+    return sowCall<BaseResponse>(`/api/v1/sow${qs}`);
+  },
+
+  uploadSOW(file: File, metadata: {
+    projectTitle: string;
+    clientOrganisation: string;
+    linkedSowId?: string | null;
+  }): Promise<BaseResponse> {
+    return getToken().then(token => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectTitle", metadata.projectTitle);
+      formData.append("clientOrganisation", metadata.clientOrganisation);
+      if (metadata.linkedSowId) formData.append("linkedSowId", metadata.linkedSowId);
+
+      return fetch(`${BASE_URL}/api/v1/sow/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      }).then(async res => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (res.status === 401) { _cachedToken = null; }
+          const msg = data?.detail?.message ?? data?.detail ?? data?.message ?? `Upload error ${res.status}`;
+          throw new ApiError(res.status, typeof msg === "string" ? msg : JSON.stringify(msg));
+        }
+        return data as BaseResponse;
+      });
+    });
+  },
+
+  getManualSOW(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`);
+  },
+
+  updateManualSOW(sowId: string, data: {
+    title?: string;
+    tags?: string[];
+    stakeholders?: string[];
+    estimated_budget?: number;
+  }): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`, "PATCH", data);
+  },
+
+  deleteManualSOW(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`, "DELETE");
+  },
+
+  getUploadStatus(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/upload-status`);
+  },
+
+  getExtractionReport(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/extraction-report`);
+  },
+
+  getExtractionItems(sowId: string, params?: {
+    category?: string;
+    review_state?: string;
+  }): Promise<BaseResponse> {
+    const qs = params ? `?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]).toString()}` : "";
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/extraction-items${qs}`);
+  },
+
+  reviewExtractionItem(sowId: string, itemId: string, reviewState: {
+    state: "accepted" | "edited" | "excluded";
+    edited_value?: string;
+  }): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/extraction-items/${itemId}/review-state`, "PATCH", reviewState);
+  },
+
+  acceptAllExtractionItems(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/extraction-items/accept-all`, "POST");
+  },
+
+  getGapItems(sowId: string, params?: {
+    severity?: "critical" | "important" | "optional";
+    status?: string;
+  }): Promise<BaseResponse> {
+    const qs = params ? `?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]).toString()}` : "";
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/gap-items${qs}`);
+  },
+
+  updateGapItem(sowId: string, gapId: string, data: Record<string, unknown>): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/gap-items/${gapId}`, "PATCH", data);
+  },
+
+  getCommercialDetails(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/commercial-details`);
+  },
+
+  saveCommercialSection(sowId: string, section: string, data: Record<string, unknown>): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/commercial-details/${section}`, "PATCH", data);
+  },
+
+  validateCommercialSection(sowId: string, section: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/commercial-details/${section}/validate`, "POST");
+  },
+
+  markSectionComplete(sowId: string, section: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/commercial-details/sections/mark-complete`, "POST", { section });
+  },
+
+  setApprovalAuthorities(sowId: string, data: {
+    business_owner_approver: string;
+    final_approver: string;
+    legal_compliance_reviewer?: string;
+    security_reviewer?: string;
+  }): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/approval-authorities`, "PATCH", data);
+  },
+
+  generateManualSOW(sowId: string, opts?: { include_extracted_sections?: boolean }): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/generate`, "POST", opts ?? {});
+  },
+
+  getGenerationStatus(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/generation-status`);
+  },
+
+  getSOWPreview(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/preview`);
+  },
+
+  confirmAndSubmit(sowId: string, data: {
+    confirms_accuracy: boolean;
+    notes?: string;
+  }): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/confirm-and-submit`, "POST", data);
+  },
+
+  getApprovalStages(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/approval-stages`);
+  },
+
+  approveStage(sowId: string, stageKey: string, data: {
+    reviewer: string;
+    comments?: string;
+    checklist?: Record<string, boolean>;
+  }): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/approval-stage/${stageKey}/approve`, "POST", data);
+  },
+
+  rejectStage(sowId: string, stageKey: string, data: {
+    reviewer: string;
+    reason: string;
+    specific_feedback?: string;
+  }): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/approval-stage/${stageKey}/reject`, "POST", data);
+  },
+
+  getApprovalMessages(sowId: string, params?: {
+    stage?: string;
+    limit?: number;
+  }): Promise<BaseResponse> {
+    const qs = params ? `?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString()}` : "";
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/approval-messages${qs}`);
+  },
+
+  markMessageRead(sowId: string, messageId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/approval-messages/${messageId}/mark-read`, "POST");
+  },
+
+  getSOWClauses(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/clauses`);
+  },
+
+  getSOWSections(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/sections`);
+  },
+
+  getHallucinationLayers(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/hallucination-layers`);
+  },
+
+  exportSOW(sowId: string, format: "pdf" | "docx" | "json"): Promise<Blob> {
+    return getToken().then(token =>
+      fetch(`${BASE_URL}/api/v1/sow/${sowId}/export/${format}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(res => {
+        if (!res.ok) throw new ApiError(res.status, `Export failed: ${res.status}`);
+        return res.blob();
+      })
+    );
+  },
 };

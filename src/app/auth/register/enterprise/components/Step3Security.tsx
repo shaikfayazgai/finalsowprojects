@@ -5,8 +5,6 @@ import {
   AlertCircle,
   ArrowRight,
   ArrowLeft,
-  Eye,
-  EyeOff,
   Lock,
   Smartphone,
   Mail,
@@ -22,14 +20,12 @@ import {
   Label,
 } from "@/components/ui";
 import { COUNTRIES_DATA } from "../../data";
-import type { PasswordStrength } from "../../types";
 
 interface Props {
   password: string;
   setPassword: (v: string) => void;
   confirm: string;
   setConfirm: (v: string) => void;
-  passwordStrength: PasswordStrength;
   phoneCountry: string;
   setPhoneCountry: (v: string) => void;
   phone: string;
@@ -63,7 +59,6 @@ export function Step3Security({
   setPassword,
   confirm,
   setConfirm,
-  passwordStrength,
   phoneCountry,
   setPhoneCountry,
   phone,
@@ -92,7 +87,6 @@ export function Step3Security({
   onBack,
 }: Props) {
   const [showPw, setShowPw] = useState(false);
-  const [showCon, setShowCon] = useState(false);
 
   const selectedCountry = COUNTRIES_DATA.find(
     (country) => country.name === phoneCountry,
@@ -142,94 +136,30 @@ export function Step3Security({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="pw">
-                  Password <span className="text-red-400">*</span>{" "}
-                  <span className="text-beige-400 text-xs">
-                    (min 8 characters)
-                  </span>
+                  Password <span className="text-red-400">*</span>
                 </Label>
-                <div className="relative">
-                  <Input
-                    id="pw"
-                    type={showPw ? "text" : "password"}
-                    placeholder="Create a strong password (min 8 characters)"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pr-10"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPw((value) => !value)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600"
-                  >
-                    {showPw ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-                {password && (
-                  <div className="space-y-1.5">
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <div
-                          key={i}
-                          className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                            i <= passwordStrength.score
-                              ? passwordStrength.color
-                              : "bg-beige-200"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p
-                        className={`text-xs font-medium ${
-                          passwordStrength.score <= 1
-                            ? "text-red-500"
-                            : passwordStrength.score <= 3
-                              ? "text-gold-600"
-                              : "text-teal-600"
-                        }`}
-                      >
-                        {passwordStrength.label}
-                      </p>
-                      <p className="text-[10px] text-beige-400">
-                        {passwordStrength.score < 5
-                          ? "Add symbols & length for a stronger password"
-                          : "Excellent password strength"}
-                      </p>
-                    </div>
-                  </div>
-                )}
+                <Input
+                  id="pw"
+                  type={showPw ? "text" : "password"}
+                  placeholder="Create a strong password (min 8 characters)"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoFocus
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="con">
                   Confirm Password <span className="text-red-400">*</span>
                 </Label>
-                <div className="relative">
-                  <Input
-                    id="con"
-                    type={showCon ? "text" : "password"}
-                    placeholder="Re-enter password to confirm"
-                    value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)}
-                    className={`pr-10 ${pwMismatch ? "border-red-300 focus:border-red-400" : pwMatch ? "border-teal-400" : ""}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCon((value) => !value)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-beige-400 hover:text-beige-600"
-                  >
-                    {showCon ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
+                <Input
+                  id="con"
+                  type={showPw ? "text" : "password"}
+                  placeholder="Re-enter password to confirm"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  className={pwMismatch ? "border-red-300 focus:border-red-400" : pwMatch ? "border-teal-400" : ""}
+                />
                 {pwMatch && (
                   <p className="text-xs text-teal-600 flex items-center gap-1">
                     <CheckCircle className="w-3 h-3" /> Passwords match
@@ -239,6 +169,38 @@ export function Step3Security({
                   <p className="text-xs text-red-500">Passwords do not match</p>
                 )}
               </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showPw}
+                  onChange={(e) => setShowPw(e.target.checked)}
+                  className="w-4 h-4 rounded border-beige-300 accent-brown-600 cursor-pointer"
+                />
+                <span className="text-xs text-beige-600">Show password</span>
+              </label>
+
+              {password && (
+                <div className="p-3 rounded-lg bg-beige-50 border border-beige-200 space-y-1">
+                  <p className="text-xs font-semibold text-beige-700 mb-1">Password requirements:</p>
+                  {[
+                    { check: password.length >= 8, text: "At least 8 characters" },
+                    { check: /[A-Z]/.test(password), text: "Uppercase letter" },
+                    { check: /[a-z]/.test(password), text: "Lowercase letter" },
+                    { check: /[0-9]/.test(password), text: "Number" },
+                    { check: /[^A-Za-z0-9]/.test(password), text: "Special character" },
+                  ].map((req, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 ${
+                        req.check ? "bg-teal-500" : "bg-beige-300"
+                      }`}>
+                        {req.check && <CheckCircle className="w-2.5 h-2.5 text-white" />}
+                      </div>
+                      <span className={req.check ? "text-teal-700" : "text-beige-500"}>{req.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

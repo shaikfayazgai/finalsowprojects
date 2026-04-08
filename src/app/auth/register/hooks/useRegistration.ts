@@ -66,6 +66,7 @@ export function useRegistration(ssoData?: SSOData | null) {
 
   const [ndaAccepted,     setNdaAccepted]     = useState(false);
   const [ndaSignature,    setNdaSignature]    = useState("");
+  const [ndaSignedFile,   setNdaSignedFile]   = useState<File | null>(null);
 
   const [resumeFile,      setResumeFile]      = useState<File | null>(null);
   const [resumeDrag,      setResumeDrag]      = useState(false);
@@ -75,10 +76,6 @@ export function useRegistration(ssoData?: SSOData | null) {
   const [acceptFee,       setAcceptFee]       = useState(false);
   const [acceptAhp,       setAcceptAhp]       = useState(false);
   const [marketingOptIn,  setMarketingOptIn]  = useState(false);
-
-  useEffect(() => {
-    if (email) setVerificationEmail(prev => prev || email);
-  }, [email]);
 
   useEffect(() => {
     if (step !== 3 || !country) return;
@@ -159,16 +156,27 @@ export function useRegistration(ssoData?: SSOData | null) {
   }
 
   async function sendEmailOTP() {
-    if (!verificationEmail) {
+    if (!verificationEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(verificationEmail)) {
       setError("Please enter a valid email address");
       return;
     }
     setError("");
     setEmailOtpLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setEmailOtpLoading(false);
-    setEmailOtpSent(true);
-    startEmailCooldown();
+    try {
+      const res = await fetch("/api/auth/otp/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message); return; }
+      setEmailOtpSent(true);
+      startEmailCooldown();
+    } catch {
+      setError("Failed to send email. Please check your connection and try again.");
+    } finally {
+      setEmailOtpLoading(false);
+    }
   }
 
   async function verifyEmailOTP() {
@@ -178,9 +186,20 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     setError("");
     setEmailOtpLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setEmailOtpLoading(false);
-    setEmailVerified(true);
+    try {
+      const res = await fetch("/api/auth/otp/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail, code: emailOtp }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message); return; }
+      setEmailVerified(true);
+    } catch {
+      setError("Verification failed. Please try again.");
+    } finally {
+      setEmailOtpLoading(false);
+    }
   }
 
   function goToStep2() {
@@ -209,12 +228,21 @@ export function useRegistration(ssoData?: SSOData | null) {
     if (primarySkills.length < 1) { setError("Please add at least one primary skill"); return; }
     if (!availability) { setError("Please enter your weekly availability (hours)"); return; }
     setError("");
+    if (!verificationEmail) setVerificationEmail(email);
     setStep(3);
   }
 
   function goToStep4() {
-    if (!ndaAccepted || !ndaSignature.trim()) {
-      setError("You must read, sign, and accept the NDA & Disclosure Agreement to continue");
+    if (!ndaSignedFile) {
+      setError("Please upload the signed NDA document to continue");
+      return;
+    }
+    if (!ndaSignature.trim()) {
+      setError("Please enter your full legal name as a digital signature");
+      return;
+    }
+    if (!ndaAccepted) {
+      setError("You must read and accept the NDA & Disclosure Agreement to continue");
       return;
     }
     if (!phoneVerified || !emailVerified) {
@@ -274,11 +302,23 @@ export function useRegistration(ssoData?: SSOData | null) {
         return;
       }
 
-      await signIn("credentials", {
+      const signInResult = await signIn("credentials", {
         email,
         password,
-        callbackUrl: "/contributor/dashboard",
+        redirect: false,
       });
+
+      if (signInResult?.ok) {
+        const { getSession } = await import("next-auth/react");
+        const session = await getSession();
+        const role = (session?.user as { role?: string })?.role;
+        window.location.href =
+          role === "enterprise" ? "/enterprise/dashboard" :
+          role === "mentor"     ? "/mentor/dashboard" :
+                                  "/contributor/dashboard";
+      } else {
+        window.location.href = "/auth/login";
+      }
     } catch {
       setError("Something went wrong. Please try again.");
       setIsLoading(false);
@@ -340,6 +380,7 @@ export function useRegistration(ssoData?: SSOData | null) {
 
     ndaAccepted, setNdaAccepted,
     ndaSignature, setNdaSignature,
+    ndaSignedFile, setNdaSignedFile,
 
     resumeFile, setResumeFile,
     resumeDrag, setResumeDrag,

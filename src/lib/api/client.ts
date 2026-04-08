@@ -30,8 +30,20 @@ export async function apiCall<T>(
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       const detail = body?.detail ?? body?.message ?? `API error ${res.status}`;
-      const message =
-        typeof detail === "string" ? detail : JSON.stringify(detail);
+      let message: string;
+      if (typeof detail === "string") {
+        message = detail;
+      } else if (Array.isArray(detail)) {
+        // FastAPI validation errors: [{ loc: [...], msg: "...", type: "..." }]
+        message = detail
+          .map((e: { loc?: string[]; msg?: string }) => {
+            const field = e.loc?.slice(1).join(".") ?? "field";
+            return `${field}: ${e.msg ?? "invalid"}`;
+          })
+          .join("; ");
+      } else {
+        message = JSON.stringify(detail);
+      }
       throw new ApiError(res.status, message);
     }
 

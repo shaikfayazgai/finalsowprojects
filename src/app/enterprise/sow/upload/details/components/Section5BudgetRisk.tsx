@@ -84,7 +84,7 @@ export function Section5BudgetRisk({ onComplete, onBack }: Props) {
           <Field label="Pricing Model" error={errors.pricingModel}>
             <SelectDropdown
               value={data.pricingModel ?? ""}
-              onChange={(val) => { update({ pricingModel: val as typeof data.pricingModel }); blurField("pricingModel"); }}
+              onChange={(val) => { touched.current.add("pricingModel"); update({ pricingModel: val as typeof data.pricingModel }); }}
               placeholder="Select…"
               searchable={false}
               dropdownHeight={160}

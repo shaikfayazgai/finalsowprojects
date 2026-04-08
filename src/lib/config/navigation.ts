@@ -20,20 +20,14 @@ import {
   Server,
   Boxes,
   PieChart,
-  UserCog,
   KeyRound,
-  ShieldCheck,
-  Plug,
   UsersRound,
-  FormInput,
-  BookMarked,
-  FileStack,
-  Scale,
   BarChart3,
   Bell,
   Inbox,
   ClipboardList,
   LineChart,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 
@@ -120,14 +114,6 @@ export const enterpriseNav: ModuleConfig = {
       title: "Organization",
       items: [
         { label: "Settings", href: "/enterprise/settings", icon: Settings },
-        { label: "Roles & Access", href: "/enterprise/admin/roles", icon: KeyRound },
-        { label: "Policies", href: "/enterprise/admin/config/apg", icon: ShieldCheck },
-        { label: "Integrations", href: "/enterprise/admin/config/integrations", icon: Plug },
-        { label: "Contributors", href: "/enterprise/admin/users", icon: UserCog },
-        { label: "SOW Intake Forms", href: "/enterprise/admin/config/sow-forms", icon: FormInput },
-        { label: "Clause Library", href: "/enterprise/admin/config/clause-library", icon: BookMarked },
-        { label: "SOW Templates", href: "/enterprise/admin/config/templates", icon: FileStack },
-        { label: "Review Rubrics", href: "/enterprise/admin/config/review-rubrics", icon: Scale },
       ],
     },
     {
@@ -302,3 +288,48 @@ export const analyticsNav: ModuleConfig = {
 };
 
 export const allModules = [enterpriseNav, contributorNav, mentorNav, reviewerNav, analyticsNav] as const;
+export const adminNav: ModuleConfig = {
+  id: "admin",
+  name: "Platform Admin Console",
+  shortName: "Admin",
+  basePath: "/admin",
+  accentColor: "gold",
+  sections: [
+    {
+      items: [
+        { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+      ],
+    },
+    {
+      title: "User Management",
+      items: [
+        { label: "All Users", href: "/admin/users", icon: Users },
+        { label: "Roles & Permissions", href: "/admin/roles", icon: KeyRound },
+      ],
+    },
+    {
+      title: "Platform",
+      items: [
+        { label: "Organisations", href: "/admin/organisations", icon: UsersRound },
+        { label: "SOW Oversight", href: "/admin/sow", icon: FileText },
+        { label: "Audit Log", href: "/admin/audit", icon: ScrollText },
+      ],
+    },
+    {
+      title: "Configuration",
+      items: [
+        { label: "Email Templates", href: "/admin/email-templates", icon: Mail },
+      ],
+    },
+    {
+      title: "System",
+      items: [
+        { label: "System Health", href: "/admin/system", icon: Server },
+        { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+        { label: "Settings", href: "/admin/settings", icon: Settings },
+      ],
+    },
+  ],
+};
+
+export const allModules = [enterpriseNav, contributorNav, mentorNav, analyticsNav, adminNav] as const;

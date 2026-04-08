@@ -131,7 +131,7 @@ export function useContributorOnboarding() {
   const [emailOtpSent,      setEmailOtpSent]      = useState(false);
   const [emailOtp,          setEmailOtp]          = useState("");
   const [emailCooldown,     setEmailCooldown]     = useState(0);
-  const [emailVerified]                           = useState(true); // SSO = already verified
+  const [emailVerified,     setEmailVerified]     = useState(true); // SSO = already verified
   const [emailOtpLoading,   setEmailOtpLoading]   = useState(false);
 
   const [ndaAccepted,   setNdaAccepted]   = useState(false);
@@ -190,16 +190,40 @@ export function useContributorOnboarding() {
     setPhoneOtpLoading(false); setPhoneVerified(true);
   }
   async function sendEmailOTP() {
-    if (!verificationEmail) { setError("Please enter a valid email address"); return; }
+    if (!verificationEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(verificationEmail)) { setError("Please enter a valid email address"); return; }
     setError(""); setEmailOtpLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setEmailOtpLoading(false); setEmailOtpSent(true); startEmailCooldown();
+    try {
+      const res = await fetch("/api/auth/otp/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message); return; }
+      setEmailOtpSent(true); startEmailCooldown();
+    } catch {
+      setError("Failed to send email. Please check your connection and try again.");
+    } finally {
+      setEmailOtpLoading(false);
+    }
   }
   async function verifyEmailOTP() {
     if (emailOtp.length !== 6) { setError("Please enter the 6-digit email code"); return; }
     setError(""); setEmailOtpLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setEmailOtpLoading(false);
+    try {
+      const res = await fetch("/api/auth/otp/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail, code: emailOtp }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message); return; }
+      setEmailVerified(true);
+    } catch {
+      setError("Verification failed. Please try again.");
+    } finally {
+      setEmailOtpLoading(false);
+    }
   }
 
   /* ─── Step navigation ─── */

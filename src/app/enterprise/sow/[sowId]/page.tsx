@@ -70,6 +70,7 @@ import { StatusTimeline } from "@/components/enterprise/status-timeline";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { useSowStore, INITIAL_APPROVAL_STAGES } from "@/lib/stores/sow-store";
 import { useSOWPipelineStore } from "@/lib/stores/sow-pipeline-store";
+import { useManualSOW } from "@/lib/hooks/use-manual-sow";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
 import {
   mockSOWClauses,
@@ -274,6 +275,9 @@ export default function SOWDetailPage() {
   const updateSow = useSowStore((s) => s.updateSow);
   const updatePipelineSOW = useSOWPipelineStore((s) => s.updateSOW);
   const pipelineSows = useSOWPipelineStore((s) => s.sows);
+  const { data: apiSowRes } = useManualSOW(sowId);
+  /* If the API returned a SOW, merge its fields on top of the mock/store record */
+  const apiSowData = apiSowRes?.data as Record<string, unknown> | null | undefined;
   const sow = React.useMemo(() => {
     // Try to find the SOW by its actual ID first
     const exactMatch = allSows.find((s) => s.id === sowId)
@@ -281,8 +285,8 @@ export default function SOWDetailPage() {
     const pipelineMeta = pipelineSows.find((s) => s.id === sowId);
 
     if (exactMatch) {
-      // Found in a real store — use live data as-is
-      return exactMatch;
+      // Found in a real store — merge API data on top for real-time fields
+      return apiSowData ? { ...exactMatch, ...apiSowData, id: sowId } : exactMatch;
     }
 
     // SOW only exists in the pipeline store (no mock/store entry).
@@ -309,7 +313,7 @@ export default function SOWDetailPage() {
 
     // Last resort fallback
     return allSows[0];
-  }, [allSows, pipelineSows, sowId]);
+  }, [allSows, pipelineSows, sowId, apiSowData]);
   const linkedProject = mockProjects.find((p) => p.sowId === sow.id);
   const sections = mockSOWSections.filter((s) => s.sowId === sow.id);
   const clauses = mockSOWClauses.filter((c) => c.sowId === sow.id);

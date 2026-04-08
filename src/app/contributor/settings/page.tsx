@@ -6,6 +6,7 @@ import {
   User, Mail, Phone, Bell, Globe, Clock, Shield, Key,
   AlertTriangle, ChevronRight, Languages, X,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { mockContributorProfile } from "@/mocks/data/contributor";
@@ -55,7 +56,12 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
 /* ═══ PAGE ═══ */
 
 export default function SettingsPage() {
-  const profile = mockContributorProfile;
+  const { data: session } = useSession();
+  const profile = {
+    ...mockContributorProfile,
+    displayName: session?.user?.name || mockContributorProfile.displayName,
+    email: session?.user?.email || mockContributorProfile.email,
+  };
 
   const [editField, setEditField] = React.useState<string | null>(null);
   const [editValue, setEditValue] = React.useState("");
@@ -96,7 +102,7 @@ export default function SettingsPage() {
           {[
             { label: "Display Name", value: profile.displayName, icon: User },
             { label: "Email", value: profile.email, icon: Mail },
-            { label: "Phone", value: "+91 **** **** 42", icon: Phone },
+            { label: "Phone", value: profile.phone || "Not set", icon: Phone },
           ].map((item, i, arr) => {
             const ItemIcon = item.icon;
             return (

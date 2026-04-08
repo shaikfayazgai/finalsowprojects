@@ -452,6 +452,7 @@ export function Sidebar({ config }: SidebarProps) {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
 
+            <DropdownMenuContent side="right" align="end" className="w-64 mb-1" style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.08)" }}>
               <DropdownMenuLabel>
                 <div className="flex items-center gap-3">
                   <div
@@ -462,7 +463,7 @@ export function Sidebar({ config }: SidebarProps) {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-gray-800">{userName}</p>
-                    <p className="text-xs text-gray-400">{userEmail}</p>
+                    <p className="text-xs text-gray-400 lowercase">{userEmail}</p>
                   </div>
                 </div>
               </DropdownMenuLabel>

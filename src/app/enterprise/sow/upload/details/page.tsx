@@ -11,6 +11,13 @@ import { StatusBanner } from "@/components/enterprise/sow/StatusBanner";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import type { CommercialSectionKey } from "@/types/enterprise";
 import { mockPrePopulatedDetails, mockPrePopulatedSectionStatus } from "@/mocks/data/sow-upload-flow";
+import {
+  useCommercialDetails,
+  useSaveCommercialSection,
+  useValidateCommercialSection,
+  useMarkSectionComplete,
+  useSetApprovalAuthorities,
+} from "@/lib/hooks/use-manual-sow";
 
 /* ── Section content components ── */
 
@@ -42,27 +49,58 @@ const SECTION_ORDER: CommercialSectionKey[] = [
 export default function CommercialDetailsPage() {
   const router = useRouter();
   const store = useSOWUploadStore();
+  const sowId = store.uploadedSowId;
+  const { data: commercialRes } = useCommercialDetails(sowId);
+  const saveSection = useSaveCommercialSection(sowId);
+  const validateSection = useValidateCommercialSection(sowId);
+  const markSectionComplete = useMarkSectionComplete(sowId);
+  const setApprovalAuthorities = useSetApprovalAuthorities(sowId);
 
   const [activeSection, setActiveSection] = React.useState<CommercialSectionKey>("businessContext");
   /* Initialize with pre-populated data on first visit */
   React.useEffect(() => {
     if (store.commercialSectionStatus.businessContext === "not_started") {
-      /* Apply mock pre-populated data */
-      if (mockPrePopulatedDetails.businessContext) {
-        store.updateCommercialSection("businessContext", mockPrePopulatedDetails.businessContext);
-      }
-      if (mockPrePopulatedDetails.techIntegrations) {
-        store.updateCommercialSection("techIntegrations", mockPrePopulatedDetails.techIntegrations);
-      }
-      /* Set section statuses */
-      Object.entries(mockPrePopulatedSectionStatus).forEach(([key, status]) => {
-        if (status === "pre_populated") {
-          store.markSectionInProgress(key as CommercialSectionKey);
-        }
+      /* Prefer API data; fall back to mock pre-populated data */
+      const res = commercialRes as unknown as Record<string, unknown> | null | undefined;
+      const payload = (res?.data !== undefined && res?.data !== null ? res.data : res) as Record<string, unknown> | null;
+      // API may nest details under .details, .commercial_details, .sections, or directly
+      const apiDetails = (
+        payload?.details ?? payload?.commercial_details ?? payload?.sections ?? payload
+      ) as Record<string, unknown> | null;
+
+      // Check if it has at least one section key
+      const hasApiData = apiDetails && SECTION_ORDER.some((k) => {
+        const snakeKey = k.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
+        return apiDetails[k] || apiDetails[snakeKey];
       });
+
+      if (hasApiData && apiDetails) {
+        /* Merge API sections into the store */
+        SECTION_ORDER.forEach((key) => {
+          const snakeKey = key.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
+          const sectionData = apiDetails[key] ?? apiDetails[snakeKey];
+          if (sectionData && typeof sectionData === "object") {
+            store.updateCommercialSection(key, sectionData as never);
+            store.markSectionInProgress(key);
+          }
+        });
+      } else {
+        /* Fall back to mocks */
+        if (mockPrePopulatedDetails.businessContext) {
+          store.updateCommercialSection("businessContext", mockPrePopulatedDetails.businessContext);
+        }
+        if (mockPrePopulatedDetails.techIntegrations) {
+          store.updateCommercialSection("techIntegrations", mockPrePopulatedDetails.techIntegrations);
+        }
+        Object.entries(mockPrePopulatedSectionStatus).forEach(([key, status]) => {
+          if (status === "pre_populated") {
+            store.markSectionInProgress(key as CommercialSectionKey);
+          }
+        });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [!!commercialRes]);
 
   /* Auto-save every 30 seconds */
   React.useEffect(() => {
@@ -85,6 +123,17 @@ export default function CommercialDetailsPage() {
 
   const handleSectionComplete = () => {
     store.markSectionComplete(activeSection);
+
+    /* Persist section data to API */
+    if (sowId) {
+      const sectionData = store.commercialDetails[activeSection];
+      if (sectionData && typeof sectionData === "object") {
+        saveSection.mutate({ section: activeSection, data: sectionData as unknown as Record<string, unknown> });
+      }
+      validateSection.mutate(activeSection);
+      markSectionComplete.mutate(activeSection);
+    }
+
     const idx = SECTION_ORDER.indexOf(activeSection);
     if (idx < SECTION_ORDER.length - 1) {
       setActiveSection(SECTION_ORDER[idx + 1]);
@@ -96,6 +145,24 @@ export default function CommercialDetailsPage() {
 
   const handleGenerate = () => {
     store.markSectionComplete("commercialLegal");
+
+    /* Persist commercialLegal section + approval authorities to API */
+    if (sowId) {
+      const sectionData = store.commercialDetails.commercialLegal;
+      if (sectionData && typeof sectionData === "object") {
+        saveSection.mutate({ section: "commercialLegal", data: sectionData as unknown as Record<string, unknown> });
+      }
+      validateSection.mutate("commercialLegal");
+      markSectionComplete.mutate("commercialLegal");
+
+      const auth = store.approvalAuthorities;
+      setApprovalAuthorities.mutate({
+        business_owner_approver: auth.businessOwnerApprover,
+        final_approver: auth.finalApprover,
+        ...(auth.sowSubmitter ? { legal_compliance_reviewer: auth.sowSubmitter } : {}),
+      });
+    }
+
     store.setFlowStep(6);
     router.push("/enterprise/sow/upload/generate");
   };

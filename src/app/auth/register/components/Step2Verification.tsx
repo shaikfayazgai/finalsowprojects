@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertCircle, ArrowRight, ArrowLeft,
   CheckCircle, RefreshCw, Smartphone, Mail, FileText, ShieldCheck,
@@ -214,18 +215,18 @@ export function Step2Verification({
         <div className="mb-5">
           <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 3 of 4</p>
           <p className="font-heading font-semibold text-brown-950 text-lg mt-0.5">Identity Verification</p>
-          <p className="text-xs text-beige-500 mt-0.5">Download and sign the NDA, then verify your contact details</p>
+          <p className="text-xs text-beige-500 mt-0.5">Review and accept the NDA, then verify your contact details</p>
         </div>
 
         <div className="space-y-5">
 
           {/* ── NDA Document ── */}
-          <div className={`rounded-2xl overflow-hidden transition-all duration-300 ${ndaSigned ? "ring-2 ring-teal-300 shadow-lg shadow-teal-50" : "ring-1 ring-beige-200 shadow-md"}`}>
+          <div className={`rounded-2xl overflow-hidden transition-all duration-300 ${ndaAccepted && !!ndaSignedFile ? "ring-2 ring-teal-300 shadow-lg shadow-teal-50" : "ring-1 ring-beige-200 shadow-md"}`}>
 
             {/* Doc top bar */}
             <div className="bg-white px-5 py-3.5 flex items-center justify-between border-b border-gray-100">
               <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${ndaSigned ? "bg-teal-500" : "bg-brown-600"}`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${ndaAccepted && !!ndaSignedFile ? "bg-teal-500" : "bg-brown-600"}`}>
                   <FileText className="w-4 h-4 text-white" />
                 </div>
                 <div>
@@ -233,7 +234,7 @@ export function Step2Verification({
                   <p className="text-[10px] text-gray-400 mt-0.5">Glimmora International, UAE · 3 pages · Review before signing</p>
                 </div>
               </div>
-              {ndaSigned
+              {ndaAccepted && !!ndaSignedFile
                 ? <span className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-full shrink-0">
                     <ShieldCheck className="w-3.5 h-3.5" /> Signed
                   </span>
@@ -305,6 +306,21 @@ export function Step2Verification({
             {/* Sign panel */}
             <div className="bg-white border-t border-gray-100 px-5 py-4 space-y-4">
 
+              {/* Digital signature */}
+              <div className="space-y-1.5">
+                <label htmlFor="nda-signature" className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
+                  Legal Full Name (Digital Signature) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="nda-signature"
+                  type="text"
+                  placeholder="Type your full legal name to sign"
+                  value={ndaSignature}
+                  onChange={e => setNdaSignature(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border border-beige-200 bg-white text-sm text-brown-950 font-serif italic placeholder:text-gray-300 focus:outline-none focus:border-brown-500 focus:ring-2 focus:ring-brown-500/20 transition-all"
+                />
+              </div>
+
               {/* Checkbox */}
               <label className="flex items-start gap-3 cursor-pointer group p-3 rounded-xl hover:bg-gray-50 transition-colors -mx-1">
                 <div className="mt-0.5 shrink-0">
@@ -325,7 +341,7 @@ export function Step2Verification({
               </label>
 
               {/* Signed confirmation */}
-              {ndaSigned && (
+              {ndaAccepted && !!ndaSignedFile && (
                 <div className="flex items-center gap-3 p-3 rounded-xl bg-teal-50 border border-teal-200">
                   <ShieldCheck className="w-5 h-5 text-teal-500 shrink-0" />
                   <div>
@@ -496,11 +512,20 @@ export function Step2Verification({
             )}
           </div>
 
-          {error && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
-            </div>
-          )}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                key="step2-error"
+                initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700"
+              >
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <Button type="button" variant="primary" size="lg" className="w-full"
             onClick={onContinue}>

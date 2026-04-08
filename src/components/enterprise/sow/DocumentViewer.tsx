@@ -1,125 +1,156 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, FileText } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import type { SOWSection } from "@/types/enterprise";
+
+interface ParsedSection {
+  id: string;
+  title: string;
+  content: string;
+  pageNumber?: number;
+}
 
 interface DocumentViewerProps {
-  sections: SOWSection[];
+  /** Parsed text sections from /api/v1/sow/{id}/sections */
+  sections?: ParsedSection[];
+  /** Text to highlight (from clicked extraction item's sourceHighlight) */
   highlightText?: string;
+  /** Page number to jump to */
   highlightPage?: number;
   className?: string;
+  /** Legacy props — ignored */
   fileUrl?: string;
   fileType?: string;
 }
 
-export function DocumentViewer({ sections, highlightText, highlightPage, className }: DocumentViewerProps) {
-  const [currentPage, setCurrentPage] = React.useState(1);
+export function DocumentViewer({
+  sections = [],
+  highlightText,
+  highlightPage,
+  className,
+}: DocumentViewerProps) {
   const [zoom, setZoom] = React.useState(100);
-  const [searchQuery, setSearchQuery] = React.useState("");
   const contentRef = React.useRef<HTMLDivElement>(null);
+  const highlightRef = React.useRef<HTMLElement | null>(null);
 
-  const totalPages = Math.max(1, Math.ceil(sections.length / 2));
-
-  /* Jump to page when highlight changes */
+  /* Scroll highlighted mark into view whenever highlight changes */
   React.useEffect(() => {
-    if (highlightPage && highlightPage > 0) {
-      const targetPage = Math.ceil(highlightPage / 2);
-      setCurrentPage(Math.min(targetPage, totalPages));
-    }
-  }, [highlightPage, totalPages]);
-
-  /* Scroll to highlighted text */
-  React.useEffect(() => {
-    if (highlightText && contentRef.current) {
-      const marks = contentRef.current.querySelectorAll("mark");
-      if (marks.length > 0) {
-        marks[0].scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!highlightText || !contentRef.current) return;
+    // Small delay to let the DOM update after re-render
+    const id = setTimeout(() => {
+      const mark = contentRef.current?.querySelector("mark");
+      if (mark) {
+        mark.scrollIntoView({ behavior: "smooth", block: "center" });
+        highlightRef.current = mark;
       }
-    }
-  }, [highlightText, currentPage]);
+    }, 50);
+    return () => clearTimeout(id);
+  }, [highlightText, highlightPage]);
 
-  const visibleSections = sections.slice((currentPage - 1) * 2, currentPage * 2);
-
+  /* Highlight matching text inside a string */
   function renderContent(text: string) {
-    if (!highlightText) return text;
-    const idx = text.toLowerCase().indexOf(highlightText.toLowerCase());
-    if (idx === -1) return text;
+    if (!highlightText || !highlightText.trim()) return <>{text}</>;
+    const needle = highlightText.trim().toLowerCase();
+    const lower = text.toLowerCase();
+    const idx = lower.indexOf(needle);
+    if (idx === -1) return <>{text}</>;
     return (
       <>
         {text.slice(0, idx)}
-        <mark className="bg-gold-200 text-gold-900 px-0.5 rounded">{text.slice(idx, idx + highlightText.length)}</mark>
-        {text.slice(idx + highlightText.length)}
+        <mark className="bg-amber-200 text-amber-900 px-0.5 rounded-sm font-medium">
+          {text.slice(idx, idx + highlightText.trim().length)}
+        </mark>
+        {text.slice(idx + highlightText.trim().length)}
       </>
     );
   }
 
+  /* Sort sections by page number */
+  const sorted = React.useMemo(
+    () => [...sections].sort((a, b) => (a.pageNumber ?? 0) - (b.pageNumber ?? 0)),
+    [sections],
+  );
+
+  const totalPages = sorted.length;
+
+  /* Which page is highlighted */
+  const activePage = highlightPage ?? null;
+
   return (
-    <div className={cn("card-parchment flex flex-col h-full", className)}>
+    <div className={cn("flex flex-col h-full bg-white", className)}>
+
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2.5 shrink-0" style={{ borderBottom: "1px solid var(--border-soft)" }}>
-        {/* Search */}
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          <input
-            type="text"
-            placeholder="Search in document..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="text-[11px] text-gray-600 bg-transparent outline-none flex-1 min-w-0"
-          />
-        </div>
-
-        {/* Zoom */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 shrink-0 bg-gray-50/60">
+        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex-1">
+          {totalPages > 0 ? `${totalPages} section${totalPages !== 1 ? "s" : ""} parsed` : "Parsed Document"}
+        </span>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => setZoom(Math.max(50, zoom - 10))} className="p-1 rounded-md hover:bg-gray-100 transition-colors">
-            <ZoomOut className="w-3.5 h-3.5 text-gray-400" />
+          <button
+            onClick={() => setZoom((z) => Math.max(70, z - 10))}
+            className="p-1 rounded hover:bg-gray-200 transition-colors"
+          >
+            <ZoomOut className="w-3.5 h-3.5 text-gray-500" />
           </button>
-          <span className="text-[10px] font-mono text-gray-400 w-8 text-center">{zoom}%</span>
-          <button onClick={() => setZoom(Math.min(150, zoom + 10))} className="p-1 rounded-md hover:bg-gray-100 transition-colors">
-            <ZoomIn className="w-3.5 h-3.5 text-gray-400" />
-          </button>
-        </div>
-
-        {/* Page nav */}
-        <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}
-            className="p-1 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-30">
-            <ChevronLeft className="w-3.5 h-3.5 text-gray-500" />
-          </button>
-          <span className="text-[10px] font-mono text-gray-500">{currentPage}/{totalPages}</span>
-          <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}
-            className="p-1 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-30">
-            <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
+          <span className="text-[10px] font-mono text-gray-500 w-8 text-center">{zoom}%</span>
+          <button
+            onClick={() => setZoom((z) => Math.min(140, z + 10))}
+            className="p-1 rounded hover:bg-gray-200 transition-colors"
+          >
+            <ZoomIn className="w-3.5 h-3.5 text-gray-500" />
           </button>
         </div>
       </div>
 
       {/* Content */}
-      <div ref={contentRef} className="flex-1 overflow-y-auto px-6 py-5" style={{ fontSize: `${zoom}%` }}>
-        {visibleSections.length > 0 ? (
-          <div className="space-y-6">
-            {visibleSections.map((sec, idx) => (
-              <div key={sec.id}>
+      <div
+        ref={contentRef}
+        className="flex-1 overflow-y-auto px-5 py-4 space-y-5"
+        style={{ fontSize: `${zoom}%` }}
+      >
+        {sorted.length > 0 ? (
+          sorted.map((sec) => {
+            const isActive = activePage !== null && sec.pageNumber === activePage;
+            return (
+              <div
+                key={sec.id}
+                className={cn(
+                  "rounded-xl border px-4 py-3.5 transition-colors duration-200",
+                  isActive
+                    ? "border-amber-300 bg-amber-50/40"
+                    : "border-gray-100 bg-white",
+                )}
+              >
+                {/* Section header */}
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[9px] font-mono text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
-                    p.{(currentPage - 1) * 2 + idx + 1}
-                  </span>
-                  <h3 className="text-[14px] font-semibold text-gray-800">{sec.title}</h3>
+                  {sec.pageNumber && (
+                    <span className="text-[9px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                      p.{sec.pageNumber}
+                    </span>
+                  )}
+                  <h3 className="text-[13px] font-semibold text-gray-800 leading-snug">
+                    {sec.title}
+                  </h3>
                 </div>
-                <p className="text-[13px] text-gray-600 leading-relaxed whitespace-pre-wrap">
+                {/* Section content with highlight */}
+                <p className="text-[12px] text-gray-600 leading-relaxed whitespace-pre-wrap">
                   {renderContent(sec.content)}
                 </p>
               </div>
-            ))}
-          </div>
+            );
+          })
         ) : (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-[12px] text-gray-400">No content available for this page.</p>
+          <div className="flex flex-col items-center justify-center h-full py-16 text-center">
+            <FileText className="w-8 h-8 text-gray-200 mb-3" />
+            <p className="text-[12px] font-medium text-gray-400">
+              {highlightText
+                ? "Parsed sections loading…"
+                : "Click an extracted item to see its source text here."}
+            </p>
           </div>
         )}
       </div>
+
     </div>
   );
 }

@@ -30,6 +30,7 @@ import { stagger, fadeUp, slideInRight, scaleIn } from "@/lib/utils/motion-varia
 import { Badge, Button } from "@/components/ui";
 import { useSOWPipelineStore, type PipelineSOW, type SLAStatus, type ChangeRequestHistoryEntry } from "@/lib/stores/sow-pipeline-store";
 import { useNotificationStore } from "@/lib/stores/notification-store";
+import { useManualSOWList } from "@/lib/hooks/use-manual-sow";
 
 /* ═══════════════════════════════════════════════════════════════
    Types
@@ -306,9 +307,72 @@ function PipelineStageCard({ stage, index, sows }: { stage: PipelineStage; index
    Main Page
    ═══════════════════════════════════════════════════════════════ */
 
+function deriveStageFromApprovalStages(stages: Record<string, unknown>[] | undefined): { currentStage: number; completedStages: number[] } {
+  if (!stages || !Array.isArray(stages)) return { currentStage: 1, completedStages: [] };
+  const completed: number[] = [];
+  let current = 1;
+  // API returns stages with `stage` as a number (1-5) and `status` as a string
+  for (let i = 1; i <= 5; i++) {
+    const match = stages.find((s) => (s.stage as number) === i);
+    if (match && match.status === "approved") {
+      completed.push(i);
+      current = i + 1;
+    } else {
+      break;
+    }
+  }
+  return { currentStage: Math.min(current, 5), completedStages: completed };
+}
+
+function deriveSLAStatus(submittedAt: string | undefined): SLAStatus {
+  if (!submittedAt) return "on-track";
+  const days = (Date.now() - new Date(submittedAt).getTime()) / (1000 * 60 * 60 * 24);
+  if (days > 10) return "overdue";
+  if (days > 5) return "at-risk";
+  return "on-track";
+}
+
 export default function SOWApprovalPipelinePage() {
-  const sows = useSOWPipelineStore((s) => s.sows);
+  const localSows = useSOWPipelineStore((s) => s.sows);
   const updateSOW = useSOWPipelineStore((s) => s.updateSOW);
+
+  // Fetch real SOWs from API (status: approval)
+  const { data: apiRes, isLoading } = useManualSOWList({ status: "approval" });
+  const apiItems = ((apiRes?.data ?? apiRes) as Record<string, unknown>[] | undefined);
+
+  // Merge API SOWs into PipelineSOW shape, deduplicating with local store
+  const sows: PipelineSOW[] = React.useMemo(() => {
+    const apiPipelineSows: PipelineSOW[] = (Array.isArray(apiItems) ? apiItems : []).map((item) => {
+      const id = (item.id ?? item._id ?? "") as string;
+      const approvalStages = (item.approval_stages ?? item.approvalStages) as Record<string, unknown>[] | undefined;
+      const { currentStage, completedStages } = deriveStageFromApprovalStages(approvalStages);
+      const submittedAt = (item.submitted_at ?? item.submittedAt ?? item.created_at ?? item.createdAt) as string | undefined;
+      // If the local store has extra state (changesRequested, etc.), merge it
+      const local = localSows.find((s) => s.id === id);
+      return {
+        id,
+        title: (item.title ?? item.projectTitle ?? item.project_title ?? "Untitled") as string,
+        client: (item.client ?? item.clientOrganisation ?? item.client_organisation ?? "") as string,
+        currentStage,
+        stageApprover: (item.stageApprover ?? local?.stageApprover ?? "Assigned Reviewer") as string,
+        slaStatus: deriveSLAStatus(submittedAt),
+        submittedDate: submittedAt ?? new Date().toISOString(),
+        totalValue: (item.totalValue ?? item.total_value ?? local?.totalValue ?? "$0") as string,
+        completedStages,
+        submittedBy: (item.submittedBy ?? item.submitted_by ?? item.created_by) as string | undefined,
+        changesRequested: local?.changesRequested,
+        changeRequestReason: local?.changeRequestReason,
+        changeRequestedAt: local?.changeRequestedAt,
+        changeRequestedBy: local?.changeRequestedBy,
+        changeRequestHistory: local?.changeRequestHistory,
+      };
+    });
+
+    // Include local-only SOWs (not from API) as fallback
+    const apiIds = new Set(apiPipelineSows.map((s) => s.id));
+    const localOnly = localSows.filter((s) => !apiIds.has(s.id));
+    return [...apiPipelineSows, ...localOnly];
+  }, [apiItems, localSows]);
   const pushNotification = useNotificationStore((s) => s.push);
   const [stageFilter, setStageFilter] = React.useState<number | null>(null);
   const [slaFilter, setSLAFilter] = React.useState<SLAStatus | null>(null);
@@ -424,6 +488,14 @@ export default function SOWApprovalPipelinePage() {
   const onTrackCount = sows.filter((s) => s.slaStatus === "on-track").length;
   const atRiskCount = sows.filter((s) => s.slaStatus === "at-risk").length;
   const overdueCount = sows.filter((s) => s.slaStatus === "overdue").length;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-sm text-gray-400">
+        Loading approval pipeline…
+      </div>
+    );
+  }
 
   return (
     <motion.div

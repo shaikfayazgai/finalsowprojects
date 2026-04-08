@@ -12,10 +12,9 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Checkbox, Textarea } from "@/components/ui";
-import { mockSOWs } from "@/mocks/data/enterprise-sow";
-import { useSowStore, INITIAL_APPROVAL_STAGES } from "@/lib/stores/sow-store";
-import { useSOWPipelineStore } from "@/lib/stores/sow-pipeline-store";
 import type { ApprovalStage } from "@/types/enterprise";
+import { useManualSOW, useApprovalStages, useApproveStage, useRejectStage } from "@/lib/hooks/use-manual-sow";
+import { useEmailTemplateStore } from "@/lib/stores/email-template-store";
 
 /* ═══ Badge component (matches detail page) ═══ */
 
@@ -93,45 +92,94 @@ export default function SOWApprovePage() {
   const params = useParams();
   const router = useRouter();
   const sowId = params.sowId as string;
-  const storeSows = useSowStore((s) => s.sows);
-  const addSow = useSowStore((s) => s.addSow);
-  const pipelineSows = useSOWPipelineStore((s) => s.sows);
-  const removeSOW = useSOWPipelineStore((s) => s.removeSOW);
-  const updatePipelineSOW = useSOWPipelineStore((s) => s.updateSOW);
 
-  // Base SOW: prefer store (has live stage progress), fall back to mock
-  const rawSow = storeSows.find((s) => s.id === sowId)
-    ?? mockSOWs.find((s) => s.id === sowId)
-    ?? mockSOWs[0];
+  // ── API data ──
+  const { data: sowRes, isLoading: sowLoading } = useManualSOW(sowId);
+  const { data: stagesRes, isLoading: stagesLoading } = useApprovalStages(sowId);
+  const approveStageMutation = useApproveStage(sowId);
+  const rejectStageMutation = useRejectStage(sowId);
+  const getEmailTemplate = useEmailTemplateStore((s) => s.getTemplate);
 
-  const pipelineMeta = pipelineSows.find((s) => s.id === sowId);
-
-  // Build approval stages that reflect pipeline store state (completed + current stage)
-  function buildStagesFromPipeline() {
-    const stageKeys: ApprovalStage[] = ["business", "glimmora_commercial", "legal", "security", "final"];
-    const completed = pipelineMeta?.completedStages ?? [];
-    const current = pipelineMeta?.currentStage ?? 1;
-    return stageKeys.map((key, idx) => {
-      const num = idx + 1;
-      if (completed.includes(num)) return { stage: key, status: "approved" as const };
-      if (num === current) return { stage: key, status: "in_review" as const, reviewer: "Enterprise Admin" };
-      return { stage: key, status: "pending" as const };
-    });
+  function fireEmail(event: string, payload: Record<string, string>) {
+    const tmpl = getEmailTemplate(event as Parameters<typeof getEmailTemplate>[0]);
+    if (!tmpl?.isActive) return;
+    fetch("/api/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event,
+        payload,
+        subject: tmpl.subject,
+        headerColor: tmpl.headerColor,
+        logoUrl: tmpl.logoUrl,
+        footerText: tmpl.footerText,
+      }),
+    }).catch(() => {/* fire-and-forget */});
   }
 
-  const hasActiveStage = rawSow.approvalStages.some(
-    (s) => s.status === "in_review" || s.status === "pending"
-  );
-  const sow = hasActiveStage
-    ? rawSow
-    : {
-        ...rawSow,
-        id: sowId,
-        title: pipelineMeta?.title ?? rawSow.title,
-        client: pipelineMeta?.client ?? rawSow.client,
-        status: "approval" as const,
-        approvalStages: pipelineMeta ? buildStagesFromPipeline() : INITIAL_APPROVAL_STAGES.map((s) => ({ ...s })),
-      };
+  // Derive SOW metadata from API
+  const sowData = (sowRes?.data ?? sowRes) as Record<string, unknown> | null;
+  const sowTitle = (sowData?.title ?? sowData?.projectTitle ?? sowData?.project_title ?? "Untitled SOW") as string;
+  const sowClient = (sowData?.client ?? sowData?.clientOrganisation ?? sowData?.client_organisation ?? "") as string;
+  const sowStatus = (sowData?.status ?? "approval") as string;
+  const sowVersion = (sowData?.version ?? 1) as number;
+  const sowPages = (sowData?.pages ?? sowData?.page_count ?? 0) as number;
+  const sowRiskScore = (sowData?.riskScore ?? sowData?.risk_score ?? { overall: 0 }) as { overall: number };
+  const sowCreatedBy = (sowData?.createdBy ?? sowData?.created_by ?? "Enterprise Admin") as string;
+
+  // Derive approval stages from API response
+  // API returns: { data: { stages: [{ stage: 1, status: "approved", stage_name, reviewer_name, comments, decided_at }] } }
+  const stageNumToKey: Record<number, ApprovalStage> = { 1: "business", 2: "glimmora_commercial", 3: "legal", 4: "security", 5: "final" };
+  const stageKeys: ApprovalStage[] = ["business", "glimmora_commercial", "legal", "security", "final"];
+  const pipelineData = (stagesRes as unknown as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
+  const rawStagesArr = (pipelineData?.stages ?? []) as Record<string, unknown>[];
+
+  const apiStages: { stage: ApprovalStage; status: string; reviewer?: string; reviewedAt?: string; comments?: string }[] = (() => {
+    if (Array.isArray(rawStagesArr) && rawStagesArr.length > 0) {
+      return rawStagesArr.map((s) => ({
+        stage: stageNumToKey[s.stage as number] ?? stageKeys[(s.stage as number) - 1] ?? "business",
+        status: (s.status === "approved" ? "approved" : s.status === "rejected" ? "rejected" : s.status === "changes_requested" ? "rejected" : "pending") as string,
+        reviewer: (s.reviewer_name ?? s.reviewer) as string | undefined,
+        reviewedAt: (s.decided_at ?? s.updated_at) as string | undefined,
+        comments: s.comments as string | undefined,
+      }));
+    }
+    return stageKeys.map((k) => ({ stage: k, status: "pending" }));
+  })();
+
+  // Ensure all 5 stages are present (API may only return stages that exist)
+  const fullStages = stageKeys.map((key) => {
+    const existing = apiStages.find((s) => s.stage === key);
+    if (existing) return existing;
+    return { stage: key, status: "pending" as string };
+  });
+
+  // Mark the active stage as "in_review":
+  // 1. Use current_active_stage from API if available
+  // 2. Otherwise, find the first pending stage (the one right after the last approved)
+  const activeStageNum = pipelineData?.current_active_stage as number | null;
+  const firstPendingKey = activeStageNum
+    ? stageNumToKey[activeStageNum]
+    : fullStages.find((s) => s.status === "pending")?.stage;
+
+  const finalStages = fullStages.map((s) => {
+    if (s.stage === firstPendingKey && s.status === "pending") {
+      return { ...s, status: "in_review" };
+    }
+    return s;
+  });
+
+  const sow = {
+    id: sowId,
+    title: sowTitle,
+    client: sowClient,
+    status: sowStatus,
+    version: sowVersion,
+    pages: sowPages,
+    riskScore: sowRiskScore,
+    createdBy: sowCreatedBy,
+    approvalStages: finalStages,
+  };
 
   const activeStageIndex = sow.approvalStages.findIndex((s) => s.status === "in_review" || s.status === "pending");
   const activeStage = activeStageIndex >= 0 ? sow.approvalStages[activeStageIndex] : null;
@@ -151,63 +199,86 @@ export default function SOWApprovePage() {
 
   function handleApproveStage() {
     if (!activeStage) return;
-    const now = new Date().toISOString();
     const isFinalStage = activeStage.stage === "final";
 
-    const updatedStages = sow.approvalStages.map((s, idx) => {
-      if (s.stage === activeStage.stage) {
-        return { ...s, status: "approved" as const, reviewedAt: now, comments: comments || undefined };
-      }
-      if (idx === activeStageIndex + 1 && s.status === "pending") {
-        return { ...s, status: "in_review" as const };
-      }
-      return s;
-    });
+    const stageLabelsMap: Record<string, string> = {
+      business: "Business Owner Review",
+      glimmora_commercial: "GlimmoraTeam Commercial Review",
+      legal: "Legal / Compliance Review",
+      security: "Security Review",
+      final: "Final Sign-off",
+    };
+    const nextStageKeys = ["business", "glimmora_commercial", "legal", "security", "final"];
+    const nextStageKey = nextStageKeys[activeStageIndex + 1];
+    const nextStageName = nextStageKey ? stageLabelsMap[nextStageKey] : undefined;
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const sowUrl = `${baseUrl}/enterprise/sow/${sow.id}/approve`;
 
-    const stageNum = activeStageIndex + 1;          // 1-indexed stage just approved
-    const newCompletedStages = [...(pipelineMeta?.completedStages ?? []).filter(n => n !== stageNum), stageNum];
-
-    if (isFinalStage) {
-      addSow({ ...sow, approvalStages: updatedStages, status: "approved", approvedAt: now, updatedAt: now });
-      removeSOW(sow.id);
-      setApprovalSubmitted(true);
-      setTimeout(() => router.push("/enterprise/sow"), 2000);
-    } else {
-      addSow({ ...sow, approvalStages: updatedStages, updatedAt: now });
-      // Sync pipeline store for real-time stage tracker
-      updatePipelineSOW(sow.id, {
-        currentStage: stageNum + 1,
-        completedStages: newCompletedStages,
-      });
-      setApprovalSubmitted(true);
-    }
+    approveStageMutation.mutate(
+      {
+        stageKey: activeStage.stage,
+        data: { reviewer: "Enterprise Admin", comments: comments || undefined, checklist: checked },
+      },
+      {
+        onSuccess: () => {
+          if (isFinalStage) {
+            fireEmail("sow_fully_approved", {
+              adminName: "Enterprise Admin",
+              sowTitle: sow.title,
+              approvedAt: new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+              sowUrl,
+            });
+            setApprovalSubmitted(true);
+            setTimeout(() => router.push("/enterprise/sow"), 2000);
+          } else {
+            fireEmail("sow_stage_approved", {
+              recipientName: sow.createdBy,
+              stageName: stageLabelsMap[activeStage.stage] ?? activeStage.stage,
+              approverName: "Enterprise Admin",
+              sowTitle: sow.title,
+              sowUrl,
+              ...(nextStageName ? { nextStageName } : {}),
+            });
+            setApprovalSubmitted(true);
+          }
+        },
+      },
+    );
   }
 
   function handleRejectStage() {
     if (!activeStage || !rejectionReason.trim()) return;
-    const now = new Date().toISOString();
-    const updatedStages = sow.approvalStages.map((s) =>
-      s.stage === activeStage.stage
-        ? { ...s, status: "rejected" as const, reviewedAt: now, comments: rejectionReason }
-        : s
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+
+    rejectStageMutation.mutate(
+      {
+        stageKey: activeStage.stage,
+        data: { reviewer: "Enterprise Admin", reason: rejectionReason },
+      },
+      {
+        onSuccess: () => {
+          fireEmail("sow_changes_requested", {
+            recipientName: sow.createdBy,
+            stageName: stageLabels[activeStage.stage] ?? activeStage.stage,
+            reason: rejectionReason,
+            sowTitle: sow.title,
+            sowUrl: `${baseUrl}/enterprise/sow/${sow.id}/approve`,
+          });
+          setRejectionSubmitted(true);
+          setShowRejectForm(false);
+        },
+      },
     );
-    addSow({
-      ...sow,
-      approvalStages: updatedStages,
-      status: "changes_requested",
-      updatedAt: now,
-    });
-    // Mark the pipeline SOW so it surfaces at the top with a notification
-    updatePipelineSOW(sowId, {
-      changesRequested: true,
-      changeRequestReason: rejectionReason,
-      changeRequestedAt: now,
-      changeRequestedBy: stageLabels[activeStage.stage],
-    });
-    setRejectionSubmitted(true);
-    setShowRejectForm(false);
   }
   const showMain = activeStage && !approvalSubmitted && !rejectionSubmitted;
+
+  if (sowLoading || stagesLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-sm text-gray-400">
+        Loading approval pipeline…
+      </div>
+    );
+  }
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">

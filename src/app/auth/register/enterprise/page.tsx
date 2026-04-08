@@ -14,7 +14,7 @@ export default function EnterpriseRegisterPage() {
   const reg = useEnterpriseRegistration();
 
   return (
-    <div className="w-full max-w-3xl mx-auto py-8">
+    <div className="w-full max-w-xl mx-auto py-8">
       {/* ── Header row: logo left · badge right ── */}
       <div className="flex items-center justify-between mb-8">
         <Link href="/" className="flex items-center gap-2 group">
@@ -106,7 +106,6 @@ export default function EnterpriseRegisterPage() {
           setPassword={reg.setPassword}
           confirm={reg.confirm}
           setConfirm={reg.setConfirm}
-          passwordStrength={reg.passwordStrength}
           phoneCountry={reg.phoneCountry}
           setPhoneCountry={reg.setPhoneCountry}
           phone={reg.phone}

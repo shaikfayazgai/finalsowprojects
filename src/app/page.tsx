@@ -113,7 +113,14 @@ export default function HomePage() {
           <div className="flex items-center gap-4">
             {isLoggedIn ? (
               <>
-                <Link href="/enterprise/dashboard" className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors">
+                <Link
+                  href={
+                    session?.user?.role === "contributor" ? "/contributor/dashboard" :
+                    session?.user?.role === "mentor"      ? "/mentor/dashboard" :
+                                                            "/enterprise/dashboard"
+                  }
+                  className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors"
+                >
                   Dashboard
                 </Link>
                 <Button

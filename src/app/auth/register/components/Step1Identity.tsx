@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertCircle, ArrowRight, CheckCircle,
   GraduationCap, Briefcase, Users,
@@ -267,11 +268,20 @@ export function Step1Identity({
             <CountryCombobox value={country} onChange={setCountry} />
           </div>
 
-          {error && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-              <AlertCircle className="w-4 h-4 shrink-0" />{error}
-            </div>
-          )}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                key="step1-error"
+                initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0" />{error}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <Button type="button" variant="primary" size="lg" className="w-full" onClick={onContinue}>
             Continue <ArrowRight className="w-4 h-4" />
