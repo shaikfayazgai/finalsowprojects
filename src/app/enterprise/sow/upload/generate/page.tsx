@@ -16,7 +16,7 @@ import { SowBadge, riskVariant } from "@/components/enterprise/sow/SowBadge";
 import { mockPreviewMetrics } from "@/mocks/data/sow-upload-flow";
 import { mockHallucinationLayers } from "@/mocks/data/enterprise-sow-detail";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { useGenerationStatus, useGenerateManualSOW, useHallucinationLayers } from "@/lib/hooks/use-manual-sow";
+import { useGenerationStatus, useGenerateManualSOW, useHallucinationLayers, useSOWSections } from "@/lib/hooks/use-manual-sow";
 import { useMutation } from "@tanstack/react-query";
 import { sowApi } from "@/lib/api/sow";
 
@@ -61,6 +61,10 @@ export default function GeneratePreviewPage({ sowId: sowIdProp }: { sowId?: stri
   const generateMutation = useGenerateManualSOW(sowId);
   const { data: genStatusRes } = useGenerationStatus(sowId, genPhase === "generating");
   const { data: layersRes } = useHallucinationLayers(sowId);
+
+  const { data: sowSectionsRes } = useSOWSections(sowId);
+  const sowSectionsPayload = (sowSectionsRes as unknown as Record<string, unknown> | null);
+  const apiSowSections = (sowSectionsPayload?.data ?? sowSectionsPayload?.sections ?? null) as any[] | null;
 
   const [actionError, setActionError] = React.useState("");
   const sowActionMutation = useMutation({
