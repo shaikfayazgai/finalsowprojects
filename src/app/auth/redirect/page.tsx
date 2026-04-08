@@ -12,7 +12,8 @@ export default async function AuthRedirectPage() {
 
   if (role === "contributor") redirect("/contributor/dashboard");
   if (role === "mentor") redirect("/mentor/dashboard");
+  if (role === "admin") redirect("/admin/dashboard");
 
-  // enterprise, admin, reviewer, or unknown
+  // enterprise, reviewer, or unknown
   redirect("/enterprise/dashboard");
 }
