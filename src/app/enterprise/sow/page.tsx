@@ -354,6 +354,18 @@ export default function SOWListPage() {
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
 
+      {/* API loading/error indicator */}
+      {apiSowList.isLoading && (
+        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 border border-blue-100 text-[12px] text-blue-600">
+          <Clock className="w-3.5 h-3.5 animate-spin" /> Loading SOWs from API...
+        </div>
+      )}
+      {apiSowList.error && (
+        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-[12px] text-red-600">
+          <AlertTriangle className="w-3.5 h-3.5" /> API: {(apiSowList.error as Error).message}
+        </div>
+      )}
+
       {/* ═══ HERO — FSD §7.1.1 ═══ */}
       <motion.div variants={fadeUp} className="mb-7">
         <div className="flex items-end justify-between gap-6">

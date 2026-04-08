@@ -127,8 +127,8 @@ const step5Schema = z
   .object({
     budgetMin: z.coerce
       .number()
-      .refine((n) => n >= 0, {
-        message: "Minimum budget is required",
+      .refine((n) => n > 0, {
+        message: "Budget minimum must be greater than 0",
       }),
     budgetMax: z.coerce
       .number()

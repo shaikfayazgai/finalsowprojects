@@ -37,7 +37,7 @@ type TabKey = typeof TABS[number]["key"];
 
 /* ═══ PAGE ═══ */
 
-export default function GeneratePreviewPage() {
+export default function GeneratePreviewPage({ sowId }: { sowId?: string | null }) {
   const router = useRouter();
   const store = useSOWUploadStore();
 
@@ -45,6 +45,8 @@ export default function GeneratePreviewPage() {
   const [genStageIdx, setGenStageIdx] = React.useState(-1);
   const [showSubmitModal, setShowSubmitModal] = React.useState(false);
   const [showRequestChangesModal, setShowRequestChangesModal] = React.useState(false);
+  const [apiImprovements, setApiImprovements] = React.useState<any>(null);
+  const [submittedChangeNotes, setSubmittedChangeNotes] = React.useState("");
   const [showRejectModal, setShowRejectModal] = React.useState(false);
   const [requestChangesText, setRequestChangesText] = React.useState("");
   const [submitted, setSubmitted] = React.useState(false);
@@ -145,22 +147,64 @@ export default function GeneratePreviewPage() {
   ];
 
   const handleSubmitRequest = () => {
+    setSubmittedChangeNotes(requestChangesText);
     setShowRequestChangesModal(false);
     setRequestChangesText("");
     setProcessingStageIdx(-1);
     setShowProcessingModal(true);
+    setApiImprovements(null);
+
+    // Start the processing animation
     PROCESSING_STAGES.forEach((_, i) => {
       setTimeout(() => setProcessingStageIdx(i), (i + 1) * 700);
     });
-    setTimeout(() => {
-      setShowProcessingModal(false);
-      setShowImprovementsModal(true);
-    }, (PROCESSING_STAGES.length + 1) * 700);
+
+    if (sowId) {
+      sowActionMutation.mutate(
+        { action: "request_changes", change_notes: requestChangesText },
+        {
+          onSuccess: (data) => {
+            const result = (data as any)?.data ?? data;
+            setApiImprovements(result);
+            // Wait for animation to finish, then show improvements
+            const animDuration = (PROCESSING_STAGES.length + 1) * 700;
+            setTimeout(() => {
+              setShowProcessingModal(false);
+              setShowImprovementsModal(true);
+            }, animDuration);
+          },
+          onError: (err) => {
+            setActionError(err.message);
+            // Still show improvements modal with fallback data
+            const animDuration = (PROCESSING_STAGES.length + 1) * 700;
+            setTimeout(() => {
+              setShowProcessingModal(false);
+              setShowImprovementsModal(true);
+            }, animDuration);
+          },
+        },
+      );
+    } else {
+      setTimeout(() => {
+        setShowProcessingModal(false);
+        setShowImprovementsModal(true);
+      }, (PROCESSING_STAGES.length + 1) * 700);
+    }
   };
 
   const handleSubmit = () => {
     setSubmitted(true);
-    setTimeout(() => router.push("/enterprise/sow/sow-003"), 2000);
+    if (sowId) {
+      sowActionMutation.mutate(
+        { action: "submit" },
+        {
+          onSuccess: () => setTimeout(() => router.push(`/enterprise/sow/${sowId}`), 2000),
+          onError: (err) => { setActionError(err.message); setSubmitted(false); },
+        },
+      );
+    } else {
+      setTimeout(() => router.push("/enterprise/sow"), 2000);
+    }
   };
 
   /* ── Metric card ── */
@@ -383,10 +427,10 @@ export default function GeneratePreviewPage() {
 
           {/* Quality metrics row */}
           <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <MetricCard label="Confidence"          value={`${metrics.confidence}%`}       sub="AI extraction quality" />
-            <MetricCard label="Risk Score"          value={`${metrics.riskScore}/100`}     sub="Lower is better" />
+            <MetricCard label="Confidence"          value={`${Math.round(metrics.confidence)}%`}       sub="AI extraction quality" />
+            <MetricCard label="Risk Score"          value={`${Math.round(metrics.riskScore)}/100`}     sub="Lower is better" />
             <MetricCard label="Hallucination Flags" value={metrics.hallucinationFlags}     sub={metrics.hallucinationFlags === 0 ? "All layers passed" : "Review required"} />
-            <MetricCard label="Completeness"        value={`${metrics.completeness}%`}     sub="Sections covered" />
+            <MetricCard label="Completeness"        value={`${Math.round(metrics.completeness)}%`}     sub="Sections covered" />
           </motion.div>
 
           {/* Tab bar + content */}
@@ -411,62 +455,78 @@ export default function GeneratePreviewPage() {
 
               {activeTab === "sow" && (
                 <div className="space-y-5">
-                  {[
-                    { title: "1. Project Overview", body: "This Statement of Work defines the scope, deliverables, and commercial terms for the modernization of the enterprise resource planning system. The project aims to reduce operational costs by 30% within 18 months of deployment through automated financial workflows and real-time analytics." },
-                    { title: "2. Functional Requirements", body: "Core modules include General Ledger with multi-currency support, Accounts Payable automation with three-way matching, real-time financial dashboards, and budget planning with variance analysis." },
-                    { title: "3. Delivery Scope", body: "Full-stack development including frontend, backend, and database layers. Cloud deployment on AWS (ap-south-1). Go-live support included with 30-day hypercare." },
-                  ].map((sec) => (
-                    <div key={sec.title}>
-                      <p className="text-[12px] font-semibold text-gray-700 mb-1.5">{sec.title}</p>
-                      <p className="text-[13px] text-gray-500 leading-relaxed">{sec.body}</p>
-                    </div>
-                  ))}
+                  {apiSowSections && Array.isArray(apiSowSections) ? (
+                    apiSowSections.map((sec: any, i: number) => (
+                      <div key={i}>
+                        <p className="text-[12px] font-semibold text-gray-700 mb-1.5">{sec.title ?? `${i + 1}. Section ${i + 1}`}</p>
+                        <p className="text-[13px] text-gray-500 leading-relaxed">{sec.body ?? sec.content ?? sec.text ?? JSON.stringify(sec)}</p>
+                      </div>
+                    ))
+                  ) : (
+                    [
+                      { title: "1. Project Overview", body: "This Statement of Work defines the scope, deliverables, and commercial terms for the modernization of the enterprise resource planning system. The project aims to reduce operational costs by 30% within 18 months of deployment through automated financial workflows and real-time analytics." },
+                      { title: "2. Functional Requirements", body: "Core modules include General Ledger with multi-currency support, Accounts Payable automation with three-way matching, real-time financial dashboards, and budget planning with variance analysis." },
+                      { title: "3. Delivery Scope", body: "Full-stack development including frontend, backend, and database layers. Cloud deployment on AWS (ap-south-1). Go-live support included with 30-day hypercare." },
+                    ].map((sec) => (
+                      <div key={sec.title}>
+                        <p className="text-[12px] font-semibold text-gray-700 mb-1.5">{sec.title}</p>
+                        <p className="text-[13px] text-gray-500 leading-relaxed">{sec.body}</p>
+                      </div>
+                    ))
+                  )}
                   <p className="text-[11px] text-gray-400 italic">Full document continues — 10 sections total.</p>
                 </div>
               )}
 
               {activeTab === "hallucination" && (
                 <div className="space-y-1.5">
-                  {hallucinationLayers.map((layer) => (
-                    <div key={layer.layer} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors">
-                      {layer.status === "passed"
-                        ? <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" />
-                        : layer.status === "warning"
-                        ? <AlertTriangle className="w-4 h-4 text-gold-500 shrink-0" />
-                        : layer.status === "failed"
-                        ? <Ban className="w-4 h-4 text-red-500 shrink-0" />
-                        : <Eye className="w-4 h-4 text-gray-400 shrink-0" />}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-gray-700">Layer {layer.layer}: {layer.name}</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">{layer.details}</p>
+                  {hallucinationLayers.map((layer: any, idx: number) => {
+                    const layerStatus = layer.status === "green" ? "passed" : layer.status === "amber" ? "warning" : layer.status === "red" ? "failed" : layer.status;
+                    return (
+                      <div key={layer.layer ?? layer.layer_id ?? idx} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors">
+                        {layerStatus === "passed"
+                          ? <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" />
+                          : layerStatus === "warning"
+                          ? <AlertTriangle className="w-4 h-4 text-gold-500 shrink-0" />
+                          : layerStatus === "failed"
+                          ? <Ban className="w-4 h-4 text-red-500 shrink-0" />
+                          : <Eye className="w-4 h-4 text-gray-400 shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium text-gray-700">Layer {layer.layer ?? layer.layer_id ?? idx + 1}: {layer.name}</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">{layer.details ?? (layer.active ? "Active" : "Inactive")}</p>
+                        </div>
+                        <SowBadge variant={layerStatus === "passed" ? "forest" : layerStatus === "warning" ? "gold" : "danger"}>
+                          {layerStatus}
+                        </SowBadge>
                       </div>
-                      <SowBadge variant={layer.status === "passed" ? "forest" : layer.status === "warning" ? "gold" : "danger"}>
-                        {layer.status}
-                      </SowBadge>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
               {activeTab === "risk" && (
                 <div className="space-y-4">
-                  {[
+                  {(riskData?.factors ?? [
                     { factor: "Completeness", weight: "30%", score: metrics.completeness },
                     { factor: "Confidence",   weight: "25%", score: metrics.confidence },
                     { factor: "Compliance",   weight: "25%", score: 95 },
-                    { factor: "Pattern Match",weight: "20%", score: 88 },
-                  ].map((f) => (
-                    <div key={f.factor} className="flex items-center gap-4">
-                      <span className="text-[12px] text-gray-600 w-28 shrink-0">{f.factor}</span>
-                      <span className="text-[10px] font-medium text-gray-400 w-9 shrink-0">{f.weight}</span>
+                    { factor: "Pattern Match", weight: "20%", score: 88 },
+                  ]).map((f: any) => (
+                    <div key={f.factor ?? f.name} className="flex items-center gap-4">
+                      <span className="text-[12px] text-gray-600 w-28 shrink-0">{f.factor ?? f.name}</span>
                       <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
                         <div className={cn("h-full rounded-full transition-all",
-                          f.score >= 90 ? "bg-forest-500" : f.score >= 70 ? "bg-gold-400" : "bg-red-400",
-                        )} style={{ width: `${f.score}%` }} />
+                          Math.round(f.score ?? 0) >= 90 ? "bg-forest-500" : Math.round(f.score ?? 0) >= 70 ? "bg-gold-400" : "bg-red-400",
+                        )} style={{ width: `${Math.round(f.score ?? 0)}%` }} />
                       </div>
-                      <span className="text-[12px] font-semibold text-gray-700 w-10 text-right tabular-nums">{f.score}%</span>
+                      <span className="text-[12px] font-semibold text-gray-700 w-10 text-right tabular-nums">{Math.round(f.score ?? 0)}%</span>
                     </div>
                   ))}
+                  {riskData?.risk_level && (
+                    <div className="mt-3 px-4 py-3 rounded-xl bg-gray-50 border border-gray-100">
+                      <p className="text-[11px] text-gray-500">Overall Risk Level: <span className="font-semibold text-gray-700">{riskData.risk_level}</span> ({riskData.risk_score}/100)</p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -632,7 +692,16 @@ export default function GeneratePreviewPage() {
                   className="text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
                   Cancel
                 </button>
-                <button onClick={() => { setShowRejectModal(false); router.push("/enterprise/sow/upload"); }}
+                <button onClick={() => {
+                    if (sowId) {
+                      sowActionMutation.mutate(
+                        { action: "reject_regenerate" },
+                        { onError: (err) => setActionError(err.message) },
+                      );
+                    }
+                    setShowRejectModal(false);
+                    router.push("/enterprise/sow/upload");
+                  }}
                   className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 px-5 py-2.5 rounded-xl transition-all">
                   <RotateCcw className="w-3.5 h-3.5" /> Discard & Regenerate
                 </button>
@@ -688,9 +757,9 @@ export default function GeneratePreviewPage() {
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Quality Snapshot</p>
                       <div className="grid grid-cols-3 gap-2">
                         {[
-                          { label: "Confidence",   value: `${metrics.confidence}%`,   color: "text-brown-600",  bg: "bg-brown-50",  border: "border-brown-100" },
-                          { label: "Risk",         value: `${metrics.riskScore}`,      color: "text-amber-600",  bg: "bg-amber-50",  border: "border-amber-100" },
-                          { label: "Completeness", value: `${metrics.completeness}%`,  color: "text-teal-700",   bg: "bg-teal-50",   border: "border-teal-100"  },
+                          { label: "Confidence",   value: `${Math.round(metrics.confidence)}%`,   color: "text-brown-600",  bg: "bg-brown-50",  border: "border-brown-100" },
+                          { label: "Risk",         value: `${Math.round(metrics.riskScore)}`,      color: "text-amber-600",  bg: "bg-amber-50",  border: "border-amber-100" },
+                          { label: "Completeness", value: `${Math.round(metrics.completeness)}%`,  color: "text-teal-700",   bg: "bg-teal-50",   border: "border-teal-100"  },
                         ].map((m) => (
                           <div key={m.label} className={cn("rounded-xl border px-2.5 py-2.5 text-center", m.bg, m.border)}>
                             <p className={cn("num-display text-[18px] leading-none font-bold", m.color)}>{m.value}</p>
@@ -970,9 +1039,9 @@ export default function GeneratePreviewPage() {
 
                 <div className="flex items-center gap-2 mt-3.5 relative z-10">
                   {[
-                    { label: "Sections Updated", value: "5" },
-                    { label: "Clauses Revised",  value: "12" },
-                    { label: "Compliance",        value: "✓ Pass" },
+                    { label: "Sections Updated", value: String(apiImprovements?.sections_updated ?? apiImprovements?.improved_areas?.length ?? STATIC_IMPROVEMENTS.length) },
+                    { label: "Clauses Revised",  value: String(apiImprovements?.clauses_revised ?? apiImprovements?.improved_areas?.length ?? "—") },
+                    { label: "Compliance",        value: apiImprovements?.compliance_status === "fail" ? "✗ Fail" : "✓ Pass" },
                   ].map((s) => (
                     <div key={s.label} className="flex-1 bg-white/15 rounded-lg px-2.5 py-1.5 border border-white/20">
                       <p className="text-[14px] font-bold text-white leading-none">{s.value}</p>
@@ -985,28 +1054,49 @@ export default function GeneratePreviewPage() {
               {/* ── Improvements list ── */}
               <div className="px-4 pt-4 pb-3 space-y-1.5">
                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Improved Areas</p>
-                {STATIC_IMPROVEMENTS.map((item, i) => {
-                  const Icon = item.icon;
-                  return (
-                    <motion.div
-                      key={item.section}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.06 }}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50/60 hover:bg-white hover:border-gray-200 transition-all">
-                      <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border", item.bg, item.border)}>
-                        <Icon className={cn("w-3 h-3", item.color)} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className={cn("text-[10px] font-bold uppercase tracking-wider", item.color)}>
-                          {item.section}
-                        </p>
-                        <p className="text-[10px] text-gray-500 truncate">{item.change}</p>
-                      </div>
-                      <CheckCircle2 className="w-3 h-3 text-forest-400 shrink-0" />
-                    </motion.div>
-                  );
-                })}
+                {(() => {
+                  const apiAreas: any[] = apiImprovements?.improved_areas ?? apiImprovements?.changes ?? [];
+                  if (apiAreas.length > 0) {
+                    return apiAreas.map((item: any, i: number) => (
+                      <motion.div
+                        key={item.section ?? i}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.06 }}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50/60 hover:bg-white hover:border-gray-200 transition-all">
+                        <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border bg-forest-50 border-forest-200">
+                          <CheckCircle2 className="w-3 h-3 text-forest-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-forest-600">
+                            {item.section ?? item.title ?? item.area ?? `Section ${i + 1}`}
+                          </p>
+                          <p className="text-[10px] text-gray-500 truncate">{item.change ?? item.description ?? item.summary ?? ""}</p>
+                        </div>
+                        <CheckCircle2 className="w-3 h-3 text-forest-400 shrink-0" />
+                      </motion.div>
+                    ));
+                  }
+                  // Show user's request as the improvement when no API data
+                  if (submittedChangeNotes) {
+                    return (
+                      <motion.div
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border border-amber-100 bg-amber-50/60">
+                        <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border bg-amber-50 border-amber-200 mt-0.5">
+                          <MessageSquareDiff className="w-3 h-3 text-amber-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Requested Changes</p>
+                          <p className="text-[11px] text-gray-600 leading-relaxed mt-0.5">{submittedChangeNotes}</p>
+                        </div>
+                        <CheckCircle2 className="w-3 h-3 text-forest-400 shrink-0 mt-0.5" />
+                      </motion.div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               {/* ── Footer ── */}
