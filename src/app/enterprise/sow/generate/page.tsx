@@ -743,7 +743,7 @@ function saveDraft(formData: FormData, currentStep: number, skippedSteps: Set<nu
   } catch { /* storage full — ignore */ }
 }
 
-export default function SOWGenerateWizardPage() {
+function SOWGenerateWizardPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
@@ -4701,5 +4701,13 @@ function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComple
         ))}
       </div>
     </div>
+  );
+}
+
+export default function SOWGenerateWizardPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <SOWGenerateWizardPageInner />
+    </React.Suspense>
   );
 }
