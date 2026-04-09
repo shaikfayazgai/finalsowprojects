@@ -167,58 +167,6 @@ export function FieldGroup({
 export const inputCls =
   "w-full text-[13px] text-gray-700 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-brown-300 focus:ring-2 focus:ring-brown-50 transition-colors placeholder:text-gray-300";
 
-/* ── Read-only value display ── */
-export function ReadOnlyValue({
-  value,
-  placeholder = "—",
-  multiline = false,
-}: {
-  value?: string | number | boolean | null;
-  placeholder?: string;
-  multiline?: boolean;
-}) {
-  const display = typeof value === "boolean" ? (value ? "Yes" : "No") : String(value ?? "");
-  const isEmpty = !display;
-  return (
-    <div
-      className={cn(
-        "w-full text-[13px] px-3.5 py-2.5 rounded-xl border border-gray-200 bg-gray-50/60",
-        multiline && "min-h-[76px] whitespace-pre-wrap leading-relaxed",
-        isEmpty ? "text-gray-300" : "text-gray-700"
-      )}
-    >
-      {display || placeholder}
-    </div>
-  );
-}
-
-/* ── Read-only tag list (for checkbox arrays) ── */
-export function ReadOnlyTags({ items }: { items: string[] }) {
-  if (!items || items.length === 0) {
-    return <div className="text-[13px] text-gray-300 px-0.5 py-2">—</div>;
-  }
-  return (
-    <div className="flex flex-wrap gap-2 pt-0.5">
-      {items.map((item) => (
-        <span
-          key={item}
-          className="inline-flex items-center px-3 py-1.5 rounded-xl border border-gray-200 bg-white text-[12px] text-gray-700 font-medium"
-        >
-          {item}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-/* ── Map option value → label ── */
-export function optLabel(
-  options: { value: string; label: string }[],
-  value: string | undefined | null
-): string {
-  return options.find((o) => o.value === value)?.label ?? value ?? "—";
-}
-
 /* ── Section footer bar ── */
 export function SectionFooter({
   onBack, onComplete, completeLabel = "Mark Complete & Next", variant = "default",
