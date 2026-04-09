@@ -107,3 +107,5 @@ Most UI flows run off **mock data** in `src/mocks/data/` — there is no real AP
 - Class merging via `cn()` from `src/lib/utils/`
 - Navigation structure is centralized in `src/lib/config/navigation.ts` — add new sidebar entries there
 - Sidebar badge counts come from `src/lib/hooks/use-sow-badges.ts`
+## gitpush
+don't include claude co-author while pushing the code in to github

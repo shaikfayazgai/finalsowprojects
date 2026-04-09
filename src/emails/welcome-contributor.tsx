@@ -154,7 +154,7 @@ export default function WelcomeContributor({
 }
 
 /* ── Styles ── */
-const body: React.CSSProperties = { backgroundColor: "#F0EDE9", fontFamily: "'Inter','Helvetica Neue',Helvetica,Arial,sans-serif", margin: 0, padding: 0 };
+const body: React.CSSProperties = { backgroundColor: "#F0EDE9", fontFamily: "'Poppins','Inter','Helvetica Neue',Helvetica,Arial,sans-serif", margin: 0, padding: 0 };
 const container: React.CSSProperties = { margin: "40px auto", maxWidth: "600px", backgroundColor: "#ffffff", borderRadius: "16px", overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.10)" };
 const header: React.CSSProperties = { position: "relative", paddingBottom: "0" };
 const brandName: React.CSSProperties = { color: "#ffffff", fontSize: "20px", fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.3px" };
