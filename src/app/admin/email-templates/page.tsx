@@ -182,7 +182,7 @@ function Tooltip({ text }: { text: string }) {
         <span style={{
           position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
           background: "#1a1a1a", color: "#fff", fontSize: 11, padding: "6px 10px", borderRadius: 6,
-          whiteSpace: "nowrap" as const, zIndex: 50, maxWidth: 220, whiteSpace: "normal" as const,
+          whiteSpace: "normal" as const, zIndex: 50, maxWidth: 220,
           lineHeight: 1.5, textAlign: "center" as const, pointerEvents: "none",
         }}>
           {text}
