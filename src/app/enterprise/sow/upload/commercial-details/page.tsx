@@ -138,22 +138,29 @@ function mapApiToFormData(payload: Record<string, unknown>): Record<string, Reco
     strField("businessCriticality", "business_criticality", "businessCriticality", "criticality", "priority");
     strField("currentState", "current_state", "currentState", "current_situation", "as_is");
     strField("desiredFutureState", "desired_future_state", "desiredFutureState", "future_state", "target_state", "to_be");
-    strField("projectSuccessDefinition", "project_success_definition", "projectSuccessDefinition", "success_definition", "definition_of_done");
+    strField("projectSuccessDefinition", "definitionOfSuccess", "definition_of_success", "project_success_definition", "projectSuccessDefinition", "success_definition", "definition_of_done");
 
     // Array fields → numbered form keys
     const arrField = (formBase: string, ...apiKeys: string[]) => {
       const v = pick(bc, ...apiKeys);
       if (Array.isArray(v)) v.forEach((item, i) => { fields[`${formBase}${i + 1}`] = String(item ?? ""); });
     };
-    arrField("businessObjective", "business_objectives", "businessObjectives", "objectives");
-    arrField("painPoint", "pain_points", "painPoints", "challenges");
-    arrField("endUserProfile", "end_user_profiles", "endUserProfiles", "user_profiles", "userProfiles", "users");
-    arrField("successMetric", "success_metrics", "successMetrics", "kpis", "key_metrics");
+    arrField("businessObjective", "business_objectives", "businessObjectives", "objectives", "keyObjectives", "key_objectives");
+    arrField("painPoint", "pain_points", "painPoints", "challenges", "problems", "painPoints");
+    arrField("endUserProfile", "end_user_profiles", "endUserProfiles", "user_profiles", "userProfiles", "users", "stakeholders");
+    arrField("successMetric", "success_metrics", "successMetrics", "kpis", "key_metrics", "metrics", "successCriteria", "success_criteria");
+
+    // Known API aliases that were already mapped to a different form key above —
+    // skip so the generic pass doesn't create orphan entries under the wrong name.
+    const ALIASED = new Set(["definitionOfSuccess", "definition_of_success",
+      "keyObjectives", "key_objectives", "problems", "stakeholders",
+      "successCriteria", "success_criteria", "metrics"]);
 
     // Generic pass — catches flat numbered keys (businessObjective1, painPoint1…)
     // and any other fields the API returns that weren't explicitly handled above
     for (const [k, v] of Object.entries(bc)) {
       const camel = toCamel(k);
+      if (ALIASED.has(k) || ALIASED.has(camel)) continue;
       if (fields[camel] != null || fields[k] != null) continue; // already mapped
       if (Array.isArray(v)) {
         v.forEach((item, i) => { fields[`${camel}${i + 1}`] = String(item ?? ""); });
