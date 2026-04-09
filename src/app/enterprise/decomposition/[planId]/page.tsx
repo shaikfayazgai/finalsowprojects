@@ -424,10 +424,10 @@ export default function PlanDetailPage() {
                 </button>
               </Link>
             )}
-            {(plan.status === "draft" || plan.status === "pending_review") && (
+            {plan.status === "draft" && (
               <Link href={`/enterprise/decomposition/${plan.id}/approve`}>
                 <button className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">
-                  <ShieldCheck className="w-3.5 h-3.5" /> Confirm & Activate
+                  <ShieldCheck className="w-3.5 h-3.5" /> Submit for Approval
                 </button>
               </Link>
             )}

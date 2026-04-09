@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShieldCheck, CheckCircle2, Clock, DollarSign, Layers, Zap, Users,
@@ -57,6 +57,7 @@ const varianceTextColor: Record<string, string> = {
 export default function ApprovePlanPage() {
   const params = useParams();
   const planId = params.planId as string;
+  const router = useRouter();
   const plan = mockPlans.find((p) => p.id === planId) ?? mockPlans[0];
   const tasks = mockTasks.filter((t) => t.planId === plan.id);
   const milestones = mockPlanMilestones.filter((m) => m.planId === plan.id);
@@ -87,6 +88,7 @@ export default function ApprovePlanPage() {
   ];
 
   /* ── State ── */
+  const [planStatus, setPlanStatus] = React.useState(plan.status);
   const [checklist, setChecklist] = React.useState<Record<string, boolean>>({ breakdown: false, dependencies: false, estimates: false, budget: false, skills: false });
   const [rejectionOpen, setRejectionOpen] = React.useState(false);
   const [rejectionReason, setRejectionReason] = React.useState("");
@@ -470,7 +472,14 @@ export default function ApprovePlanPage() {
                 </div>
               </div>
               <DialogFooter>
-                <button onClick={() => { setRejectionOpen(false); setRejectionReason(""); }}
+                <button onClick={() => {
+                  const found = mockPlans.find(p => p.id === planId);
+                  if (found) found.status = "draft";
+                  setSubmitted(true);
+                  setRejectionOpen(false);
+                  setRejectionReason("");
+                  setTimeout(() => router.push(`/enterprise/decomposition/${planId}`), 2000);
+                }}
                   className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50">Cancel</button>
                 <button disabled={rejectionReason.trim().length === 0}
                   onClick={() => { setSubmitted(true); setRejectionOpen(false); setRejectionReason(""); }}
@@ -481,12 +490,16 @@ export default function ApprovePlanPage() {
             </DialogContent>
           </Dialog>
 
-          <Link href="/enterprise/team" className={cn(!canApprove && "pointer-events-none")}>
-            <button disabled={!canApprove}
-              className={cn("flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2 rounded-xl transition-all disabled:opacity-50", canApprove && "shadow-md")}>
-              <ShieldCheck className="w-3.5 h-3.5" /> Approve & Form Team <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </Link>
+          <button
+            disabled={!canApprove}
+            onClick={() => {
+              const found = mockPlans.find(p => p.id === planId);
+              if (found) found.status = "approved";
+              router.push("/enterprise/team");
+            }}
+            className={cn("flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2 rounded-xl transition-all disabled:opacity-50", canApprove && "shadow-md")}>
+            <ShieldCheck className="w-3.5 h-3.5" /> Approve & Form Team <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {!canApprove && (
