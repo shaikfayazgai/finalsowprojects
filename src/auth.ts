@@ -100,15 +100,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null;
           }
 
-          // MFA setup required or fully authenticated — allow login
-          // If MFA setup is required, tokens may not be present yet but user can still access the app
+          // MFA setup required — allow login.
+          // The API may still include tokens alongside the MFA-pending payload;
+          // include them so enterprise endpoints work without re-login.
           if (isMfaPending(response)) {
             const u = (response as any).user ?? {};
+            const r = response as any;
             return {
               id: u.id ?? "",
               name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim(),
               email: u.email ?? email,
               role: (u.role ?? "enterprise") as UserRole,
+              ...(r.access_token ? { accessToken: r.access_token } : {}),
+              ...(r.refresh_token ? { refreshToken: r.refresh_token } : {}),
+              ...(r.expires_in ? { expiresIn: r.expires_in } : {}),
             };
           }
 

@@ -195,6 +195,43 @@ function LoginPageContent() {
         return;
       }
 
+      // MFA setup required — create session via glimmora-oauth (no second login call)
+      // and go straight to MFA prompt.
+      if (validateData.mfaSetupRequired) {
+        const u = validateData.user || {};
+        const oauthResult = await signIn("glimmora-oauth", {
+          userId: u.id || "",
+          email: u.email || email.trim().toLowerCase(),
+          firstName: u.firstName || "",
+          lastName: u.lastName || "",
+          role: "enterprise",
+          accessToken: "", // No token yet — MFA blocks issuance
+          refreshToken: "",
+          expiresIn: "0",
+          provider: "credentials",
+          redirect: false,
+        });
+
+        if (oauthResult?.ok) {
+          const dest = callbackUrl || "/enterprise/dashboard";
+          setLoginDest(dest);
+          setUserRole("enterprise");
+
+          // Store pending token for MFA setup page
+          try {
+            if (validateData.mfaSetupPendingToken) {
+              sessionStorage.setItem("_mfa_pending_token", validateData.mfaSetupPendingToken);
+            }
+            sessionStorage.setItem("_mfa_setup_email", email.trim().toLowerCase());
+            sessionStorage.setItem("_mfa_setup_password", password);
+          } catch { /* sessionStorage unavailable */ }
+
+          setStep("mfa-prompt");
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const result = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
@@ -213,8 +250,6 @@ function LoginPageContent() {
 
         setUserRole(role || "enterprise");
 
-        // Login = returning user — send straight to dashboard.
-        // Onboarding wizard is only for first-time SSO users (handled in auth.ts signIn callback).
         const dest = callbackUrl || (
           role === "contributor" ? "/contributor/dashboard" :
           role === "mentor"      ? "/mentor/dashboard" :
@@ -228,6 +263,12 @@ function LoginPageContent() {
           window.location.href = dest;
           return;
         }
+
+        // Store credentials for MFA setup page
+        try {
+          sessionStorage.setItem("_mfa_setup_email", email.trim().toLowerCase());
+          sessionStorage.setItem("_mfa_setup_password", password);
+        } catch { /* sessionStorage unavailable */ }
 
         setStep("mfa-prompt");
         setIsLoading(false);

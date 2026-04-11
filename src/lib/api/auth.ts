@@ -130,10 +130,20 @@ export const authApi = {
 
   /** Start TOTP enrollment — returns the QR URI and manual secret. */
   async initMfaSetup(accessToken: string): Promise<{ qr_uri: string; secret: string }> {
-    return apiCall<{ qr_uri: string; secret: string }>("/api/v1/auth/mfa/setup/init", {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = await apiCall<Record<string, any>>("/api/v1/auth/mfa/setup/init", {
       method: "POST",
       token: accessToken,
     });
+    // Normalize field names — the API uses various naming conventions
+    const qrPng = raw.qr_code_png_base64 || raw.qrCodePngBase64 || "";
+    const otpauthUri = raw.otpauth_uri || raw.otpAuthUri || "";
+    // Prefer base64 PNG for <img src>, fall back to otpauth URI
+    const qr_uri = raw.qr_uri || (qrPng ? `data:image/png;base64,${qrPng}` : otpauthUri);
+    return {
+      qr_uri,
+      secret: raw.secret || raw.secret_base32 || raw.secretBase32 || raw.totp_secret || "",
+    };
   },
 
   /** Confirm TOTP setup with the first code — returns recovery codes + new tokens. */

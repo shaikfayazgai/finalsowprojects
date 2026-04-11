@@ -20,9 +20,21 @@ export async function POST(req: NextRequest) {
     if (isMfaPending(response)) {
       const mfaFlow = (response as unknown as Record<string, unknown>).status;
 
-      // MFA setup required but not yet configured — let them through for now
+      // MFA setup required but not yet configured — return user data + pending token
+      // so the login page can create a session without a second login call.
       if (mfaFlow === "mfa_setup_required") {
-        return NextResponse.json({ ok: true });
+        const u = response.user;
+        return NextResponse.json({
+          ok: true,
+          mfaSetupRequired: true,
+          mfaSetupPendingToken: response.mfa_pending_token,
+          user: {
+            id: u.id,
+            email: u.email,
+            firstName: u.firstName,
+            lastName: u.lastName,
+          },
+        });
       }
 
       // MFA verify required (user has TOTP set up) — return pending token
