@@ -2,8 +2,6 @@
 
 import * as React from "react";
 import { useState, useEffect } from "react";
-import ReviewerInvitationEmail from "@/emails/reviewer-invitation";
-import { render } from "@react-email/render";
 import {
   Building2,
   Users,
@@ -260,30 +258,37 @@ export default function SettingsPage() {
     try {
       const adminName = session?.user?.name ?? "Enterprise Admin";
 
-// Generate email HTML from template
-const emailHtml = await render(ReviewerInvitationEmail({
-  reviewerName: `${newFirstName} ${newLastName}`,
-  projectTitle: "GlimmoraTeam Platform",
-  roleName: "Reviewer",
-  inviterName: adminName,
-  inviterOrg: companyName || "Enterprise",
-  acceptUrl: `${window.location.origin}/auth/login`,
-  deadline: "7 days",
-}));
+      const result = await authApi.createReviewer({
+        accessToken,
+        firstName: newFirstName,
+        lastName: newLastName,
+        email: newEmail,
+        designation: newDesignation,
+        department: newDepartment,
+        username: newUsername,
+        language: newLanguage,
+        timeZone: newTimeZone,
+        invitedByName: adminName,
+      });
 
-await authApi.createReviewer({
-  accessToken,
-  firstName: newFirstName,
-  lastName: newLastName,
-  email: newEmail,
-  designation: newDesignation,
-  department: newDepartment,
-  username: newUsername,
-  language: newLanguage,
-  timeZone: newTimeZone,
-  invitedByName: adminName,
-  emailHtml, // ← pass the template
-});
+      // Send invitation email via our email service
+      await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "reviewer_invitation",
+          to: newEmail,
+          payload: {
+            reviewerName: `${newFirstName} ${newLastName}`,
+            designation: newDesignation,
+            inviterName: adminName,
+            inviterOrg: companyName || "Enterprise",
+            loginEmail: newEmail,
+            tempPassword: result.temp_password ?? "Check your email for credentials",
+            loginUrl: `${window.location.origin}/auth/login`,
+          },
+        }),
+      });
 
       const member: TeamMember = {
         id: String(Date.now()),

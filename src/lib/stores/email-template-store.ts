@@ -172,44 +172,46 @@ export const DEFAULT_TEMPLATES: Record<EmailTemplateId, EmailTemplate> = {
   reviewer_invitation: {
     id: "reviewer_invitation",
     name: "Reviewer Invitation",
-    description: "Sent to invite a reviewer to join a project for deliverable review and quality assurance.",
-    subject: "You're invited to review \"{{projectTitle}}\"",
+    description: "Sent when a reviewer account is created — includes temporary login credentials.",
+    subject: "You've been added as a Reviewer on GlimmoraTeam",
     headerColor: "#5B3A29",
     logoUrl: DEFAULT_LOGO,
     bodyHtml: `<p>Hi <strong>{{reviewerName}}</strong>,</p>
-<p>You have been invited to serve as a <strong>{{roleName}}</strong> on the project <strong>"{{projectTitle}}"</strong> by <strong>{{inviterName}}</strong> from <strong>{{inviterOrg}}</strong>.</p>
-<p>Your expertise is valued, and your review will be critical in ensuring project quality and governance compliance.</p>
+<p><strong>{{inviterName}}</strong> from <strong>{{inviterOrg}}</strong> has added you as a <strong>Reviewer</strong> on the GlimmoraTeam platform.</p>
+<p>Your account has been created. Use the credentials below to log in for the first time:</p>
 
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F7F5;border-radius:12px;margin:16px 0 24px;">
   <tr style="border-bottom:1px solid #EDE8E3;">
-    <td style="padding:12px 20px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;width:100px;">Project</td>
-    <td style="padding:12px 20px;font-size:14px;font-weight:500;color:#0D1B2A;">{{projectTitle}}</td>
+    <td style="padding:12px 20px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;width:140px;">Designation</td>
+    <td style="padding:12px 20px;font-size:14px;font-weight:500;color:#0D1B2A;">{{designation}}</td>
   </tr>
   <tr style="border-bottom:1px solid #EDE8E3;">
-    <td style="padding:12px 20px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Role</td>
-    <td style="padding:12px 20px;font-size:14px;font-weight:500;color:#0D1B2A;">{{roleName}}</td>
+    <td style="padding:12px 20px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Login Email</td>
+    <td style="padding:12px 20px;font-size:14px;font-weight:500;color:#0D1B2A;">{{loginEmail}}</td>
   </tr>
   <tr>
-    <td style="padding:12px 20px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Respond By</td>
-    <td style="padding:12px 20px;font-size:14px;font-weight:700;color:#92400E;">{{deadline}}</td>
+    <td style="padding:12px 20px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Temp Password</td>
+    <td style="padding:12px 20px;font-size:14px;font-weight:700;color:#92400E;font-family:'Courier New',monospace;">{{tempPassword}}</td>
   </tr>
 </table>
 
-<p><strong>What you'll be doing:</strong></p>
+<p style="background:#FFF8F3;border:1px solid #F0DDD0;border-radius:10px;padding:14px 20px;font-size:13px;color:#374151;">
+  <strong style="color:#92400E;">⚠ Security:</strong> You will be asked to change your password on first login. Do not share these credentials with anyone.
+</p>
+
+<p><strong>As a reviewer you will:</strong></p>
 <ul style="padding-left:20px;margin:8px 0 24px;color:#374151;font-size:14px;line-height:1.8;">
-  <li>Review deliverables and evidence packs</li>
+  <li>Review deliverables and evidence packs submitted by contributors</li>
   <li>Provide quality assessments and approval decisions</li>
   <li>Flag rework requests when standards are not met</li>
   <li>Participate in milestone sign-off workflows</li>
 </ul>
 
-<p style="text-align:center;"><a href="{{acceptUrl}}" style="display:inline-block;background:#5B3A29;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;border-radius:10px;padding:14px 32px;">Accept Invitation →</a></p>
-
-<p style="font-size:13px;color:#9ca3af;text-align:center;margin-top:16px;">This invitation expires in <strong style="color:#374151;">{{deadline}}</strong>.</p>`,
-    footerText: "© Glimmora Technologies Pvt. Ltd. · You received this because you were invited as a reviewer on GlimmoraTeam.",
+<p style="text-align:center;"><a href="{{loginUrl}}" style="display:inline-block;background:#5B3A29;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;border-radius:10px;padding:14px 32px;">Log In to GlimmoraTeam →</a></p>`,
+    footerText: "© Glimmora Technologies Pvt. Ltd. · You received this because you were added as a reviewer on GlimmoraTeam.",
     isActive: true,
     lastEditedAt: new Date().toISOString(),
-    variables: ["reviewerName", "projectTitle", "roleName", "inviterName", "inviterOrg", "deadline", "acceptUrl"],
+    variables: ["reviewerName", "designation", "inviterName", "inviterOrg", "loginEmail", "tempPassword", "loginUrl"],
   },
 };
 

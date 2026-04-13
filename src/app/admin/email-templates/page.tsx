@@ -247,7 +247,7 @@ function getTestPayload(id: EmailTemplateId): Record<string, string> {
     sow_fully_approved: { adminName: "Enterprise Admin", sowTitle: "AI-Driven Supply Chain Optimizer", approvedAt: "April 8, 2026", sowUrl: "#" },
     welcome_contributor: { firstName: "Alex", loginUrl: "#", onboardingUrl: "#" },
     welcome_enterprise: { firstName: "Priya", orgName: "Luminary Logistics", dashboardUrl: "#" },
-    reviewer_invitation: { reviewerName: "Jordan Lee", projectTitle: "Cloud-Native EHR Migration", roleName: "Senior Reviewer", inviterName: "Priya Sharma", inviterOrg: "Luminary Logistics", deadline: "7 days", acceptUrl: "#" },
+    reviewer_invitation: { reviewerName: "Jordan Lee", designation: "Senior Quality Analyst", inviterName: "Priya Sharma", inviterOrg: "Luminary Logistics", loginEmail: "jordan.lee@luminarylogistics.com", tempPassword: "Tmp@83xKq!", loginUrl: "#" },
   };
   return payloads[id];
 }
