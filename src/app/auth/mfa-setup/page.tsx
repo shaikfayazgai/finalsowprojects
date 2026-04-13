@@ -72,6 +72,7 @@ function MFASetupContent() {
         setMfaPhase("setup");
         setQrUri(data.qr_uri);
         setSecret(data.secret || "");
+        mfaTokenRef.current = data.mfa_pending_token || "";
       } else if (data.phase === "done") {
         // Already fully authenticated — redirect
         router.push(redirect);
@@ -102,7 +103,7 @@ function MFASetupContent() {
       const res = await fetch("/api/auth/mfa-confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, code: verifyCode }),
+        body: JSON.stringify({ email, password, code: verifyCode, mfa_pending_token: mfaTokenRef.current || undefined }),
       });
       const data = await res.json();
 
