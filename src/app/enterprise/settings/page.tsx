@@ -258,8 +258,18 @@ export default function SettingsPage() {
     try {
       const adminName = session?.user?.name ?? "Enterprise Admin";
 
+      // Resolve a valid Glimmora API token — falls back to enterprise service account
+      // when the session has no token (e.g. admin bypass login).
+      let apiToken = accessToken;
+      if (!apiToken) {
+        const tokenRes = await fetch("/api/sow/token?role=enterprise");
+        const tokenData = await tokenRes.json().catch(() => ({}));
+        apiToken = tokenData.token ?? "";
+      }
+      if (!apiToken) throw new Error("Unable to acquire API token. Please re-login.");
+
       const result = await authApi.createReviewer({
-        accessToken,
+        accessToken: apiToken,
         firstName: newFirstName,
         lastName: newLastName,
         email: newEmail,
