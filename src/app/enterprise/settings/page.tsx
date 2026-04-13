@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { useState, useEffect } from "react";
+import ReviewerInvitationEmail from "@/emails/reviewer-invitation";
+import { render } from "@react-email/render";
 import {
   Building2,
   Users,
@@ -245,8 +247,8 @@ export default function SettingsPage() {
       setAddError("All fields are required.");
       return;
     }
-    if (!newEmail.includes("@") || newEmail.endsWith("@gmail.com") || newEmail.endsWith("@yahoo.com") || newEmail.endsWith("@hotmail.com")) {
-      setAddError("Please use a work email address.");
+    if (!newEmail.includes("@")) {
+      setAddError("Please enter a valid email address.");
       return;
     }
     if (teamMembers.some((m) => m.email === newEmail)) {
@@ -257,18 +259,31 @@ export default function SettingsPage() {
     setAddSaving(true);
     try {
       const adminName = session?.user?.name ?? "Enterprise Admin";
-      await authApi.createReviewer({
-        accessToken,
-        firstName: newFirstName,
-        lastName: newLastName,
-        email: newEmail,
-        designation: newDesignation,
-        department: newDepartment,
-        username: newUsername,
-        language: newLanguage,
-        timeZone: newTimeZone,
-        invitedByName: adminName,
-      });
+
+// Generate email HTML from template
+const emailHtml = await render(ReviewerInvitationEmail({
+  reviewerName: `${newFirstName} ${newLastName}`,
+  projectTitle: "GlimmoraTeam Platform",
+  roleName: "Reviewer",
+  inviterName: adminName,
+  inviterOrg: companyName || "Enterprise",
+  acceptUrl: `${window.location.origin}/auth/login`,
+  deadline: "7 days",
+}));
+
+await authApi.createReviewer({
+  accessToken,
+  firstName: newFirstName,
+  lastName: newLastName,
+  email: newEmail,
+  designation: newDesignation,
+  department: newDepartment,
+  username: newUsername,
+  language: newLanguage,
+  timeZone: newTimeZone,
+  invitedByName: adminName,
+  emailHtml, // ← pass the template
+});
 
       const member: TeamMember = {
         id: String(Date.now()),

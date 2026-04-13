@@ -252,6 +252,7 @@ export const authApi = {
     timeZone: string;
     invitedByName: string;
     accessToken: string;
+    emailHtml?: string;
   }): Promise<{ user_id: string; email: string; temp_password: string }> {
     return apiCall<{ user_id: string; email: string; temp_password: string }>("/api/v1/users", {
       method: "POST",
@@ -268,6 +269,7 @@ export const authApi = {
         timeZone: data.timeZone,
         invitedByName: data.invitedByName,
         sendInvitationEmail: true,
+        emailHtml: data.emailHtml,
       }),
     });
   },
