@@ -250,12 +250,14 @@ function LoginPageContent() {
 
         setUserRole(role || "enterprise");
 
+        // Login = returning user — send straight to dashboard.
+        // Onboarding wizard is only for first-time SSO users (handled in auth.ts signIn callback).
         const dest = callbackUrl || (
           role === "contributor" ? "/contributor/dashboard" :
           role === "mentor"      ? "/mentor/dashboard" :
-          role === "admin"       ? "/admin/dashboard" :
                                    "/enterprise/dashboard"
         );
+        
         setLoginDest(dest);
 
         // Admin role skips MFA prompt — navigate directly to dashboard.

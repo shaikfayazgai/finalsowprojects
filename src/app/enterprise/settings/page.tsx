@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { authApi } from "@/lib/api/auth";
+import { ApiError } from "@/lib/api/client";
 import { toast } from "@/lib/stores/toast-store";
 import { cn } from "@/lib/utils/cn";
 import ProfilePage from "@/app/enterprise/profile/page";
@@ -158,6 +160,8 @@ export default function SettingsPage() {
   /* ── Session + store data (backend API) ── */
   const { data: session } = useSession();
   const { registrationData, onboardingProgress } = useAuthStore();
+  const accessToken = (session as any)?.user?.accessToken ?? "";
+  console.log("FULL SESSION:", session);
 
   /* ── Company Profile state — seeded from API / onboarding store ── */
   const [companyName, setCompanyName] = useState(registrationData?.companyName || "");
@@ -234,8 +238,9 @@ export default function SettingsPage() {
     setAddError("");
   };
 
-  const handleAddReviewer = () => {
+  const handleAddReviewer = async () => {
     setAddError("");
+    console.log("TOKEN:", accessToken);
     if (!newEmail || !newFirstName || !newLastName || !newDesignation || !newDepartment || !newUsername || !newLanguage || !newTimeZone) {
       setAddError("All fields are required.");
       return;
@@ -248,22 +253,41 @@ export default function SettingsPage() {
       setAddError("A team member with this email already exists.");
       return;
     }
+
     setAddSaving(true);
-    setTimeout(() => {
+    try {
+      const adminName = session?.user?.name ?? "Enterprise Admin";
+      await authApi.createReviewer({
+        accessToken,
+        firstName: newFirstName,
+        lastName: newLastName,
+        email: newEmail,
+        designation: newDesignation,
+        department: newDepartment,
+        username: newUsername,
+        language: newLanguage,
+        timeZone: newTimeZone,
+        invitedByName: adminName,
+      });
+
       const member: TeamMember = {
         id: String(Date.now()),
         name: `${newFirstName} ${newLastName}`,
         email: newEmail,
         role: "Reviewer",
-        status: newStatus === "active" ? "Active" : "Deactivated",
+        status: "Invited",
         lastActive: "Never",
         projectAccess: [],
       };
       setTeamMembers((prev) => [...prev, member]);
       resetAddForm();
-      setAddSaving(false);
       setAddReviewerOpen(false);
-    }, 600);
+      toast.success(`Invitation sent to ${newEmail}. They will receive login credentials shortly.`);
+    } catch (err: any) {
+      setAddError(err?.message ?? "Failed to send invitation. Please try again.");
+    } finally {
+      setAddSaving(false);
+    }
   };
 
   const handleDeactivate = (id: string) => {

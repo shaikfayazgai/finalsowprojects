@@ -240,6 +240,38 @@ export const authApi = {
     );
   },
 
+  /** Create a reviewer user and send invitation email with temp password. */
+  async createReviewer(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    designation: string;
+    department: string;
+    username: string;
+    language: string;
+    timeZone: string;
+    invitedByName: string;
+    accessToken: string;
+  }): Promise<{ user_id: string; email: string; temp_password: string }> {
+    return apiCall<{ user_id: string; email: string; temp_password: string }>("/api/v1/users", {
+      method: "POST",
+      token: data.accessToken,
+      body: JSON.stringify({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        role: "reviewer",
+        designation: data.designation,
+        department: data.department,
+        username: data.username,
+        language: data.language,
+        timeZone: data.timeZone,
+        invitedByName: data.invitedByName,
+        sendInvitationEmail: true,
+      }),
+    });
+  },
+
   /** Register a new enterprise organisation + admin user. */
   async registerEnterprise(data: {
     firstName: string;

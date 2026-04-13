@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Sparkles, Eye, EyeOff, AlertCircle, CheckCircle, RefreshCw, Lock,
 } from "lucide-react";
@@ -22,8 +22,12 @@ function getStrength(pw: string): { score: number; label: string; color: string 
   return             { score, label: "Strong", color: "bg-teal-500" };
 }
 
-export default function ResetPasswordPage() {
+import { Suspense } from "react";
+
+function ResetPasswordContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isForced = searchParams.get("forced") === "true";
 
   const [password, setPassword]           = useState("");
   const [confirm, setConfirm]             = useState("");
@@ -46,7 +50,7 @@ export default function ResetPasswordPage() {
     setIsLoading(false);
     setSuccess(true);
 
-    setTimeout(() => router.push("/auth/login"), 2500);
+    setTimeout(() => router.push(isForced ? "/enterprise/reviewer" : "/auth/login"), 2500);
   };
 
   return (
@@ -197,5 +201,13 @@ export default function ResetPasswordPage() {
         </GlassCardContent>
       </GlassCard>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }

@@ -118,6 +118,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
 
           const role = (response.user.role ?? "contributor") as UserRole;
+          console.log("LOGIN RESPONSE:", JSON.stringify(response));
 
           return {
             id: response.user.id,
