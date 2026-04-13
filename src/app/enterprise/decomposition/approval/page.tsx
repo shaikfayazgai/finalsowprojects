@@ -17,8 +17,8 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Badge } from "@/components/ui";
-import { mockPlans } from "@/mocks/data/enterprise-projects";
 import type { DecompositionPlan, PlanStatus } from "@/types/enterprise";
+import { useDecompositionPlans } from "@/lib/hooks/use-decomposition";
 
 /* ── Status badge config ── */
 const statusBadge: Record<
@@ -200,8 +200,66 @@ function ApprovalCard({ plan }: { plan: DecompositionPlan }) {
    PLAN APPROVAL QUEUE PAGE
    ============================================================== */
 export default function PlanApprovalPage() {
+  const { data: apiPlansRes } = useDecompositionPlans();
+
+  // Map backend status to frontend PlanStatus
+  const normalizeStatus = (s: string): PlanStatus => {
+    const map: Record<string, PlanStatus> = {
+      PLAN_REVIEW_REQUIRED: "pending_review",
+      PENDING_KICKOFF: "draft",
+      NEW: "draft",
+      PLAN_CONFIRMED: "approved",
+      PLAN_LOCKED: "in_progress",
+      REVISION_IN_PROGRESS: "revision_in_progress",
+      COMPLETED: "completed",
+      WITHDRAWN: "completed",
+    };
+    return map[s] ?? (s as PlanStatus);
+  };
+
+  const allPlans: DecompositionPlan[] = React.useMemo(() => {
+    // Handle both direct array and {data: [...]} wrapper
+    const resp = apiPlansRes as unknown;
+    let rawArr: Record<string, unknown>[] | null = null;
+    if (Array.isArray(resp)) {
+      rawArr = resp;
+    } else if (resp && typeof resp === "object") {
+      const obj = resp as Record<string, unknown>;
+      const inner = obj.data ?? obj;
+      if (Array.isArray(inner)) rawArr = inner;
+      else if (inner && typeof inner === "object") {
+        const nested = (inner as Record<string, unknown>).plans ?? (inner as Record<string, unknown>).items;
+        if (Array.isArray(nested)) rawArr = nested;
+      }
+    }
+
+    if (!rawArr || rawArr.length === 0) return [];
+
+    return rawArr.map((p) => ({
+      id: (p._id ?? p.id ?? p.plan_id ?? "") as string,
+      sowId: (p.sow_id ?? p.sowId ?? p.sow_reference ?? "") as string,
+      title: (p.title ?? p.project_name ?? "Untitled Plan") as string,
+      status: normalizeStatus((p.status ?? "draft") as string),
+      createdAt: (p.created_at ?? p.createdAt ?? new Date().toISOString()) as string,
+      updatedAt: (p.updated_at ?? p.updatedAt ?? new Date().toISOString()) as string,
+      totalTasks: Number(p.total_tasks ?? p.totalTasks ?? p.task_count ?? 0),
+      totalSubtasks: Number(p.total_subtasks ?? p.totalSubtasks ?? 0),
+      totalMilestones: Number(p.total_milestones ?? p.totalMilestones ?? p.milestone_count ?? 0),
+      estimatedHours: Number(p.estimated_hours ?? p.estimatedHours ?? 0),
+      estimatedCost: Number(p.estimated_cost ?? p.estimatedCost ?? 0),
+      complexity: (p.complexity ?? "medium") as DecompositionPlan["complexity"],
+      version: Number(p.version ?? p.plan_version ?? p.sow_version ?? 1),
+      teamId: (p.team_id ?? p.teamId) as string | undefined,
+      projectId: (p.project_id ?? p.projectId) as string | undefined,
+      aiConfidence: Number(p.ai_confidence ?? p.aiConfidence ?? 0),
+      criticalPathDuration: Number(p.critical_path_duration ?? p.criticalPathDuration ?? 0),
+      uniqueSkills: Number(p.unique_skills ?? p.uniqueSkills ?? 0),
+      dependencyCount: Number(p.dependency_count ?? p.dependencyCount ?? 0),
+    }));
+  }, [apiPlansRes]);
+
   /* Filter to plans needing attention: pending_review or approved */
-  const approvalPlans = mockPlans.filter(
+  const approvalPlans = allPlans.filter(
     (p) => p.status === "pending_review" || p.status === "approved"
   );
 

@@ -67,19 +67,18 @@ import {
   Separator,
   ScrollArea,
 } from "@/components/ui";
-import {
-  mockPlans,
-  mockTasks,
-  mockPlanMilestones,
-  mockPlanVersions,
-} from "@/mocks/data/enterprise-projects";
 import type {
   DecompositionTask,
+  DecompositionPlan,
   PlanMilestone,
+  PlanStatus,
   Subtask,
   SkillTag,
   TaskDependency,
 } from "@/types/enterprise";
+import {
+  useDecompositionPlan, useTasks, useMilestones, useIncreaseRevision,
+} from "@/lib/hooks/use-decomposition";
 
 /* ══════════════════════════════════════════════════════════════
    CONSTANTS
@@ -1489,7 +1488,7 @@ function ChangeSummaryView({
 }: {
   tasks: EditableTask[];
   milestones: EditableMilestone[];
-  plan: typeof mockPlans[0];
+  plan: DecompositionPlan;
 }) {
   const newTasks = tasks.filter((t) => t.isNew);
   const modifiedTasks = tasks.filter((t) => t.isModified && !t.isNew);
@@ -1687,33 +1686,32 @@ function ChangeSummaryView({
           Version History
         </p>
         <div className="space-y-2">
-          {mockPlanVersions.map((v) => (
+          {plan.version >= 1 && (
             <div
-              key={v.version}
               className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50"
             >
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-beige-200 to-beige-300 flex items-center justify-center shrink-0 text-[11px] font-bold text-brown-600">
-                v{v.version}
+                v{plan.version}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-semibold text-gray-800">
-                    {v.createdBy}
+                    AI Decomposition Engine
                   </span>
                   <span
                     className={cn(
                       "inline-flex items-center text-[8px] font-semibold h-4 px-1.5 rounded-full border",
-                      v.status === "draft"
+                      plan.status === "draft"
                         ? "border-gray-300 text-gray-400"
                         : "border-teal-300 text-teal-600"
                     )}
                   >
-                    {v.status}
+                    {plan.status}
                   </span>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-0.5">{v.changes}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Current version from API</p>
                 <p className="text-[9px] text-gray-400 mt-1 font-mono">
-                  {new Date(v.createdAt).toLocaleDateString("en-US", {
+                  {new Date(plan.updatedAt).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
@@ -1723,7 +1721,7 @@ function ChangeSummaryView({
                 </p>
               </div>
             </div>
-          ))}
+          )}
 
           {/* Current draft entry */}
           <div className="flex items-start gap-3 p-3 rounded-lg border border-gold-200/40 bg-gold-50/20">
@@ -1766,7 +1764,7 @@ function PlanSummarySidebar({
 }: {
   tasks: EditableTask[];
   milestones: EditableMilestone[];
-  plan: typeof mockPlans[0];
+  plan: DecompositionPlan;
 }) {
   const totalTasks = tasks.length;
   const totalSubtasks = tasks.reduce((s, t) => s + t.subtasks.length, 0);
@@ -1908,67 +1906,94 @@ export default function EditDecompositionPage() {
   const params = useParams();
   const router = useRouter();
   const planId = params.planId as string;
-  const plan = mockPlans.find((p) => p.id === planId) ?? mockPlans[0];
+
+  // ── API data ──
+  const { data: apiPlanRes } = useDecompositionPlan(planId);
+  const { data: apiTasksRes } = useTasks(planId);
+  const { data: apiMilestonesRes } = useMilestones(planId);
+  const revisionMutation = useIncreaseRevision(planId);
+
+  const plan = React.useMemo(() => {
+    const raw = apiPlanRes?.data as Record<string, unknown> | null;
+    if (raw && (raw._id || raw.id)) {
+      return {
+        id: (raw._id ?? raw.id ?? planId) as string,
+        sowId: (raw.sow_id ?? raw.sowId ?? "") as string,
+        title: (raw.title ?? raw.project_name ?? "Untitled Plan") as string,
+        status: (raw.status ?? "draft") as PlanStatus,
+        createdAt: (raw.created_at ?? raw.createdAt ?? new Date().toISOString()) as string,
+        updatedAt: (raw.updated_at ?? raw.updatedAt ?? new Date().toISOString()) as string,
+        totalTasks: Number(raw.total_tasks ?? raw.totalTasks ?? 0),
+        totalSubtasks: Number(raw.total_subtasks ?? raw.totalSubtasks ?? 0),
+        totalMilestones: Number(raw.total_milestones ?? raw.totalMilestones ?? 0),
+        estimatedHours: Number(raw.estimated_hours ?? raw.estimatedHours ?? 0),
+        estimatedCost: Number(raw.estimated_cost ?? raw.estimatedCost ?? 0),
+        complexity: (raw.complexity ?? "medium") as "low" | "medium" | "high" | "critical",
+        version: Number(raw.version ?? 1),
+        teamId: (raw.team_id ?? raw.teamId) as string | undefined,
+        projectId: (raw.project_id ?? raw.projectId) as string | undefined,
+        aiConfidence: Number(raw.ai_confidence ?? raw.aiConfidence ?? 0),
+        criticalPathDuration: Number(raw.critical_path_duration ?? raw.criticalPathDuration ?? 0),
+        uniqueSkills: Number(raw.unique_skills ?? raw.uniqueSkills ?? 0),
+        dependencyCount: Number(raw.dependency_count ?? raw.dependencyCount ?? 0),
+      };
+    }
+    return null;
+  }, [apiPlanRes, planId]);
 
   /* ── C6: Revision warning for approved plans ── */
-  const isApproved = plan.status === "approved" || plan.status === "completed" || plan.status === "in_progress";
+  const isApproved = plan?.status === "approved" || plan?.status === "completed" || plan?.status === "in_progress";
   const [showRevisionWarning, setShowRevisionWarning] = React.useState(isApproved);
 
-  /* ── AI Review flow state ── */
-  const [aiReviewOpen, setAiReviewOpen] = React.useState(false);
-  const [aiReviewStage, setAiReviewStage] = React.useState(0);
-  const aiReviewStages = React.useMemo(
-    () => [
-      { label: "Scanning plan structure", icon: FileText },
-      { label: "Validating task breakdown", icon: ListChecks },
-      { label: "Checking dependency graph", icon: GitBranch },
-      { label: "Running compliance checks", icon: ShieldCheck },
-      { label: "Finalizing AI review", icon: Sparkles },
-    ],
-    []
-  );
-
-  const handleSubmitAiReview = () => {
-    setAiReviewStage(0);
-    setAiReviewOpen(true);
-  };
-
-  React.useEffect(() => {
-    if (!aiReviewOpen) return;
-    if (aiReviewStage >= aiReviewStages.length) {
-      const t = setTimeout(() => {
-        setAiReviewOpen(false);
-        router.push(`/enterprise/decomposition/${planId}#task-breakdown`);
-      }, 900);
-      return () => clearTimeout(t);
+  /* ── Initialize editable milestones from API or mock data ── */
+  const initialMilestones = React.useMemo((): EditableMilestone[] => {
+    const raw = apiMilestonesRes?.data;
+    const arr = (Array.isArray(raw) ? raw : (raw as Record<string, unknown> | null)?.milestones ?? null) as Record<string, unknown>[] | null;
+    if (arr && arr.length > 0) {
+      return arr.map((m) => ({
+        id: (m._id ?? m.id ?? "") as string,
+        planId: (m.plan_id ?? m.planId ?? planId) as string,
+        title: (m.title ?? "") as string,
+        description: (m.description ?? "") as string,
+        order: Number(m.order ?? 0),
+      }));
     }
-    const t = setTimeout(() => setAiReviewStage((s) => s + 1), 900);
-    return () => clearTimeout(t);
-  }, [aiReviewOpen, aiReviewStage, aiReviewStages.length, planId, router]);
+    return [];
+  }, [apiMilestonesRes, plan?.id, planId]);
 
-  /* ── Initialize editable milestones from mock data ── */
-  const [editableMilestones, setEditableMilestones] = React.useState<EditableMilestone[]>(
-    () =>
-      mockPlanMilestones
-        .filter((m) => m.planId === plan.id)
-        .map((m) => ({
-          id: m.id,
-          planId: m.planId,
-          title: m.title,
-          description: m.description,
-          order: m.order,
-        }))
-  );
+  const [editableMilestones, setEditableMilestones] = React.useState<EditableMilestone[]>(initialMilestones);
+  React.useEffect(() => { setEditableMilestones(initialMilestones); }, [initialMilestones]);
 
-  /* ── Initialize editable tasks from mock data ── */
-  const [editableTasks, setEditableTasks] = React.useState<EditableTask[]>(() =>
-    mockTasks
-      .filter((t) => t.planId === plan.id)
-      .map((t) => ({
-        ...t,
-        subtasks: t.subtasks.map((st) => ({ ...st })),
-      }))
-  );
+  /* ── Initialize editable tasks from API or mock data ── */
+  const initialTasks = React.useMemo((): EditableTask[] => {
+    const raw = apiTasksRes?.data;
+    const arr = (Array.isArray(raw) ? raw : (raw as Record<string, unknown> | null)?.tasks ?? null) as Record<string, unknown>[] | null;
+    if (arr && arr.length > 0) {
+      return arr.map((t) => ({
+        id: (t._id ?? t.id ?? "") as string,
+        planId: (t.plan_id ?? t.planId ?? planId) as string,
+        milestoneId: (t.milestone_id ?? t.milestoneId ?? "") as string,
+        title: (t.title ?? "") as string,
+        description: (t.description ?? "") as string,
+        status: (t.status ?? "backlog") as DecompositionTask["status"],
+        priority: (t.priority ?? "medium") as DecompositionTask["priority"],
+        estimatedHours: Number(t.estimated_hours ?? t.estimatedHours ?? 0),
+        skillsRequired: (t.skills_required ?? t.skillsRequired ?? []) as SkillTag[],
+        dependencies: (t.dependencies ?? []) as TaskDependency[],
+        phase: Number(t.phase ?? 1),
+        order: Number(t.order ?? 0),
+        assigneeId: (t.assignee_id ?? t.assigneeId) as string | undefined,
+        acceptanceCriteria: (t.acceptance_criteria ?? t.acceptanceCriteria ?? []) as string[],
+        aiConfidence: Number(t.ai_confidence ?? t.aiConfidence ?? 0),
+        itemStatus: (t.item_status ?? t.itemStatus ?? "proposed") as DecompositionTask["itemStatus"],
+        subtasks: ((t.subtasks ?? []) as Subtask[]).map((st) => ({ ...st })),
+      }));
+    }
+    return [];
+  }, [apiTasksRes, plan?.id, planId]);
+
+  const [editableTasks, setEditableTasks] = React.useState<EditableTask[]>(initialTasks);
+  React.useEffect(() => { setEditableTasks(initialTasks); }, [initialTasks]);
 
   const [activeTab, setActiveTab] = React.useState("tasks");
 
@@ -1992,7 +2017,7 @@ export default function EditDecompositionPage() {
 
     const newTask: EditableTask = {
       id: `task-new-${Date.now()}`,
-      planId: plan.id,
+      planId: plan!.id,
       milestoneId,
       title: "",
       description: "",
@@ -2015,7 +2040,7 @@ export default function EditDecompositionPage() {
   const handleAddMilestone = () => {
     const newMs: EditableMilestone = {
       id: `pm-new-${Date.now()}`,
-      planId: plan.id,
+      planId: plan!.id,
       title: "New Milestone",
       description: "",
       order: editableMilestones.length + 1,
@@ -2058,6 +2083,17 @@ export default function EditDecompositionPage() {
     (t) => t.isModified && !t.isNew
   ).length;
   const totalChanges = newTasksCount + modifiedTasksCount;
+
+  if (!plan) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <Network className="w-10 h-10 text-gray-300 mb-4" />
+        <h2 className="text-lg font-semibold text-gray-800 mb-1">Plan not found</h2>
+        <p className="text-sm text-gray-500 mb-4">The decomposition plan could not be loaded.</p>
+        <Link href="/enterprise/decomposition" className="text-sm text-brown-500 hover:text-brown-600 font-medium">Back to plans</Link>
+      </div>
+    );
+  }
 
   return (
     <>

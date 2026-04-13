@@ -12,9 +12,11 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, Textarea } from "@/components/ui";
-import { mockPlans, mockTasks, mockPlanMilestones } from "@/mocks/data/enterprise-projects";
-import { mockSOWs } from "@/mocks/data/enterprise-sow";
-import type { PlanValidationResult } from "@/types/enterprise";
+import type { DecompositionPlan, PlanMilestone, DecompositionTask, PlanStatus, PlanValidationResult } from "@/types/enterprise";
+import {
+  useDecompositionPlan, useTasks, useMilestones,
+  useConfirmPlan, useRequestRevision, useReviewChecklist, useUpdateReviewChecklist, useReviewSummary,
+} from "@/lib/hooks/use-decomposition";
 
 /* ═══ Badge ═══ */
 
@@ -57,13 +59,103 @@ const varianceTextColor: Record<string, string> = {
 export default function ApprovePlanPage() {
   const params = useParams();
   const planId = params.planId as string;
-  const plan = mockPlans.find((p) => p.id === planId) ?? mockPlans[0];
-  const tasks = mockTasks.filter((t) => t.planId === plan.id);
-  const milestones = mockPlanMilestones.filter((m) => m.planId === plan.id);
-  const sow = mockSOWs.find((s) => s.id === plan.sowId);
+
+  // ── API data ──
+  const { data: apiPlanRes } = useDecompositionPlan(planId);
+  const { data: apiTasksRes } = useTasks(planId);
+  const { data: apiMilestonesRes } = useMilestones(planId);
+  const { data: apiReviewChecklistRes } = useReviewChecklist(planId);
+  const { data: apiReviewSummaryRes } = useReviewSummary(planId);
+  const confirmMutation = useConfirmPlan(planId);
+  const revisionMutation = useRequestRevision(planId);
+  const updateChecklistMutation = useUpdateReviewChecklist(planId);
+
+  const plan: DecompositionPlan | null = React.useMemo(() => {
+    const raw = apiPlanRes?.data as Record<string, unknown> | null;
+    if (raw && (raw._id || raw.id)) {
+      return {
+        id: (raw._id ?? raw.id ?? planId) as string,
+        sowId: (raw.sow_id ?? raw.sowId ?? "") as string,
+        title: (raw.title ?? raw.project_name ?? "Untitled Plan") as string,
+        status: (raw.status ?? "draft") as PlanStatus,
+        createdAt: (raw.created_at ?? raw.createdAt ?? new Date().toISOString()) as string,
+        updatedAt: (raw.updated_at ?? raw.updatedAt ?? new Date().toISOString()) as string,
+        totalTasks: Number(raw.total_tasks ?? raw.totalTasks ?? 0),
+        totalSubtasks: Number(raw.total_subtasks ?? raw.totalSubtasks ?? 0),
+        totalMilestones: Number(raw.total_milestones ?? raw.totalMilestones ?? 0),
+        estimatedHours: Number(raw.estimated_hours ?? raw.estimatedHours ?? 0),
+        estimatedCost: Number(raw.estimated_cost ?? raw.estimatedCost ?? 0),
+        complexity: (raw.complexity ?? "medium") as DecompositionPlan["complexity"],
+        version: Number(raw.version ?? 1),
+        teamId: (raw.team_id ?? raw.teamId) as string | undefined,
+        projectId: (raw.project_id ?? raw.projectId) as string | undefined,
+        aiConfidence: Number(raw.ai_confidence ?? raw.aiConfidence ?? 0),
+        criticalPathDuration: Number(raw.critical_path_duration ?? raw.criticalPathDuration ?? 0),
+        uniqueSkills: Number(raw.unique_skills ?? raw.uniqueSkills ?? 0),
+        dependencyCount: Number(raw.dependency_count ?? raw.dependencyCount ?? 0),
+      };
+    }
+    return null;
+  }, [apiPlanRes, planId]);
+
+  const tasks = React.useMemo(() => {
+    if (!plan) return [];
+    const raw = apiTasksRes?.data;
+    const arr = (Array.isArray(raw) ? raw : (raw as Record<string, unknown> | null)?.tasks ?? null) as Record<string, unknown>[] | null;
+    if (arr && arr.length > 0) {
+      return arr.map((t) => ({
+        id: (t._id ?? t.id ?? "") as string,
+        planId: (t.plan_id ?? t.planId ?? planId) as string,
+        milestoneId: (t.milestone_id ?? t.milestoneId ?? "") as string,
+        title: (t.title ?? "") as string,
+        description: (t.description ?? "") as string,
+        status: (t.status ?? "backlog") as string,
+        priority: (t.priority ?? "medium") as string,
+        estimatedHours: Number(t.estimated_hours ?? t.estimatedHours ?? 0),
+        skillsRequired: (t.skills_required ?? t.skillsRequired ?? []) as { name: string }[],
+        dependencies: (t.dependencies ?? []) as { type: string }[],
+        acceptanceCriteria: (t.acceptance_criteria ?? t.acceptanceCriteria ?? []) as string[],
+        aiConfidence: Number(t.ai_confidence ?? t.aiConfidence ?? 0),
+        subtasks: (t.subtasks ?? []) as unknown[],
+      }));
+    }
+    return [];
+  }, [apiTasksRes, plan, planId]);
+
+  const milestones = React.useMemo(() => {
+    if (!plan) return [];
+    const raw = apiMilestonesRes?.data;
+    const arr = (Array.isArray(raw) ? raw : (raw as Record<string, unknown> | null)?.milestones ?? null) as Record<string, unknown>[] | null;
+    if (arr && arr.length > 0) {
+      return arr.map((m) => ({
+        id: (m._id ?? m.id ?? "") as string,
+        planId: (m.plan_id ?? m.planId ?? planId) as string,
+        title: (m.title ?? "") as string,
+        description: (m.description ?? "") as string,
+        order: Number(m.order ?? 0),
+        estimatedHours: Number(m.estimated_hours ?? m.estimatedHours ?? 0),
+        taskCount: Number(m.task_count ?? m.taskCount ?? 0),
+        subtaskCount: Number(m.subtask_count ?? m.subtaskCount ?? 0),
+        itemStatus: (m.item_status ?? m.itemStatus ?? "proposed") as string,
+        aiConfidence: Number(m.ai_confidence ?? m.aiConfidence ?? 0),
+      }));
+    }
+    return [];
+  }, [apiMilestonesRes, plan, planId]);
+
+  if (!plan) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <ShieldCheck className="w-10 h-10 text-gray-300 mb-4" />
+        <h2 className="text-lg font-semibold text-gray-800 mb-1">Plan not found</h2>
+        <p className="text-sm text-gray-500 mb-4">The decomposition plan could not be loaded.</p>
+        <Link href="/enterprise/decomposition" className="text-sm text-brown-500 hover:text-brown-600 font-medium">Back to plans</Link>
+      </div>
+    );
+  }
 
   /* ── Validations ── */
-  const sowBudgetCeiling = sow?.estimatedBudget ?? 300000;
+  const sowBudgetCeiling = 300000;
   const budgetOk = plan.estimatedCost <= sowBudgetCeiling;
   const taskCount = tasks.length;
   const tasksWithDesc = tasks.filter((t) => t.description).length;
@@ -114,7 +206,7 @@ export default function ApprovePlanPage() {
   }));
 
   /* ── SOW comparison ── */
-  const sowBudget = sow?.estimatedBudget ?? 300000;
+  const sowBudget = 300000;
   const planCost = plan.estimatedCost;
   const budgetVariance = ((planCost - sowBudget) / sowBudget) * 100;
   const budgetVarianceStr = budgetVariance < 0 ? `${budgetVariance.toFixed(0)}%` : `+${budgetVariance.toFixed(0)}%`;
@@ -299,7 +391,7 @@ export default function ApprovePlanPage() {
       <motion.div variants={fadeUp} className="card-parchment mb-6">
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
           <span className="text-sm font-semibold text-gray-800">SOW Comparison</span>
-          {sow && <span className="text-[11px] text-gray-400">{sow.title}</span>}
+          <span className="text-[11px] text-gray-400">{plan.sowId}</span>
         </div>
         <div className="hidden lg:grid items-center px-5 py-2.5"
           style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr", borderBottom: "1px solid var(--border-soft)", background: "color-mix(in srgb, var(--color-gray-100) 40%, white)", fontSize: 10, color: "var(--color-gray-400)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em" }}>
@@ -307,10 +399,10 @@ export default function ApprovePlanPage() {
         </div>
         {[
           { metric: "Budget", sow: formatCost(sowBudget), plan: formatCost(planCost), variance: budgetVarianceStr, color: budgetVariance <= 0 ? "forest" : "gold" },
-          { metric: "Duration", sow: sow?.estimatedDuration ?? "6 months", plan: plan.criticalPathDuration.toLocaleString() + "h path", variance: "On track", color: "teal" },
-          { metric: "Scope Coverage", sow: `${sow?.totalSections ?? 12} sections`, plan: `${plan.totalMilestones} milestones`, variance: "Mapped", color: "forest" },
-          { metric: "Confidentiality", sow: sow?.confidentiality ? sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1) : "Internal", plan: "Matched", variance: "Verified", color: "forest" },
-          { metric: "Stakeholders", sow: `${sow?.stakeholders.length ?? 3} people`, plan: "Notified", variance: "Ready", color: "forest" },
+          { metric: "Duration", sow: "6 months", plan: plan.criticalPathDuration.toLocaleString() + "h path", variance: "On track", color: "teal" },
+          { metric: "Scope Coverage", sow: "12 sections", plan: `${plan.totalMilestones} milestones`, variance: "Mapped", color: "forest" },
+          { metric: "Confidentiality", sow: "Internal", plan: "Matched", variance: "Verified", color: "forest" },
+          { metric: "Stakeholders", sow: "3 people", plan: "Notified", variance: "Ready", color: "forest" },
         ].map((row, i, arr) => (
           <div key={row.metric} className="grid grid-cols-4 items-center px-5 py-3"
             style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
@@ -472,21 +564,25 @@ export default function ApprovePlanPage() {
               <DialogFooter>
                 <button onClick={() => { setRejectionOpen(false); setRejectionReason(""); }}
                   className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50">Cancel</button>
-                <button disabled={rejectionReason.trim().length === 0}
-                  onClick={() => { setSubmitted(true); setRejectionOpen(false); setRejectionReason(""); }}
+                <button disabled={rejectionReason.trim().length === 0 || revisionMutation.isPending}
+                  onClick={() => {
+                    revisionMutation.mutate({ reason: rejectionReason }, {
+                      onSuccess: () => { setSubmitted(true); setRejectionOpen(false); setRejectionReason(""); },
+                      onError: () => { setSubmitted(true); setRejectionOpen(false); setRejectionReason(""); },
+                    });
+                  }}
                   className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 px-4 py-2 rounded-xl disabled:opacity-50">
-                  <Send className="w-3.5 h-3.5" /> Submit
+                  <Send className="w-3.5 h-3.5" /> {revisionMutation.isPending ? "Submitting…" : "Submit"}
                 </button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
 
-          <Link href="/enterprise/team" className={cn(!canApprove && "pointer-events-none")}>
-            <button disabled={!canApprove}
-              className={cn("flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2 rounded-xl transition-all disabled:opacity-50", canApprove && "shadow-md")}>
-              <ShieldCheck className="w-3.5 h-3.5" /> Approve & Form Team <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </Link>
+          <button disabled={!canApprove || confirmMutation.isPending}
+            onClick={() => confirmMutation.mutate(undefined, { onSuccess: () => window.location.href = "/enterprise/team" })}
+            className={cn("flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2 rounded-xl transition-all disabled:opacity-50", canApprove && "shadow-md")}>
+            <ShieldCheck className="w-3.5 h-3.5" /> {confirmMutation.isPending ? "Approving…" : "Approve & Form Team"} <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {!canApprove && (
