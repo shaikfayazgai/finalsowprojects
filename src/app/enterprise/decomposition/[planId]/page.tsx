@@ -13,15 +13,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
-import {
-  mockPlans, mockTasks, mockPlanMilestones, mockAIRecommendations,
-} from "@/mocks/data/enterprise-projects";
-import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import type {
   DecompositionTask, DecompositionPlan, PlanMilestone, PlanStatus, TaskStatus, AIRecommendation,
 } from "@/types/enterprise";
 import { PaymentReleaseTab } from "@/components/enterprise/decomposition/PaymentReleaseTab";
 import { useProjectHoldStore } from "@/lib/stores/project-hold-store";
+import {
+  useDecompositionPlan, useTasks, useMilestones, usePlanSummary,
+} from "@/lib/hooks/use-decomposition";
 
 /* ═══ Badge ═══ */
 
@@ -46,13 +45,20 @@ function Badge({ variant, dot, children }: { variant: string; dot?: boolean; chi
 
 /* ═══ Status configs ═══ */
 
-const planStatusMap: Record<PlanStatus, { variant: string; label: string }> = {
+const planStatusMap: Record<string, { variant: string; label: string }> = {
   draft: { variant: "beige", label: "Draft" },
   pending_review: { variant: "gold", label: "Plan Review Required" },
   revision_in_progress: { variant: "teal", label: "Revision In Progress" },
   approved: { variant: "forest", label: "Plan Confirmed" },
   in_progress: { variant: "beige", label: "Plan Locked" },
   completed: { variant: "brown", label: "Completed" },
+  // API returns uppercase statuses
+  NEW: { variant: "beige", label: "New" },
+  IN_REVIEW: { variant: "gold", label: "In Review" },
+  CONFIRMED: { variant: "forest", label: "Confirmed" },
+  LOCKED: { variant: "teal", label: "Locked" },
+  REVISION_REQUESTED: { variant: "gold", label: "Revision Requested" },
+  PENDING_KICKOFF: { variant: "beige", label: "Pending Kickoff" },
 };
 
 const taskStatusMap: Record<TaskStatus, { variant: string; label: string; dotColor: string }> = {
@@ -283,7 +289,7 @@ function TaskBreakdownGantt({ milestones, tasks, plan }: { milestones: PlanMiles
                 {/* ── Task rows ── */}
                 <AnimatePresence initial={false}>
                   {isOpen && msTasks.map((task, ti) => {
-                    const ts = taskStatusMap[task.status];
+                    const ts = taskStatusMap[task.status] ?? { variant: "beige", label: task.status, dotColor: "bg-gray-300" };
                     const tProg = task.status === "accepted" ? 100 : task.status === "in_progress" || task.status === "in_review" ? 60 : task.status === "rework" ? 35 : 0;
                     // Spread tasks evenly within the milestone window
                     const slotSize = (timeline.end.getTime() - timeline.start.getTime()) / Math.max(msTasks.length, 1);
@@ -359,12 +365,204 @@ export default function PlanDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const planId = params.planId as string;
-  const plan = mockPlans.find((p) => p.id === planId) ?? mockPlans[0];
-  const sow = mockSOWs.find((s) => s.id === plan.sowId);
-  const sowTitle = sow?.title ?? plan.sowId;
-  const tasks = mockTasks.filter((t) => t.planId === plan.id);
-  const milestones = mockPlanMilestones.filter((m) => m.planId === plan.id).sort((a, b) => a.order - b.order);
-  const recommendations = mockAIRecommendations.filter((r) => r.planId === plan.id);
+
+  // ── API data ──
+  const { data: apiPlanRes, isLoading: planLoading, isError: planError, error: planErrorObj } = useDecompositionPlan(planId);
+  const { data: apiTasksRes } = useTasks(planId);
+  const { data: apiMilestonesRes } = useMilestones(planId);
+
+
+  // Map backend status to frontend PlanStatus
+  const normalizeStatus = (s: string): PlanStatus => {
+    const map: Record<string, PlanStatus> = {
+      PLAN_REVIEW_REQUIRED: "pending_review",
+      PENDING_KICKOFF: "draft",
+      NEW: "draft",
+      PLAN_CONFIRMED: "approved",
+      PLAN_LOCKED: "in_progress",
+      REVISION_IN_PROGRESS: "revision_in_progress",
+      COMPLETED: "completed",
+      WITHDRAWN: "completed",
+    };
+    return map[s] ?? (s as PlanStatus);
+  };
+
+  const plan: DecompositionPlan | null = React.useMemo(() => {
+    // Handle both {data: {...}} wrapper and direct object
+    const resp = apiPlanRes as unknown;
+    let raw: Record<string, unknown> | null = null;
+    if (resp && typeof resp === "object") {
+      const obj = resp as Record<string, unknown>;
+      if (obj.data && typeof obj.data === "object" && !Array.isArray(obj.data)) {
+        raw = obj.data as Record<string, unknown>;
+      } else if (obj.plan_id || obj._id || obj.id) {
+        raw = obj;
+      }
+    }
+    if (raw && (raw._id || raw.id || raw.plan_id)) {
+      return {
+        id: (raw._id ?? raw.id ?? raw.plan_id ?? planId) as string,
+        sowId: (raw.sow_id ?? raw.sowId ?? raw.sow_reference ?? "") as string,
+        title: (raw.title ?? raw.project_name ?? "Untitled Plan") as string,
+        status: normalizeStatus((raw.status ?? "draft") as string),
+        createdAt: (raw.created_at ?? raw.createdAt ?? new Date().toISOString()) as string,
+        updatedAt: (raw.updated_at ?? raw.updatedAt ?? new Date().toISOString()) as string,
+        totalTasks: Number(raw.total_tasks ?? raw.totalTasks ?? (raw.summary as Record<string, unknown>)?.total_tasks ?? 0),
+        totalSubtasks: Number(raw.total_subtasks ?? raw.totalSubtasks ?? 0),
+        totalMilestones: Number(raw.total_milestones ?? raw.totalMilestones ?? (raw.summary as Record<string, unknown>)?.total_milestones ?? 0),
+        estimatedHours: Number(raw.estimated_hours ?? raw.estimatedHours ?? ((raw.summary as Record<string, unknown>)?.estimated_total_effort_days as number ?? 0) * 8),
+        estimatedCost: Number(raw.estimated_cost ?? raw.estimatedCost ?? 0),
+        complexity: (raw.complexity ?? "medium") as DecompositionPlan["complexity"],
+        version: Number(raw.version ?? raw.plan_version ?? 1),
+        teamId: (raw.team_id ?? raw.teamId) as string | undefined,
+        projectId: (raw.project_id ?? raw.projectId) as string | undefined,
+        aiConfidence: Number(raw.ai_confidence ?? raw.aiConfidence ?? 0),
+        criticalPathDuration: Number(raw.critical_path_duration ?? raw.criticalPathDuration ?? 0),
+        uniqueSkills: Number(raw.unique_skills ?? raw.uniqueSkills ?? 0),
+        dependencyCount: Number(raw.dependency_count ?? raw.dependencyCount ?? 0),
+      };
+    }
+    return null;
+  }, [apiPlanRes, planId]);
+
+  const tasks: DecompositionTask[] = React.useMemo(() => {
+    if (!plan) return [];
+    // Handle both {data: {tasks: [...]}} and direct {tasks: [...]}
+    const resp = apiTasksRes as unknown;
+    const raw = (resp && typeof resp === "object" && (resp as Record<string, unknown>).data)
+      ? (resp as Record<string, unknown>).data
+      : resp;
+    const arr = (Array.isArray(raw) ? raw : (raw as Record<string, unknown> | null)?.tasks ?? null) as Record<string, unknown>[] | null;
+    if (arr && arr.length > 0) {
+      return arr.map((t) => {
+        // Backend returns: {id, task_name, milestone, skills, effort, start_date, end_date, critical}
+        const skills = t.skills_required ?? t.skillsRequired ?? t.skills;
+        const skillTags: DecompositionTask["skillsRequired"] = Array.isArray(skills)
+          ? skills.map((s: unknown) => typeof s === "string" ? { name: s, source: "ai" as const } : s as DecompositionTask["skillsRequired"][0])
+          : typeof skills === "string" && skills
+            ? skills.split(",").map((s: string) => ({ name: s.trim(), source: "ai" as const }))
+            : [];
+
+        return {
+          id: String(t._id ?? t.id ?? t.task_id ?? ""),
+          planId: (t.plan_id ?? t.planId ?? planId) as string,
+          milestoneId: (t.milestone_id ?? t.milestoneId ?? t.milestone ?? "") as string,
+          title: (t.title ?? t.task_name ?? "") as string,
+          description: (t.description ?? "") as string,
+          status: (t.status ?? "backlog") as TaskStatus,
+          priority: (t.priority ?? (t.critical ? "critical" : "medium")) as DecompositionTask["priority"],
+          estimatedHours: Number(t.estimated_hours ?? t.estimatedHours ?? t.effort ?? 0) * (t.effort ? 8 : 1),
+          skillsRequired: skillTags,
+          dependencies: (t.dependencies ?? []) as DecompositionTask["dependencies"],
+          phase: Number(t.phase ?? 1),
+          order: Number(t.order ?? t.id ?? 0),
+          assigneeId: (t.assignee_id ?? t.assigneeId) as string | undefined,
+          acceptanceCriteria: (t.acceptance_criteria ?? t.acceptanceCriteria ?? []) as string[],
+          aiConfidence: Number(t.ai_confidence ?? t.aiConfidence ?? 0),
+          itemStatus: (t.item_status ?? t.itemStatus ?? "proposed") as DecompositionTask["itemStatus"],
+          subtasks: (t.subtasks ?? []) as DecompositionTask["subtasks"],
+        };
+      });
+    }
+    return [];
+  }, [apiTasksRes, plan, planId]);
+
+  const milestones: PlanMilestone[] = React.useMemo(() => {
+    if (!plan) return [];
+    // Handle both {data: {milestones: {...}}} and direct {milestones: {...}}
+    const resp = apiMilestonesRes as unknown;
+    const raw = (resp && typeof resp === "object" && (resp as Record<string, unknown>).data)
+      ? (resp as Record<string, unknown>).data
+      : resp;
+    // Backend can return: {milestones: {M1: [...tasks], M2: [...]}} (dict) or [{...}, {...}] (array)
+    const milestonesRaw = (raw as Record<string, unknown> | null)?.milestones ?? raw;
+
+    // Case 1: Array of milestone objects
+    if (Array.isArray(milestonesRaw) && milestonesRaw.length > 0) {
+      return milestonesRaw.map((m: Record<string, unknown>) => ({
+        id: (m._id ?? m.id ?? "") as string,
+        planId: (m.plan_id ?? m.planId ?? planId) as string,
+        title: (m.title ?? "") as string,
+        description: (m.description ?? "") as string,
+        order: Number(m.order ?? 0),
+        estimatedHours: Number(m.estimated_hours ?? m.estimatedHours ?? 0),
+        taskCount: Number(m.task_count ?? m.taskCount ?? 0),
+        subtaskCount: Number(m.subtask_count ?? m.subtaskCount ?? 0),
+        itemStatus: (m.item_status ?? m.itemStatus ?? "proposed") as PlanMilestone["itemStatus"],
+        aiConfidence: Number(m.ai_confidence ?? m.aiConfidence ?? 0),
+      })).sort((a, b) => a.order - b.order);
+    }
+
+    // Case 2: Dict of {M1: [...tasks], M2: [...tasks]} — convert to milestone objects
+    if (milestonesRaw && typeof milestonesRaw === "object" && !Array.isArray(milestonesRaw)) {
+      const msDict = milestonesRaw as Record<string, unknown[]>;
+      return Object.entries(msDict).map(([key, msTasks], idx) => {
+        const tasksArr = Array.isArray(msTasks) ? msTasks : [];
+        const totalEffort = tasksArr.reduce((sum, t: Record<string, unknown>) => sum + Number(t.effort ?? 0), 0);
+        return {
+          id: key,
+          planId: planId,
+          title: `Milestone ${idx + 1} (${key})`,
+          description: `${tasksArr.length} tasks, ${totalEffort} days effort`,
+          order: idx + 1,
+          estimatedHours: totalEffort * 8,
+          taskCount: tasksArr.length,
+          subtaskCount: 0,
+          itemStatus: "proposed" as PlanMilestone["itemStatus"],
+          aiConfidence: 0,
+        };
+      }).sort((a, b) => a.order - b.order);
+    }
+
+    return [];
+  }, [apiMilestonesRes, plan, planId]);
+
+  const sowTitle = plan?.sowId ?? "";
+  const recommendations: AIRecommendation[] = [];
+
+  /* ── Loading state ── */
+  if (planLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="w-10 h-10 border-3 border-brown-200 border-t-brown-500 rounded-full animate-spin mb-4" />
+        <p className="text-sm font-medium text-gray-600">Loading plan details...</p>
+        <p className="text-xs text-gray-400 mt-1">Plan ID: {planId}</p>
+      </div>
+    );
+  }
+
+  /* ── Error state ── */
+  if (planError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center px-6">
+        <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center mb-4">
+          <AlertTriangle className="w-6 h-6 text-red-500" />
+        </div>
+        <p className="text-sm font-semibold text-gray-800 mb-1">Failed to load plan</p>
+        <p className="text-xs text-gray-500 max-w-md mb-3">
+          {planErrorObj instanceof Error ? planErrorObj.message : "Unknown error"}
+        </p>
+        <p className="text-xs text-gray-400">Plan ID: {planId}</p>
+        <details className="text-left w-full max-w-lg mt-3">
+          <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600">Debug info</summary>
+          <pre className="mt-2 p-3 bg-gray-50 rounded-lg text-[10px] text-gray-600 overflow-auto max-h-40">
+            {JSON.stringify({ error: planErrorObj, response: apiPlanRes }, null, 2)}
+          </pre>
+        </details>
+      </div>
+    );
+  }
+
+  if (!plan) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <Network className="w-10 h-10 text-gray-300 mb-4" />
+        <h2 className="text-lg font-semibold text-gray-800 mb-1">Plan not found</h2>
+        <p className="text-sm text-gray-500 mb-4">The decomposition plan could not be loaded.</p>
+        <Link href="/enterprise/decomposition" className="text-sm text-brown-500 hover:text-brown-600 font-medium">Back to plans</Link>
+      </div>
+    );
+  }
 
   const effectiveProjectId = (plan as { projectId?: string }).projectId ?? "proj-001";
   const { holdProject } = useProjectHoldStore();
@@ -378,7 +576,7 @@ export default function PlanDetailPage() {
   const toggleMilestone = (id: string) => setExpandedMilestones((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleTask = (id: string) => setExpandedTasks((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const st = planStatusMap[plan.status];
+  const st = planStatusMap[plan.status] ?? { variant: "beige", label: plan.status };
   const completedTasks = tasks.filter((t) => t.status === "accepted").length;
   const completionPct = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
   const totalSubtasks = tasks.reduce((s, t) => s + t.subtasks.length, 0);
@@ -630,7 +828,7 @@ export default function PlanDetailPage() {
                       {isOpen && (
                         <div>
                           {msTasks.map((task) => {
-                            const ts = taskStatusMap[task.status];
+                            const ts = taskStatusMap[task.status] ?? { variant: "beige", label: task.status, dotColor: "bg-gray-300" };
                             const pr = priorityMap[task.priority];
                             const isTaskOpen = expandedTasks.has(task.id);
                             const hasSubtasks = task.subtasks.length > 0;
