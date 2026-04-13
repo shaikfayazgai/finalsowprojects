@@ -1274,7 +1274,7 @@ function SOWGenerateWizardPageInner() {
 
 
   if (generationComplete) {
-    return <SOWAIDraftReviewPage sowId={generatedSowId} />;
+    return <SOWAIDraftReviewPage sowId={generatedSowId} flow="ai" />;
   }
 
   return (

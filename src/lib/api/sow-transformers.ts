@@ -363,12 +363,12 @@ export function toStep3(fd: FD) {
   const integrations = (fd.integrationPoints ?? [])
     .filter((ip: any) => ip.name?.trim())
     .map((ip: any) => ({
-      name: ip.name,
+      integration_name: ip.name,
       direction: maybe(ip.direction),
       protocol: maybe(ip.protocol),
       authentication: maybe(ip.authentication),
       data_format: maybe(ip.dataFormat),
-      sandbox_credentials: maybe(ip.sandboxCredentials),
+      sandbox_credentials_by: maybe(ip.sandboxCredentials),
       testing_responsibility: maybe(ip.testingResponsibility),
       error_handling_sla: maybe(ip.errorHandlingSLA),
     }));
