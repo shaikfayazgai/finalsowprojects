@@ -255,6 +255,7 @@ function LoginPageContent() {
         const dest = callbackUrl || (
           role === "contributor" ? "/contributor/dashboard" :
           role === "mentor"      ? "/mentor/dashboard" :
+          role === "admin"       ? "/admin/dashboard" :
                                    "/enterprise/dashboard"
         );
         
