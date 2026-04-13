@@ -270,10 +270,10 @@ export default function ParsedSOWReviewPage() {
       </AnimatePresence>
 
       {/* MAIN SPLIT */}
-      <motion.div variants={fadeUp} className="flex-1 min-h-0 grid grid-cols-[380px_1fr] gap-5">
+      <motion.div variants={fadeUp} className="flex-1 min-h-0 grid grid-cols-[520px_1fr] gap-5">
 
         {/* LEFT: Document Viewer */}
-        <div className="flex flex-col min-h-0 rounded-2xl border border-gray-200 bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+        <div className="flex flex-col rounded-2xl border border-gray-200 bg-white overflow-hidden self-start" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-brown-400" />
@@ -284,14 +284,12 @@ export default function ParsedSOWReviewPage() {
             )}
           </div>
 
-          <div className="flex-1 min-h-0">
-            <DocumentViewer
-              sections={parsedSections}
-              highlightText={highlightText}
-              highlightPage={highlightPage}
-              className="rounded-none border-0 h-full"
-            />
-          </div>
+          <DocumentViewer
+            sections={parsedSections}
+            highlightText={highlightText}
+            highlightPage={highlightPage}
+            className="rounded-none border-0"
+          />
         </div>
 
         {/* RIGHT: Extracted Items */}

@@ -107,11 +107,9 @@ const section6Schema = z.object({
 const section7Schema = z.object({
   ipOwnership: nonEmptyString("Select IP ownership model"),
   sourceCodeOwnership: nonEmptyString("Select source code repository ownership"),
-  warrantyPeriod: nonEmptyString("Select warranty period"),
   changeRequestProcess: nonEmptyString("Select change request process"),
   thirdPartyCosts: nonEmptyString("Select third-party licensing costs model"),
   businessOwnerApprover: nonEmptyString("Business owner approver is required"),
-  finalApprover: nonEmptyString("Final approver is required"),
 });
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   GripVertical,
@@ -20,6 +20,11 @@ import {
   Tag,
   Sparkles,
   Check,
+  CheckCircle2,
+  Loader2,
+  Bot,
+  FileText,
+  ShieldCheck,
   Search,
   AlertTriangle,
   History,
@@ -1899,6 +1904,7 @@ function PlanSummarySidebar({
 
 export default function EditDecompositionPage() {
   const params = useParams();
+  const router = useRouter();
   const planId = params.planId as string;
 
   // ── API data ──
@@ -2136,6 +2142,104 @@ export default function EditDecompositionPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ═══ AI Reviewing overlay ═══ */}
+      <AnimatePresence>
+        {aiReviewOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 12 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 12 }}
+              transition={{ type: "spring", stiffness: 340, damping: 28 }}
+              className="w-[460px] max-w-[92vw] bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200"
+            >
+              {/* Header */}
+              <div className="relative px-6 pt-6 pb-5 bg-gradient-to-br from-brown-50 via-white to-amber-50 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-brown-500 to-brown-700 flex items-center justify-center shadow-lg">
+                    <Bot className="w-6 h-6 text-white" />
+                    <motion.div
+                      className="absolute inset-0 rounded-2xl border-2 border-brown-400"
+                      animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0, 0.6] }}
+                      transition={{ duration: 1.6, repeat: Infinity }}
+                    />
+                  </div>
+                  <div>
+                    <h3 className="text-[15px] font-heading font-bold text-gray-900">
+                      AI Reviewing Your Plan
+                    </h3>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Analyzing structure, dependencies & compliance…
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stages */}
+              <div className="px-6 py-5 space-y-3">
+                {aiReviewStages.map((stage, idx) => {
+                  const done = idx < aiReviewStage;
+                  const active = idx === aiReviewStage;
+                  const Icon = stage.icon;
+                  return (
+                    <div key={stage.label} className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all",
+                          done && "bg-gradient-to-br from-forest-500 to-teal-500 text-white",
+                          active && "bg-brown-100 text-brown-700",
+                          !done && !active && "bg-gray-100 text-gray-400"
+                        )}
+                      >
+                        {done ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : active ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Icon className="w-4 h-4" />
+                        )}
+                      </div>
+                      <span
+                        className={cn(
+                          "text-[12.5px] font-medium transition-colors",
+                          done && "text-forest-700",
+                          active && "text-gray-900",
+                          !done && !active && "text-gray-400"
+                        )}
+                      >
+                        {stage.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Progress bar */}
+              <div className="px-6 pb-5">
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-brown-500 to-amber-500"
+                    initial={{ width: 0 }}
+                    animate={{
+                      width: `${Math.min(100, (aiReviewStage / aiReviewStages.length) * 100)}%`,
+                    }}
+                    transition={{ duration: 0.5 }}
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2 text-center">
+                  Redirecting to Task Breakdown when complete…
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Main page */}
       <motion.div
         variants={stagger}
@@ -2168,8 +2272,11 @@ export default function EditDecompositionPage() {
               <button className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
                 <Save className="w-3 h-3" /> Save Draft
               </button>
-              <button className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">
-                <Send className="w-3.5 h-3.5" /> Submit for Approval
+              <button
+                onClick={handleSubmitAiReview}
+                className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all"
+              >
+                <Send className="w-3.5 h-3.5" /> Submit AI Review
               </button>
             </div>
           </div>

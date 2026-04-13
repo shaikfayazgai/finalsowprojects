@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 import { SignJWT } from "jose";
 import crypto from "crypto";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { sendEmail, buildEmailHtml } from "@/lib/email";
+import { DEFAULT_TEMPLATES } from "@/lib/stores/email-template-store";
 
 function getSecret() {
   const s = process.env.AUTH_SECRET;
@@ -31,43 +30,28 @@ export async function POST(req: NextRequest) {
       .setExpirationTime("5m")
       .sign(getSecret());
 
-    // Send the email
-    const { error: sendError } = await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? "onboarding@resend.dev",
+    const tpl = DEFAULT_TEMPLATES.otp_email;
+
+    console.log(`[send-email OTP] Sending code to: ${email}`);
+    const { success } = await sendEmail({
       to: email,
-      subject: "Your GlimmoraTeam verification code",
-      html: `
-        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#fff;">
-          <div style="text-align:center;margin-bottom:28px;">
-            <div style="display:inline-block;background:linear-gradient(135deg,#7C5C3E,#5C3D1E);border-radius:12px;padding:12px 20px;">
-              <span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:0.5px;">GlimmoraTeam</span>
-            </div>
-          </div>
-          <h2 style="color:#0D1B2A;font-size:20px;font-weight:700;margin:0 0 8px;">Email Verification</h2>
-          <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 24px;">
-            Use the code below to verify your email address. It expires in <strong>5 minutes</strong>.
-          </p>
-          <div style="background:#F0F8FA;border:2px solid #007A8A;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
-            <span style="font-size:36px;font-weight:700;letter-spacing:10px;color:#007A8A;font-family:monospace;">${code}</span>
-          </div>
-          <p style="color:#888;font-size:12px;line-height:1.5;margin:0;">
-            If you did not request this code, please ignore this email. Do not share this code with anyone.
-          </p>
-          <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-          <p style="color:#bbb;font-size:11px;text-align:center;margin:0;">
-            GlimmoraTeam &mdash; AI-Governed Global Workforce Platform
-          </p>
-        </div>
-      `,
+      subject: tpl.subject,
+      html: buildEmailHtml({
+        bodyHtml: tpl.bodyHtml,
+        headerColor: tpl.headerColor,
+        footerText: tpl.footerText,
+        payload: { code, expiryMinutes: "5" },
+      }),
     });
 
-    if (sendError) {
-      console.error("[send-email OTP] Resend error:", sendError);
+    if (!success) {
       return NextResponse.json(
         { error: "SEND_FAILED", message: "Could not send verification email. Please try again." },
         { status: 500 },
       );
     }
+
+    console.log(`[send-email OTP] Sent successfully to: ${email}`);
 
     const res = NextResponse.json({ ok: true });
     res.cookies.set("email_otp_token", token, {

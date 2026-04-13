@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight, ArrowLeft, CheckCircle2, AlertTriangle, Ban,
-  Sparkles, X, Clock, Send, Bot, Undo2, MessageSquare, Pencil,
+  Sparkles, X, Clock, Send, Bot, Undo2, MessageSquare, Pencil, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
-import { mockGapItems } from "@/mocks/data/sow-upload-flow";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { useGapItems } from "@/lib/hooks/use-manual-sow";
 import type { GapItem, GapSeverity } from "@/types/enterprise";
@@ -319,7 +318,7 @@ export default function GapAnalysisPage() {
   const router = useRouter();
   const store = useSOWUploadStore();
   const sowId = store.uploadedSowId;
-  const { data: gapRes } = useGapItems(sowId);
+  const { data: gapRes, isLoading: gapsLoading } = useGapItems(sowId);
 
   /* Map API data */
   const apiGaps: GapItem[] = React.useMemo(() => {
@@ -332,7 +331,7 @@ export default function GapAnalysisPage() {
   }, [gapRes]);
 
   const [gaps, setGaps] = React.useState<GapItem[]>(() =>
-    store.gapItems.length > 0 ? store.gapItems : mockGapItems,
+    store.gapItems.length > 0 ? store.gapItems : [],
   );
 
   /* Update from API when available */
@@ -544,6 +543,21 @@ export default function GapAnalysisPage() {
               </p>
             </div>
             <div className="flex-1 overflow-y-auto p-2.5 space-y-1">
+              {/* Loading state */}
+              {gapsLoading && gaps.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                  <Loader2 className="w-5 h-5 animate-spin mb-2" />
+                  <span className="text-[11px]">Loading gaps...</span>
+                </div>
+              )}
+              {/* Empty state */}
+              {!gapsLoading && gaps.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-8 text-gray-400 text-center px-4">
+                  <CheckCircle2 className="w-8 h-8 text-forest-300 mb-2" />
+                  <p className="text-[12px] font-medium text-gray-500">No gaps detected</p>
+                  <p className="text-[11px] text-gray-400 mt-1">Your SOW meets all required standards.</p>
+                </div>
+              )}
               {/* Critical */}
               {criticalGaps.length > 0 && (
                 <>

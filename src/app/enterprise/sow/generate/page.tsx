@@ -3,7 +3,7 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -22,7 +22,7 @@ import {
   Button, Input, Textarea, Label, Select, SelectTrigger, SelectContent,
   SelectItem, SelectValue,
 } from "@/components/ui";
-import { useCreateWizard, useSaveStep, useSkipStep, useGenerateSOW, useReviewSummary } from "@/lib/hooks/use-sow-wizard";
+import { useCreateWizard, useSaveStep, useSkipStep, useGenerateSOW, useReviewSummary, useWizard } from "@/lib/hooks/use-sow-wizard";
 
 /* ══════════════════════════════════════════ Steps ══════════════════════════════════════════ */
 
@@ -743,11 +743,67 @@ function saveDraft(formData: FormData, currentStep: number, skippedSteps: Set<nu
   } catch { /* storage full — ignore */ }
 }
 
-export default function SOWGenerateWizardPage() {
+function SOWGenerateWizardPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const draft = React.useRef(loadDraft());
-  const [currentStep, setCurrentStep] = React.useState(draft.current?.currentStep ?? 0);
+
+  // Resolve initial step: URL param > draft > 0
+  const initialStep = React.useMemo(() => {
+    const urlStep = searchParams.get("step");
+    if (urlStep !== null) {
+      const n = parseInt(urlStep, 10);
+      if (!isNaN(n) && n >= 0 && n < STEPS.length) return n;
+    }
+    return draft.current?.currentStep ?? 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [currentStep, setCurrentStepRaw] = React.useState(initialStep);
+
+  // Wrapper that accepts updater function or direct value (mirrors setState API)
+  // Pushes step changes into browser history so back/forward works
+  const setCurrentStep: React.Dispatch<React.SetStateAction<number>> = React.useCallback(
+    (action) => {
+      setCurrentStepRaw((prev) => {
+        const next = typeof action === "function" ? action(prev) : action;
+        if (next !== prev) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("step", String(next));
+          window.history.pushState({ sowStep: next }, "", url.toString());
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  // Listen for browser back/forward to sync step state
+  React.useEffect(() => {
+    const onPopState = (e: PopStateEvent) => {
+      if (e.state && typeof e.state.sowStep === "number") {
+        setCurrentStepRaw(e.state.sowStep);
+      } else {
+        const url = new URL(window.location.href);
+        const s = parseInt(url.searchParams.get("step") ?? "", 10);
+        if (!isNaN(s) && s >= 0 && s < STEPS.length) {
+          setCurrentStepRaw(s);
+        }
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+
+    // Set initial history state so first back press has state
+    if (!window.history.state?.sowStep && window.history.state?.sowStep !== 0) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("step", String(initialStep));
+      window.history.replaceState({ ...window.history.state, sowStep: initialStep }, "", url.toString());
+    }
+
+    return () => window.removeEventListener("popstate", onPopState);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [formData, setFormData] = React.useState<FormData>(() => {
     // Merge initialFormData as base to ensure all fields exist (handles HMR + draft migration)
     const merged = { ...initialFormData, ...draft.current?.formData };
@@ -769,9 +825,9 @@ export default function SOWGenerateWizardPage() {
   const [genLayer, setGenLayer] = React.useState(0);
   const [stepErrors, setStepErrors] = React.useState<StepErrors>({});
   const [touchedFields, setTouchedFields] = React.useState<Set<string>>(new Set());
-  const [showStepCompleteModal, setShowStepCompleteModal] = React.useState(false);
   const [cameFromReview, setCameFromReview] = React.useState(false);
   const [generationComplete, setGenerationComplete] = React.useState(false);
+  const [generatedSowId, setGeneratedSowId] = React.useState<string | null>(null);
 
   // ── API integration (wizard session + step mutations) ──
   const [wizardId, setWizardId] = React.useState<string | null>(() => {
@@ -779,6 +835,7 @@ export default function SOWGenerateWizardPage() {
     return sessionStorage.getItem("sow-wizard-id");
   });
   const createWizard = useCreateWizard();
+  const wizardQuery = useWizard(wizardId);
   const saveStepMutation = useSaveStep(wizardId);
   const skipStepMutation = useSkipStep(wizardId);
   const generateMutation = useGenerateSOW(wizardId);
@@ -969,7 +1026,21 @@ export default function SOWGenerateWizardPage() {
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
   }, [formData]);
 
-  const aiConfidence = calculateConfidence();
+  const localConfidence = calculateConfidence();
+  // Track API confidence from step save/skip responses
+  const [stepApiConfidence, setStepApiConfidence] = React.useState<number | null>(null);
+  // Wizard-level confidence from GET /wizards/:id
+  const wizardConfidence = typeof (wizardQuery.data as any)?.data?.confidence_score === "number"
+    ? (wizardQuery.data as any).data.confidence_score
+    : typeof (wizardQuery.data as any)?.confidence_score === "number"
+    ? (wizardQuery.data as any).confidence_score
+    : null;
+  const reviewApiConfidence = (reviewSummary.data?.data as any)?.confidence_score ?? null;
+  // Priority: step save/skip response > review API (step 9) > wizard GET > local calculation
+  const aiConfidence = stepApiConfidence
+    ?? (currentStep === 9 && reviewApiConfidence !== null ? reviewApiConfidence : null)
+    ?? wizardConfidence
+    ?? localConfidence;
 
   /* ── Step completion ── */
   const isStepComplete = React.useCallback(
@@ -1063,6 +1134,9 @@ export default function SOWGenerateWizardPage() {
       setApiError("");
       if (wizardId) {
         skipStepMutation.mutate(currentStep, {
+          onSuccess: (data) => {
+            if (typeof (data as any)?.new_confidence_score === "number") setStepApiConfidence((data as any).new_confidence_score);
+          },
           onSettled: () => {
             setSkippedSteps(prev => new Set(prev).add(currentStep));
             setCurrentStep(s => Math.min(STEPS.length - 1, s + 1));
@@ -1096,6 +1170,10 @@ export default function SOWGenerateWizardPage() {
       generateMutation.mutate(
         formData as unknown as Record<string, unknown>,
         {
+          onSuccess: (data) => {
+            const id = (data as any)?.data?.sow_id ?? (data as any)?.data?._id ?? (data as any)?.sow_id ?? null;
+            if (id) setGeneratedSowId(id);
+          },
           onError: (err) => setApiError(err.message),
         },
       );
@@ -1159,14 +1237,20 @@ export default function SOWGenerateWizardPage() {
       setTouchedFields(new Set());
       setApiError("");
 
+      const advanceToNext = () => {
+        setCurrentStep(s => s + 1);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      };
+
       // Step 9 is the review step (no save, just generate) — skip API call
       if (currentStep <= 8 && wizardId) {
         saveStepMutation.mutate(
           { step: currentStep, formData: formData as unknown as Record<string, unknown> },
           {
-            onSuccess: () => {
+            onSuccess: (data) => {
               setApiError("");
-              setShowStepCompleteModal(true);
+              if (typeof (data as any)?.confidence_score === "number") setStepApiConfidence((data as any).confidence_score);
+              advanceToNext();
             },
             onError: (err) => {
               // If wizard not found (404), clear stale ID and create a new one
@@ -1176,24 +1260,21 @@ export default function SOWGenerateWizardPage() {
                 createNewWizard();
               }
               setApiError(err.message);
-              setShowStepCompleteModal(true);
+              // Still advance even if API fails
+              advanceToNext();
             },
           },
         );
       } else {
         // No wizard session yet — proceed locally
-        setShowStepCompleteModal(true);
+        advanceToNext();
       }
     }
   };
 
-  const handleConfirmNextStep = () => {
-    setShowStepCompleteModal(false);
-    setCurrentStep(s => s + 1);
-  };
 
   if (generationComplete) {
-    return <SOWAIDraftReviewPage />;
+    return <SOWAIDraftReviewPage sowId={generatedSowId} />;
   }
 
   return (
@@ -1344,16 +1425,6 @@ export default function SOWGenerateWizardPage() {
                       <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
                         {STEPS[currentStep].label}
                       </div>
-                      {!STEPS[currentStep].mandatory && (
-                      <span className="rounded-md" style={{
-                        padding: '3px 10px', fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
-                        background: 'rgba(208,176,96,0.08)',
-                        color: '#86713D',
-                        border: '1px solid rgba(208,176,96,0.14)',
-                      }}>
-                        OPTIONAL
-                      </span>
-                      )}
                     </div>
                   </div>
 
@@ -1523,22 +1594,43 @@ export default function SOWGenerateWizardPage() {
                 Hallucination Prevention
               </div>
               <div className="space-y-2.5">
-                {HALLUCINATION_LAYERS.map((layer, idx) => {
-                  const active = hallucinationLayerActive(idx);
-                  return (
-                    <div key={idx} className="flex items-center gap-2.5">
-                      <div style={{
-                        width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                        background: active ? '#4D5741' : 'var(--border-soft)',
-                        boxShadow: active ? '0 0 4px rgba(77,87,65,0.30)' : 'none',
-                        transition: 'all 0.3s ease',
-                      }} />
-                      <span style={{ fontSize: 12, color: active ? 'var(--ink-mid)' : 'var(--ink-faint)', fontWeight: active ? 500 : 400 }}>
-                        {layer}
-                      </span>
-                    </div>
-                  );
-                })}
+                {(() => {
+                  const apiLayers: any[] = (reviewSummary.data?.data as any)?.hallucination_layers ?? [];
+                  if (apiLayers.length > 0) {
+                    return apiLayers.map((layer: any, idx: number) => {
+                      const active = layer.active !== false && layer.status !== "inactive";
+                      return (
+                        <div key={layer.layer_id ?? idx} className="flex items-center gap-2.5">
+                          <div style={{
+                            width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                            background: active ? (layer.status === "red" ? '#c04444' : layer.status === "amber" ? '#C4A24E' : '#4D5741') : 'var(--border-soft)',
+                            boxShadow: active ? '0 0 4px rgba(77,87,65,0.30)' : 'none',
+                            transition: 'all 0.3s ease',
+                          }} />
+                          <span style={{ fontSize: 12, color: active ? 'var(--ink-mid)' : 'var(--ink-faint)', fontWeight: active ? 500 : 400 }}>
+                            {layer.name}
+                          </span>
+                        </div>
+                      );
+                    });
+                  }
+                  return HALLUCINATION_LAYERS.map((layer, idx) => {
+                    const active = hallucinationLayerActive(idx);
+                    return (
+                      <div key={idx} className="flex items-center gap-2.5">
+                        <div style={{
+                          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                          background: active ? '#4D5741' : 'var(--border-soft)',
+                          boxShadow: active ? '0 0 4px rgba(77,87,65,0.30)' : 'none',
+                          transition: 'all 0.3s ease',
+                        }} />
+                        <span style={{ fontSize: 12, color: active ? 'var(--ink-mid)' : 'var(--ink-faint)', fontWeight: active ? 500 : 400 }}>
+                          {layer}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
 
@@ -1754,56 +1846,6 @@ export default function SOWGenerateWizardPage() {
         )}
       </AnimatePresence>
 
-      {/* ═══════════════════════════════════
-          STEP COMPLETE MODAL
-          ═══════════════════════════════════ */}
-      {showStepCompleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
-          onClick={() => setShowStepCompleteModal(false)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 400, damping: 25 }}
-            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="relative flex flex-col items-center text-center px-8 py-8">
-              <button
-                onClick={() => setShowStepCompleteModal(false)}
-                className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
-                style={{ background: "linear-gradient(135deg, #A67763, #886151)" }}>
-                <CheckCircle2 className="w-7 h-7 text-white" />
-              </div>
-              <h3 className="text-[16px] font-semibold text-gray-900 mb-1">
-                Step {currentStep + 1} Complete
-              </h3>
-              <p className="text-[13px] text-gray-500 mb-1">
-                {STEPS[currentStep].label}
-              </p>
-              <p className="text-[12px] text-gray-400 mb-6">
-                Moving to: <span className="font-medium text-gray-600">{currentStep + 1 < STEPS.length ? STEPS[currentStep + 1].label : "Review"}</span>
-              </p>
-              <button
-                onClick={handleConfirmNextStep}
-                className="flex items-center gap-2 rounded-xl text-white text-[13px] font-medium px-6 py-2.5 transition-all hover:-translate-y-0.5"
-                style={{
-                  background: "linear-gradient(135deg, #A67763, #886151)",
-                  boxShadow: "0 4px 12px rgba(166,119,99,0.3)",
-                }}
-              >
-                Continue to {currentStep + 1 < STEPS.length ? `Step ${currentStep + 2}` : "Review"} <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
 
     </motion.div>
   );
@@ -4535,93 +4577,10 @@ function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComple
 }) {
   const onBlur = (field: string) => () => blurField?.(field);
 
-  // Use API confidence if available, otherwise fall back to local
-  const apiConfidence = reviewSummaryData?.confidence_score ?? null;
-  const displayConfidence = apiConfidence ?? aiConfidence;
-  const confidenceStatus = reviewSummaryData?.confidence_status ?? (displayConfidence >= 90 ? "high" : displayConfidence >= 60 ? "medium" : "low");
-  const canGenerate = reviewSummaryData?.can_generate ?? displayConfidence >= 60;
-  const blockingErrors: string[] = reviewSummaryData?.blocking_errors ?? [];
   const apiStepIndicators: Record<string, string> = reviewSummaryData?.step_indicators ?? {};
-  const hallucinationLayers: any[] = reviewSummaryData?.hallucination_layers ?? [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
-        Review your inputs, assign approvers, and generate the SOW. All mandatory steps must be complete before generation.
-      </p>
-
-      {/* API Confidence Score */}
-      {reviewSummaryLoading ? (
-        <div className="flex items-center gap-2 rounded-xl px-4 py-3 bg-gray-50 border border-gray-100">
-          <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-          <span className="text-[12px] text-gray-500">Loading review summary from API...</span>
-        </div>
-      ) : apiConfidence !== null ? (
-        <div className="rounded-xl px-5 py-4 border" style={{
-          background: confidenceStatus === "high" ? "rgba(77,87,65,0.04)" : confidenceStatus === "medium" ? "rgba(166,119,99,0.04)" : "rgba(192,68,68,0.04)",
-          borderColor: confidenceStatus === "high" ? "rgba(77,87,65,0.15)" : confidenceStatus === "medium" ? "rgba(166,119,99,0.15)" : "rgba(192,68,68,0.15)",
-        }}>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[13px] font-semibold" style={{ color: confidenceStatus === "high" ? "#4D5741" : confidenceStatus === "medium" ? "#A67763" : "#c04444" }}>
-              API Confidence Score
-            </span>
-            <span className="text-[22px] font-bold" style={{ color: confidenceStatus === "high" ? "#4D5741" : confidenceStatus === "medium" ? "#A67763" : "#c04444" }}>
-              {displayConfidence}%
-            </span>
-          </div>
-          <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-500" style={{
-              width: `${displayConfidence}%`,
-              background: confidenceStatus === "high" ? "#4D5741" : confidenceStatus === "medium" ? "#A67763" : "#c04444",
-            }} />
-          </div>
-          {reviewSummaryData?.confidence_advisory && (
-            <p className="text-[11px] mt-2" style={{ color: 'var(--ink-muted)' }}>{reviewSummaryData.confidence_advisory}</p>
-          )}
-          {!canGenerate && (
-            <p className="text-[11px] mt-1 font-semibold text-red-500">Generation blocked — confidence too low or missing mandatory steps.</p>
-          )}
-        </div>
-      ) : null}
-
-      {/* Blocking errors from API */}
-      {blockingErrors.length > 0 && (
-        <div className="rounded-xl px-4 py-3 bg-red-50 border border-red-100">
-          <p className="text-[12px] font-semibold text-red-600 mb-1">Blocking Issues</p>
-          {blockingErrors.map((err, i) => (
-            <p key={i} className="text-[11px] text-red-500">• {err}</p>
-          ))}
-        </div>
-      )}
-
-      {/* Hallucination Layers from API */}
-      {hallucinationLayers.length > 0 && (
-        <>
-          <SectionHeading>Hallucination Prevention Layers</SectionHeading>
-          <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-soft)' }}>
-            {hallucinationLayers.map((layer: any, idx: number) => (
-              <div key={layer.layer_id ?? idx} className="flex items-center" style={{
-                padding: '8px 16px',
-                background: idx % 2 === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(249,245,241,0.25)',
-                borderBottom: idx < hallucinationLayers.length - 1 ? '1px solid var(--border-hair)' : 'none',
-                gap: 10,
-              }}>
-                <div className="shrink-0" style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: layer.status === "green" ? "#4D5741" : layer.status === "amber" ? "#C4A24E" : layer.status === "red" ? "#c04444" : "#ccc",
-                }} />
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-mid)' }}>{layer.name}</span>
-                <span className="ml-auto text-[10px] font-semibold" style={{
-                  color: layer.status === "green" ? "#4D5741" : layer.status === "amber" ? "#C4A24E" : layer.status === "red" ? "#c04444" : "#999",
-                }}>
-                  {layer.active ? (layer.status === "green" ? "PASSED" : layer.status === "amber" ? "WARNING" : "FAILED") : "INACTIVE"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
       {/* Approvers */}
       <SectionHeading>Approvers</SectionHeading>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4742,5 +4701,13 @@ function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComple
         ))}
       </div>
     </div>
+  );
+}
+
+export default function SOWGenerateWizardPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <SOWGenerateWizardPageInner />
+    </React.Suspense>
   );
 }

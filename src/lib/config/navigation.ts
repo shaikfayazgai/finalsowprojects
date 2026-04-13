@@ -24,6 +24,9 @@ import {
   UsersRound,
   BarChart3,
   Bell,
+  Inbox,
+  ClipboardList,
+  LineChart,
   Mail,
   type LucideIcon,
 } from "lucide-react";
@@ -72,7 +75,6 @@ export const enterpriseNav: ModuleConfig = {
       items: [
         { label: "SOW Repository", href: "/enterprise/sow", icon: FileText },
         { label: "Approval Pipeline", href: "/enterprise/sow/approval", icon: ClipboardCheck },
-        { label: "Archive", href: "/enterprise/sow/archive", icon: History },
       ],
     },
     /* ─── Planning ─── */
@@ -111,23 +113,6 @@ export const enterpriseNav: ModuleConfig = {
       title: "Organization",
       items: [
         { label: "Settings", href: "/enterprise/settings", icon: Settings },
-      ],
-    },
-    {
-      title: "Analytics & Intelligence",
-      items: [
-        { label: "Workforce", href: "/enterprise/analytics", icon: BarChart3 },
-        { label: "Economic", href: "/enterprise/analytics/economic", icon: TrendingUp },
-        { label: "Governance & Risk", href: "/enterprise/analytics/governance", icon: Shield },
-        { label: "Self-service", href: "/enterprise/analytics/reports", icon: PieChart },
-      ],
-    },
-    /* ─── Audit ─── */
-    {
-      title: "Audit",
-      items: [
-        { label: "Audit Log", href: "/enterprise/audit", icon: ScrollText },
-        { label: "Notifications", href: "/enterprise/notifications", icon: Bell },
       ],
     },
   ],
@@ -206,6 +191,43 @@ export const mentorNav: ModuleConfig = {
     {
       items: [
         { label: "Settings", href: "/mentor/settings", icon: Settings },
+      ],
+    },
+  ],
+};
+
+export const reviewerNav: ModuleConfig = {
+  id: "reviewer",
+  name: "Reviewer Workspace",
+  shortName: "Reviewer",
+  basePath: "/enterprise/reviewer",
+  accentColor: "teal",
+  sections: [
+    {
+      items: [
+        { label: "Dashboard", href: "/enterprise/reviewer", icon: LayoutDashboard },
+      ],
+    },
+    {
+      title: "Active Work",
+      items: [
+        { label: "Review Queue", href: "/enterprise/reviewer/review-queue", icon: ListChecks },
+        { label: "Task Monitor", href: "/enterprise/reviewer/task-monitor", icon: ClipboardList },
+        { label: "Q&A Inbox", href: "/enterprise/reviewer/qa-inbox", icon: Inbox },
+        { label: "Notifications", href: "/enterprise/reviewer/notifications", icon: Bell },
+      ],
+    },
+    {
+      title: "Records",
+      items: [
+        { label: "Review History", href: "/enterprise/reviewer/review-history", icon: History },
+        { label: "Mentoring Log", href: "/enterprise/reviewer/mentoring-log", icon: GraduationCap },
+      ],
+    },
+    {
+      title: "Performance",
+      items: [
+        { label: "My Metrics", href: "/enterprise/reviewer/my-metrics", icon: LineChart },
       ],
     },
   ],
@@ -291,4 +313,4 @@ export const adminNav: ModuleConfig = {
   ],
 };
 
-export const allModules = [enterpriseNav, contributorNav, mentorNav, analyticsNav, adminNav] as const;
+export const allModules = [enterpriseNav, contributorNav, mentorNav, reviewerNav, analyticsNav, adminNav] as const;

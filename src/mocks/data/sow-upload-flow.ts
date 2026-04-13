@@ -189,3 +189,97 @@ export const mockPreviewMetrics = {
   hallucinationFlags: 0,
   completeness: 92,
 };
+
+/* ══════════════════════════════════════════════
+   Mock — Generated SOW Sections (10 sections)
+   ══════════════════════════════════════════════ */
+
+export const mockGeneratedSowSections: { title: string; body: string }[] = [
+  {
+    title: "1. Project Overview",
+    body: "This Statement of Work defines the scope, deliverables, and commercial terms for the modernisation of the enterprise resource planning system. The project aims to reduce operational costs by 30% within 18 months of deployment through automated financial workflows and real-time analytics.",
+  },
+  {
+    title: "2. Functional Requirements",
+    body: "Core modules include General Ledger with multi-currency support, Accounts Payable automation with three-way matching, real-time financial dashboards, budget planning with variance analysis, and cross-entity consolidation.",
+  },
+  {
+    title: "3. Delivery Scope",
+    body: "Full-stack development including frontend, backend, and database layers. Cloud deployment on AWS (ap-south-1). Go-live support included with 30-day hypercare followed by T&M support.",
+  },
+  {
+    title: "4. Technical Architecture",
+    body: "Microservices deployed on AWS EKS with PostgreSQL (Aurora), Redis for caching, and S3 for document storage. Event-driven workflows via EventBridge. CI/CD via GitHub Actions with blue/green deployments.",
+  },
+  {
+    title: "5. Timeline & Milestones",
+    body: "M1 — Discovery & design (6 weeks). M2 — Core module build (14 weeks). M3 — Integration, UAT and hypercare (6 weeks). Total engagement: 26 weeks from kick-off.",
+  },
+  {
+    title: "6. Team Composition",
+    body: "1 Engagement Lead, 1 Solution Architect, 4 Senior Engineers, 2 QA Engineers, 1 DevOps Engineer, and 1 Business Analyst. Rate card applied per role as per Annexure A.",
+  },
+  {
+    title: "7. Budget & Payment Terms",
+    body: "Fixed price engagement at ₹2,40,00,000. Payment schedule: 35% on kick-off (M1), 35% on development completion (M2), 30% on UAT sign-off (M3). Net-15 payment terms via Razorpay.",
+  },
+  {
+    title: "8. Governance & Compliance",
+    body: "Bi-weekly steering committee meetings. Monthly executive reviews. ISO 27001 and SOC 2 Type II compliance maintained throughout. Full audit trail for every AI-assisted decision.",
+  },
+  {
+    title: "9. Risk & Change Management",
+    body: "Change requests follow a threshold-based CR process — minor changes within 5% contingency, larger changes require formal CR with impact assessment. All risks tracked in a shared RAID log.",
+  },
+  {
+    title: "10. Commercial & Legal",
+    body: "Client owns all custom IP and source code. GlimmoraTeam retains framework-level utilities under a non-exclusive license. Governing law: India. Arbitration venue: Mumbai. 90-day warranty post go-live.",
+  },
+];
+
+/* ══════════════════════════════════════════════
+   Mock — Risk Assessment Factors
+   ══════════════════════════════════════════════ */
+
+export const mockRiskAssessment = {
+  riskLevel: "Low",
+  riskScore: 22,
+  factors: [
+    { factor: "Completeness",   weight: "30%", score: 92 },
+    { factor: "Confidence",     weight: "25%", score: 89 },
+    { factor: "Compliance",     weight: "25%", score: 95 },
+    { factor: "Pattern Match",  weight: "20%", score: 88 },
+  ],
+};
+
+/* ══════════════════════════════════════════════
+   Mock — Source Traceability
+   ══════════════════════════════════════════════ */
+
+export const mockSourceTraceability: { section: string; source: string }[] = [
+  { section: "Project Overview",        source: "Extracted (p.3)" },
+  { section: "Functional Requirements", source: "Extracted (p.8)" },
+  { section: "Delivery Scope",          source: "Extracted (p.13)" },
+  { section: "Technical Architecture",  source: "Commercial Details §3" },
+  { section: "Timeline & Milestones",   source: "Commercial Details §4" },
+  { section: "Team Composition",        source: "Commercial Details §4" },
+  { section: "Budget & Payment Terms",  source: "Commercial Details §5" },
+  { section: "Governance & Compliance", source: "Commercial Details §6" },
+  { section: "Risk & Change Management",source: "Commercial Details §5" },
+  { section: "Commercial & Legal",      source: "Commercial Details §7" },
+];
+
+/* ══════════════════════════════════════════════
+   Mock — 8-Layer Hallucination Analysis
+   ══════════════════════════════════════════════ */
+
+export const mockGenerationHallucinationLayers = [
+  { layer: 1, name: "Input Validation",    status: "passed",  details: "All 10 wizard parameters validated against schema." },
+  { layer: 2, name: "Template Locking",    status: "passed",  details: "Enterprise template clauses locked — no structural deviation." },
+  { layer: 3, name: "Clause Library",      status: "passed",  details: "14 clauses sourced from vetted library. 1 custom clause flagged for review." },
+  { layer: 4, name: "Completeness Checks", status: "passed",  details: "All 10 required sections present and populated." },
+  { layer: 5, name: "Confidence Scoring",  status: "passed",  details: "All sections above 85% threshold. Lowest: 87% (Technical Architecture)." },
+  { layer: 6, name: "Pattern Matching",    status: "passed",  details: "SOW structure matches 94% of enterprise baseline patterns." },
+  { layer: 7, name: "Human Approval",      status: "warning", details: "Pending human review gate before finalisation." },
+  { layer: 8, name: "Audit Logging",       status: "passed",  details: "47 AI decisions logged with full provenance chain." },
+];

@@ -13,10 +13,14 @@ import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { StatusBanner } from "@/components/enterprise/sow/StatusBanner";
 import { SowBadge, riskVariant } from "@/components/enterprise/sow/SowBadge";
-import { mockPreviewMetrics } from "@/mocks/data/sow-upload-flow";
-import { mockHallucinationLayers } from "@/mocks/data/enterprise-sow-detail";
+import {
+  mockPreviewMetrics,
+  mockGeneratedSowSections,
+  mockRiskAssessment,
+  mockSourceTraceability,
+  mockGenerationHallucinationLayers,
+} from "@/mocks/data/sow-upload-flow";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { useGenerationStatus, useGenerateManualSOW, useHallucinationLayers } from "@/lib/hooks/use-manual-sow";
 
 /* ── Generation stages ── */
 const GEN_STAGES = [
@@ -35,16 +39,124 @@ const TABS = [
 ] as const;
 type TabKey = typeof TABS[number]["key"];
 
+/* ═══ Read-only detail row ═══ */
+function ReadOnlyRow({ label, value }: { label: string; value: React.ReactNode }) {
+  const isEmpty = value == null || value === "" || (Array.isArray(value) && value.length === 0);
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</p>
+      <div className={cn(
+        "rounded-xl px-3.5 py-2.5 text-[12.5px] border border-gray-100 bg-gray-50/60 min-h-[38px]",
+        isEmpty ? "text-gray-300" : "text-gray-700",
+      )}>
+        {isEmpty ? "—" : (Array.isArray(value) ? value.join(", ") : value)}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ Read-only card for a section ═══ */
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="card-parchment px-5 py-4">
+      <p className="text-[11px] font-bold uppercase tracking-widest text-brown-600 mb-3">{title}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{children}</div>
+    </div>
+  );
+}
+
+/* ═══ Full read-only commercial-details preview ═══ */
+function ReadOnlyDetailsPreview({ details }: { details: any }) {
+  const bc = details?.businessContext ?? {};
+  const ds = details?.deliveryScope ?? {};
+  const ti = details?.techIntegrations ?? {};
+  const tt = details?.timelineTeam ?? {};
+  const br = details?.budgetRisk ?? {};
+  const gv = details?.governance ?? {};
+  const cl = details?.commercialLegal ?? {};
+
+  const budgetDisplay =
+    br.budgetMinimum || br.budgetMaximum
+      ? `${br.currency ?? "USD"} ${Number(br.budgetMinimum ?? 0).toLocaleString()} – ${Number(br.budgetMaximum ?? 0).toLocaleString()}`
+      : "";
+
+  return (
+    <div className="space-y-4">
+      <SectionCard title="Business Context & Vision">
+        <ReadOnlyRow label="Project Vision" value={bc.projectVision} />
+        <ReadOnlyRow label="Business Criticality" value={bc.businessCriticality} />
+        <ReadOnlyRow label="Current State" value={bc.currentState} />
+        <ReadOnlyRow label="Desired Future State" value={bc.desiredFutureState} />
+        <ReadOnlyRow label="Definition of Success" value={bc.definitionOfSuccess} />
+      </SectionCard>
+
+      <SectionCard title="Delivery Scope Boundary">
+        <ReadOnlyRow label="Development Scope" value={ds.developmentScope} />
+        <ReadOnlyRow label="UI/UX Design Scope" value={ds.uiuxDesignScope} />
+        <ReadOnlyRow label="Deployment Scope" value={ds.deploymentScope} />
+        <ReadOnlyRow label="Go-Live Scope" value={ds.goLiveScope} />
+        <ReadOnlyRow label="Data Migration Scope" value={ds.dataMigrationScope} />
+      </SectionCard>
+
+      <SectionCard title="Technical Architecture & Integrations">
+        <ReadOnlyRow label="Technology Stack" value={ti.technologyStack} />
+        <ReadOnlyRow label="Scalability Requirements" value={ti.scalabilityRequirements} />
+        <ReadOnlyRow label="User Management Scope" value={ti.userManagementScope} />
+        <ReadOnlyRow label="SSO Required" value={ti.ssoRequired ? "Yes" : "No"} />
+      </SectionCard>
+
+      <SectionCard title="Timeline, Team & Testing">
+        <ReadOnlyRow label="Start Date" value={tt.startDate} />
+        <ReadOnlyRow label="Target End Date" value={tt.targetEndDate} />
+        <ReadOnlyRow label="Estimated Team Size" value={tt.estimatedTeamSize} />
+        <ReadOnlyRow label="Work Model" value={tt.workModel} />
+        <ReadOnlyRow label="UAT Sign-off Authority" value={tt.uatSignOffAuthority} />
+      </SectionCard>
+
+      <SectionCard title="Budget & Risk">
+        <ReadOnlyRow label="Budget Range" value={budgetDisplay} />
+        <ReadOnlyRow label="Pricing Model" value={br.pricingModel} />
+        <ReadOnlyRow label="Contingency" value={br.contingencyPercent ? `${br.contingencyPercent}%` : ""} />
+      </SectionCard>
+
+      <SectionCard title="Governance & Compliance">
+        <ReadOnlyRow label="Non-Discrimination Confirmed" value={gv.nonDiscriminationConfirmed ? "Yes" : "No"} />
+        <ReadOnlyRow label="Data Sensitivity Level" value={gv.dataSensitivityLevel} />
+        <ReadOnlyRow label="Personal Data Involved" value={gv.personalDataInvolved} />
+        <ReadOnlyRow label="Data Residency" value={gv.dataResidency} />
+        <ReadOnlyRow label="Regulatory Frameworks" value={gv.regulatoryFrameworks} />
+      </SectionCard>
+
+      <SectionCard title="Commercial & Legal">
+        <ReadOnlyRow label="IP Ownership" value={cl.ipOwnership} />
+        <ReadOnlyRow label="Source Code Ownership" value={cl.sourceCodeOwnership} />
+        <ReadOnlyRow label="Third-Party Costs" value={cl.thirdPartyCosts} />
+        <ReadOnlyRow label="Change Request Process" value={cl.changeRequestProcess} />
+      </SectionCard>
+    </div>
+  );
+}
+
 /* ═══ PAGE ═══ */
 
-export default function GeneratePreviewPage() {
+export default function GeneratePreviewPage({ sowId: sowIdProp }: { sowId?: string | null }) {
   const router = useRouter();
   const store = useSOWUploadStore();
 
-  const [genPhase, setGenPhase] = React.useState<"idle" | "generating" | "complete">(store.generationState);
+  /* Always start fresh on page mount.
+     - genPhase starts as "generating" so the page immediately shows the in-progress state
+     - genMinimized starts as `false` so the full-screen generating modal auto-opens
+       the moment the user lands on the page. The left-side floating pill only appears
+       once the user closes/minimizes the modal.
+     - genReady flips to `true` once the timers finish, enabling the manual
+       "Continue to Review" action. We never auto-transition to the complete view. */
+  const [genPhase, setGenPhase] = React.useState<"idle" | "generating" | "complete">("generating");
   const [genStageIdx, setGenStageIdx] = React.useState(-1);
+  const [genMinimized, setGenMinimized] = React.useState(false);
+  const [genReady, setGenReady] = React.useState(false);
   const [showSubmitModal, setShowSubmitModal] = React.useState(false);
   const [showRequestChangesModal, setShowRequestChangesModal] = React.useState(false);
+  const [submittedChangeNotes, setSubmittedChangeNotes] = React.useState("");
   const [showRejectModal, setShowRejectModal] = React.useState(false);
   const [requestChangesText, setRequestChangesText] = React.useState("");
   const [submitted, setSubmitted] = React.useState(false);
@@ -53,78 +165,57 @@ export default function GeneratePreviewPage() {
   const [processingStageIdx, setProcessingStageIdx] = React.useState(-1);
   const [activeTab, setActiveTab] = React.useState<TabKey>("sow");
 
-  const sowId = store.uploadedSowId;
-  const generateMutation = useGenerateManualSOW(sowId);
-  const { data: genStatusRes } = useGenerationStatus(sowId, genPhase === "generating");
-  const { data: layersRes } = useHallucinationLayers(sowId);
+  const sowId = sowIdProp ?? store.uploadedSowId;
 
   type HallucinationLayer = { layer?: number | string; name?: string; status?: string; details?: string };
 
-  /* Robustly extract generation status */
-  const genStatusPayload = (genStatusRes as unknown as Record<string, unknown> | null);
-  const genStatusData = (genStatusPayload?.data ?? genStatusPayload) as Record<string, unknown> | null;
-  const apiGenStatus = (genStatusData?.status as string | undefined);
-
-  /* Robustly extract hallucination layers */
-  const layersPayload = (layersRes as unknown as Record<string, unknown> | null);
-  const layersData = (layersPayload?.data ?? layersPayload) as Record<string, unknown> | null;
-  const apiLayers = (
-    layersData?.layers ?? layersData?.hallucination_layers ?? layersData?.hallucinationLayers
-    ?? (Array.isArray(layersData) ? layersData : null)
-  ) as HallucinationLayer[] | null;
-
-  /* Extract metrics from generation status if available */
-  const apiMetrics = genStatusData ? {
-    confidence: Number(genStatusData.confidence ?? genStatusData.ai_confidence ?? genStatusData.aiConfidence ?? 0),
-    riskScore: Number(genStatusData.riskScore ?? genStatusData.risk_score ?? 0),
-    hallucinationFlags: Number(genStatusData.hallucinationFlags ?? genStatusData.hallucination_flags ?? 0),
-    completeness: Number(genStatusData.completeness ?? genStatusData.completeness_score ?? 0),
-  } : null;
-  const hasApiMetrics = apiMetrics && (apiMetrics.confidence > 0 || apiMetrics.completeness > 0);
-  const metrics = hasApiMetrics ? apiMetrics : mockPreviewMetrics;
-
-  const hallucinationLayers: HallucinationLayer[] = (apiLayers && apiLayers.length > 0 ? apiLayers : mockHallucinationLayers["sow-001"] ?? []) as HallucinationLayer[];
+  const metrics = mockPreviewMetrics;
+  const riskData = mockRiskAssessment;
+  const hallucinationLayers: HallucinationLayer[] = mockGenerationHallucinationLayers as HallucinationLayer[];
   const hasRedLayers = hallucinationLayers.some((l) => l.status === "failed");
   const isStale = store.previewState?.isStaleDocument || false;
   const canSubmit = genPhase === "complete" && !hasRedLayers && !isStale;
 
-  /* When API signals completion, advance local phase */
-  React.useEffect(() => {
-    if ((apiGenStatus === "completed" || apiGenStatus === "complete") && genPhase !== "complete") {
-      setGenStageIdx(GEN_STAGES.length - 1);
-      setGenPhase("complete");
-      store.setGenerationState("complete");
-      store.setPreviewState({ qualityMetrics: metrics, isStaleDocument: false, hardBlocks: [] });
-      store.setFlowStep(7);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiGenStatus]);
-
-  const startGeneration = () => {
+  const startGeneration = React.useCallback(() => {
     setGenPhase("generating");
+    setGenStageIdx(-1);
+    setGenReady(false);
     GEN_STAGES.forEach((_, i) => {
       setTimeout(() => setGenStageIdx(i), (i + 1) * 800);
     });
-    /* Trigger real generation */
-    if (sowId) {
-      generateMutation.mutate({});
-    } else {
-      /* Fallback: advance to complete after animation if no real SOW */
-      setTimeout(() => {
-        setGenPhase("complete");
-        store.setGenerationState("complete");
-        store.setPreviewState({
-          qualityMetrics: metrics,
-          isStaleDocument: false,
-          hardBlocks: hasRedLayers ? ["Hallucination layer failed"] : [],
-        });
-        store.setFlowStep(7);
-      }, (GEN_STAGES.length + 1) * 800);
-    }
-  };
+    /* When the background generation finishes, mark it ready — DO NOT auto-advance
+       to the complete/review view. The user must click "Continue to Review". */
+    setTimeout(() => {
+      setGenReady(true);
+      store.setGenerationState("complete");
+      store.setPreviewState({
+        qualityMetrics: metrics,
+        isStaleDocument: false,
+        hardBlocks: hasRedLayers ? ["Hallucination layer failed"] : [],
+      });
+    }, (GEN_STAGES.length + 1) * 800);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  /* Mount-only initializer — guarded against Strict Mode double-invoke */
+  const didInitRef = React.useRef(false);
   React.useEffect(() => {
-    if (genPhase === "idle") startGeneration();
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    /* Reset any stale state from a previous visit, then kick off generation */
+    store.setGenerationState("idle");
+    GEN_STAGES.forEach((_, i) => {
+      setTimeout(() => setGenStageIdx(i), (i + 1) * 800);
+    });
+    setTimeout(() => {
+      setGenReady(true);
+      store.setGenerationState("complete");
+      store.setPreviewState({
+        qualityMetrics: metrics,
+        isStaleDocument: false,
+        hardBlocks: hasRedLayers ? ["Hallucination layer failed"] : [],
+      });
+    }, (GEN_STAGES.length + 1) * 800);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -145,22 +236,26 @@ export default function GeneratePreviewPage() {
   ];
 
   const handleSubmitRequest = () => {
+    setSubmittedChangeNotes(requestChangesText);
     setShowRequestChangesModal(false);
     setRequestChangesText("");
     setProcessingStageIdx(-1);
     setShowProcessingModal(true);
+
+    // Start the processing animation
     PROCESSING_STAGES.forEach((_, i) => {
       setTimeout(() => setProcessingStageIdx(i), (i + 1) * 700);
     });
+    const animDuration = (PROCESSING_STAGES.length + 1) * 700;
     setTimeout(() => {
       setShowProcessingModal(false);
       setShowImprovementsModal(true);
-    }, (PROCESSING_STAGES.length + 1) * 700);
+    }, animDuration);
   };
 
   const handleSubmit = () => {
     setSubmitted(true);
-    setTimeout(() => router.push("/enterprise/sow/sow-003"), 2000);
+    /* No auto-redirect — user proceeds manually via the Continue button after submission */
   };
 
   /* ── Metric card ── */
@@ -194,9 +289,28 @@ export default function GeneratePreviewPage() {
         </p>
       </motion.div>
 
+      {/* ═══ READ-ONLY DETAILS PREVIEW (visible during generating phase) ═══ */}
+      {genPhase === "generating" && (
+        <motion.div variants={fadeUp} className="mb-6">
+          <ReadOnlyDetailsPreview details={store.commercialDetails} />
+
+          {/* Action bar — only Back to Details on the right-side main content.
+              The forward action (View Progress / Continue to Review) lives in the
+              floating pill at the bottom-left. */}
+          <div className="mt-5 flex items-center justify-start gap-3">
+            <button
+              onClick={() => router.push("/enterprise/sow/upload/details")}
+              className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 px-4 py-2.5 rounded-xl transition-all"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Details
+            </button>
+          </div>
+        </motion.div>
+      )}
+
       {/* ═══ GENERATING MODAL ═══ */}
       <AnimatePresence>
-        {genPhase === "generating" && (
+        {genPhase === "generating" && !genMinimized && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -244,14 +358,12 @@ export default function GeneratePreviewPage() {
                     >
                       <Loader2 className="w-7 h-7 text-white animate-spin" />
                     </div>
-                    {/* Breathing ring */}
                     <motion.div
                       className="absolute inset-0 rounded-2xl"
                       animate={{ scale: [1, 1.22, 1], opacity: [0.5, 0, 0.5] }}
                       transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
                       style={{ border: "2px solid rgba(166,119,99,0.45)" }}
                     />
-                    {/* Outer slow ring */}
                     <motion.div
                       className="absolute inset-0 rounded-2xl"
                       animate={{ scale: [1, 1.45, 1], opacity: [0.2, 0, 0.2] }}
@@ -281,7 +393,6 @@ export default function GeneratePreviewPage() {
                         animate={{ opacity: isDone || isActive ? 1 : 0.28 }}
                         transition={{ duration: 0.35 }}
                       >
-                        {/* Status dot with pulse */}
                         <div className="relative shrink-0 w-3 h-3 flex items-center justify-center">
                           {isActive && (
                             <motion.div
@@ -295,23 +406,14 @@ export default function GeneratePreviewPage() {
                             isDone ? "bg-forest-500" : isActive ? "bg-brown-500" : "bg-gray-300",
                           )} />
                         </div>
-
-                        {/* Label */}
                         <span className={cn(
                           "text-[11px] font-bold tracking-widest uppercase truncate transition-colors duration-300",
                           isDone ? "text-gray-400" : isActive ? "text-gray-900" : "text-gray-400",
                         )}>
                           {stage.label}...
                         </span>
-
-                        {/* Checkmark pop */}
                         {isDone && (
-                          <motion.span
-                            className="ml-auto shrink-0"
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ type: "spring", stiffness: 420, damping: 18 }}
-                          >
+                          <motion.span className="ml-auto shrink-0" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 420, damping: 18 }}>
                             <CheckCircle2 className="w-3.5 h-3.5 text-forest-500" />
                           </motion.span>
                         )}
@@ -326,9 +428,7 @@ export default function GeneratePreviewPage() {
                 {/* ── Progress bar ── */}
                 <div>
                   <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400">
-                      Overall Progress
-                    </span>
+                    <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400">Overall Progress</span>
                     <span className="num-display text-[14px] font-bold" style={{ color: "#A67763" }}>
                       {genStageIdx < 0 ? 0 : Math.round(((genStageIdx + 1) / GEN_STAGES.length) * 100)}%
                     </span>
@@ -343,17 +443,93 @@ export default function GeneratePreviewPage() {
                   </div>
                 </div>
 
-                {/* ── Warning ── */}
-                <div className="flex items-center justify-center gap-2 mt-5">
-                  <div className="w-1 h-1 rounded-full bg-amber-400" />
-                  <p className="text-[11px] text-gray-400">
-                    Please don&apos;t close this page while generating
-                  </p>
-                  <div className="w-1 h-1 rounded-full bg-amber-400" />
-                </div>
+                {/* ── Actions: Wait / Cancel while running · Continue to Review when ready ── */}
+                {genReady ? (
+                  <div className="mt-6">
+                    <button
+                      onClick={() => setGenPhase("complete")}
+                      className="w-full flex items-center justify-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-forest-500 to-teal-600 hover:from-forest-600 hover:to-teal-700 px-4 py-3 rounded-xl transition-all shadow-sm"
+                      style={{ boxShadow: "0 8px 24px rgba(42,96,104,0.30)" }}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Continue to Review
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                    <p className="text-center text-[10px] text-forest-700 mt-3 font-medium">
+                      Generation complete — ready to review the draft.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3 mt-6">
+                      <button
+                        onClick={() => setGenMinimized(true)}
+                        className="flex-1 flex items-center justify-center gap-2 text-[12px] font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 px-4 py-2.5 rounded-xl transition-all"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        Wait — Keep Generating
+                      </button>
+                      <button
+                        onClick={() => { setGenPhase("idle"); setGenStageIdx(-1); store.setGenerationState("idle"); }}
+                        className="flex items-center justify-center gap-2 text-[12px] font-semibold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 px-4 py-2.5 rounded-xl transition-all"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Cancel
+                      </button>
+                    </div>
+
+                    <p className="text-center text-[10px] text-gray-400 mt-3">
+                      You can browse the page while generation runs in the background.
+                    </p>
+                  </>
+                )}
 
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══ FLOATING WIDGET — only visible once the user has minimized the generating modal.
+             While generating → "View Progress" pill (reopens modal)
+             When ready → "Continue to Review" pill (advances to review view) ═══ */}
+      <AnimatePresence>
+        {genPhase === "generating" && genMinimized && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            transition={{ type: "spring", stiffness: 340, damping: 28 }}
+            className="fixed bottom-6 left-[232px] z-40"
+          >
+            {genReady ? (
+              <button
+                onClick={() => setGenPhase("complete")}
+                className="flex items-center gap-3 px-5 py-3 rounded-2xl text-white text-[12px] font-semibold shadow-xl transition-all hover:scale-[1.02]"
+                style={{ background: "linear-gradient(135deg, #2A6068 0%, #1a4049 100%)", boxShadow: "0 8px 32px rgba(42,96,104,0.35)" }}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Continue to Review</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setGenMinimized(false)}
+                className="flex items-center gap-3 px-5 py-3 rounded-2xl text-white text-[12px] font-semibold shadow-xl transition-all hover:scale-[1.02]"
+                style={{ background: "linear-gradient(135deg, #A67763 0%, #7A4F38 100%)", boxShadow: "0 8px 32px rgba(166,119,99,0.40)" }}
+              >
+                <div className="relative">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <motion.div
+                    className="absolute inset-0 rounded-full border border-white/40"
+                    animate={{ scale: [1, 1.6, 1], opacity: [0.6, 0, 0.6] }}
+                    transition={{ duration: 1.8, repeat: Infinity }}
+                  />
+                </div>
+                <span>View Progress</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -383,10 +559,10 @@ export default function GeneratePreviewPage() {
 
           {/* Quality metrics row */}
           <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <MetricCard label="Confidence"          value={`${metrics.confidence}%`}       sub="AI extraction quality" />
-            <MetricCard label="Risk Score"          value={`${metrics.riskScore}/100`}     sub="Lower is better" />
+            <MetricCard label="Confidence"          value={`${Math.round(metrics.confidence)}%`}       sub="AI extraction quality" />
+            <MetricCard label="Risk Score"          value={`${Math.round(metrics.riskScore)}/100`}     sub="Lower is better" />
             <MetricCard label="Hallucination Flags" value={metrics.hallucinationFlags}     sub={metrics.hallucinationFlags === 0 ? "All layers passed" : "Review required"} />
-            <MetricCard label="Completeness"        value={`${metrics.completeness}%`}     sub="Sections covered" />
+            <MetricCard label="Completeness"        value={`${Math.round(metrics.completeness)}%`}     sub="Sections covered" />
           </motion.div>
 
           {/* Tab bar + content */}
@@ -411,74 +587,72 @@ export default function GeneratePreviewPage() {
 
               {activeTab === "sow" && (
                 <div className="space-y-5">
-                  {[
-                    { title: "1. Project Overview", body: "This Statement of Work defines the scope, deliverables, and commercial terms for the modernization of the enterprise resource planning system. The project aims to reduce operational costs by 30% within 18 months of deployment through automated financial workflows and real-time analytics." },
-                    { title: "2. Functional Requirements", body: "Core modules include General Ledger with multi-currency support, Accounts Payable automation with three-way matching, real-time financial dashboards, and budget planning with variance analysis." },
-                    { title: "3. Delivery Scope", body: "Full-stack development including frontend, backend, and database layers. Cloud deployment on AWS (ap-south-1). Go-live support included with 30-day hypercare." },
-                  ].map((sec) => (
-                    <div key={sec.title}>
+                  {mockGeneratedSowSections.map((sec, i) => (
+                    <div key={`${sec.title}-${i}`}>
                       <p className="text-[12px] font-semibold text-gray-700 mb-1.5">{sec.title}</p>
                       <p className="text-[13px] text-gray-500 leading-relaxed">{sec.body}</p>
                     </div>
                   ))}
-                  <p className="text-[11px] text-gray-400 italic">Full document continues — 10 sections total.</p>
                 </div>
               )}
 
               {activeTab === "hallucination" && (
                 <div className="space-y-1.5">
-                  {hallucinationLayers.map((layer) => (
-                    <div key={layer.layer} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors">
-                      {layer.status === "passed"
-                        ? <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" />
-                        : layer.status === "warning"
-                        ? <AlertTriangle className="w-4 h-4 text-gold-500 shrink-0" />
-                        : layer.status === "failed"
-                        ? <Ban className="w-4 h-4 text-red-500 shrink-0" />
-                        : <Eye className="w-4 h-4 text-gray-400 shrink-0" />}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-gray-700">Layer {layer.layer}: {layer.name}</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">{layer.details}</p>
+                  {hallucinationLayers.map((layer: any, idx: number) => {
+                    const layerStatus = layer.status === "green" ? "passed" : layer.status === "amber" ? "warning" : layer.status === "red" ? "failed" : layer.status;
+                    return (
+                      <div key={layer.layer ?? layer.layer_id ?? idx} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors">
+                        {layerStatus === "passed"
+                          ? <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" />
+                          : layerStatus === "warning"
+                          ? <AlertTriangle className="w-4 h-4 text-gold-500 shrink-0" />
+                          : layerStatus === "failed"
+                          ? <Ban className="w-4 h-4 text-red-500 shrink-0" />
+                          : <Eye className="w-4 h-4 text-gray-400 shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium text-gray-700">Layer {layer.layer ?? layer.layer_id ?? idx + 1}: {layer.name}</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">{layer.details ?? (layer.active ? "Active" : "Inactive")}</p>
+                        </div>
+                        <SowBadge variant={layerStatus === "passed" ? "forest" : layerStatus === "warning" ? "gold" : "danger"}>
+                          {layerStatus}
+                        </SowBadge>
                       </div>
-                      <SowBadge variant={layer.status === "passed" ? "forest" : layer.status === "warning" ? "gold" : "danger"}>
-                        {layer.status}
-                      </SowBadge>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
               {activeTab === "risk" && (
                 <div className="space-y-4">
-                  {[
-                    { factor: "Completeness", weight: "30%", score: metrics.completeness },
-                    { factor: "Confidence",   weight: "25%", score: metrics.confidence },
-                    { factor: "Compliance",   weight: "25%", score: 95 },
-                    { factor: "Pattern Match",weight: "20%", score: 88 },
-                  ].map((f) => (
-                    <div key={f.factor} className="flex items-center gap-4">
-                      <span className="text-[12px] text-gray-600 w-28 shrink-0">{f.factor}</span>
-                      <span className="text-[10px] font-medium text-gray-400 w-9 shrink-0">{f.weight}</span>
+                  {riskData.factors.map((f: any) => (
+                    <div key={f.factor ?? f.name} className="flex items-center gap-4">
+                      <span className="text-[12px] text-gray-600 w-28 shrink-0">{f.factor ?? f.name}</span>
+                      <span className="text-[10px] text-gray-400 w-10 shrink-0">{f.weight ?? ""}</span>
                       <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
                         <div className={cn("h-full rounded-full transition-all",
-                          f.score >= 90 ? "bg-forest-500" : f.score >= 70 ? "bg-gold-400" : "bg-red-400",
-                        )} style={{ width: `${f.score}%` }} />
+                          Math.round(f.score ?? 0) >= 90 ? "bg-forest-500" : Math.round(f.score ?? 0) >= 70 ? "bg-gold-400" : "bg-red-400",
+                        )} style={{ width: `${Math.round(f.score ?? 0)}%` }} />
                       </div>
-                      <span className="text-[12px] font-semibold text-gray-700 w-10 text-right tabular-nums">{f.score}%</span>
+                      <span className="text-[12px] font-semibold text-gray-700 w-10 text-right tabular-nums">{Math.round(f.score ?? 0)}%</span>
                     </div>
                   ))}
+                  <div className="mt-3 px-4 py-3 rounded-xl bg-gray-50 border border-gray-100">
+                    <p className="text-[11px] text-gray-500">
+                      Overall Risk Level:{" "}
+                      <span className="font-semibold text-gray-700">{riskData.riskLevel}</span>{" "}
+                      ({riskData.riskScore}/100)
+                    </p>
+                  </div>
                 </div>
               )}
 
               {activeTab === "traceability" && (
                 <div className="space-y-1">
-                  {["Project Overview", "Functional Requirements", "Delivery Scope", "Technical Architecture", "Timeline", "Budget", "Governance", "Commercial & Legal"].map((sec, i) => (
-                    <div key={sec} className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+                  {mockSourceTraceability.map((item, i) => (
+                    <div key={item.section} className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-50 transition-colors">
                       <span className="text-[10px] font-mono text-gray-300 w-6 shrink-0">{String(i + 1).padStart(2, "0")}</span>
-                      <span className="text-[12px] font-medium text-gray-700 flex-1">{sec}</span>
-                      <span className="text-[10px] text-gray-400">
-                        {i < 3 ? `Extracted (p.${i * 5 + 3})` : `Commercial Details §${i - 2}`}
-                      </span>
+                      <span className="text-[12px] font-medium text-gray-700 flex-1">{item.section}</span>
+                      <span className="text-[10px] text-gray-400">{item.source}</span>
                     </div>
                   ))}
                 </div>
@@ -632,7 +806,10 @@ export default function GeneratePreviewPage() {
                   className="text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
                   Cancel
                 </button>
-                <button onClick={() => { setShowRejectModal(false); router.push("/enterprise/sow/upload"); }}
+                <button onClick={() => {
+                    setShowRejectModal(false);
+                    router.push("/enterprise/sow/upload");
+                  }}
                   className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 px-5 py-2.5 rounded-xl transition-all">
                   <RotateCcw className="w-3.5 h-3.5" /> Discard & Regenerate
                 </button>
@@ -688,9 +865,9 @@ export default function GeneratePreviewPage() {
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Quality Snapshot</p>
                       <div className="grid grid-cols-3 gap-2">
                         {[
-                          { label: "Confidence",   value: `${metrics.confidence}%`,   color: "text-brown-600",  bg: "bg-brown-50",  border: "border-brown-100" },
-                          { label: "Risk",         value: `${metrics.riskScore}`,      color: "text-amber-600",  bg: "bg-amber-50",  border: "border-amber-100" },
-                          { label: "Completeness", value: `${metrics.completeness}%`,  color: "text-teal-700",   bg: "bg-teal-50",   border: "border-teal-100"  },
+                          { label: "Confidence",   value: `${Math.round(metrics.confidence)}%`,   color: "text-brown-600",  bg: "bg-brown-50",  border: "border-brown-100" },
+                          { label: "Risk",         value: `${Math.round(metrics.riskScore)}`,      color: "text-amber-600",  bg: "bg-amber-50",  border: "border-amber-100" },
+                          { label: "Completeness", value: `${Math.round(metrics.completeness)}%`,  color: "text-teal-700",   bg: "bg-teal-50",   border: "border-teal-100"  },
                         ].map((m) => (
                           <div key={m.label} className={cn("rounded-xl border px-2.5 py-2.5 text-center", m.bg, m.border)}>
                             <p className={cn("num-display text-[18px] leading-none font-bold", m.color)}>{m.value}</p>
@@ -970,8 +1147,8 @@ export default function GeneratePreviewPage() {
 
                 <div className="flex items-center gap-2 mt-3.5 relative z-10">
                   {[
-                    { label: "Sections Updated", value: "5" },
-                    { label: "Clauses Revised",  value: "12" },
+                    { label: "Sections Updated", value: String(STATIC_IMPROVEMENTS.length) },
+                    { label: "Clauses Revised",  value: String(STATIC_IMPROVEMENTS.length) },
                     { label: "Compliance",        value: "✓ Pass" },
                   ].map((s) => (
                     <div key={s.label} className="flex-1 bg-white/15 rounded-lg px-2.5 py-1.5 border border-white/20">
@@ -985,11 +1162,26 @@ export default function GeneratePreviewPage() {
               {/* ── Improvements list ── */}
               <div className="px-4 pt-4 pb-3 space-y-1.5">
                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Improved Areas</p>
+                {submittedChangeNotes && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border border-amber-100 bg-amber-50/60">
+                    <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border bg-amber-50 border-amber-200 mt-0.5">
+                      <MessageSquareDiff className="w-3 h-3 text-amber-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Requested Changes</p>
+                      <p className="text-[11px] text-gray-600 leading-relaxed mt-0.5">{submittedChangeNotes}</p>
+                    </div>
+                    <CheckCircle2 className="w-3 h-3 text-forest-400 shrink-0 mt-0.5" />
+                  </motion.div>
+                )}
                 {STATIC_IMPROVEMENTS.map((item, i) => {
                   const Icon = item.icon;
                   return (
                     <motion.div
-                      key={item.section}
+                      key={`${item.section}-${i}`}
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.06 }}

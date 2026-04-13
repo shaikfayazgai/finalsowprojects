@@ -7,13 +7,12 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  CheckCircle2,
   Edit3,
   X,
   FileText,
-  Clock,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Save,
   Sparkles,
   ListChecks,
@@ -296,6 +295,14 @@ export default function ParsedReviewPage() {
   const [editingItem, setEditingItem] = React.useState<string | null>(null);
   const [editText, setEditText] = React.useState("");
 
+  /* Document viewer pagination */
+  const TOTAL_DOC_PAGES = 28;
+  const PAGES_PER_VIEW = 4;
+  const totalDocPaginatedPages = Math.ceil(TOTAL_DOC_PAGES / PAGES_PER_VIEW);
+  const [docPage, setDocPage] = React.useState(1);
+  const docPagesStart = (docPage - 1) * PAGES_PER_VIEW + 1;
+  const docPagesEnd = Math.min(docPage * PAGES_PER_VIEW, TOTAL_DOC_PAGES);
+
   /* Sync if API data loads after initial render */
   React.useEffect(() => {
     if (apiItems && (apiItems as unknown[]).length > 0) {
@@ -451,9 +458,9 @@ export default function ParsedReviewPage() {
 
       {/* Main Split Panel */}
       <motion.div variants={fadeUp}>
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
           {/* LEFT: Document Viewer */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <div
               className="rounded-2xl sticky top-6 overflow-hidden"
               style={{
@@ -462,6 +469,7 @@ export default function ParsedReviewPage() {
                 borderRadius: 12,
               }}
             >
+              {/* Header */}
               <div
                 className="flex items-center gap-2.5 px-5 py-3.5"
                 style={{ borderBottom: "1px solid var(--border-soft)" }}
@@ -469,7 +477,7 @@ export default function ParsedReviewPage() {
                 <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brown-400 to-brown-500 flex items-center justify-center">
                   <FileText className="w-3.5 h-3.5 text-white" />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <h3
                     className="text-[13px] font-semibold"
                     style={{ color: "var(--ink)" }}
@@ -477,69 +485,146 @@ export default function ParsedReviewPage() {
                     Acme_Corp_SOW_v2.1.pdf
                   </h3>
                   <p className="text-[11px]" style={{ color: "var(--ink-faint)" }}>
-                    28 pages - 2.4 MB
+                    {TOTAL_DOC_PAGES} pages · 2.4 MB · Showing pages {docPagesStart}–{docPagesEnd}
                   </p>
                 </div>
               </div>
-              <ScrollArea className="h-[600px]">
+
+              {/* Document content */}
+              <ScrollArea className="h-[580px]">
                 <div className="p-5 space-y-5">
-                  {/* Simulated document content */}
-                  {Array.from({ length: 8 }).map((_, sectionIdx) => (
-                    <div key={sectionIdx} className="space-y-2.5">
-                      <div
-                        className="h-4 rounded-full"
-                        style={{
-                          background: "var(--border-soft)",
-                          width: `${35 + Math.sin(sectionIdx) * 20}%`,
-                        }}
-                      />
-                      {Array.from({ length: 3 + (sectionIdx % 3) }).map((_, lineIdx) => (
+                  {Array.from({ length: PAGES_PER_VIEW }).map((_, pageOffset) => {
+                    const pageNum = docPagesStart + pageOffset;
+                    if (pageNum > TOTAL_DOC_PAGES) return null;
+                    const sectionIdx = (docPage - 1) * PAGES_PER_VIEW + pageOffset;
+                    return (
+                      <div key={pageNum} className="space-y-2.5">
+                        {/* Page label */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded"
+                            style={{ background: "var(--border-soft)", color: "var(--ink-faint)" }}
+                          >
+                            Page {pageNum}
+                          </span>
+                          <div className="flex-1 h-px" style={{ background: "var(--border-soft)" }} />
+                        </div>
+                        {/* Heading skeleton */}
                         <div
-                          key={lineIdx}
-                          className="h-2.5 rounded-full"
+                          className="h-4 rounded-full"
                           style={{
                             background: "var(--border-soft)",
-                            opacity: 0.4,
-                            width: `${65 + Math.cos(lineIdx + sectionIdx) * 25}%`,
+                            width: `${35 + Math.sin(sectionIdx) * 20}%`,
                           }}
                         />
-                      ))}
-                      {sectionIdx % 3 === 0 && (
-                        <div
-                          className="rounded-lg p-3 mt-2"
-                          style={{
-                            background: "rgba(76, 175, 80, 0.06)",
-                            border: "1px dashed rgba(76, 175, 80, 0.25)",
-                          }}
-                        >
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <Sparkles className="w-3 h-3 text-forest-500" />
-                            <span className="text-[10px] font-bold text-forest-600 uppercase">
-                              AI Extracted
-                            </span>
+                        {/* Line skeletons */}
+                        {Array.from({ length: 3 + (sectionIdx % 3) }).map((_, lineIdx) => (
+                          <div
+                            key={lineIdx}
+                            className="h-2.5 rounded-full"
+                            style={{
+                              background: "var(--border-soft)",
+                              opacity: 0.4,
+                              width: `${65 + Math.cos(lineIdx + sectionIdx) * 25}%`,
+                            }}
+                          />
+                        ))}
+                        {/* AI extracted highlight (every 3rd page) */}
+                        {sectionIdx % 3 === 0 && (
+                          <div
+                            className="rounded-lg p-3 mt-2"
+                            style={{
+                              background: "rgba(76, 175, 80, 0.06)",
+                              border: "1px dashed rgba(76, 175, 80, 0.25)",
+                            }}
+                          >
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <Sparkles className="w-3 h-3 text-forest-500" />
+                              <span className="text-[10px] font-bold text-forest-600 uppercase">
+                                AI Extracted
+                              </span>
+                            </div>
+                            {[1, 2].map((l) => (
+                              <div
+                                key={l}
+                                className="h-2 rounded-full mb-1"
+                                style={{
+                                  background: "var(--border-soft)",
+                                  opacity: 0.5,
+                                  width: `${60 + l * 15}%`,
+                                }}
+                              />
+                            ))}
                           </div>
-                          {[1, 2].map((l) => (
-                            <div
-                              key={l}
-                              className="h-2 rounded-full mb-1"
-                              style={{
-                                background: "var(--border-soft)",
-                                opacity: 0.5,
-                                width: `${60 + l * 15}%`,
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </ScrollArea>
+
+              {/* Pagination controls */}
+              <div
+                className="flex items-center justify-between px-5 py-3"
+                style={{ borderTop: "1px solid var(--border-soft)" }}
+              >
+                <button
+                  onClick={() => setDocPage((p) => Math.max(1, p - 1))}
+                  disabled={docPage === 1}
+                  className={cn(
+                    "flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-all",
+                    docPage === 1
+                      ? "opacity-30 cursor-not-allowed"
+                      : "hover:opacity-80"
+                  )}
+                  style={{ color: "var(--ink-muted)", background: "var(--page-bg)", border: "1px solid var(--border-soft)" }}
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Prev
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalDocPaginatedPages }).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setDocPage(i + 1)}
+                      className={cn(
+                        "w-7 h-7 rounded-lg text-[11px] font-semibold transition-all",
+                        docPage === i + 1
+                          ? "text-white"
+                          : "hover:opacity-80"
+                      )}
+                      style={
+                        docPage === i + 1
+                          ? { background: "var(--color-brown-500)", color: "white" }
+                          : { color: "var(--ink-faint)", background: "var(--page-bg)", border: "1px solid var(--border-soft)" }
+                      }
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setDocPage((p) => Math.min(totalDocPaginatedPages, p + 1))}
+                  disabled={docPage === totalDocPaginatedPages}
+                  className={cn(
+                    "flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-all",
+                    docPage === totalDocPaginatedPages
+                      ? "opacity-30 cursor-not-allowed"
+                      : "hover:opacity-80"
+                  )}
+                  style={{ color: "var(--ink-muted)", background: "var(--page-bg)", border: "1px solid var(--border-soft)" }}
+                >
+                  Next
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 
           {/* RIGHT: Extractions Panel */}
-          <div className="lg:col-span-3 space-y-3">
+          <div className="lg:col-span-4 space-y-3">
             {categories.map((category) => {
               const isExpanded = expandedCategory === category.id;
               const catPending = category.items.filter((i) => i.state === "pending").length;

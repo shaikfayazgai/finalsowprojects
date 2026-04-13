@@ -169,11 +169,14 @@ export function useRegistration(ssoData?: SSOData | null) {
         body: JSON.stringify({ email: verificationEmail }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.message); return; }
+      if (!res.ok) {
+        setError(data.message ?? "Failed to send verification email. Please try again.");
+        return;
+      }
       setEmailOtpSent(true);
       startEmailCooldown();
     } catch {
-      setError("Failed to send email. Please check your connection and try again.");
+      setError("Network error. Please check your connection and try again.");
     } finally {
       setEmailOtpLoading(false);
     }
@@ -193,10 +196,13 @@ export function useRegistration(ssoData?: SSOData | null) {
         body: JSON.stringify({ email: verificationEmail, code: emailOtp }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.message); return; }
+      if (!res.ok) {
+        setError(data.message ?? "Invalid or expired code. Please try again.");
+        return;
+      }
       setEmailVerified(true);
     } catch {
-      setError("Verification failed. Please try again.");
+      setError("Network error. Please check your connection and try again.");
     } finally {
       setEmailOtpLoading(false);
     }

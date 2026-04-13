@@ -13,6 +13,9 @@ export interface GlimmoraUser {
   mfaEnabled: boolean;
   mfaEnrollmentRequired: boolean;
   authPending?: boolean;
+  // Profile fields
+  phone?: string;
+  adminTitle?: string;
 }
 
 export interface AuthTokens {

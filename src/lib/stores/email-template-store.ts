@@ -9,7 +9,8 @@ export type EmailTemplateId =
   | "sow_changes_requested"
   | "sow_fully_approved"
   | "welcome_contributor"
-  | "welcome_enterprise";
+  | "welcome_enterprise"
+  | "otp_email";
 
 export interface EmailTemplate {
   id: EmailTemplateId;
@@ -133,6 +134,39 @@ export const DEFAULT_TEMPLATES: Record<EmailTemplateId, EmailTemplate> = {
     isActive: true,
     lastEditedAt: new Date().toISOString(),
     variables: ["firstName", "orgName", "dashboardUrl"],
+  },
+  otp_email: {
+    id: "otp_email",
+    name: "Email Verification OTP",
+    description: "Sent when a user requests an email verification code.",
+    subject: "Your GlimmoraTeam verification code",
+    headerColor: "#007A8A",
+    logoUrl: DEFAULT_LOGO,
+    bodyHtml: `<p>Hi there,</p>
+<p>Your one-time verification code is valid for <strong>{{expiryMinutes}} minutes</strong>. Do not share this code with anyone.</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 24px;">
+  <tr>
+    <td align="center" style="background:#F0FAFA;border:2px solid #007A8A;border-radius:14px;padding:28px 20px;">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#007A8A;margin:0 0 12px;padding:0;">Your Verification Code</p>
+      <p style="font-size:44px;font-weight:800;letter-spacing:16px;color:#0D1B2A;font-family:'Courier New',Courier,monospace;margin:0;padding:0;">{{code}}</p>
+      <p style="font-size:12px;color:#6b7280;margin:12px 0 0;padding:0;">Expires in {{expiryMinutes}} minutes</p>
+    </td>
+  </tr>
+</table>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#FFF8F3;border:1px solid #F0DDD0;border-radius:10px;">
+  <tr>
+    <td style="padding:14px 20px;">
+      <p style="font-size:13px;font-weight:700;color:#92400E;margin:0 0 4px;padding:0;">⚠ Security Notice</p>
+      <p style="font-size:13px;color:#374151;line-height:1.5;margin:0;padding:0;">If you did not request this code, please ignore this email. Never share your verification code with anyone, including GlimmoraTeam support.</p>
+    </td>
+  </tr>
+</table>`,
+    footerText: "You received this because you requested email verification on GlimmoraTeam. © Glimmora Technologies Pvt. Ltd.",
+    isActive: true,
+    lastEditedAt: new Date().toISOString(),
+    variables: ["code", "expiryMinutes"],
   },
 };
 

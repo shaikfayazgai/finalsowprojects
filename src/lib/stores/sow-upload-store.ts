@@ -88,6 +88,10 @@ interface SOWUploadState {
   currentFlowStep: number; // 1=Upload 2=Report 3=Review 4=Gaps 5=Details 6=Generate 7=Preview
   setFlowStep: (step: number) => void;
 
+  /* Last section the user was on inside the Commercial Details page */
+  activeCommercialSection: CommercialSectionKey;
+  setActiveCommercialSection: (key: CommercialSectionKey) => void;
+
   /* Upload */
   uploadedFile: UploadedFileInfo | null;
   projectTitle: string;
@@ -151,6 +155,10 @@ export const useSOWUploadStore = create<SOWUploadState>()(
       /* Flow */
       currentFlowStep: 1,
       setFlowStep: (step) => set({ currentFlowStep: step }),
+
+      /* Active section within Commercial Details */
+      activeCommercialSection: "businessContext",
+      setActiveCommercialSection: (key) => set({ activeCommercialSection: key }),
 
       /* Upload */
       uploadedFile: null,
@@ -240,6 +248,7 @@ export const useSOWUploadStore = create<SOWUploadState>()(
         clearFileObjectUrl();
         return set({
           currentFlowStep: 1,
+          activeCommercialSection: "businessContext",
           uploadedFile: null,
           projectTitle: "",
           clientOrganisation: "",

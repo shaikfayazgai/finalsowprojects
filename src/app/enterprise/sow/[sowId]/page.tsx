@@ -70,7 +70,7 @@ import { StatusTimeline } from "@/components/enterprise/status-timeline";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { useSowStore, INITIAL_APPROVAL_STAGES } from "@/lib/stores/sow-store";
 import { useSOWPipelineStore } from "@/lib/stores/sow-pipeline-store";
-import { useManualSOW } from "@/lib/hooks/use-manual-sow";
+import { useConfirmAndSubmit, useManualSOW } from "@/lib/hooks/use-manual-sow";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
 import {
   mockSOWClauses,
@@ -272,12 +272,23 @@ export default function SOWDetailPage() {
   const params = useParams();
   const sowId = params.sowId as string;
   const allSows = useSowStore((s) => s.sows);
+  const addSow = useSowStore((s) => s.addSow);
   const updateSow = useSowStore((s) => s.updateSow);
+  const addPipelineSOW = useSOWPipelineStore((s) => s.addSOW);
   const updatePipelineSOW = useSOWPipelineStore((s) => s.updateSOW);
   const pipelineSows = useSOWPipelineStore((s) => s.sows);
   const { data: apiSowRes } = useManualSOW(sowId);
+  const confirmAndSubmit = useConfirmAndSubmit(sowId);
   /* If the API returned a SOW, merge its fields on top of the mock/store record */
   const apiSowData = apiSowRes?.data as Record<string, unknown> | null | undefined;
+  const normalizedApiSow = React.useMemo(() => {
+    if (!apiSowData) return null;
+    const d = { ...apiSowData } as Record<string, unknown>;
+    if (d.approval_stages && !d.approvalStages) d.approvalStages = d.approval_stages;
+    if (d.parsed_sections && !d.parsedSections) d.parsedSections = d.parsed_sections;
+    if (d.total_sections && !d.totalSections) d.totalSections = d.total_sections;
+    return d;
+  }, [apiSowData]);
   const sow = React.useMemo(() => {
     // Try to find the SOW by its actual ID first
     const exactMatch = allSows.find((s) => s.id === sowId)
@@ -286,7 +297,12 @@ export default function SOWDetailPage() {
 
     if (exactMatch) {
       // Found in a real store — merge API data on top for real-time fields
-      return apiSowData ? { ...exactMatch, ...apiSowData, id: sowId } : exactMatch;
+      return normalizedApiSow ? { ...exactMatch, ...normalizedApiSow, id: sowId } : exactMatch;
+    }
+
+    // API-only SOW (no local store match) — use the API payload atop a base shape
+    if (normalizedApiSow) {
+      return { ...allSows[0], ...normalizedApiSow, id: sowId };
     }
 
     // SOW only exists in the pipeline store (no mock/store entry).
@@ -313,7 +329,7 @@ export default function SOWDetailPage() {
 
     // Last resort fallback
     return allSows[0];
-  }, [allSows, pipelineSows, sowId, apiSowData]);
+  }, [allSows, pipelineSows, sowId, normalizedApiSow]);
   const linkedProject = mockProjects.find((p) => p.sowId === sow.id);
   const sections = mockSOWSections.filter((s) => s.sowId === sow.id);
   const clauses = mockSOWClauses.filter((c) => c.sowId === sow.id);
@@ -414,25 +430,84 @@ export default function SOWDetailPage() {
   const isValidated = sow.parsedSections > 0 && sow.totalSections > 0;
 
   function handleConfirmSubmit() {
-    updateSow(sow.id, {
-      status: "approval",
+    if (confirmAndSubmit.isPending) return;
+
+    const nowIso = new Date().toISOString();
+    const patch = {
+      status: "approval" as const,
       approvalStages: INITIAL_APPROVAL_STAGES,
-      updatedAt: new Date().toISOString(),
-    });
-    // Seed the first stage activation message
-    const thread = useSowMessagesStore.getState().getThread(sow.id);
-    if (thread.length === 0) {
-      const activatedMsg = buildActivatedMessage(sow.id, 0, sow.title);
-      useSowMessagesStore.getState().addMessage(sow.id, activatedMsg);
-      useNotificationStore.getState().push({
-        title: activatedMsg.subject,
-        body: activatedMsg.body,
-        severity: "medium",
-        href: `/enterprise/sow/${sow.id}`,
-      });
+      updatedAt: nowIso,
+    };
+
+    const upsertLocalSow = () => {
+      const exists = allSows.some((s) => s.id === sow.id);
+      if (exists) {
+        updateSow(sow.id, patch);
+      } else {
+        addSow({ ...sow, ...patch });
+      }
+    };
+
+    const upsertPipeline = () => {
+      const exists = pipelineSows.some((s) => s.id === sow.id);
+      const submittedDate = nowIso.split("T")[0];
+      const totalValue = sow.estimatedBudget > 0 ? `$${sow.estimatedBudget.toLocaleString()}` : "$0";
+      const stageApprover =
+        sow.approvalStages?.find((s) => s.stage === "business")?.reviewer
+        ?? sow.createdBy
+        ?? "Enterprise Admin";
+
+      const pipelinePayload = {
+        id: sow.id,
+        title: sow.title,
+        client: sow.client,
+        currentStage: 1,
+        stageApprover,
+        slaStatus: "on-track" as const,
+        submittedDate,
+        totalValue,
+        completedStages: [],
+        submittedBy: sow.createdBy,
+      };
+
+      if (exists) updatePipelineSOW(sow.id, pipelinePayload);
+      else addPipelineSOW(pipelinePayload);
+    };
+
+    const finalizeSubmit = () => {
+      upsertLocalSow();
+      upsertPipeline();
+      // Seed the first stage activation message
+      const thread = useSowMessagesStore.getState().getThread(sow.id);
+      if (thread.length === 0) {
+        const activatedMsg = buildActivatedMessage(sow.id, 0, sow.title);
+        useSowMessagesStore.getState().addMessage(sow.id, activatedMsg);
+        useNotificationStore.getState().push({
+          title: activatedMsg.subject,
+          body: activatedMsg.body,
+          severity: "medium",
+          href: `/enterprise/sow/${sow.id}`,
+        });
+      }
+      setSubmitSuccess(true);
+      setTimeout(() => setShowSubmitModal(false), 2000);
+    };
+
+    if (normalizedApiSow) {
+      confirmAndSubmit.mutate(
+        { confirms_accuracy: true },
+        {
+          onSuccess: finalizeSubmit,
+          onError: (err) => {
+            const message = err instanceof Error ? err.message : "Unable to submit for approval.";
+            toast.error("Submission failed", message);
+          },
+        }
+      );
+      return;
     }
-    setSubmitSuccess(true);
-    setTimeout(() => setShowSubmitModal(false), 2000);
+
+    finalizeSubmit();
   }
 
   /* Filtered clauses */
@@ -2209,8 +2284,14 @@ export default function SOWDetailPage() {
 
                 <div className="flex items-center justify-end gap-2">
                   <Button variant="outline" size="sm" onClick={() => setShowSubmitModal(false)}>Cancel</Button>
-                  <Button variant="gradient-primary" size="sm" onClick={handleConfirmSubmit}>
-                    <Send className="w-3.5 h-3.5" /> Confirm Submission
+                  <Button
+                    variant="gradient-primary"
+                    size="sm"
+                    onClick={handleConfirmSubmit}
+                    disabled={confirmAndSubmit.isPending}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    {confirmAndSubmit.isPending ? "Submitting..." : "Confirm Submission"}
                   </Button>
                 </div>
               </>

@@ -14,8 +14,8 @@ import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { WhatHappensNext } from "./components/WhatHappensNext";
 import { RecentUploads } from "./components/RecentUploads";
 import { aiPoweredFeatures } from "@/mocks/data/sow-upload-flow";
-import { mockSOWs } from "@/mocks/data/enterprise-sow";
 import { useSOWUploadStore, setFileObjectUrl } from "@/lib/stores/sow-upload-store";
+import { useManualSOWList } from "@/lib/hooks/use-manual-sow";
 import { validateSOWUploadFields, validateSOWField, type SOWUploadFieldErrors } from "@/lib/validations/sow-upload";
 import { sowApi } from "@/lib/api/sow";
 
@@ -101,7 +101,14 @@ export default function SOWUploadPage() {
     }
   }, [isComplete]);
 
-  const existingSows = mockSOWs.filter((s) => s.status === "draft" || s.status === "review");
+  const { data: sowListRes } = useManualSOWList();
+  const existingSows = React.useMemo(() => {
+    const res = sowListRes as unknown as { data?: unknown } | null;
+    const payload = res?.data as { items?: unknown[] } | unknown[] | null;
+    const items = Array.isArray(payload) ? payload : (payload as { items?: unknown[] } | null)?.items ?? [];
+    return (items as Array<{ id: string; title: string; status: string }>)
+      .filter((s) => s.status === "draft" || s.status === "review");
+  }, [sowListRes]);
 
   const handleFileSelect = (file: File) => {
     const result = validateFile(file);

@@ -55,15 +55,13 @@ function getFriendlyLabel(segment: string, _prev: string[]): string | null {
 
 function NotificationBell() {
   const { notifications } = useNotificationStore();
-  const router = useRouter();
-
   const unread = notifications.filter((n) => !n.read);
   const hasHigh = unread.some((n) => n.severity === "high");
   const badgeColor = hasHigh ? "bg-red-500" : "bg-gold-500";
 
   return (
-    <button
-      onClick={() => router.push("/enterprise/notifications")}
+    <Link
+      href="/enterprise/notifications"
       className="relative flex items-center justify-center w-8 h-8 rounded-full text-gray-500 bg-white/50 border border-white/30 hover:bg-white/70 transition-all"
       aria-label={`Notifications, ${unread.length} unread`}
       suppressHydrationWarning
@@ -77,7 +75,7 @@ function NotificationBell() {
           {unread.length}
         </span>
       )}
-    </button>
+    </Link>
   );
 }
 

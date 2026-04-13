@@ -56,7 +56,8 @@ export default function CommercialDetailsPage() {
   const markSectionComplete = useMarkSectionComplete(sowId);
   const setApprovalAuthorities = useSetApprovalAuthorities(sowId);
 
-  const [activeSection, setActiveSection] = React.useState<CommercialSectionKey>("businessContext");
+  const activeSection = store.activeCommercialSection;
+  const setActiveSection = store.setActiveCommercialSection;
   /* Initialize with pre-populated data on first visit */
   React.useEffect(() => {
     if (store.commercialSectionStatus.businessContext === "not_started") {

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useCurrentUser } from "@/lib/hooks/use-auth";
 import {
   User,
   Camera,
@@ -105,12 +106,33 @@ const MOCK_RECOVERY_CODES = [
 export default function ProfilePage() {
   /* ── Personal Information State ── */
   const { data: session } = useSession();
-  const [firstName, setFirstName] = useState(session?.user?.name?.split(" ")[0] ?? "");
-  const [lastName, setLastName] = useState(session?.user?.name?.split(" ")[1] ?? "");
-  const [displayName, setDisplayName] = useState(session?.user?.name ?? "");
-  const [email] = useState(session?.user?.email ?? "");
+  const { data: currentUser, isLoading: isUserLoading } = useCurrentUser();
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [phone, setPhone] = useState("");
+
+  // Derive email from API first, then session (avoids the useState-async-session trap)
+  const email = currentUser?.email ?? session?.user?.email ?? "";
+
+  // Populate fields from API response
+  useEffect(() => {
+    if (currentUser) {
+      setFirstName(currentUser.firstName ?? "");
+      setLastName(currentUser.lastName ?? "");
+      setDisplayName(`${currentUser.firstName ?? ""} ${currentUser.lastName ?? ""}`.trim());
+      setJobTitle(currentUser.role ?? "");
+      setPhone(currentUser.phone ?? "");
+    } else if (!isUserLoading && session?.user?.name) {
+      const parts = session.user.name.split(" ");
+      setFirstName(parts[0] ?? "");
+      setLastName(parts.slice(1).join(" ") ?? "");
+      setDisplayName(session.user.name);
+    }
+  }, [currentUser, isUserLoading, session?.user?.name]);
+
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [displayNameCustomized, setDisplayNameCustomized] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -131,7 +153,7 @@ export default function ProfilePage() {
   );
 
   /* ── MFA State ── */
-  const [mfaEnabled] = useState(true);
+  const mfaEnabled = currentUser?.mfaEnabled ?? true;
   const [mfaMethod, setMfaMethod] = useState("totp");
   const [verificationCode, setVerificationCode] = useState("");
   const [showRecoveryCodes, setShowRecoveryCodes] = useState(false);
@@ -400,6 +422,8 @@ export default function ProfilePage() {
                     alt="Profile"
                     className="h-full w-full object-cover"
                   />
+                ) : isUserLoading ? (
+                  <div className="h-10 w-10 rounded-full bg-beige-300 animate-pulse" />
                 ) : (
                   <span className="text-3xl font-heading font-semibold text-brown-400">
                     {firstName[0]}
@@ -430,29 +454,48 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>First Name</Label>
-                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
-                  {firstName || "—"}
-                </div>
+                {isUserLoading ? (
+                  <div className="h-10 rounded-xl bg-beige-200 animate-pulse" />
+                ) : (
+                  <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                    {firstName || "—"}
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Last Name</Label>
-                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
-                  {lastName || "—"}
-                </div>
+                {isUserLoading ? (
+                  <div className="h-10 rounded-xl bg-beige-200 animate-pulse" />
+                ) : (
+                  <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                    {lastName || "—"}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Username — readonly */}
             <div className="space-y-1.5">
               <Label>Username</Label>
-              <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
-                {displayName || "—"}
-              </div>
+              {isUserLoading ? (
+                <div className="h-10 rounded-xl bg-beige-200 animate-pulse" />
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {displayName || "—"}
+                </div>
+              )}
             </div>
 
             {/* Work Email — readonly */}
             <div className="space-y-1.5">
-              <Label htmlFor="email">Work Email</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="email">Work Email</Label>
+                {!isUserLoading && currentUser && (
+                  <Badge variant={currentUser.emailVerified ? "teal" : "gold"} size="sm" dot>
+                    {currentUser.emailVerified ? "Verified" : "Unverified"}
+                  </Badge>
+                )}
+              </div>
               <Input
                 id="email"
                 value={email}
@@ -490,7 +533,14 @@ export default function ProfilePage() {
 
             {/* Phone Number — editable */}
             <div className="space-y-1.5">
-              <Label htmlFor="phone">Phone Number</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="phone">Phone Number</Label>
+                {!isUserLoading && currentUser && (
+                  <Badge variant={currentUser.phoneVerified ? "teal" : "gold"} size="sm" dot>
+                    {currentUser.phoneVerified ? "Verified" : "Unverified"}
+                  </Badge>
+                )}
+              </div>
               {isEditing ? (
                 <Input
                   id="phone"
@@ -734,17 +784,29 @@ export default function ProfilePage() {
                     MFA Status
                   </p>
                   <p className="text-xs text-beige-500">
-                    Required by your organization. MFA cannot be disabled.
+                    {currentUser?.mfaEnrollmentRequired
+                      ? "Enrollment required. Please set up MFA to secure your account."
+                      : "Required by your organization. MFA cannot be disabled."}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Badge variant="teal" size="sm" dot>
-                  Enabled
+                <Badge variant={mfaEnabled ? "teal" : "gold"} size="sm" dot>
+                  {mfaEnabled ? "Enabled" : "Disabled"}
                 </Badge>
                 <Switch checked={mfaEnabled} disabled />
               </div>
             </div>
+
+            {/* MFA Enrollment Required Warning */}
+            {currentUser?.mfaEnrollmentRequired && !mfaEnabled && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-gold-50 border border-gold-200 text-gold-800">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <p className="text-xs leading-relaxed">
+                  Your organization requires MFA. Complete setup below to avoid losing access.
+                </p>
+              </div>
+            )}
 
             {/* MFA Method */}
             <div className="space-y-1.5">

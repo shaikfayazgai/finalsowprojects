@@ -180,6 +180,8 @@ export default function DecompositionPlansPage() {
   const [sortField, setSortField] = React.useState<SortField>("updated");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [paymentPlan, setPaymentPlan] = React.useState<DecompositionPlan | null>(null);
+  const [plans, setPlans] = React.useState<DecompositionPlan[]>([]);
+  const [justPaidIds, setJustPaidIds] = React.useState<Set<string>>(new Set());
 
   // ── API data & mutations ──
   const { data: apiPlansRes, isLoading: plansLoading, isError: plansError, error: plansErrorObj } = useDecompositionPlans();
@@ -248,6 +250,18 @@ export default function DecompositionPlansPage() {
   const handleKickoff = (plan: DecompositionPlan) => {
     kickoffMutation.mutate({ plan_id: plan.id });
     setPaymentPlan(plan);
+  };
+
+  const handlePaymentSuccess = (paidPlanId: string) => {
+    setPlans((prev) =>
+      prev.map((p) => p.id === paidPlanId ? { ...p, status: "approved" } : p)
+    );
+    setJustPaidIds((prev) => {
+      const next = new Set(prev);
+      next.add(paidPlanId);
+      return next;
+    });
+    setPaymentPlan(null);
   };
 
   function handleSort(field: SortField) {
@@ -332,7 +346,7 @@ export default function DecompositionPlansPage() {
         budget={paymentPlan.estimatedCost}
         pendingId="m1"
         entityId={paymentPlan.id}
-        onSuccess={() => setPaymentPlan(null)}
+        onSuccess={() => handlePaymentSuccess(paymentPlan!.id)}
         onClose={() => setPaymentPlan(null)}
       />
     )}
@@ -491,7 +505,11 @@ export default function DecompositionPlansPage() {
                     <td style={{ padding: "13px 16px", textAlign: "center" }}>
                       <PrimaryActionButton
                         plan={plan}
-                        onClick={(e) => { e.stopPropagation(); router.push(`/enterprise/decomposition/${plan.id}`); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const suffix = justPaidIds.has(plan.id) ? "?ai=generating" : "";
+                          router.push(`/enterprise/decomposition/${plan.id}${suffix}`);
+                        }}
                         onKickoff={() => handleKickoff(plan)}
                         onWithdraw={(id) => withdrawMutation.mutate(id)}
                       />

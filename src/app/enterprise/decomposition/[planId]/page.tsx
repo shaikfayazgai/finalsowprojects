@@ -359,6 +359,87 @@ function TaskBreakdownGantt({ milestones, tasks, plan }: { milestones: PlanMiles
   );
 }
 
+/* ═══ AI Generating Card ═══ */
+
+function AiGeneratingCard() {
+  return (
+    <motion.div variants={fadeUp} className="card-parchment flex flex-col items-center justify-center py-20 mb-8 text-center overflow-hidden relative">
+      {/* Soft radial background glow */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(circle at 50% 40%, rgba(20,184,166,0.08) 0%, rgba(20,184,166,0) 55%)",
+        }}
+      />
+
+      {/* Animated icon with orbiting rings */}
+      <div className="relative mb-6">
+        {/* Outer pulsing ring */}
+        <motion.div
+          className="absolute inset-0 rounded-full border-2 border-teal-300/50"
+          animate={{ scale: [1, 1.6, 1.6], opacity: [0.6, 0, 0] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+          style={{ width: 64, height: 64 }}
+        />
+        {/* Middle pulsing ring (staggered) */}
+        <motion.div
+          className="absolute inset-0 rounded-full border-2 border-teal-400/60"
+          animate={{ scale: [1, 1.6, 1.6], opacity: [0.8, 0, 0] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeOut", delay: 0.6 }}
+          style={{ width: 64, height: 64 }}
+        />
+        {/* Icon container with gentle float */}
+        <motion.div
+          className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-400 via-teal-500 to-teal-600 flex items-center justify-center shadow-xl shadow-teal-200/70"
+          animate={{ y: [0, -4, 0] }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <motion.div
+            animate={{ rotate: [0, 360] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+          >
+            <Sparkles className="w-7 h-7 text-white" />
+          </motion.div>
+        </motion.div>
+      </div>
+
+      <p className="relative text-[15px] font-semibold text-gray-800 mb-1.5">AI is working on your decomposition</p>
+      <p className="relative text-[12px] text-gray-400 max-w-[340px] mb-7">
+        You will be able to see the details once it is completed.
+      </p>
+
+      {/* Material-style dual-bar indeterminate progress */}
+      <div className="relative w-72 h-1 rounded-full bg-teal-100/70 overflow-hidden">
+        <motion.div
+          className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-teal-400 to-teal-600"
+          initial={{ left: "-35%", width: "35%" }}
+          animate={{ left: ["−35%", "100%"], width: ["35%", "35%"] }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-teal-300 to-teal-500"
+          initial={{ left: "-60%", width: "20%" }}
+          animate={{ left: ["−60%", "110%"], width: ["20%", "20%"] }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+        />
+      </div>
+
+      {/* Animated dots */}
+      <div className="relative flex items-center gap-1.5 mt-5">
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={i}
+            className="w-1.5 h-1.5 rounded-full bg-teal-500"
+            animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.1, 0.8] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut", delay: i * 0.2 }}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
 /* ═══ PAGE ═══ */
 
 export default function PlanDetailPage() {
@@ -572,6 +653,54 @@ export default function PlanDetailPage() {
   const [dismissedRecs, setDismissedRecs] = React.useState<Set<string>>(() => new Set(recommendations.filter((r) => r.dismissed).map((r) => r.id)));
   const [viewMode, setViewMode] = React.useState<"list" | "gantt">("list");
   const [activeTab, setActiveTab] = React.useState(() => searchParams.get("tab") ?? "project_plan");
+  const [aiGenerating, setAiGenerating] = React.useState(() => searchParams.get("ai") === "generating");
+  const { push: pushNotification } = useNotificationStore();
+  const { data: session } = useSession();
+
+  /* ── 60s AI generation timer ── */
+  React.useEffect(() => {
+    if (!aiGenerating) return;
+
+    const timer = setTimeout(() => {
+      setAiGenerating(false);
+      // Promote plan out of "draft" so the task breakdown renders
+      setPlan((p) => p.status === "draft" ? { ...p, status: "pending_review" } : p);
+
+      // In-app notification
+      pushNotification({
+        title: "AI Decomposition Complete",
+        body: `Task breakdown for "${plan.title}" is ready. Review your milestones and tasks.`,
+        severity: "medium",
+        href: `/enterprise/decomposition/${plan.id}`,
+      });
+
+      // Toast
+      toast.success("AI Decomposition Complete", `Task breakdown for "${plan.title}" is ready.`);
+
+      // Email notification (fire-and-forget)
+      const userEmail = session?.user?.email;
+      if (userEmail) {
+        fetch("/api/email/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "sow_stage_approved",
+            subject: `AI Task Breakdown Ready — ${plan.title}`,
+            payload: {
+              stageName: "AI Decomposition",
+              projectTitle: plan.title,
+              approvedBy: session?.user?.name ?? "Glimmora AI",
+              comments: "Your project has been decomposed into milestones and tasks. Please review the breakdown and proceed.",
+            },
+            to: userEmail,
+          }),
+        }).catch(() => {/* silent */});
+      }
+    }, 20_000);
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiGenerating]);
 
   const toggleMilestone = (id: string) => setExpandedMilestones((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleTask = (id: string) => setExpandedTasks((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -727,6 +856,7 @@ export default function PlanDetailPage() {
             estimatedCost={plan.estimatedCost}
             projectId={effectiveProjectId}
             onProjectHold={(pid) => holdProject(pid, "payment_overdue")}
+            onM1Paid={() => { setAiGenerating(true); setActiveTab("project_plan"); }}
           />
         </motion.div>
       )}
@@ -744,19 +874,11 @@ export default function PlanDetailPage() {
       {activeTab === "project_plan" && (
         <>
         {/* ═══ AI GENERATING STATE ═══ */}
-        {plan.status === "draft" && (
-          <motion.div variants={fadeUp} className="card-parchment flex flex-col items-center justify-center py-16 mb-8 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center mb-4">
-              <Sparkles className="w-5 h-5 text-white animate-pulse" />
-            </div>
-            <p className="text-sm font-semibold text-gray-800 mb-1">AI is working on your decomposition</p>
-            <p className="text-xs text-gray-400 max-w-[320px]">You will be able to see the details once it is completed.</p>
-          </motion.div>
-        )}
+        {aiGenerating && <AiGeneratingCard />}
 
           {/* ═══ MILESTONE → TASK TREE / GANTT ═══ */}
-          {plan.status !== "draft" && (
-          <motion.div variants={fadeUp} className="mb-8">
+          {!aiGenerating && (
+          <motion.div id="task-breakdown" variants={fadeUp} className="mb-8 scroll-mt-24">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-gray-800">Task Breakdown</h2>
               <div className="flex items-center gap-2">

@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Button, Badge, Textarea } from "@/components/ui";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { useConfirmAndSubmit, useSOWPreview } from "@/lib/hooks/use-manual-sow";
+import { useConfirmAndSubmit, useSOWPreview, useHallucinationLayers, useManualSOW } from "@/lib/hooks/use-manual-sow";
 
 /* ═══════════════════════════════════════════════════════════
    TYPES
@@ -289,6 +289,8 @@ export default function PreviewConfirmPage() {
   const sowId = uploadStore.uploadedSowId;
   const confirmMutation = useConfirmAndSubmit(sowId);
   const { data: previewRes } = useSOWPreview(sowId);
+  const { data: hallucinationRes } = useHallucinationLayers(sowId);
+  const { data: sowRes } = useManualSOW(sowId);
 
   /* Map API preview data → sections */
   const apiSections: SOWSection[] = React.useMemo(() => {
@@ -328,6 +330,46 @@ export default function PreviewConfirmPage() {
     ];
   }, [previewRes]);
 
+  /* Map API hallucination layers */
+  const apiHallucinationFlags = React.useMemo(() => {
+    if (!hallucinationRes) return null;
+    const res = hallucinationRes as unknown as Record<string, unknown>;
+    const payload = (res.data ?? res) as Record<string, unknown>;
+    const list = payload.layers ?? payload.hallucination_layers ?? payload.flags ?? payload;
+    if (!Array.isArray(list) || list.length === 0) return null;
+    return list.map((raw: unknown, i: number) => {
+      const r = raw as Record<string, unknown>;
+      const sev = String(r.severity ?? r.risk_level ?? "low").toLowerCase() as "high" | "medium" | "low";
+      return {
+        id: String(r.id ?? r.layer_id ?? `flag-${i + 1}`),
+        severity: (sev === "high" || sev === "medium" || sev === "low" ? sev : "low") as "high" | "medium" | "low",
+        section: String(r.section ?? r.affected_section ?? ""),
+        clause: String(r.clause ?? r.text ?? r.content ?? ""),
+        reason: String(r.reason ?? r.description ?? ""),
+        suggestion: String(r.suggestion ?? r.recommendation ?? ""),
+        resolved: Boolean(r.resolved ?? r.is_resolved ?? false),
+      };
+    });
+  }, [hallucinationRes]);
+
+  /* Map API SOW meta */
+  const sowMeta = React.useMemo(() => {
+    if (sowRes) {
+      const res = sowRes as unknown as Record<string, unknown>;
+      const d = (res.data ?? res) as Record<string, unknown>;
+      return {
+        id: String(d.id ?? d.sow_id ?? sowId ?? ""),
+        title: String(d.title ?? d.project_title ?? SOW_META.title),
+        client: String(d.client_organisation ?? d.client ?? SOW_META.client),
+        generatedAt: String(d.created_at ?? d.generated_at ?? SOW_META.generatedAt),
+        sourceDocument: uploadStore.uploadedFile?.name ?? SOW_META.sourceDocument,
+      };
+    }
+    return { ...SOW_META, sourceDocument: uploadStore.uploadedFile?.name ?? SOW_META.sourceDocument };
+  }, [sowRes, sowId, uploadStore.uploadedFile]);
+
+  const activeHallucinationFlags = apiHallucinationFlags ?? HALLUCINATION_FLAGS;
+
   const [activeTab, setActiveTab] = React.useState<TabKey>("generated");
   const [sections, setSections] = React.useState(apiSections.length > 0 ? apiSections : SOW_SECTIONS);
 
@@ -337,7 +379,7 @@ export default function PreviewConfirmPage() {
 
   const qualityMetrics = apiMetrics.length > 0 ? apiMetrics : QUALITY_METRICS;
   const [resolvedFlags, setResolvedFlags] = React.useState<Set<string>>(
-    new Set(HALLUCINATION_FLAGS.filter((f) => f.resolved).map((f) => f.id))
+    new Set(activeHallucinationFlags.filter((f) => f.resolved).map((f) => f.id))
   );
   const [showConfirmDialog, setShowConfirmDialog] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -373,11 +415,11 @@ export default function PreviewConfirmPage() {
         },
       );
     } else {
-      setTimeout(() => navigateToApprove(SOW_META.id), 1500);
+      setTimeout(() => navigateToApprove(sowMeta.id), 1500);
     }
   };
 
-  const unresolvedCount = HALLUCINATION_FLAGS.filter((f) => !resolvedFlags.has(f.id)).length;
+  const unresolvedCount = activeHallucinationFlags.filter((f) => !resolvedFlags.has(f.id)).length;
   const allFlagsResolved = unresolvedCount === 0;
 
   return (
@@ -394,7 +436,7 @@ export default function PreviewConfirmPage() {
           <div className="flex-1">
             <h2 className="text-lg font-semibold">AI Generated Draft Ready</h2>
             <p className="text-sm text-white/80">
-              Your SOW has been generated from <span className="font-medium">{SOW_META.sourceDocument}</span> with{" "}
+              Your SOW has been generated from <span className="font-medium">{sowMeta.sourceDocument}</span> with{" "}
               {qualityMetrics[0]?.value ?? "N/A"} confidence. Review and confirm to proceed to approval.
             </p>
           </div>
@@ -605,12 +647,12 @@ export default function PreviewConfirmPage() {
                   </Badge>
                 ) : (
                   <span className="text-xs text-[#8B7355]">
-                    {unresolvedCount} of {HALLUCINATION_FLAGS.length} unresolved
+                    {unresolvedCount} of {activeHallucinationFlags.length} unresolved
                   </span>
                 )}
               </div>
               <div className="divide-y divide-[#E5DDD4]">
-                {HALLUCINATION_FLAGS.map((flag) => {
+                {activeHallucinationFlags.map((flag) => {
                   const ss = severityStyle(flag.severity);
                   const isResolved = resolvedFlags.has(flag.id);
 

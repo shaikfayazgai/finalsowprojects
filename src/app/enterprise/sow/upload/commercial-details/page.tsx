@@ -18,11 +18,12 @@ import {
   FileSignature,
   ChevronRight,
   Loader2,
-  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, slideInRight } from "@/lib/utils/motion-variants";
-import { Badge, Button, Input, Textarea, Label, ScrollArea } from "@/components/ui";
+import { Badge, Button, ScrollArea } from "@/components/ui";
+import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { useCommercialDetails, useSaveCommercialSection } from "@/lib/hooks/use-manual-sow";
 
 /* ────────────────────────────────────────────────────────────
    Section definitions
@@ -96,7 +97,105 @@ const SECTIONS: WizardSection[] = [
 ];
 
 /* ────────────────────────────────────────────────────────────
-   Mock form data (pre-populated by AI)
+   Section → API key mapping
+   ──────────────────────────────────────────────────────────── */
+const SECTION_API_KEY: Record<string, string> = {
+  "business-context": "businessContext",
+  "delivery-scope": "deliveryScope",
+  "technical-architecture": "techIntegrations",
+  "timeline-team": "timelineTeam",
+  "budget-risk": "budgetRisk",
+  "governance-compliance": "governance",
+  "commercial-legal": "commercialLegal",
+};
+
+/** Convert snake_case or kebab-case key to camelCase */
+function toCamel(k: string): string {
+  return k.replace(/[_-]([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+/** Try multiple key names, return first non-null value */
+function pick(obj: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const k of keys) if (obj[k] != null) return obj[k];
+  return undefined;
+}
+
+function mapApiToFormData(payload: Record<string, unknown>): Record<string, Record<string, string>> {
+  const result: Record<string, Record<string, string>> = {};
+
+  /* ── Business Context — explicit + generic pass ── */
+  const bc = pick(payload, "businessContext", "business_context") as Record<string, unknown> | undefined;
+  if (bc) {
+    const fields: Record<string, string> = {};
+
+    // Explicit string fields (many key variants)
+    const strField = (formKey: string, ...apiKeys: string[]) => {
+      const v = pick(bc, ...apiKeys);
+      if (v != null && !Array.isArray(v) && typeof v !== "object") fields[formKey] = String(v);
+    };
+    strField("projectVision", "project_vision", "projectVision", "vision", "project_vision_statement");
+    strField("businessCriticality", "business_criticality", "businessCriticality", "criticality", "priority");
+    strField("currentState", "current_state", "currentState", "current_situation", "as_is");
+    strField("desiredFutureState", "desired_future_state", "desiredFutureState", "future_state", "target_state", "to_be");
+    strField("projectSuccessDefinition", "definitionOfSuccess", "definition_of_success", "project_success_definition", "projectSuccessDefinition", "success_definition", "definition_of_done");
+
+    // Array fields → numbered form keys
+    const arrField = (formBase: string, ...apiKeys: string[]) => {
+      const v = pick(bc, ...apiKeys);
+      if (Array.isArray(v)) v.forEach((item, i) => { fields[`${formBase}${i + 1}`] = String(item ?? ""); });
+    };
+    arrField("businessObjective", "business_objectives", "businessObjectives", "objectives", "keyObjectives", "key_objectives");
+    arrField("painPoint", "pain_points", "painPoints", "challenges", "problems", "painPoints");
+    arrField("endUserProfile", "end_user_profiles", "endUserProfiles", "user_profiles", "userProfiles", "users", "stakeholders");
+    arrField("successMetric", "success_metrics", "successMetrics", "kpis", "key_metrics", "metrics", "successCriteria", "success_criteria");
+
+    // Known API aliases that were already mapped to a different form key above —
+    // skip so the generic pass doesn't create orphan entries under the wrong name.
+    const ALIASED = new Set(["definitionOfSuccess", "definition_of_success",
+      "keyObjectives", "key_objectives", "problems", "stakeholders",
+      "successCriteria", "success_criteria", "metrics"]);
+
+    // Generic pass — catches flat numbered keys (businessObjective1, painPoint1…)
+    // and any other fields the API returns that weren't explicitly handled above
+    for (const [k, v] of Object.entries(bc)) {
+      const camel = toCamel(k);
+      if (ALIASED.has(k) || ALIASED.has(camel)) continue;
+      if (fields[camel] != null || fields[k] != null) continue; // already mapped
+      if (Array.isArray(v)) {
+        v.forEach((item, i) => { fields[`${camel}${i + 1}`] = String(item ?? ""); });
+      } else if (v != null && typeof v !== "object") {
+        fields[camel] = String(v);
+      }
+    }
+
+    if (Object.keys(fields).length > 0) result["business-context"] = fields;
+  }
+
+  /* ── Other sections — generic flat mapping ── */
+  const flatSection = (apiKey: string, formId: string) => {
+    const snakeKey = apiKey.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`);
+    const sec = (payload[apiKey] ?? payload[snakeKey]) as Record<string, unknown> | undefined;
+    if (!sec || typeof sec !== "object") return;
+    const fields: Record<string, string> = {};
+    for (const [k, v] of Object.entries(sec)) {
+      const camel = toCamel(k);
+      if (Array.isArray(v)) { v.forEach((item, i) => { fields[`${camel}${i + 1}`] = String(item ?? ""); }); }
+      else if (v != null && typeof v !== "object") { fields[camel] = String(v); }
+    }
+    if (Object.keys(fields).length > 0) result[formId] = fields;
+  };
+  flatSection("deliveryScope", "delivery-scope");
+  flatSection("techIntegrations", "technical-architecture");
+  flatSection("timelineTeam", "timeline-team");
+  flatSection("budgetRisk", "budget-risk");
+  flatSection("governance", "governance-compliance");
+  flatSection("commercialLegal", "commercial-legal");
+
+  return result;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Default form data (fallback when API has no data)
    ──────────────────────────────────────────────────────────── */
 const PREPOPULATED_DATA: Record<string, Record<string, string>> = {
   "business-context": {
@@ -130,6 +229,122 @@ const PREPOPULATED_DATA: Record<string, Record<string, string>> = {
       "Successful go-live with 80% user adoption within 60 days, meeting all performance SLAs and passing UAT sign-off from all stakeholder groups.",
   },
 };
+
+/* ────────────────────────────────────────────────────────────
+   Read-only field helpers
+   ──────────────────────────────────────────────────────────── */
+function ReadOnlyField({
+  label,
+  value,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  multiline?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[12px] font-semibold" style={{ color: "var(--ink-muted)" }}>
+        {label}
+      </p>
+      <div
+        className={cn(
+          "rounded-xl px-4 py-3 text-[13px] leading-relaxed",
+          multiline && "whitespace-pre-wrap min-h-[72px]"
+        )}
+        style={{
+          background: "var(--page-bg)",
+          border: "1px solid var(--border-soft)",
+          color: value ? "var(--ink)" : "var(--ink-faint)",
+        }}
+      >
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function ReadOnlyListField({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[12px] font-semibold" style={{ color: "var(--ink-muted)" }}>
+        {label}
+      </p>
+      <div className="space-y-2">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <span
+              className="text-[11px] font-mono shrink-0 w-5 text-center pt-2.5"
+              style={{ color: "var(--ink-faint)" }}
+            >
+              {i + 1}.
+            </span>
+            <div
+              className="flex-1 rounded-xl px-4 py-2.5 text-[13px]"
+              style={{
+                background: "var(--page-bg)",
+                border: "1px solid var(--border-soft)",
+                color: item ? "var(--ink)" : "var(--ink-faint)",
+              }}
+            >
+              {item || "—"}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function toLabel(key: string): string {
+  return key
+    .replace(/(\d+)$/, " $1")
+    .replace(/([A-Z])/g, " $1")
+    .trim()
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+function DynamicSectionFields({ sectionData }: { sectionData: Record<string, string> }) {
+  const entries = Object.entries(sectionData);
+  if (entries.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 gap-3">
+        <Sparkles className="w-8 h-8 text-forest-300" />
+        <p className="text-[13px]" style={{ color: "var(--ink-muted)" }}>
+          No data available for this section yet.
+        </p>
+      </div>
+    );
+  }
+
+  /* Group numbered keys (e.g. deliverable1, deliverable2) under their base */
+  const groups = new Map<string, { key: string; value: string }[]>();
+  for (const [key, value] of entries) {
+    const hasNum = /\d+$/.test(key);
+    const base = hasNum ? key.replace(/\d+$/, "") : key;
+    if (!groups.has(base)) groups.set(base, []);
+    groups.get(base)!.push({ key, value });
+  }
+
+  return (
+    <div className="space-y-5">
+      {Array.from(groups.entries()).map(([base, items]) => {
+        const sorted = [...items].sort((a, b) =>
+          a.key.localeCompare(b.key, undefined, { numeric: true })
+        );
+        if (items.length === 1 && !/\d+$/.test(items[0].key)) {
+          const isLong = items[0].value.length > 100;
+          return (
+            <ReadOnlyField key={base} label={toLabel(base)} value={items[0].value} multiline={isLong} />
+          );
+        }
+        return (
+          <ReadOnlyListField key={base} label={toLabel(base)} items={sorted.map((i) => i.value)} />
+        );
+      })}
+    </div>
+  );
+}
 
 /* ────────────────────────────────────────────────────────────
    Progress circle component
@@ -167,17 +382,44 @@ function ProgressCircle({
    Page component
    ──────────────────────────────────────────────────────────── */
 export default function CommercialDetailsPage() {
+  const store = useSOWUploadStore();
+  const sowId = store.uploadedSowId;
+  const { data: detailsRes } = useCommercialDetails(sowId);
+  const saveMutation = useSaveCommercialSection(sowId);
+
   const [activeSection, setActiveSection] = React.useState(0);
   const [completedSections, setCompletedSections] = React.useState<Set<number>>(new Set());
   const [formData, setFormData] = React.useState<Record<string, Record<string, string>>>(
     PREPOPULATED_DATA
   );
 
+  /* Populate form from API response */
+  React.useEffect(() => {
+    if (!detailsRes) return;
+    const res = detailsRes as unknown as Record<string, unknown>;
+    // Handle { success, data: {...} } wrapper or bare payload
+    const inner = res.data as Record<string, unknown> | null;
+    const payload = (inner && typeof inner === "object" ? inner : res) as Record<string, unknown>;
+    if (process.env.NODE_ENV === "development") {
+      console.log("[commercial-details] API payload:", JSON.stringify(payload, null, 2));
+    }
+    const mapped = mapApiToFormData(payload);
+    if (Object.keys(mapped).length > 0) {
+      setFormData((prev) => ({ ...prev, ...mapped }));
+    }
+  }, [detailsRes]);
+
   const currentSection = SECTIONS[activeSection];
   const isPrePopulated = currentSection.aiConfidence >= 85;
 
   const markComplete = (idx: number) => {
     setCompletedSections((prev) => new Set([...prev, idx]));
+    /* Save section to API */
+    if (sowId) {
+      const sec = SECTIONS[idx];
+      const apiKey = SECTION_API_KEY[sec.id];
+      if (apiKey) saveMutation.mutate({ section: apiKey, data: formData[sec.id] ?? {} });
+    }
   };
 
   const goToNext = () => {
@@ -191,16 +433,6 @@ export default function CommercialDetailsPage() {
 
   const getFieldValue = (field: string) => {
     return formData[currentSection.id]?.[field] || "";
-  };
-
-  const setFieldValue = (field: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [currentSection.id]: {
-        ...(prev[currentSection.id] || {}),
-        [field]: value,
-      },
-    }));
   };
 
   /* ── Flow progress steps ── */
@@ -443,294 +675,36 @@ export default function CommercialDetailsPage() {
                     )}
                   </div>
 
-                  {/* Form Fields */}
+                  {/* Form Fields — read-only */}
                   <div className="p-6 space-y-5">
                     {activeSection === 0 && (
                       <>
-                        {/* Project Vision */}
-                        <div className="space-y-2">
-                          <Label
-                            className="text-[13px] font-semibold"
-                            style={{ color: "var(--ink)" }}
-                          >
-                            Project Vision
-                          </Label>
-                          <Textarea
-                            value={getFieldValue("projectVision")}
-                            onChange={(e) => setFieldValue("projectVision", e.target.value)}
-                            placeholder="Describe the overarching vision for this project..."
-                            className="min-h-[100px]"
-                          />
-                        </div>
-
-                        {/* Business Objectives */}
-                        <div className="space-y-2">
-                          <Label
-                            className="text-[13px] font-semibold"
-                            style={{ color: "var(--ink)" }}
-                          >
-                            Business Objectives
-                          </Label>
-                          {[1, 2, 3].map((i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <span
-                                className="text-[11px] font-mono shrink-0 w-5 text-center"
-                                style={{ color: "var(--ink-faint)" }}
-                              >
-                                {i}.
-                              </span>
-                              <Input
-                                value={getFieldValue(`businessObjective${i}`)}
-                                onChange={(e) =>
-                                  setFieldValue(`businessObjective${i}`, e.target.value)
-                                }
-                                placeholder={`Business objective ${i}...`}
-                              />
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Pain Points */}
-                        <div className="space-y-2">
-                          <Label
-                            className="text-[13px] font-semibold"
-                            style={{ color: "var(--ink)" }}
-                          >
-                            Pain Points
-                          </Label>
-                          {[1, 2].map((i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <span
-                                className="text-[11px] font-mono shrink-0 w-5 text-center"
-                                style={{ color: "var(--ink-faint)" }}
-                              >
-                                {i}.
-                              </span>
-                              <Input
-                                value={getFieldValue(`painPoint${i}`)}
-                                onChange={(e) =>
-                                  setFieldValue(`painPoint${i}`, e.target.value)
-                                }
-                                placeholder={`Pain point ${i}...`}
-                              />
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Business Criticality */}
-                        <div className="space-y-2">
-                          <Label
-                            className="text-[13px] font-semibold"
-                            style={{ color: "var(--ink)" }}
-                          >
-                            Business Criticality
-                          </Label>
-                          <select
-                            value={getFieldValue("businessCriticality")}
-                            onChange={(e) =>
-                              setFieldValue("businessCriticality", e.target.value)
-                            }
-                            className="w-full rounded-xl px-4 py-2.5 text-sm"
-                            style={{
-                              background: "var(--page-bg)",
-                              border: "1px solid var(--border-soft)",
-                              color: "var(--ink)",
-                            }}
-                          >
-                            <option value="">Select criticality...</option>
-                            <option value="Critical">Critical</option>
-                            <option value="High">High</option>
-                            <option value="Medium">Medium</option>
-                            <option value="Low">Low</option>
-                          </select>
-                        </div>
-
-                        {/* Current State */}
-                        <div className="space-y-2">
-                          <Label
-                            className="text-[13px] font-semibold"
-                            style={{ color: "var(--ink)" }}
-                          >
-                            Current State
-                          </Label>
-                          <Textarea
-                            value={getFieldValue("currentState")}
-                            onChange={(e) => setFieldValue("currentState", e.target.value)}
-                            placeholder="Describe the current state of systems/processes..."
-                            className="min-h-[80px]"
-                          />
-                        </div>
-
-                        {/* Desired Future State */}
-                        <div className="space-y-2">
-                          <Label
-                            className="text-[13px] font-semibold"
-                            style={{ color: "var(--ink)" }}
-                          >
-                            Desired Future State
-                          </Label>
-                          <Textarea
-                            value={getFieldValue("desiredFutureState")}
-                            onChange={(e) =>
-                              setFieldValue("desiredFutureState", e.target.value)
-                            }
-                            placeholder="Describe the desired future state..."
-                            className="min-h-[80px]"
-                          />
-                        </div>
-
-                        {/* End User Profiles */}
-                        <div className="space-y-2">
-                          <Label
-                            className="text-[13px] font-semibold"
-                            style={{ color: "var(--ink)" }}
-                          >
-                            End User Profiles
-                          </Label>
-                          {[1, 2, 3].map((i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <span
-                                className="text-[11px] font-mono shrink-0 w-5 text-center"
-                                style={{ color: "var(--ink-faint)" }}
-                              >
-                                {i}.
-                              </span>
-                              <Input
-                                value={getFieldValue(`endUserProfile${i}`)}
-                                onChange={(e) =>
-                                  setFieldValue(`endUserProfile${i}`, e.target.value)
-                                }
-                                placeholder={`User profile ${i}...`}
-                              />
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Success Metrics */}
-                        <div className="space-y-2">
-                          <Label
-                            className="text-[13px] font-semibold"
-                            style={{ color: "var(--ink)" }}
-                          >
-                            Success Metrics
-                          </Label>
-                          {[1, 2, 3].map((i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <span
-                                className="text-[11px] font-mono shrink-0 w-5 text-center"
-                                style={{ color: "var(--ink-faint)" }}
-                              >
-                                {i}.
-                              </span>
-                              <Input
-                                value={getFieldValue(`successMetric${i}`)}
-                                onChange={(e) =>
-                                  setFieldValue(`successMetric${i}`, e.target.value)
-                                }
-                                placeholder={`Success metric ${i}...`}
-                              />
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Definition of Project Success */}
-                        <div className="space-y-2">
-                          <Label
-                            className="text-[13px] font-semibold"
-                            style={{ color: "var(--ink)" }}
-                          >
-                            Definition of Project Success
-                          </Label>
-                          <Textarea
-                            value={getFieldValue("projectSuccessDefinition")}
-                            onChange={(e) =>
-                              setFieldValue("projectSuccessDefinition", e.target.value)
-                            }
-                            placeholder="Define what constitutes project success..."
-                            className="min-h-[80px]"
-                          />
-                        </div>
+                        <ReadOnlyField label="Project Vision" value={getFieldValue("projectVision")} multiline />
+                        <ReadOnlyListField
+                          label="Business Objectives"
+                          items={[1, 2, 3].map((i) => getFieldValue(`businessObjective${i}`))}
+                        />
+                        <ReadOnlyListField
+                          label="Pain Points"
+                          items={[1, 2].map((i) => getFieldValue(`painPoint${i}`))}
+                        />
+                        <ReadOnlyField label="Business Criticality" value={getFieldValue("businessCriticality")} />
+                        <ReadOnlyField label="Current State" value={getFieldValue("currentState")} multiline />
+                        <ReadOnlyField label="Desired Future State" value={getFieldValue("desiredFutureState")} multiline />
+                        <ReadOnlyListField
+                          label="End User Profiles"
+                          items={[1, 2, 3].map((i) => getFieldValue(`endUserProfile${i}`))}
+                        />
+                        <ReadOnlyListField
+                          label="Success Metrics"
+                          items={[1, 2, 3].map((i) => getFieldValue(`successMetric${i}`))}
+                        />
+                        <ReadOnlyField label="Definition of Project Success" value={getFieldValue("projectSuccessDefinition")} multiline />
                       </>
                     )}
 
-                    {/* Sections 2-7: Show pre-populated summary */}
                     {activeSection > 0 && (
-                      <div className="space-y-4">
-                        {isPrePopulated && (
-                          <div
-                            className="rounded-xl p-5 text-center"
-                            style={{
-                              background: "var(--page-bg)",
-                              border: "1px dashed var(--border-soft)",
-                            }}
-                          >
-                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-forest-100 to-teal-100 flex items-center justify-center mx-auto mb-3">
-                              <Sparkles className="w-6 h-6 text-forest-500" />
-                            </div>
-                            <h3
-                              className="text-[15px] font-heading font-semibold mb-1"
-                              style={{ color: "var(--ink)" }}
-                            >
-                              Section Pre-Populated by AI
-                            </h3>
-                            <p className="text-[12px] mb-4" style={{ color: "var(--ink-muted)" }}>
-                              AI confidence: {currentSection.aiConfidence}%. Fields have been filled
-                              based on extracted data.
-                            </p>
-                            <div className="flex items-center justify-center gap-3">
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-3.5 h-3.5" />
-                                Review Fields
-                              </Button>
-                              <Button variant="secondary" size="sm" onClick={goToNext}>
-                                Continue
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Placeholder fields for other sections */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {Array.from({ length: 4 }).map((_, i) => (
-                            <div key={i} className="space-y-2">
-                              <div
-                                className="h-3 rounded-full"
-                                style={{
-                                  background: "var(--border-soft)",
-                                  width: `${50 + i * 10}%`,
-                                }}
-                              />
-                              <div
-                                className="rounded-xl h-10"
-                                style={{
-                                  background: "var(--page-bg)",
-                                  border: "1px solid var(--border-soft)",
-                                }}
-                              />
-                            </div>
-                          ))}
-                        </div>
-
-                        {activeSection > 0 && (
-                          <div className="space-y-2">
-                            <div
-                              className="h-3 rounded-full"
-                              style={{
-                                background: "var(--border-soft)",
-                                width: "35%",
-                              }}
-                            />
-                            <div
-                              className="rounded-xl h-24"
-                              style={{
-                                background: "var(--page-bg)",
-                                border: "1px solid var(--border-soft)",
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
+                      <DynamicSectionFields sectionData={formData[currentSection.id] ?? {}} />
                     )}
                   </div>
 
