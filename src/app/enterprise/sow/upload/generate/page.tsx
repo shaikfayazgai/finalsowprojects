@@ -7,10 +7,25 @@ import {
   ArrowLeft, ArrowRight, CheckCircle2, Loader2, AlertTriangle, Send,
   Sparkles, ShieldCheck, FileText, RefreshCw, Ban, Eye, GitBranch,
   MessageSquareDiff, RotateCcw, X, Zap, TrendingUp, FileCheck2, PenLine, Clock4,
+  Target, Code2, Link2, Calendar, DollarSign, Gavel, Scale, ClipboardCheck, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
-import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
+import { FlowStepProgress, type FlowStep } from "@/components/enterprise/sow/FlowStepProgress";
+
+const AI_SOW_STEPS: FlowStep[] = [
+  { label: "Overview",     icon: FileText },
+  { label: "Scope",        icon: Target },
+  { label: "Technical",    icon: Code2 },
+  { label: "Integrations", icon: Link2 },
+  { label: "Timeline",     icon: Calendar },
+  { label: "Budget",       icon: DollarSign },
+  { label: "Quality",      icon: ShieldCheck },
+  { label: "Governance",   icon: Gavel },
+  { label: "Commercial",   icon: Scale },
+  { label: "Review",       icon: ClipboardCheck },
+  { label: "Confirm",      icon: ClipboardList },
+];
 import { StatusBanner } from "@/components/enterprise/sow/StatusBanner";
 import { SowBadge, riskVariant } from "@/components/enterprise/sow/SowBadge";
 import {
@@ -139,7 +154,7 @@ function ReadOnlyDetailsPreview({ details }: { details: any }) {
 
 /* ═══ PAGE ═══ */
 
-export default function GeneratePreviewPage({ sowId: sowIdProp }: { sowId?: string | null }) {
+export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" }: { sowId?: string | null; flow?: "manual" | "ai" }) {
   const router = useRouter();
   const store = useSOWUploadStore();
 
@@ -274,7 +289,11 @@ export default function GeneratePreviewPage({ sowId: sowIdProp }: { sowId?: stri
 
       {/* Step progress */}
       <motion.div variants={fadeUp} className="mb-6">
-        <FlowStepProgress currentStep={genPhase === "complete" ? 7 : 6} />
+        {flow === "ai" ? (
+          <FlowStepProgress steps={AI_SOW_STEPS} currentStep={genPhase === "complete" ? 11 : 10} />
+        ) : (
+          <FlowStepProgress currentStep={genPhase === "complete" ? 7 : 6} />
+        )}
       </motion.div>
 
       {/* Page header */}

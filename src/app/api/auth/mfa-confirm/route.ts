@@ -14,7 +14,29 @@ const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLI
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, code, action } = await req.json();
+    const { email, password, code, action, mfa_pending_token: providedToken } = await req.json();
+
+    // Confirm path with a reusable pending token — skip login + re-init so the
+    // TOTP secret associated with the already-shown QR is preserved.
+    if (action !== "init" && code && providedToken) {
+      const confirmRes = await fetch(`${GLIMMORA_API}/api/v1/auth/mfa/setup/confirm`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${providedToken}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+      const confirmData = await confirmRes.json().catch(() => ({}));
+
+      if (!confirmRes.ok && (confirmData.code === "WRONG_MFA_PHASE" || String(confirmData.detail).includes("WRONG_MFA_PHASE"))) {
+        return await verifyMfa(providedToken, code);
+      }
+      if (!confirmRes.ok) {
+        return NextResponse.json(confirmData, { status: confirmRes.status });
+      }
+      return NextResponse.json({ phase: "setup", ...confirmData });
+    }
 
     if (!email || !password) {
       return NextResponse.json({ error: "Missing email or password" }, { status: 400 });
@@ -77,6 +99,7 @@ export async function POST(req: NextRequest) {
           phase: "setup",
           qr_uri: qrPng ? `data:image/png;base64,${qrPng}` : otpauthUri,
           secret,
+          mfa_pending_token: pendingToken,
         });
       } else {
         // MFA already configured — just need verification, no QR needed
@@ -90,15 +113,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (mfaStatus === "mfa_setup_required") {
-      // Re-init to associate with this fresh token, then confirm
-      await fetch(`${GLIMMORA_API}/api/v1/auth/mfa/setup/init`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${pendingToken}`,
-        },
-      });
-
+      // NOTE: we intentionally do NOT re-init here. Re-initing rotates the TOTP
+      // secret on the backend, which invalidates the QR the user just scanned.
+      // The client should pass back the `mfa_pending_token` returned by the
+      // init call so this branch is only hit as a legacy fallback.
       const confirmRes = await fetch(`${GLIMMORA_API}/api/v1/auth/mfa/setup/confirm`, {
         method: "POST",
         headers: {
