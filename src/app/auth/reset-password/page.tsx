@@ -46,12 +46,41 @@ function ResetPasswordContent() {
 
     setError("");
     setIsLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setIsLoading(false);
+    try {
+    const token = searchParams.get("token") ?? "";
+
+    const res = await fetch("/api/auth/password/change", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, new_password: password }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      setError(err?.message ?? "Failed to reset password");
+      return;
+    }
+
     setSuccess(true);
 
-    setTimeout(() => router.push(isForced ? "/enterprise/reviewer" : "/auth/login"), 2500);
-  };
+    // Send confirmation email
+    const email = searchParams.get("email") ?? "";
+    await fetch("/api/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "password_reset_success",
+        to: email,
+      }),
+    });
+
+    setTimeout(() => router.push("/enterprise/dashboard"), 2500);
+  } catch (err: any) {
+    setError(err?.message ?? "Something went wrong");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="w-full max-w-md">

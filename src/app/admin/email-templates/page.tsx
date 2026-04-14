@@ -24,6 +24,7 @@ const TEMPLATE_ORDER: EmailTemplateId[] = [
   "welcome_contributor",
   "welcome_enterprise",
   "welcome_reviewer",
+  "forgot_password",
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -35,6 +36,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   welcome_contributor: "Onboarding",
   welcome_enterprise: "Onboarding",
   welcome_reviewer: "Onboarding",
+  forgot_password: "Authentication",
 };
 
 // Human-readable names for template variables
@@ -92,6 +94,7 @@ function LivePreview({ template, selectedId }: { template: EmailTemplate; select
     welcome_contributor: { firstName: "Alex" },
     welcome_enterprise: { firstName: "Priya", orgName: "Luminary Logistics" },
     welcome_reviewer: { firstName: "Jordan", loginEmail: "jordan@glimmora.io", tempPassword: "Tmp@9xKq2!", orgName: "GlimmoraTeam", dashboardUrl: "#", supportUrl: "#" },
+    forgot_password: { userName: "Sarah Chen", resetLink: "#", expiryMinutes: "30" },
   };
 
   const vars = placeholderValues[selectedId] ?? {};
@@ -255,6 +258,7 @@ function getTestPayload(id: EmailTemplateId): Record<string, string> {
     welcome_enterprise: { firstName: "Priya", orgName: "Luminary Logistics", dashboardUrl: "#" },
     welcome_reviewer: { firstName: "Jordan", loginEmail: "jordan@glimmora.io", tempPassword: "Tmp@9xKq2!", orgName: "GlimmoraTeam", dashboardUrl: "#", supportUrl: "#" },
     reviewer_invitation: { reviewerName: "Jordan Lee", designation: "Senior Quality Analyst", inviterName: "Priya Sharma", inviterOrg: "Luminary Logistics", loginEmail: "jordan.lee@luminarylogistics.com", tempPassword: "Tmp@83xKq!", loginUrl: "#" },
+    forgot_password: { userName: "Sarah Chen", resetLink: "#", expiryMinutes: "30" },
   };
   return payloads[id];
 }

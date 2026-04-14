@@ -12,7 +12,8 @@ export type EmailTemplateId =
   | "welcome_enterprise"
   | "welcome_reviewer"
   | "otp_email"
-  | "reviewer_invitation";
+  | "reviewer_invitation"
+  | "forgot_password";
 
 export interface EmailTemplate {
   id: EmailTemplateId;
@@ -269,6 +270,26 @@ export const DEFAULT_TEMPLATES: Record<EmailTemplateId, EmailTemplate> = {
     lastEditedAt: new Date().toISOString(),
     variables: ["reviewerName", "designation", "inviterName", "inviterOrg", "loginEmail", "tempPassword", "loginUrl"],
   },
+
+  forgot_password: {
+    id: "forgot_password",
+    name: "Forgot Password",
+    description: "Sent to the user when they request a password reset link.",
+    subject: "Reset your GlimmoraTeam password",
+    headerColor: "#A67763",
+    logoUrl: DEFAULT_LOGO,
+    bodyHtml: `<p>Hi {{userName}},</p>
+<p>We received a request to reset the password for your GlimmoraTeam account.</p>
+<p>Click the button below to set a new password. This link is valid for <strong>{{expiryMinutes}} minutes</strong>.</p>
+<p style="text-align:center;margin:28px 0;">
+  <a href="{{resetLink}}" style="display:inline-block;background:#A67763;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;border-radius:10px;padding:14px 32px;">Reset My Password →</a>
+</p>
+<p>If you did not request a password reset, you can safely ignore this email. Your password will not be changed.</p>`,
+  footerText: "© Glimmora Technologies Pvt. Ltd. · You received this because a password reset was requested for your account.",
+  isActive: true,
+  lastEditedAt: new Date().toISOString(),
+  variables: ["userName", "resetLink", "expiryMinutes"],
+},
 };
 
 /* ── Store ── */
