@@ -263,8 +263,11 @@ export default function AdminSOWApprovePage() {
     setTimeout(() => router.push("/admin/sow"), 2200);
   }
 
+  const isFollowUp = isChangesRequested && !!glimmoraStage?.enterpriseReply;
+
   function handleReject() {
-    if (!rejectionReason.trim()) return;
+    // In follow-up mode allow sending without text — defaults to acknowledgment
+    if (!isFollowUp && !rejectionReason.trim()) return;
     setRejectionSubmitted(true);
     setPanelMode("checklist");
     setTimeout(() => router.push("/admin/sow"), 2500);
@@ -840,17 +843,17 @@ export default function AdminSOWApprovePage() {
                         Cancel
                       </button>
                       <button
-                        disabled={!rejectionReason.trim()}
+                        disabled={!isFollowUp && !rejectionReason.trim()}
                         onClick={handleReject}
                         className={cn(
                           "flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2.5 rounded-xl transition-all",
-                          rejectionReason.trim()
+                          (isFollowUp || rejectionReason.trim())
                             ? "text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-sm"
                             : "text-gray-400 bg-gray-100 cursor-not-allowed",
                         )}
                       >
                         <Send className="w-3.5 h-3.5" />
-                        {glimmoraStage?.enterpriseReply ? "Send Follow-up" : "Send Request"}
+                        {isFollowUp ? "Send Follow-up" : "Send Request"}
                       </button>
                     </div>
                   </div>
