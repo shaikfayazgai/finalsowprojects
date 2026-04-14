@@ -1945,6 +1945,33 @@ export default function EditDecompositionPage() {
   const isApproved = plan?.status === "approved" || plan?.status === "completed" || plan?.status === "in_progress";
   const [showRevisionWarning, setShowRevisionWarning] = React.useState(isApproved);
 
+  /* ── AI Review overlay state ── */
+  const [aiReviewOpen, setAiReviewOpen] = React.useState(false);
+  const [aiReviewStage, setAiReviewStage] = React.useState(0);
+  const aiReviewStages = [
+    { icon: Layers,      label: "Analyzing plan structure…" },
+    { icon: Search,      label: "Checking task dependencies…" },
+    { icon: ShieldCheck, label: "Compliance & risk review…" },
+    { icon: FileText,    label: "Generating AI insights…" },
+  ];
+
+  function handleSubmitAiReview() {
+    setAiReviewOpen(true);
+    setAiReviewStage(0);
+    let stage = 0;
+    const interval = setInterval(() => {
+      stage += 1;
+      setAiReviewStage(stage);
+      if (stage >= aiReviewStages.length) {
+        clearInterval(interval);
+        setTimeout(() => {
+          setAiReviewOpen(false);
+          router.push(`/enterprise/decomposition/${planId}`);
+        }, 600);
+      }
+    }, 900);
+  }
+
   /* ── Initialize editable milestones from API or mock data ── */
   const initialMilestones = React.useMemo((): EditableMilestone[] => {
     const raw = apiMilestonesRes?.data;
