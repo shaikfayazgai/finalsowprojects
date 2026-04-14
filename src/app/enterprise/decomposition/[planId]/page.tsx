@@ -580,7 +580,7 @@ export default function PlanDetailPage() {
       const msDict = milestonesRaw as Record<string, unknown[]>;
       return Object.entries(msDict).map(([key, msTasks], idx) => {
         const tasksArr = Array.isArray(msTasks) ? msTasks : [];
-        const totalEffort = tasksArr.reduce((sum, t: Record<string, unknown>) => sum + Number(t.effort ?? 0), 0);
+        const totalEffort = tasksArr.reduce((sum, t) => sum + Number((t as Record<string, unknown>).effort ?? 0), 0);
         return {
           id: key,
           planId: planId,
