@@ -422,9 +422,13 @@ export default function AdminSOWApprovePage() {
                     <span className="text-[10px] text-gray-400">
                       {glimmoraStage.enterpriseRepliedAt ? formatDate(glimmoraStage.enterpriseRepliedAt) : ""}
                     </span>
-                    <span className="ml-auto text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-100">
+                    <button
+                      onClick={() => setPanelMode("reject")}
+                      className="ml-auto inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-100 hover:bg-teal-100 hover:border-teal-200 transition-colors cursor-pointer"
+                    >
+                      <MessageSquare className="w-2.5 h-2.5" />
                       Reply
-                    </span>
+                    </button>
                   </div>
                   <p className="text-[12px] text-gray-700 leading-relaxed">{glimmoraStage.enterpriseReply}</p>
                 </div>
