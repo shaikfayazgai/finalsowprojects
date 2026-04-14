@@ -320,16 +320,6 @@ export default function AdminSOWApprovePage() {
 
       {/* ════════════════════════════════ HEADER BAND ════════════════════════════════ */}
       <div className="px-6 pt-6 pb-5 border-b border-beige-100 bg-white">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-1.5 text-[11px] text-beige-400 mb-4">
-          <Link href="/admin/dashboard" className="hover:text-brown-700 transition-colors">Dashboard</Link>
-          <span>/</span>
-          <Link href="/admin/sow" className="hover:text-brown-700 transition-colors">SOW Oversight</Link>
-          <span>/</span>
-          <span className="text-brown-700 font-medium truncate max-w-[200px]">{sow.title}</span>
-          <span>/</span>
-          <span className="text-brown-700 font-medium">Review</span>
-        </div>
 
         <div className="flex items-start justify-between gap-6 flex-wrap">
           {/* Title block */}
