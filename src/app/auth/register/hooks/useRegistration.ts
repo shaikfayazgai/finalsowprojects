@@ -211,7 +211,13 @@ export function useRegistration(ssoData?: SSOData | null) {
   function goToStep2() {
     if (!firstName.trim())               { setError("Please enter your first name"); return; }
     if (!lastName.trim())     { setError("Please enter your last name"); return; }
-    if (!email)                          { setError("Please enter a valid email address"); return; }
+    // ✅ Added proper email validation
+    if (!email.trim()) { setError("Please enter your email address"); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { 
+      setError("Please enter a valid email address (e.g. name@company.com)"); 
+      return; 
+    }
+
     if (!isSsoUser) {
       if (password.length < 8)  { setError("Password must be at least 8 characters with a number and mixed case"); return; }
       if (password !== confirm) { setError("Passwords do not match - please re-enter"); return; }
@@ -303,7 +309,14 @@ export function useRegistration(ssoData?: SSOData | null) {
       });
 
       if (!result.success) {
-        setError(result.error);
+        // Show friendly message for duplicate email
+        if (result.error?.toLowerCase().includes("already") || 
+            result.error?.toLowerCase().includes("exists") ||
+            result.error?.toLowerCase().includes("duplicate")) {
+          setError("This email is already registered. Please sign in instead.");
+        } else {
+          setError(result.error);
+        }
         setIsLoading(false);
         return;
       }

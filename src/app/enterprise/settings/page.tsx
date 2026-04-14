@@ -329,8 +329,13 @@ export default function SettingsPage() {
       setAddReviewerOpen(false);
       toast.success(`Welcome email sent to ${newEmail} with login credentials.`);
     } catch (err: any) {
+      if (err?.message?.toLowerCase().includes("already") || 
+        err?.message?.toLowerCase().includes("exists")) {
+      setAddError("A reviewer with this email already exists in the system.");
+    } else {
       setAddError(err?.message ?? "Failed to send invitation. Please try again.");
-    } finally {
+    }
+  } finally {
       setAddSaving(false);
     }
   };

@@ -15,6 +15,7 @@ const bodySchema = z.object({
     "welcome_reviewer",
     "otp_email",
     "reviewer_invitation",
+    "forgot_password",
   ]),
   payload: z.record(z.string(), z.string()),
   /** Override recipient; falls back to session user email */
