@@ -10,6 +10,7 @@ export type EmailTemplateId =
   | "sow_fully_approved"
   | "welcome_contributor"
   | "welcome_enterprise"
+  | "welcome_reviewer"
   | "otp_email"
   | "reviewer_invitation";
 
@@ -136,6 +137,61 @@ export const DEFAULT_TEMPLATES: Record<EmailTemplateId, EmailTemplate> = {
     lastEditedAt: new Date().toISOString(),
     variables: ["firstName", "orgName", "dashboardUrl"],
   },
+  welcome_reviewer: {
+    id: "welcome_reviewer",
+    name: "Welcome — Reviewer",
+    description: "Sent to a newly onboarded reviewer with login credentials and a prompt to reset their password.",
+    subject: "Welcome to GlimmoraTeam, {{firstName}} — Your reviewer account is ready",
+    headerColor: "#4D5741",
+    logoUrl: DEFAULT_LOGO,
+    bodyHtml: `<p>Hi <strong>{{firstName}}</strong>,</p>
+<p>Welcome to <strong>GlimmoraTeam</strong>! Your reviewer account has been created and you're ready to start making an impact.</p>
+<p>Use the credentials below to log in for the first time:</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F7F5;border-radius:12px;margin:20px 0 8px;overflow:hidden;">
+  <tr style="border-bottom:1px solid #EDE8E3;">
+    <td style="padding:13px 20px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;width:130px;">Login Email</td>
+    <td style="padding:13px 20px;font-size:14px;font-weight:500;color:#0D1B2A;">{{loginEmail}}</td>
+  </tr>
+  <tr>
+    <td style="padding:13px 20px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;">Temp Password</td>
+    <td style="padding:13px 20px;font-size:15px;font-weight:700;color:#4D5741;font-family:'Courier New',Courier,monospace;letter-spacing:2px;">{{tempPassword}}</td>
+  </tr>
+</table>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#FFF8F3;border:1px solid #F0DDD0;border-radius:10px;margin:0 0 24px;">
+  <tr>
+    <td style="padding:14px 20px;">
+      <p style="font-size:13px;font-weight:700;color:#92400E;margin:0 0 4px;padding:0;">⚠ Reset your password on first login</p>
+      <p style="font-size:13px;color:#374151;line-height:1.6;margin:0;padding:0;">For your security, you will be prompted to set a new password the first time you sign in. Do not share these credentials with anyone.</p>
+    </td>
+  </tr>
+</table>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F3;border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr>
+    <td style="padding:18px 24px;">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#707867;margin:0 0 12px;">As a Reviewer, you will</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="padding:5px 0;font-size:13px;color:#313829;line-height:1.6;"><span style="color:#4D5741;font-weight:700;margin-right:8px;">✓</span>Review deliverables and evidence packs submitted by contributors</td></tr>
+        <tr><td style="padding:5px 0;font-size:13px;color:#313829;line-height:1.6;"><span style="color:#4D5741;font-weight:700;margin-right:8px;">✓</span>Provide quality assessments and approval decisions</td></tr>
+        <tr><td style="padding:5px 0;font-size:13px;color:#313829;line-height:1.6;"><span style="color:#4D5741;font-weight:700;margin-right:8px;">✓</span>Flag rework requests when standards are not met</td></tr>
+        <tr><td style="padding:5px 0;font-size:13px;color:#313829;line-height:1.6;"><span style="color:#4D5741;font-weight:700;margin-right:8px;">✓</span>Participate in milestone sign-off workflows</td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<p style="text-align:center;margin:28px 0;">
+  <a href="{{dashboardUrl}}" style="display:inline-block;background:#4D5741;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;border-radius:10px;padding:14px 32px;">Log In & Reset Password →</a>
+</p>
+
+<p style="font-size:13px;color:#6b7280;">Need help? Visit our <a href="{{supportUrl}}" style="color:#4D5741;">support centre</a> or reply to this email.</p>`,
+    footerText: "© Glimmora Technologies Pvt. Ltd. · You received this because you were onboarded as a reviewer on GlimmoraTeam.",
+    isActive: true,
+    lastEditedAt: new Date().toISOString(),
+    variables: ["firstName", "loginEmail", "tempPassword", "orgName", "dashboardUrl", "supportUrl"],
+  },
   otp_email: {
     id: "otp_email",
     name: "Email Verification OTP",
@@ -253,6 +309,19 @@ export const useEmailTemplateStore = create<EmailTemplateState>()(
 
       getTemplate: (id) => get().templates[id],
     }),
-    { name: "gt-email-templates", version: 1 }
+    {
+      name: "gt-email-templates",
+      version: 1,
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<EmailTemplateState>),
+        // Always include all DEFAULT_TEMPLATES so newly added templates
+        // are never missing from an older persisted localStorage state.
+        templates: {
+          ...DEFAULT_TEMPLATES,
+          ...((persisted as Partial<EmailTemplateState>)?.templates ?? {}),
+        },
+      }),
+    }
   )
 );

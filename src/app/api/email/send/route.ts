@@ -12,6 +12,7 @@ const bodySchema = z.object({
     "sow_fully_approved",
     "welcome_contributor",
     "welcome_enterprise",
+    "welcome_reviewer",
     "otp_email",
     "reviewer_invitation",
   ]),

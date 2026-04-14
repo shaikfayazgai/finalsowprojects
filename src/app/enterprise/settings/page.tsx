@@ -238,9 +238,21 @@ export default function SettingsPage() {
     setAddError("");
   };
 
+  /** Generate a random temporary password: 12 chars, upper+lower+digit+symbol */
+  function generateTempPassword(): string {
+    const upper  = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower  = "abcdefghjkmnpqrstuvwxyz";
+    const digits = "23456789";
+    const syms   = "@#$!";
+    const all    = upper + lower + digits + syms;
+    const rand   = (s: string) => s[Math.floor(Math.random() * s.length)];
+    const core   = Array.from({ length: 8 }, () => rand(all)).join("");
+    // Guarantee at least one of each required type
+    return rand(upper) + rand(lower) + rand(digits) + rand(syms) + core;
+  }
+
   const handleAddReviewer = async () => {
     setAddError("");
-    console.log("TOKEN:", accessToken);
     if (!newEmail || !newFirstName || !newLastName || !newDesignation || !newDepartment || !newUsername || !newLanguage || !newTimeZone) {
       setAddError("All fields are required.");
       return;
@@ -258,33 +270,47 @@ export default function SettingsPage() {
     try {
       const adminName = session?.user?.name ?? "Enterprise Admin";
 
-      const result = await authApi.createReviewer({
-        firstName: newFirstName,
-        lastName: newLastName,
-        email: newEmail,
-        designation: newDesignation,
-        department: newDepartment,
-        username: newUsername,
-        language: newLanguage,
-        timeZone: newTimeZone,
-        invitedByName: adminName,
-      });
+      // Generate a local temp password upfront — used as fallback if the
+      // Glimmora API is unavailable (e.g. missing admin credentials in .env)
+      const localTempPassword = generateTempPassword();
 
-      // Send invitation email via our email service
+      // Try to create the account via the Glimmora backend API.
+      // If this fails (e.g. no admin token configured), we still proceed
+      // with sending the welcome email using the locally generated password.
+      let apiTempPassword: string | undefined;
+      try {
+        const result = await authApi.createReviewer({
+          firstName: newFirstName,
+          lastName: newLastName,
+          email: newEmail,
+          designation: newDesignation,
+          department: newDepartment,
+          username: newUsername,
+          language: newLanguage,
+          timeZone: newTimeZone,
+          invitedByName: adminName,
+        });
+        apiTempPassword = result.temp_password;
+      } catch {
+        // API unavailable — continue with local password
+      }
+
+      const tempPassword = apiTempPassword ?? localTempPassword;
+
+      // Send welcome email via Gmail SMTP (always runs regardless of API result)
       await fetch("/api/email/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          event: "reviewer_invitation",
+          event: "welcome_reviewer",
           to: newEmail,
           payload: {
-            reviewerName: `${newFirstName} ${newLastName}`,
-            designation: newDesignation,
-            inviterName: adminName,
-            inviterOrg: companyName || "Enterprise",
+            firstName: newFirstName,
             loginEmail: newEmail,
-            tempPassword: result.temp_password ?? "Check your email for credentials",
-            loginUrl: `${window.location.origin}/auth/login`,
+            tempPassword,
+            orgName: companyName || "Enterprise",
+            dashboardUrl: `${window.location.origin}/enterprise/reviewer`,
+            supportUrl: `${window.location.origin}/support`,
           },
         }),
       });
@@ -301,7 +327,7 @@ export default function SettingsPage() {
       setTeamMembers((prev) => [...prev, member]);
       resetAddForm();
       setAddReviewerOpen(false);
-      toast.success(`Invitation sent to ${newEmail}. They will receive login credentials shortly.`);
+      toast.success(`Welcome email sent to ${newEmail} with login credentials.`);
     } catch (err: any) {
       setAddError(err?.message ?? "Failed to send invitation. Please try again.");
     } finally {

@@ -23,6 +23,7 @@ const TEMPLATE_ORDER: EmailTemplateId[] = [
   "sow_fully_approved",
   "welcome_contributor",
   "welcome_enterprise",
+  "welcome_reviewer",
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -33,6 +34,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   sow_fully_approved: "SOW Pipeline",
   welcome_contributor: "Onboarding",
   welcome_enterprise: "Onboarding",
+  welcome_reviewer: "Onboarding",
 };
 
 // Human-readable names for template variables
@@ -52,6 +54,9 @@ const VAR_FRIENDLY: Record<string, string> = {
   dashboardUrl: "Dashboard Link",
   loginUrl: "Login Link",
   onboardingUrl: "Onboarding Link",
+  supportUrl: "Support Link",
+  loginEmail: "Login Email",
+  tempPassword: "Temporary Password",
   code: "Verification Code",
   expiryMinutes: "Code Expiry (minutes)",
 };
@@ -86,6 +91,7 @@ function LivePreview({ template, selectedId }: { template: EmailTemplate; select
     sow_fully_approved: { adminName: "Enterprise Admin", sowTitle: "AI-Driven Supply Chain Optimizer", approvedAt: "April 8, 2026", sowUrl: "#" },
     welcome_contributor: { firstName: "Alex" },
     welcome_enterprise: { firstName: "Priya", orgName: "Luminary Logistics" },
+    welcome_reviewer: { firstName: "Jordan", loginEmail: "jordan@glimmora.io", tempPassword: "Tmp@9xKq2!", orgName: "GlimmoraTeam", dashboardUrl: "#", supportUrl: "#" },
   };
 
   const vars = placeholderValues[selectedId] ?? {};
@@ -247,6 +253,7 @@ function getTestPayload(id: EmailTemplateId): Record<string, string> {
     sow_fully_approved: { adminName: "Enterprise Admin", sowTitle: "AI-Driven Supply Chain Optimizer", approvedAt: "April 8, 2026", sowUrl: "#" },
     welcome_contributor: { firstName: "Alex", loginUrl: "#", onboardingUrl: "#" },
     welcome_enterprise: { firstName: "Priya", orgName: "Luminary Logistics", dashboardUrl: "#" },
+    welcome_reviewer: { firstName: "Jordan", loginEmail: "jordan@glimmora.io", tempPassword: "Tmp@9xKq2!", orgName: "GlimmoraTeam", dashboardUrl: "#", supportUrl: "#" },
     reviewer_invitation: { reviewerName: "Jordan Lee", designation: "Senior Quality Analyst", inviterName: "Priya Sharma", inviterOrg: "Luminary Logistics", loginEmail: "jordan.lee@luminarylogistics.com", tempPassword: "Tmp@83xKq!", loginUrl: "#" },
   };
   return payloads[id];
@@ -374,7 +381,7 @@ export default function AdminEmailTemplatesPage() {
           <div style={{ flex: "0 0 auto" }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: "#0D1B2A", margin: "0 0 2px" }}>Send Test Emails</p>
             <p style={{ fontSize: 11, color: "#9ca3af", margin: 0 }}>
-              Send a sample of all 7 email types to one address to see how they look
+              Send a sample of all 8 email types to one address to see how they look
             </p>
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
@@ -392,7 +399,7 @@ export default function AdminEmailTemplatesPage() {
             style={{ ...primaryBtn, opacity: sendingAll || !bulkRecipient ? 0.55 : 1, flexShrink: 0 }}
           >
             <SendHorizonal size={14} />
-            {sendingAll ? "Sending…" : "Send All 7"}
+            {sendingAll ? "Sending…" : "Send All 8"}
           </button>
         </div>
 

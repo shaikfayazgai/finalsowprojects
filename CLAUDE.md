@@ -109,3 +109,9 @@ Most UI flows run off **mock data** in `src/mocks/data/` — there is no real AP
 - Sidebar badge counts come from `src/lib/hooks/use-sow-badges.ts`
 ## gitpush
 don't include claude co-author while pushing the code in to github
+
+## api integration
+for api integration use built in fetch function for normal pages and use tanstack query for data heavy pages and the page that require data cache. don't integrate multiple at a time. integrate one at a time test it if it work and then integrate  another api follow this rule every time while integrating api
+
+## loading 
+use skeleton ui loader for all pages based on that page structure

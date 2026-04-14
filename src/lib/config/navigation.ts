@@ -284,7 +284,6 @@ export const adminNav: ModuleConfig = {
     {
       title: "User Management",
       items: [
-        { label: "All Users", href: "/admin/users", icon: Users },
         { label: "Roles & Permissions", href: "/admin/roles", icon: KeyRound },
       ],
     },
