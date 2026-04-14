@@ -375,7 +375,7 @@ export function useCriticalPath(planId: string | null) {
 export function useKickoff() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: unknown) => decompositionApi.kickoff(payload),
+    mutationFn: (payload: { plan_id: string } & Record<string, unknown>) => decompositionApi.kickoff(payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: decompositionKeys.plans() });
     },
