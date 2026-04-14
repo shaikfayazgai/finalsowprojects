@@ -9,6 +9,7 @@ import {
   DollarSign, Target, Scale, Shield, ShieldCheck, Clock, XCircle,
   Send, Sparkles, Building2, FileText, Users, Tag, Calendar,
   BookOpen, Layers, Bot, Lock, Gauge, LayoutGrid, GitBranch,
+  MessageSquare, CornerDownRight,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -127,7 +128,7 @@ function SectionRow({ title, content, confidence, aiSuggestion }: {
 }
 
 function PipelineStage({ stage, index, total }: {
-  stage: { stage: string; status: string; reviewer?: string; comments?: string };
+  stage: { stage: string; status: string; reviewer?: string; comments?: string; enterpriseReply?: string; enterpriseRepliedAt?: string };
   index: number; total: number;
 }) {
   const isActive  = stage.stage === "glimmora_commercial";
@@ -182,6 +183,33 @@ function PipelineStage({ stage, index, total }: {
         {stage.comments && done && (
           <div className="mt-2 px-3 py-2 rounded-lg bg-beige-50 border border-beige-100">
             <p className="text-[11px] text-gray-500 italic">&ldquo;{stage.comments}&rdquo;</p>
+          </div>
+        )}
+        {stage.comments && stage.status === "rejected" && (
+          <div className="mt-2 space-y-2">
+            <div className="px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-100">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-amber-600 mb-1">Changes Requested</p>
+              <p className="text-[11px] text-amber-900 leading-relaxed">{stage.comments}</p>
+            </div>
+            {stage.enterpriseReply ? (
+              <div className="flex items-start gap-2">
+                <CornerDownRight className="w-3 h-3 text-beige-300 mt-1 shrink-0" />
+                <div className="flex-1 px-3 py-2.5 rounded-xl bg-teal-50 border border-teal-100">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-teal-600">Enterprise Reply</p>
+                    {stage.enterpriseRepliedAt && (
+                      <p className="text-[10px] text-teal-400">{formatDate(stage.enterpriseRepliedAt)}</p>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-teal-900 leading-relaxed">{stage.enterpriseReply}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-50 border border-dashed border-gray-200">
+                <Clock className="w-3 h-3 text-gray-300 shrink-0" />
+                <p className="text-[10px] text-gray-400 italic">Awaiting enterprise response…</p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -352,14 +380,53 @@ export default function AdminSOWApprovePage() {
           </div>
         </div>
 
-        {/* Previous feedback banner */}
+        {/* Change request thread banner */}
         {isChangesRequested && glimmoraStage?.comments && (
-          <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-            <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-[11px] font-semibold text-amber-700 mb-0.5">Previous feedback from commercial review</p>
-              <p className="text-[12px] text-amber-800">{glimmoraStage.comments}</p>
+          <div className="mt-4 rounded-2xl border border-amber-200 overflow-hidden">
+            {/* Glimmora request row */}
+            <div className="flex items-start gap-3 bg-amber-50 px-4 py-3.5">
+              <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[11px] font-bold text-amber-800">GlimmoraTeam Admin</span>
+                  <span className="text-[10px] text-amber-500">·</span>
+                  <span className="text-[10px] text-amber-500">
+                    {glimmoraStage.reviewedAt ? formatDate(glimmoraStage.reviewedAt) : ""}
+                  </span>
+                  <span className="ml-auto text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-200 text-amber-700">
+                    Changes Requested
+                  </span>
+                </div>
+                <p className="text-[12px] text-amber-900 leading-relaxed">{glimmoraStage.comments}</p>
+              </div>
             </div>
+
+            {/* Enterprise reply row */}
+            {glimmoraStage.enterpriseReply && (
+              <div className="flex items-start gap-3 bg-white px-4 py-3.5 border-t border-amber-100">
+                <div className="flex flex-col items-center shrink-0">
+                  <CornerDownRight className="w-3.5 h-3.5 text-beige-300 mt-1" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <div className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center shrink-0">
+                      <Building2 className="w-2.5 h-2.5 text-teal-600" />
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-800">Enterprise Admin</span>
+                    <span className="text-[10px] text-gray-400">·</span>
+                    <span className="text-[10px] text-gray-400">
+                      {glimmoraStage.enterpriseRepliedAt ? formatDate(glimmoraStage.enterpriseRepliedAt) : ""}
+                    </span>
+                    <span className="ml-auto text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-100">
+                      Reply
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-gray-700 leading-relaxed">{glimmoraStage.enterpriseReply}</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -677,43 +744,115 @@ export default function AdminSOWApprovePage() {
                   key="reject"
                   initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.15 }}
-                  className="px-5 py-5"
+                  className="flex flex-col"
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                    <p className="text-[13px] font-semibold text-gray-900">Request Changes</p>
+                  {/* Panel title */}
+                  <div className="px-5 pt-5 pb-4 border-b border-beige-50">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <MessageSquare className="w-4 h-4 text-amber-500 shrink-0" />
+                      <p className="text-[13px] font-semibold text-gray-900">Change Request Thread</p>
+                    </div>
+                    <p className="text-[11px] text-gray-400 leading-snug">
+                      Conversation history for this commercial review stage.
+                    </p>
                   </div>
-                  <p className="text-[11px] text-gray-400 mb-4 leading-snug">
-                    Describe what needs to be addressed before this SOW can receive commercial approval.
-                  </p>
 
-                  <Textarea
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
-                    placeholder="e.g. Budget range too low for declared scope. Rate cards for senior roles are missing."
-                    className="min-h-[120px] text-[12px] resize-none mb-4"
-                    autoFocus
-                  />
+                  {/* ── Thread: existing messages ── */}
+                  {isChangesRequested && glimmoraStage?.comments && (
+                    <div className="px-5 pt-4 pb-3 space-y-3">
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { setPanelMode("checklist"); setRejectionReason(""); }}
-                      className="flex-1 text-[12px] font-medium text-gray-500 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      disabled={!rejectionReason.trim()}
-                      onClick={handleReject}
-                      className={cn(
-                        "flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2.5 rounded-xl transition-all",
-                        rejectionReason.trim()
-                          ? "text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-sm"
-                          : "text-gray-400 bg-gray-100 cursor-not-allowed",
+                      {/* Glimmora original request */}
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline gap-1.5 mb-1">
+                            <span className="text-[11px] font-bold text-gray-800">You</span>
+                            <span className="text-[10px] text-gray-400">
+                              {glimmoraStage.reviewedAt ? formatDate(glimmoraStage.reviewedAt) : ""}
+                            </span>
+                          </div>
+                          <div className="rounded-xl rounded-tl-none bg-amber-50 border border-amber-100 px-3 py-2.5">
+                            <p className="text-[11.5px] text-amber-900 leading-relaxed">{glimmoraStage.comments}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Enterprise reply bubble */}
+                      {glimmoraStage.enterpriseReply ? (
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center shrink-0 mt-0.5">
+                            <Building2 className="w-3 h-3 text-teal-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-1.5 mb-1">
+                              <span className="text-[11px] font-bold text-gray-800">Enterprise Admin</span>
+                              <span className="text-[10px] text-gray-400">
+                                {glimmoraStage.enterpriseRepliedAt ? formatDate(glimmoraStage.enterpriseRepliedAt) : ""}
+                              </span>
+                              <span className="ml-auto text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-100 shrink-0">
+                                Reply
+                              </span>
+                            </div>
+                            <div className="rounded-xl rounded-tl-none bg-teal-50 border border-teal-100 px-3 py-2.5">
+                              <p className="text-[11.5px] text-teal-900 leading-relaxed">{glimmoraStage.enterpriseReply}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-50 border border-dashed border-gray-200">
+                          <Clock className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                          <p className="text-[11px] text-gray-400 italic">Awaiting enterprise admin response…</p>
+                        </div>
                       )}
-                    >
-                      <Send className="w-3.5 h-3.5" /> Submit
-                    </button>
+
+                      <div className="border-t border-beige-50 pt-3">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-beige-400 mb-2">
+                          {glimmoraStage.enterpriseReply ? "Send Follow-up" : "Add Another Request"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── New message composer ── */}
+                  <div className={cn("px-5 pb-5", !(isChangesRequested && glimmoraStage?.comments) && "pt-5")}>
+                    {!(isChangesRequested && glimmoraStage?.comments) && (
+                      <p className="text-[11px] text-gray-400 mb-3 leading-snug">
+                        Describe what needs to be addressed before this SOW can receive commercial approval.
+                      </p>
+                    )}
+                    <Textarea
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder={glimmoraStage?.enterpriseReply
+                        ? "Send a follow-up or additional request…"
+                        : "e.g. Budget range too low for declared scope. Rate cards for senior roles are missing."}
+                      className="min-h-[100px] text-[12px] resize-none mb-4"
+                      autoFocus
+                    />
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setPanelMode("checklist"); setRejectionReason(""); }}
+                        className="flex-1 text-[12px] font-medium text-gray-500 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        disabled={!rejectionReason.trim()}
+                        onClick={handleReject}
+                        className={cn(
+                          "flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2.5 rounded-xl transition-all",
+                          rejectionReason.trim()
+                            ? "text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-sm"
+                            : "text-gray-400 bg-gray-100 cursor-not-allowed",
+                        )}
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        {glimmoraStage?.enterpriseReply ? "Send Follow-up" : "Send Request"}
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               )}

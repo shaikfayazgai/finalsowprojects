@@ -27,7 +27,15 @@ const draftStages: SOWApprovalStage[] = [
 
 const changesRequestedStages: SOWApprovalStage[] = [
   { stage: "business", status: "approved", reviewer: "Enterprise Admin", reviewedAt: "2026-03-10T10:00:00Z", comments: "Scope verified." },
-  { stage: "glimmora_commercial", status: "rejected", reviewer: "GlimmoraTeam Admin", reviewedAt: "2026-03-11T15:00:00Z", comments: "Budget range too low for declared scope. Minimum viable budget for this scope is $220,000." },
+  {
+    stage: "glimmora_commercial",
+    status: "rejected",
+    reviewer: "GlimmoraTeam Admin",
+    reviewedAt: "2026-03-11T15:00:00Z",
+    comments: "Budget range too low for declared scope. Minimum viable budget for this scope is $220,000. Please revise the budget section and resubmit for commercial review.",
+    enterpriseReply: "Acknowledged. We have revised the budget ceiling to $240,000 to reflect the full delivery scope, including the additional data pipeline and QA phase. The updated SoW section 4.2 reflects these changes. Please re-review at your earliest convenience.",
+    enterpriseRepliedAt: "2026-03-12T09:45:00Z",
+  },
   { stage: "legal", status: "pending" },
   { stage: "security", status: "pending" },
   { stage: "final", status: "pending" },

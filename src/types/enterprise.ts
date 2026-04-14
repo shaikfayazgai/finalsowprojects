@@ -88,6 +88,9 @@ export interface SOWApprovalStage {
   reviewer?: string;
   reviewedAt?: string;
   comments?: string;
+  /** Enterprise admin's reply to a request-changes comment */
+  enterpriseReply?: string;
+  enterpriseRepliedAt?: string;
 }
 
 /* ── Risk & Hallucination (SOW V2.1 Section 6.2.7 + UX Flow B4) ── */
