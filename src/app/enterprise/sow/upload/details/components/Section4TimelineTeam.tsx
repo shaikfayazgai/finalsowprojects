@@ -56,12 +56,14 @@ export function Section4TimelineTeam({ onComplete, onBack }: Props) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Start Date" error={errors.startDate}>
             <input type="date" value={data.startDate}
+              min={new Date().toISOString().split('T')[0]}
               onChange={(e) => update({ startDate: e.target.value })}
               onBlur={() => blurField("startDate")}
               className={inputCls} />
           </Field>
           <Field label="Target End Date" error={errors.targetEndDate}>
             <input type="date" value={data.targetEndDate}
+              min={data.startDate || new Date().toISOString().split('T')[0]}
               onChange={(e) => update({ targetEndDate: e.target.value })}
               onBlur={() => blurField("targetEndDate")}
               className={inputCls} />

@@ -8,21 +8,29 @@ export async function POST(req: NextRequest) {
     const { token, new_password } = body;
 
     if (!token || !new_password) {
-      return NextResponse.json({ success: false, message: "Token and new password are required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "Token and new password are required" },
+        { status: 400 },
+      );
     }
 
     const backendUrl = process.env.GLIMMORA_API_URL ?? process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
 
-    const backendRes = await fetch(`${backendUrl}/api/v1/auth/password/reset`, {
+    // The reset token from the email is used as a Bearer token.
+    // current_password is omitted since this is a reset flow (no old password known).
+    const backendRes = await fetch(`${backendUrl}/api/v1/auth/password/change`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, new_password }),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({ new_password }),
     });
 
     const data = await backendRes.json().catch(() => ({}));
 
     if (!backendRes.ok) {
-      const message = data?.detail ?? data?.message ?? "Failed to reset password";
+      const message = data?.detail ?? data?.message ?? "Failed to reset password. The link may have expired.";
       return NextResponse.json({ success: false, message }, { status: backendRes.status });
     }
 

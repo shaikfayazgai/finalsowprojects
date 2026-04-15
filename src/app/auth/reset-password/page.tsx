@@ -27,7 +27,8 @@ import { Suspense } from "react";
 function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isForced = searchParams.get("forced") === "true";
+
+  const token = searchParams.get("token") ?? "";
 
   const [password, setPassword]           = useState("");
   const [confirm, setConfirm]             = useState("");
@@ -36,6 +37,41 @@ function ResetPasswordContent() {
   const [isLoading, setIsLoading]         = useState(false);
   const [error, setError]                 = useState("");
   const [success, setSuccess]             = useState(false);
+
+  // Invalid/missing token — show error state
+  if (!token) {
+    return (
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-brown-500 to-brown-700 shadow-xl shadow-brown-500/20 mb-4">
+            <Sparkles className="w-7 h-7 text-white" />
+          </div>
+          <h1 className="font-heading text-2xl font-semibold text-brown-950">Invalid Reset Link</h1>
+          <p className="text-sm text-beige-600 mt-1">This link is invalid or has expired</p>
+        </div>
+        <GlassCard variant="heavy" padding="lg">
+          <GlassCardContent>
+            <div className="text-center space-y-5 py-2">
+              <div className="mx-auto w-14 h-14 rounded-full bg-red-50 border border-red-100 flex items-center justify-center">
+                <AlertCircle className="w-7 h-7 text-red-500" />
+              </div>
+              <div>
+                <p className="font-semibold text-brown-950 mb-1">Link expired or invalid</p>
+                <p className="text-sm text-beige-600">
+                  Password reset links expire after 30 minutes. Please request a new one.
+                </p>
+              </div>
+              <Link href="/auth/forgot-password">
+                <Button variant="primary" size="md" className="w-full">
+                  Request New Link
+                </Button>
+              </Link>
+            </div>
+          </GlassCardContent>
+        </GlassCard>
+      </div>
+    );
+  }
 
   const strength = getStrength(password);
 
@@ -47,8 +83,6 @@ function ResetPasswordContent() {
     setError("");
     setIsLoading(true);
     try {
-    const token = searchParams.get("token") ?? "";
-
     const res = await fetch("/api/auth/password/change", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -62,19 +96,7 @@ function ResetPasswordContent() {
     }
 
     setSuccess(true);
-
-    // Send confirmation email
-    const email = searchParams.get("email") ?? "";
-    await fetch("/api/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event: "password_reset_success",
-        to: email,
-      }),
-    });
-
-    setTimeout(() => router.push("/enterprise/dashboard"), 2500);
+    setTimeout(() => router.push("/auth/login"), 2500);
   } catch (err: any) {
     setError(err?.message ?? "Something went wrong");
   } finally {
