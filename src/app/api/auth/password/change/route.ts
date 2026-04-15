@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 function verifyResetToken(token: string): { valid: boolean; email?: string; reason?: string } {
   try {
-    const secret = process.env.NEXTAUTH_SECRET ?? "fallback-reset-secret";
+    const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "fallback-reset-secret";
     const decoded = JSON.parse(Buffer.from(token, "base64url").toString());
     const { email, exp, sig } = decoded;
 

@@ -6,7 +6,7 @@ import { getBaseUrl } from "@/lib/utils/base-url";
 export const runtime = "nodejs";
 
 function generateResetToken(email: string): string {
-  const secret = process.env.NEXTAUTH_SECRET ?? "fallback-reset-secret";
+  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "fallback-reset-secret";
   const exp = Date.now() + 30 * 60 * 1000; // 30 minutes
   const payload = `${email}:${exp}`;
   const sig = createHmac("sha256", secret).update(payload).digest("hex");
@@ -71,18 +71,24 @@ export async function POST(req: NextRequest) {
       footerText: "© GlimmoraTeam · AI-Governed Global Workforce Platform · This is an automated message.",
     });
 
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: normalizedEmail,
       subject: "Reset your GlimmoraTeam password",
       html,
     });
+
+    if (!emailResult.success) {
+      console.error("[forgot-password] email send failed for:", normalizedEmail);
+    } else {
+      console.log("[forgot-password] reset email sent to:", normalizedEmail, "messageId:", emailResult.messageId);
+    }
 
     return NextResponse.json({
       success: true,
       message: "If an account exists for this email, a reset link has been sent.",
     });
   } catch (err) {
-    console.error("[forgot-password] error:", err);
+    console.error("[forgot-password] unexpected error:", err);
     return NextResponse.json({
       success: true,
       message: "If an account exists for this email, a reset link has been sent.",
