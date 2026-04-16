@@ -496,9 +496,9 @@ function ContributorRegisterContent() {
     if (role === "enterprise") {
       setPendingOnboarding(true);
     }
-    const redirectAfter = role === "enterprise"
-      ? "/enterprise/dashboard"
-      : "/contributor/onboarding";
+    const redirectAfter = role === "enterprise" 
+      ? "/enterprise/dashboard" 
+      : "/contributor/dashboard";
     // Use NextAuth's built-in OAuth instead of Glimmora's endpoints
     // Glimmora's callback is locked to glimmora-api.onrender.com and can't redirect back
     signIn(provider, { callbackUrl: redirectAfter });
