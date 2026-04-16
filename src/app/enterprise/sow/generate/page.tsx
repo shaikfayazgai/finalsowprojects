@@ -395,6 +395,7 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 function DateInput({ value, onChange, placeholder, minDate }: { value: string; onChange: (v: string) => void; placeholder?: string; minDate?: string }) {
+  const [yearOpen, setYearOpen] = React.useState(false);
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
@@ -409,7 +410,7 @@ function DateInput({ value, onChange, placeholder, minDate }: { value: string; o
   React.useEffect(() => {
     if (open && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      setPos({ top: rect.bottom + 4 + window.scrollY, left: rect.left + window.scrollX });
+      setPos({ top: rect.bottom + 4, left: rect.left });
     }
   }, [open]);
 
@@ -419,8 +420,18 @@ function DateInput({ value, onChange, placeholder, minDate }: { value: string; o
       if (triggerRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
       setOpen(false);
     };
+
+    const scrollHandler = (e: Event) => {
+      if (dropdownRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    window.addEventListener('scroll', scrollHandler, true);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+
+      window.removeEventListener('scroll', scrollHandler, true); 
+    };
   }, []);
 
   const formatDisplay = (v: string) => {
@@ -458,12 +469,58 @@ function DateInput({ value, onChange, placeholder, minDate }: { value: string; o
 
       {open && ReactDOM.createPortal(
         <div ref={dropdownRef} className="fixed rounded-xl bg-white border border-gray-200 p-4 z-[9999]"
-          style={{ top: pos.top, left: pos.left, width: 280, boxShadow: "0 8px 24px var(--border-hair), 0 2px 6px var(--border-hair)" }}>
+          style={{ 
+            top: pos.top + 280 > window.innerHeight ? pos.top - 300 : pos.top, 
+            left: pos.left, 
+            width: 280, 
+            boxShadow: "0 8px 24px rgba(0,0,0,0.12)"
+          }}>
           <div className="flex items-center justify-between mb-3">
             <button type="button" onClick={prevMonth} className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
               <ArrowLeft className="w-3.5 h-3.5" />
             </button>
-            <span className="text-[13px] font-semibold text-gray-900">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+            <span className="flex items-center gap-1">
+            <span className="text-[13px] font-semibold text-gray-900">
+              {MONTH_NAMES[viewMonth]}
+            </span>
+            
+            <div className="relative">
+              <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setYearOpen(o => !o); }}
+                  style={{
+                  fontSize: 13, fontWeight: 600, color: '#1a1a1a',
+                  background: 'white', border: '1px solid rgba(166,119,99,0.3)',
+                  borderRadius: 6, padding: '2px 8px', cursor: 'pointer',
+                }}
+              >
+                {viewYear} ▾
+              </button>
+              {yearOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, zIndex: 99999,
+                  background: 'white', border: '1px solid rgba(166,119,99,0.3)',
+                  borderRadius: 8, overflow: 'auto', maxHeight: 180, width: 80,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                }}>
+                  {Array.from({ length: 21 }, (_, i) => new Date().getFullYear() - 10 + i).map(year => (
+                    <div
+                      key={year}
+                      onClick={(e) => { e.stopPropagation(); setViewYear(year); setYearOpen(false); }}
+                      style={{
+                        padding: '6px 12px', fontSize: 12, cursor: 'pointer',
+                        fontWeight: year === viewYear ? 700 : 400,
+                        background: year === viewYear ? 'rgba(166,119,99,0.1)' : 'transparent',
+                        color: year === viewYear ? '#A67763' : '#1a1a1a',
+                      }}
+                    >
+                      {year}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </span>
             <button type="button" onClick={nextMonth} className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
