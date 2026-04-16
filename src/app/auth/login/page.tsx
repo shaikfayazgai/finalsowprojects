@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { signIn, getSession } from "next-auth/react";
 import { authApi } from "@/lib/api/auth";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, fetchInternal } from "@/lib/api/client";
 import {
   Sparkles,
   ArrowRight,
@@ -171,7 +171,7 @@ function LoginPageContent() {
 
     try {
       // Pre-validate credentials to get specific error messages
-      const validateRes = await fetch("/api/auth/validate", {
+      const validateRes = await fetchInternal("/api/auth/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),

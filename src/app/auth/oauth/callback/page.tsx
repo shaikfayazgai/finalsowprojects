@@ -6,7 +6,7 @@ import { signIn } from "next-auth/react";
 import { Suspense } from "react";
 import { Sparkles, RefreshCw, AlertCircle, Shield } from "lucide-react";
 import { authApi, isMfaPending } from "@/lib/api/auth";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, fetchInternal } from "@/lib/api/client";
 
 /**
  * /auth/oauth/callback
@@ -190,7 +190,7 @@ function OAuthCallbackContent() {
       const provider: "google" | "microsoft" = providerParam === "microsoft" ? "microsoft" : "google";
       if (code) {
         try {
-          const res = await fetch("/api/auth/oauth/exchange", {
+          const res = await fetchInternal("/api/auth/oauth/exchange", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code, provider, state: rawState }),

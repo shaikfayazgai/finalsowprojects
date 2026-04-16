@@ -17,6 +17,7 @@ import { Checkbox, Textarea, Skeleton } from "@/components/ui";
 import type { ApprovalStage } from "@/types/enterprise";
 import { useManualSOW, useApprovalStages, useApproveStage, useRejectStage } from "@/lib/hooks/use-manual-sow";
 import { useEmailTemplateStore } from "@/lib/stores/email-template-store";
+import { fetchInternal } from "@/lib/api/client";
 
 /* ═══ Badge ═══ */
 
@@ -122,7 +123,7 @@ export default function SOWApprovePage() {
   function fireEmail(event: string, payload: Record<string, string>) {
     const tmpl = getEmailTemplate(event as Parameters<typeof getEmailTemplate>[0]);
     if (!tmpl?.isActive) return;
-    fetch("/api/email/send", {
+    fetchInternal("/api/email/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event, payload, subject: tmpl.subject, headerColor: tmpl.headerColor, logoUrl: tmpl.logoUrl, footerText: tmpl.footerText }),

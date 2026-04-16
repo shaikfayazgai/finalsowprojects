@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { onboardContributor } from "@/lib/actions/register";
+import { fetchInternal } from "@/lib/api/client";
 import { COUNTRIES_DATA } from "@/app/auth/register/data";
 import { getAgeFromDob } from "@/app/auth/register/helpers";
 import type { ContributorType, SSOData } from "@/app/auth/register/types";
@@ -193,7 +194,7 @@ export function useContributorOnboarding() {
     if (!verificationEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(verificationEmail)) { setError("Please enter a valid email address"); return; }
     setError(""); setEmailOtpLoading(true);
     try {
-      const res = await fetch("/api/auth/otp/send-email", {
+      const res = await fetchInternal("/api/auth/otp/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: verificationEmail }),
@@ -211,7 +212,7 @@ export function useContributorOnboarding() {
     if (emailOtp.length !== 6) { setError("Please enter the 6-digit email code"); return; }
     setError(""); setEmailOtpLoading(true);
     try {
-      const res = await fetch("/api/auth/otp/verify-email", {
+      const res = await fetchInternal("/api/auth/otp/verify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: verificationEmail, code: emailOtp }),

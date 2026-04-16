@@ -75,7 +75,7 @@ interface FormData {
   client: string;
   industry: string;
   projectCategory: string;
-  platformType: string;
+  platformType: string[];
   existingTechLandscape: string;
   featureModules: { moduleName: string; description: string; priority: string }[];
   userRoles: { roleName: string; primaryActions: string }[];
@@ -127,7 +127,7 @@ interface FormData {
   auditLogEvents: string[];
   approvalWorkflows: string;
   notifications: string;
-  notificationEvents: { trigger: string; channel: string }[];
+  notificationEvents: { trigger: string; channel: string[] }[];
   scheduledJobsScope: string;
   scheduledJobItems: { jobName: string; frequency: string; triggerCondition: string }[];
 
@@ -240,7 +240,7 @@ const initialFormData: FormData = {
   client: "",
   industry: "",
   projectCategory: "",
-  platformType: "",
+  platformType: [],
   existingTechLandscape: "",
   featureModules: [{ moduleName: "", description: "", priority: "" }],
   userRoles: [{ roleName: "", primaryActions: "" }],
@@ -292,7 +292,7 @@ const initialFormData: FormData = {
   auditLogEvents: [],
   approvalWorkflows: "",
   notifications: "",
-  notificationEvents: [{ trigger: "", channel: "Email" }],
+  notificationEvents: [{ trigger: "", channel: ["Email"] }],
   scheduledJobsScope: "",
   scheduledJobItems: [{ jobName: "", frequency: "", triggerCondition: "" }],
 
@@ -394,7 +394,7 @@ const stepTransition = {
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
-function DateInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+function DateInput({ value, onChange, placeholder, minDate }: { value: string; onChange: (v: string) => void; placeholder?: string; minDate?: string }) {
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
@@ -402,6 +402,7 @@ function DateInput({ value, onChange, placeholder }: { value: string; onChange: 
 
   const today = new Date();
   const parsed = value ? new Date(value + 'T00:00:00') : null;
+  const minParsed = minDate ? new Date(minDate + 'T00:00:00') : null;
   const [viewYear, setViewYear] = React.useState(parsed?.getFullYear() ?? today.getFullYear());
   const [viewMonth, setViewMonth] = React.useState(parsed?.getMonth() ?? today.getMonth());
 
@@ -435,7 +436,12 @@ function DateInput({ value, onChange, placeholder }: { value: string; onChange: 
 
   const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
   const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
-  const selectDay = (day: number) => { onChange(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`); setOpen(false); };
+  const isDisabled = (day: number) => {
+    if (!minParsed) return false;
+    const d = new Date(viewYear, viewMonth, day);
+    return d < minParsed;
+  };
+  const selectDay = (day: number) => { if (isDisabled(day)) return; onChange(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`); setOpen(false); };
   const isSelected = (day: number) => parsed && parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth && parsed.getDate() === day;
   const isToday = (day: number) => today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === day;
 
@@ -469,8 +475,9 @@ function DateInput({ value, onChange, placeholder }: { value: string; onChange: 
             {days.map((day, i) => (
               <div key={i} className="flex items-center justify-center h-8">
                 {day && (
-                  <button type="button" onClick={() => selectDay(day)}
+                  <button type="button" onClick={() => selectDay(day)} disabled={isDisabled(day)}
                     className={cn("w-7 h-7 rounded-md text-[12px] flex items-center justify-center transition-all",
+                      isDisabled(day) ? "text-gray-300 cursor-not-allowed" :
                       isSelected(day) ? "bg-gradient-to-r from-brown-400 to-brown-600 text-white font-semibold" :
                       isToday(day) ? "border border-brown-300 text-brown-600 font-medium" :
                       "text-gray-700 hover:bg-gray-50"
@@ -834,6 +841,18 @@ function SOWGenerateWizardPageInner() {
     if (typeof window === "undefined") return null;
     return sessionStorage.getItem("sow-wizard-id");
   });
+
+  /** Returns a user-friendly error message, hiding raw backend validation details. */
+  const friendlyApiError = (err: Error): string => {
+    const msg = err.message ?? "";
+    if (msg.includes("input should be") || msg.includes("Field required") || msg.includes("allowed values")) {
+      return "Couldn't save your progress — please review your inputs and try again.";
+    }
+    if (msg.includes("404") || msg.includes("not found")) return "Session expired. Starting a new session…";
+    if (msg.includes("401") || msg.includes("unauthorized")) return "Your session has expired. Please refresh the page.";
+    if (msg.includes("500") || msg.includes("server")) return "A server error occurred. Your progress has been saved locally.";
+    return "Couldn't reach the server. Your progress is saved locally — you can continue.";
+  };
   const createWizard = useCreateWizard();
   const wizardQuery = useWizard(wizardId);
   const saveStepMutation = useSaveStep(wizardId);
@@ -865,7 +884,7 @@ function SOWGenerateWizardPageInner() {
         setWizardId(data.wizard_id);
         setApiError("");
       },
-      onError: (err) => setApiError(err.message),
+      onError: (err) => setApiError(friendlyApiError(err)),
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user]);
@@ -1174,7 +1193,7 @@ function SOWGenerateWizardPageInner() {
             const id = (data as any)?.data?.sow_id ?? (data as any)?.data?._id ?? (data as any)?.sow_id ?? null;
             if (id) setGeneratedSowId(id);
           },
-          onError: (err) => setApiError(err.message),
+          onError: (err) => setApiError(friendlyApiError(err)),
         },
       );
     }
@@ -1259,7 +1278,7 @@ function SOWGenerateWizardPageInner() {
                 setWizardId(null);
                 createNewWizard();
               }
-              setApiError(err.message);
+              setApiError(friendlyApiError(err));
               // Still advance even if API fails
               advanceToNext();
             },
@@ -1440,17 +1459,6 @@ function SOWGenerateWizardPageInner() {
                     {currentStep === 8 && <Step8CommercialLegal formData={formData} updateField={updateField} errors={stepErrors} blurField={blurField} />}
                     {currentStep === 9 && <Step9ReviewGenerate formData={formData} updateField={updateField} aiConfidence={aiConfidence} isStepComplete={isStepComplete} skippedSteps={skippedSteps} setCurrentStep={(step) => { setCameFromReview(true); setCurrentStep(step); }} errors={stepErrors} blurField={blurField} reviewSummaryData={reviewSummary.data?.data ?? null} reviewSummaryLoading={reviewSummary.isLoading} />}
                   </div>
-
-                  {/* API error banner */}
-                  {apiError && (
-                    <div style={{ padding: '10px 26px' }}>
-                      <div className="flex items-center gap-2 rounded-xl px-4 py-2.5 bg-red-50 border border-red-100 text-[12px] text-red-600">
-                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                        <span>{apiError}</span>
-                        <button onClick={() => setApiError("")} className="ml-auto text-red-400 hover:text-red-600"><X className="w-3 h-3" /></button>
-                      </div>
-                    </div>
-                  )}
 
                   {/* Navigation footer */}
                   <div style={{ padding: '16px 26px 20px', borderTop: '1px solid var(--border-hair)' }}>
@@ -2281,21 +2289,40 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
           <FieldError error={errors.projectCategory} field="projectCategory" />
         </div>
         <div data-field="platformType">
-          <FieldLabel required>Platform Type</FieldLabel>
-          <Select value={formData.platformType} onValueChange={(v) => updateField("platformType", v)}>
-            <SelectTrigger><SelectValue placeholder="Select platform" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="web">Web Application</SelectItem>
-              <SelectItem value="mobile_ios">Mobile - iOS</SelectItem>
-              <SelectItem value="mobile_android">Mobile - Android</SelectItem>
-              <SelectItem value="mobile_hybrid">Mobile - Hybrid</SelectItem>
-              <SelectItem value="desktop">Desktop</SelectItem>
-              <SelectItem value="api_backend">API / Backend only</SelectItem>
-              <SelectItem value="data_platform">Data Platform</SelectItem>
-              <SelectItem value="full_stack">Full-Stack</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
+          <FieldLabel required>Platform Type (select all that apply)</FieldLabel>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {[
+              { value: "web", label: "Web App" },
+              { value: "mobile_ios", label: "Mobile iOS" },
+              { value: "mobile_android", label: "Mobile Android" },
+              { value: "mobile_hybrid", label: "Mobile Hybrid" },
+              { value: "desktop", label: "Desktop" },
+              { value: "api_backend", label: "API / Backend" },
+              { value: "data_platform", label: "Data Platform" },
+              { value: "full_stack", label: "Full-Stack" },
+              { value: "other", label: "Other" },
+            ].map(({ value, label }) => {
+              const selected = (formData.platformType as string[]).includes(value);
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    const current = formData.platformType as string[];
+                    updateField("platformType", selected ? current.filter(v => v !== value) : [...current, value]);
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all",
+                    selected
+                      ? "bg-brown-500 border-brown-500 text-white"
+                      : "bg-white border-gray-200 text-gray-600 hover:border-brown-300 hover:text-brown-600"
+                  )}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
           <FieldError error={errors.platformType} field="platformType" />
         </div>
       </div>
@@ -2326,12 +2353,18 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
+              {(() => {
+                const isDuplicate = mod.moduleName.trim().length > 0 &&
+                  formData.featureModules.some((m, i) => i !== idx && m.moduleName.trim().toLowerCase() === mod.moduleName.trim().toLowerCase());
+                return (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <FieldLabel required>Module Name (max 100)</FieldLabel>
                   <Input placeholder="e.g., User Authentication" value={mod.moduleName ?? ""}
                     onChange={(e) => updateField("featureModules", formData.featureModules.map((m, i) => i === idx ? { ...m, moduleName: e.target.value.slice(0, 100) } : m))}
-                    onBlur={onBlur("featureModules")} />
+                    onBlur={onBlur("featureModules")}
+                    className={isDuplicate ? "border-red-300 focus:border-red-400" : ""} />
+                  {isDuplicate && <p className="text-[11px] text-red-500 mt-1 font-medium">Module name already exists</p>}
                 </div>
                 <div>
                   <FieldLabel>Description (max 300)</FieldLabel>
@@ -2350,6 +2383,8 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
                   </Select>
                 </div>
               </div>
+                );
+              })()}
             </div>
           ))}
         </div>
@@ -2955,9 +2990,9 @@ function Step3IntegrationsUserMgmt({ formData, updateField, errors = {}, blurFie
   const removeIntegration = (idx: number) => updateField("integrationPoints", formData.integrationPoints.filter((_, i) => i !== idx));
   const updateIntegration = (idx: number, key: string, value: string) => updateField("integrationPoints", formData.integrationPoints.map((item, i) => i === idx ? { ...item, [key]: value } : item));
 
-  const addNotificationEvent = () => updateField("notificationEvents", [...formData.notificationEvents, { trigger: "", channel: "Email" }]);
+  const addNotificationEvent = () => updateField("notificationEvents", [...formData.notificationEvents, { trigger: "", channel: ["Email"] }]);
   const removeNotificationEvent = (idx: number) => updateField("notificationEvents", formData.notificationEvents.filter((_, i) => i !== idx));
-  const updateNotificationEvent = (idx: number, key: string, value: string) => updateField("notificationEvents", formData.notificationEvents.map((item, i) => i === idx ? { ...item, [key]: value } : item));
+  const updateNotificationEvent = (idx: number, key: string, value: string | string[]) => updateField("notificationEvents", formData.notificationEvents.map((item, i) => i === idx ? { ...item, [key]: value } : item));
 
   const addScheduledJob = () => updateField("scheduledJobItems", [...formData.scheduledJobItems, { jobName: "", frequency: "", triggerCondition: "" }]);
   const removeScheduledJob = (idx: number) => updateField("scheduledJobItems", formData.scheduledJobItems.filter((_, i) => i !== idx));
@@ -3335,16 +3370,29 @@ function Step3IntegrationsUserMgmt({ formData, updateField, errors = {}, blurFie
               {formData.notificationEvents.map((evt, idx) => (
                 <div key={idx} className="flex items-center gap-2">
                   <Input placeholder="Event trigger (e.g. New Order Received)" value={evt.trigger} onChange={(e) => updateNotificationEvent(idx, "trigger", e.target.value)} className="flex-1" />
-                  <div className="w-32">
-                    <Select value={evt.channel} onValueChange={(v) => updateNotificationEvent(idx, "channel", v)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Email">Email</SelectItem>
-                        <SelectItem value="Push">Push</SelectItem>
-                        <SelectItem value="SMS">SMS</SelectItem>
-                        <SelectItem value="In-App">In-App</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(["Email", "Push", "SMS", "In-App"] as const).map((ch) => {
+                      const channels = Array.isArray(evt.channel) ? evt.channel : [evt.channel];
+                      const active = channels.includes(ch);
+                      return (
+                        <button
+                          key={ch}
+                          type="button"
+                          onClick={() => {
+                            const next = active ? channels.filter(c => c !== ch) : [...channels, ch];
+                            updateNotificationEvent(idx, "channel", next.length > 0 ? next : [ch]);
+                          }}
+                          className={cn(
+                            "px-2 py-1 rounded-md text-[11px] font-medium border transition-all",
+                            active
+                              ? "bg-brown-500 border-brown-500 text-white"
+                              : "bg-white border-gray-200 text-gray-500 hover:border-brown-300 hover:text-brown-600"
+                          )}
+                        >
+                          {ch}
+                        </button>
+                      );
+                    })}
                   </div>
                   {formData.notificationEvents.length > 1 && (
                     <button onClick={() => removeNotificationEvent(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all shrink-0">
@@ -3435,6 +3483,7 @@ function Step3IntegrationsUserMgmt({ formData, updateField, errors = {}, blurFie
    ================================================================ */
 function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeListItem, updateListItem, errors = {}, blurField }: StepListProps) {
   const onBlur = (field: string) => () => blurField?.(field);
+  const todayStr = new Date().toISOString().split('T')[0];
   return (
     <div className="space-y-5">
       <p style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.65 }}>
@@ -3447,11 +3496,11 @@ function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeLi
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <FieldLabel>Start Date</FieldLabel>
-          <DateInput value={formData.startDate} onChange={(v) => updateField("startDate", v)} placeholder="Select start date" />
+          <DateInput value={formData.startDate} onChange={(v) => updateField("startDate", v)} placeholder="Select start date" minDate={todayStr} />
         </div>
         <div>
           <FieldLabel>Target End Date</FieldLabel>
-          <DateInput value={formData.endDate} onChange={(v) => updateField("endDate", v)} placeholder="Select end date" />
+          <DateInput value={formData.endDate} onChange={(v) => updateField("endDate", v)} placeholder="Select end date" minDate={formData.startDate || todayStr} />
         </div>
       </div>
 
@@ -3496,7 +3545,7 @@ function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeLi
                 </div>
                 <div>
                   <FieldLabel>Target Date</FieldLabel>
-                  <DateInput value={ms.targetDate ?? ""} onChange={(v) => updateField("milestones", formData.milestones.map((m, i) => i === idx ? { ...m, targetDate: v } : m))} placeholder="Select date" />
+                  <DateInput value={ms.targetDate ?? ""} onChange={(v) => updateField("milestones", formData.milestones.map((m, i) => i === idx ? { ...m, targetDate: v } : m))} placeholder="Select date" minDate={todayStr} />
                 </div>
                 <div>
                   <FieldLabel>Acceptance Criteria (min 50)</FieldLabel>
@@ -4677,7 +4726,7 @@ function Step9ReviewGenerate({ formData, updateField, aiConfidence, isStepComple
           { label: "Project", value: formData.title || "\u2014", filled: formData.title.trim().length >= 3 },
           { label: "Client", value: formData.client || "\u2014", filled: formData.client.trim().length >= 2 },
           { label: "Industry", value: formData.industry ? formData.industry.charAt(0).toUpperCase() + formData.industry.slice(1) : "\u2014", filled: formData.industry.length > 0 },
-          { label: "Platform", value: formData.platformType ? formData.platformType.replace(/_/g, ' ') : "\u2014", filled: formData.platformType.length > 0 },
+          { label: "Platform", value: formData.platformType.length > 0 ? formData.platformType.map(p => p.replace(/_/g, ' ')).join(', ') : "\u2014", filled: formData.platformType.length > 0 },
           { label: "Vision", value: formData.projectVision ? formData.projectVision.slice(0, 60) + (formData.projectVision.length > 60 ? "\u2026" : "") : "\u2014", filled: formData.projectVision.trim().length >= 50 },
           { label: "Tech Stack", value: formData.techStack ? formData.techStack.slice(0, 60) + (formData.techStack.length > 60 ? "\u2026" : "") : "\u2014", filled: formData.techStack.trim().length >= 10 },
           { label: "Budget", value: parseFloat(formData.budgetMin) > 0 || parseFloat(formData.budgetMax) > 0 ? `${formData.currency} ${formData.budgetMin || "?"} \u2013 ${formData.budgetMax || "?"}` : "\u2014", filled: parseFloat(formData.budgetMin) > 0 && parseFloat(formData.budgetMax) > 0 },

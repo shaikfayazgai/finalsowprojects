@@ -17,7 +17,7 @@ import type {
 const shouldRetry = (failureCount: number, error: unknown) => {
   if (error instanceof ApiError && (error.status === 403 || error.status === 401))
     return false;
-  return failureCount < 2;
+  return failureCount < 1;
 };
 
 // ── Query keys ───────────────────────────────────────────────────────────

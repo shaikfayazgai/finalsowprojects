@@ -31,6 +31,8 @@ import {
   Badge,
 } from "@/components/ui";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { type UserSessionRecord } from "@/lib/api/auth";
+import { useSessions, useRevokeSession, useRevokeAllSessions } from "@/lib/hooks/use-auth";
 
 /* ── Recovery code generator (same logic as mfa-setup) ── */
 function generateRecoveryCodes(): string[] {
@@ -42,36 +44,62 @@ function generateRecoveryCodes(): string[] {
   );
 }
 
-/* ── Mock active sessions ── */
-const MOCK_SESSIONS = [
-  {
-    id: "1",
-    device: "MacBook Pro",
-    icon: "monitor",
-    browser: "Chrome 124",
-    location: "New York, US",
-    lastActive: "Now (current session)",
-    current: true,
-  },
-  {
-    id: "2",
-    device: "iPhone 15 Pro",
-    icon: "phone",
-    browser: "Safari 17",
-    location: "New York, US",
-    lastActive: "2 hours ago",
-    current: false,
-  },
-  {
-    id: "3",
-    device: "Windows PC",
-    icon: "monitor",
-    browser: "Edge 124",
-    location: "London, UK",
-    lastActive: "Yesterday at 3:42 PM",
-    current: false,
-  },
-];
+/* ── Normalize session record from backend ── */
+function normalizeSession(s: UserSessionRecord) {
+  const ua = s.user_agent ?? "";
+  const deviceRaw = s.device_name ?? s.device ?? "";
+  const browserRaw = s.browser_name ?? s.browser ?? "";
+  const osRaw = s.os ?? "";
+
+  // Derive icon from device/UA
+  const isPhone =
+    /iphone|android|mobile/i.test(ua) ||
+    /iphone|android|mobile/i.test(deviceRaw);
+
+  const device = deviceRaw || (isPhone ? "Mobile Device" : "Desktop");
+  const browser = browserRaw || (ua.includes("Chrome") ? "Chrome" : ua.includes("Firefox") ? "Firefox" : ua.includes("Safari") ? "Safari" : ua.includes("Edg") ? "Edge" : "Browser");
+  const location = s.location ?? (s.city && s.country ? `${s.city}, ${s.country}` : s.city ?? s.country ?? s.ip_address ?? "Unknown");
+  const lastActive = s.last_active_at ?? s.last_activity ?? s.created_at ?? "";
+  const current = s.is_current ?? false;
+  const icon = isPhone ? "phone" : "monitor";
+
+  return { id: s.id, device, browser, os: osRaw, location, lastActive, current, icon };
+}
+
+/* ── Format relative time ── */
+function formatRelativeTime(dateStr: string): string {
+  if (!dateStr) return "Unknown";
+  try {
+    const date = new Date(dateStr);
+    const now = Date.now();
+    const diff = now - date.getTime();
+    if (diff < 60_000) return "Just now";
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+    return `${Math.floor(diff / 86_400_000)}d ago`;
+  } catch {
+    return dateStr;
+  }
+}
+
+/* ── Sessions skeleton ── */
+function SessionsSkeleton() {
+  return (
+    <div className="divide-y divide-beige-100">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0 animate-pulse">
+          <div className="w-9 h-9 rounded-lg bg-beige-100 shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3.5 bg-beige-100 rounded w-32" />
+            <div className="h-3 bg-beige-100 rounded w-48" />
+            <div className="h-3 bg-beige-100 rounded w-24" />
+          </div>
+          <div className="h-8 w-20 bg-beige-100 rounded-lg shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function SecuritySettingsPage() {
   const router = useRouter();
@@ -87,8 +115,13 @@ export default function SecuritySettingsPage() {
   const [showDisablePw, setShowDisablePw] = useState(false);
   const [disableLoading, setDisableLoading] = useState(false);
   const [disableError, setDisableError] = useState("");
-  const [sessions, setSessions] = useState(MOCK_SESSIONS);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  const { data: rawSessions, isLoading: sessionsLoading, isError: sessionsIsError, refetch: reloadSessions } = useSessions();
+  const revokeSession = useRevokeSession();
+  const revokeAll = useRevokeAllSessions();
+
+  const sessions = (rawSessions ?? []).map(normalizeSession);
+  const sessionsError = sessionsIsError ? "Failed to load sessions. Please try again." : "";
 
   const handleCopyCodes = () => {
     navigator.clipboard.writeText(recoveryCodes.join("\n")).catch(() => {});
@@ -118,12 +151,8 @@ export default function SecuritySettingsPage() {
     setDisablePassword("");
   };
 
-  const handleRevokeSession = async (id: string) => {
-    setRevokingId(id);
-    await new Promise((r) => setTimeout(r, 600));
-    setSessions((prev) => prev.filter((s) => s.id !== id));
-    setRevokingId(null);
-  };
+  const handleRevokeSession = (id: string) => revokeSession.mutate(id);
+  const handleRevokeAll = () => revokeAll.mutate();
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 p-6">
@@ -316,58 +345,96 @@ export default function SecuritySettingsPage() {
       <GlassCard variant="heavy" padding="lg">
         <GlassCardContent>
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-beige-100 text-beige-600 flex items-center justify-center">
-                <Globe className="w-5 h-5" />
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-beige-100 text-beige-600 flex items-center justify-center">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-brown-950">Active Sessions</p>
+                  <p className="text-xs text-beige-500">Devices currently signed into your account</p>
+                </div>
               </div>
-              <div>
-                <p className="font-semibold text-brown-950">Active Sessions</p>
-                <p className="text-xs text-beige-500">Devices currently signed into your account</p>
-              </div>
+              {sessions.filter((s) => !s.current).length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 text-red-500 border-red-200 hover:bg-red-50 hover:border-red-300"
+                  disabled={revokeAll.isPending}
+                  onClick={handleRevokeAll}
+                >
+                  {revokeAll.isPending ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <LogOut className="w-3.5 h-3.5" />
+                  )}
+                  Revoke All Others
+                </Button>
+              )}
             </div>
 
-            <div className="divide-y divide-beige-100">
-              {sessions.map((session) => (
-                <div key={session.id} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
-                  <div className="w-9 h-9 rounded-lg bg-beige-100 flex items-center justify-center shrink-0">
-                    {session.icon === "phone" ? (
-                      <Smartphone className="w-4 h-4 text-beige-600" />
-                    ) : (
-                      <Monitor className="w-4 h-4 text-beige-600" />
+            {sessionsLoading ? (
+              <SessionsSkeleton />
+            ) : sessionsError ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {sessionsError}
+                <button
+                  type="button"
+                  onClick={() => reloadSessions()}
+                  className="ml-auto text-xs font-medium underline"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : sessions.length === 0 ? (
+              <p className="text-sm text-beige-500 text-center py-4">No active sessions found.</p>
+            ) : (
+              <div className="divide-y divide-beige-100">
+                {sessions.map((s) => (
+                  <div key={s.id} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
+                    <div className="w-9 h-9 rounded-lg bg-beige-100 flex items-center justify-center shrink-0">
+                      {s.icon === "phone" ? (
+                        <Smartphone className="w-4 h-4 text-beige-600" />
+                      ) : (
+                        <Monitor className="w-4 h-4 text-beige-600" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-brown-950 truncate">{s.device}</p>
+                        {s.current && (
+                          <Badge variant="teal" size="sm">This device</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-beige-500 truncate">
+                        {s.browser}{s.location ? ` · ${s.location}` : ""}
+                      </p>
+                      <div className="flex items-center gap-1 mt-0.5 text-[11px] text-beige-400">
+                        <Clock className="w-3 h-3" />
+                        {s.current ? "Now (current session)" : formatRelativeTime(s.lastActive)}
+                      </div>
+                    </div>
+                    {!s.current && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 text-red-500 border-red-200 hover:bg-red-50 hover:border-red-300"
+                        disabled={revokeSession.isPending || revokeAll.isPending}
+                        onClick={() => handleRevokeSession(s.id)}
+                      >
+                        {revokeSession.isPending && revokeSession.variables === s.id ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <LogOut className="w-3.5 h-3.5" />
+                        )}
+                        Revoke
+                      </Button>
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-brown-950 truncate">{session.device}</p>
-                      {session.current && (
-                        <Badge variant="teal" size="sm">This device</Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-beige-500 truncate">{session.browser} &middot; {session.location}</p>
-                    <div className="flex items-center gap-1 mt-0.5 text-[11px] text-beige-400">
-                      <Clock className="w-3 h-3" />
-                      {session.lastActive}
-                    </div>
-                  </div>
-                  {!session.current && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0 text-red-500 border-red-200 hover:bg-red-50 hover:border-red-300"
-                      disabled={revokingId === session.id}
-                      onClick={() => handleRevokeSession(session.id)}
-                    >
-                      {revokingId === session.id ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <LogOut className="w-3.5 h-3.5" />
-                      )}
-                      Revoke
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </GlassCardContent>
       </GlassCard>

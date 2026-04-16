@@ -39,6 +39,24 @@ export interface MfaPendingResponse {
 
 export type LoginResponse = LoginSuccessResponse | MfaPendingResponse;
 
+export interface UserSessionRecord {
+  id: string;
+  device?: string;
+  device_name?: string;
+  browser?: string;
+  browser_name?: string;
+  os?: string;
+  ip_address?: string;
+  location?: string;
+  city?: string;
+  country?: string;
+  created_at?: string;
+  last_active_at?: string;
+  last_activity?: string;
+  is_current?: boolean;
+  user_agent?: string;
+}
+
 export interface TokenPair {
   access_token: string;
   refresh_token: string;
@@ -278,6 +296,30 @@ export const authApi = {
       throw new Error(json?.detail || json?.message || json?.error || "Failed to create reviewer");
     }
     return json;
+  },
+
+  /** Get the current active session details. */
+  async getCurrentSession(accessToken: string): Promise<UserSessionRecord> {
+    return apiCall<UserSessionRecord>("/api/v1/auth/session", {
+      method: "GET",
+      token: accessToken,
+    });
+  },
+
+  /** List all active sessions for the current user. */
+  async getSessions(accessToken: string): Promise<UserSessionRecord[]> {
+    return apiCall<UserSessionRecord[]>("/api/v1/auth/sessions", {
+      method: "GET",
+      token: accessToken,
+    });
+  },
+
+  /** Revoke a specific session by ID. */
+  async revokeSession(sessionId: string, accessToken: string): Promise<void> {
+    await apiCall(`/api/v1/auth/sessions/${sessionId}`, {
+      method: "DELETE",
+      token: accessToken,
+    });
   },
 
   /** Register a new enterprise organisation + admin user. */

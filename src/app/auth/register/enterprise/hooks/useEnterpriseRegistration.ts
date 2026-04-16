@@ -7,6 +7,7 @@ import { COUNTRIES_DATA } from "../../data";
 import { getPasswordStrength } from "../../helpers";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { registerEnterprise } from "@/lib/actions/register";
+import { fetchInternal } from "@/lib/api/client";
 
 export type OrgType =
   | ""
@@ -139,7 +140,7 @@ export function useEnterpriseRegistration() {
     setError("");
     setEmailOtpLoading(true);
     try {
-      const res = await fetch("/api/auth/otp/send-email", {
+      const res = await fetchInternal("/api/auth/otp/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: adminEmail }),
@@ -163,7 +164,7 @@ export function useEnterpriseRegistration() {
     setError("");
     setEmailOtpLoading(true);
     try {
-      const res = await fetch("/api/auth/otp/verify-email", {
+      const res = await fetchInternal("/api/auth/otp/verify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: adminEmail, code: emailOtp }),

@@ -115,3 +115,6 @@ for api integration use built in fetch function for normal pages and use tanstac
 
 ## loading 
 use skeleton ui loader for all pages based on that page structure
+
+## ui development
+while developing new ui use the color combination that is matching my current color combination

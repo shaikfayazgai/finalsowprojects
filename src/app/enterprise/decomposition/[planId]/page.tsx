@@ -12,6 +12,7 @@ import {
   ClipboardList, History, Package, RotateCcw, TrendingUp, CreditCard, Users, BarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { fetchInternal } from "@/lib/api/client";
 import { Skeleton } from "@/components/ui";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import type {
@@ -745,7 +746,7 @@ export default function PlanDetailPage() {
       // Email notification (fire-and-forget)
       const userEmail = session?.user?.email;
       if (userEmail) {
-        fetch("/api/email/send", {
+        fetchInternal("/api/email/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

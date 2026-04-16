@@ -37,7 +37,7 @@ import {
 import { useSession } from "next-auth/react";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { authApi } from "@/lib/api/auth";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, fetchInternal } from "@/lib/api/client";
 import { toast } from "@/lib/stores/toast-store";
 import { cn } from "@/lib/utils/cn";
 import ProfilePage from "@/app/enterprise/profile/page";
@@ -298,7 +298,7 @@ export default function SettingsPage() {
       const tempPassword = apiTempPassword ?? localTempPassword;
 
       // Send welcome email via Gmail SMTP (always runs regardless of API result)
-      await fetch("/api/email/send", {
+      await fetchInternal("/api/email/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

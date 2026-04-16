@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { GlassCard, GlassCardContent, Button, Input, Label, Checkbox } from "@/components/ui";
 import { authApi } from "@/lib/api/auth";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, fetchInternal } from "@/lib/api/client";
 
 function MFASetupContent() {
   const router       = useRouter();
@@ -58,7 +58,7 @@ function MFASetupContent() {
         return;
       }
 
-      const res = await fetch("/api/auth/mfa-confirm", {
+      const res = await fetchInternal("/api/auth/mfa-confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, action: "init" }),
@@ -100,7 +100,7 @@ function MFASetupContent() {
       const password = sessionStorage.getItem("_mfa_setup_password") || "";
 
       // Call server-side endpoint that handles login → init → confirm in one shot
-      const res = await fetch("/api/auth/mfa-confirm", {
+      const res = await fetchInternal("/api/auth/mfa-confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, code: verifyCode, mfa_pending_token: mfaTokenRef.current || undefined }),

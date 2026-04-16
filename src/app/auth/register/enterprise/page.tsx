@@ -14,7 +14,8 @@ export default function EnterpriseRegisterPage() {
   const reg = useEnterpriseRegistration();
 
   return (
-    <div className="w-full max-w-xl mx-auto py-8">
+    <div className="w-full max-w-[600px] mx-auto py-8 px-4">
+
       {/* ── Header row: logo left · badge right ── */}
       <div className="flex items-center justify-between mb-8">
         <Link href="/" className="flex items-center gap-2 group">
@@ -27,20 +28,14 @@ export default function EnterpriseRegisterPage() {
         </Link>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-brown-100 border border-brown-200">
           <Briefcase className="w-3.5 h-3.5 text-brown-600" />
-          <span className="text-xs font-semibold text-brown-700">
-            Enterprise Account
-          </span>
+          <span className="text-xs font-semibold text-brown-700">Enterprise Account</span>
         </div>
       </div>
 
       {/* ── Page title ── */}
-      <div className="text-center mb-7">
-        <h1 className="font-heading text-2xl font-bold text-brown-950">
-          Register Your Organisation
-        </h1>
-        <p className="text-sm text-beige-500 mt-1">
-          Hire globally, manage intelligently — 4 quick steps to get started
-        </p>
+      <div className="mb-6">
+        <h1 className="font-heading text-[22px] font-bold text-brown-950">Register your organisation</h1>
+        <p className="text-sm text-beige-500 mt-1">4 quick steps to get started</p>
       </div>
 
       {/* ── Step progress ── */}
@@ -93,10 +88,7 @@ export default function EnterpriseRegisterPage() {
           setPhone={reg.setPhone}
           error={reg.error}
           onContinue={reg.goToStep3}
-          onBack={() => {
-            reg.setStep(1);
-            reg.setError("");
-          }}
+          onBack={() => { reg.setStep(1); reg.setError(""); }}
         />
       )}
 
@@ -131,10 +123,7 @@ export default function EnterpriseRegisterPage() {
           onSendEmailOTP={reg.sendEmailOTP}
           onVerifyEmailOTP={reg.verifyEmailOTP}
           onContinue={reg.goToStep4}
-          onBack={() => {
-            reg.setStep(2);
-            reg.setError("");
-          }}
+          onBack={() => { reg.setStep(2); reg.setError(""); }}
         />
       )}
 
@@ -153,26 +142,17 @@ export default function EnterpriseRegisterPage() {
           isLoading={reg.isLoading}
           error={reg.error}
           onSubmit={reg.handleFinalSubmit}
-          onBack={() => {
-            reg.setStep(3);
-            reg.setError("");
-          }}
+          onBack={() => { reg.setStep(3); reg.setError(""); }}
         />
       )}
 
-      <p className="text-center text-sm text-beige-600 mt-5">
+      <p className="text-center text-sm text-beige-600 mt-6">
         Already have an account?{" "}
-        <Link
-          href="/auth/login"
-          className="text-teal-600 hover:text-teal-700 font-medium"
-        >
+        <Link href="/auth/login" className="text-teal-600 hover:text-teal-700 font-medium">
           Sign in
         </Link>
-        {" - "}
-        <Link
-          href="/auth/register"
-          className="text-teal-600 hover:text-teal-700 font-medium"
-        >
+        {" · "}
+        <Link href="/auth/register" className="text-teal-600 hover:text-teal-700 font-medium">
           Not an enterprise?
         </Link>
       </p>

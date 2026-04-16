@@ -68,7 +68,7 @@ const step1Schema = z.object({
   client: z.string().min(2, "Client name must be at least 2 characters"),
   industry: nonEmptyString("Select an industry"),
   projectCategory: nonEmptyString("Select a project category"),
-  platformType: nonEmptyString("Select a platform type"),
+  platformType: z.array(z.string()).min(1, "Select at least one platform type"),
   featureModules: z
     .array(z.object({ moduleName: z.string(), description: z.string(), priority: z.string() }))
     .refine(

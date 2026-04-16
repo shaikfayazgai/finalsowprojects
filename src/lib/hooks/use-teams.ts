@@ -10,7 +10,7 @@ import { ApiError } from "@/lib/api/client";
 
 const shouldRetry = (failureCount: number, error: unknown) => {
   if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404)) return false;
-  return failureCount < 2;
+  return failureCount < 1;
 };
 
 export const teamsKeys = {

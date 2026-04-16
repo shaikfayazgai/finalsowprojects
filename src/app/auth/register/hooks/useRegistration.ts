@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { COUNTRIES_DATA } from "../data";
 import { getPasswordStrength, getAgeFromDob } from "../helpers";
 import { registerContributor } from "@/lib/actions/register";
+import { fetchInternal } from "@/lib/api/client";
 import type { RegistrationRole, ContributorType, SSOData } from "../types";
 
 export function useRegistration(ssoData?: SSOData | null) {
@@ -163,7 +164,7 @@ export function useRegistration(ssoData?: SSOData | null) {
     setError("");
     setEmailOtpLoading(true);
     try {
-      const res = await fetch("/api/auth/otp/send-email", {
+      const res = await fetchInternal("/api/auth/otp/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: verificationEmail }),
@@ -190,7 +191,7 @@ export function useRegistration(ssoData?: SSOData | null) {
     setError("");
     setEmailOtpLoading(true);
     try {
-      const res = await fetch("/api/auth/otp/verify-email", {
+      const res = await fetchInternal("/api/auth/otp/verify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: verificationEmail, code: emailOtp }),

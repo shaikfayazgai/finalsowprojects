@@ -3,12 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { AnimatePresence } from "framer-motion";
 import {
   FileText, Search, Clock, CheckCircle2, AlertTriangle,
   DollarSign, ShieldAlert, ArrowUp, ArrowDown, ChevronRight,
   Building2, Eye, TrendingUp, ArrowUpDown,
-  MessageSquare, Paperclip, File, ImageIcon, XCircle, Send, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
@@ -248,45 +246,6 @@ export default function AdminSOWOversightPage() {
   const draftList    = mockSOWs.filter(s => s.status === "draft" || s.status === "parsing");
   const pendingComm  = mockSOWs.filter(needsCommercialReview);
 
-  /* ── Chat panel ── */
-  type ChatMsg = { from: "enterprise" | "glimmora"; text: string; time: string; files?: { name: string; size: number; type: string }[] };
-  const [chatMessages, setChatMessages] = React.useState<ChatMsg[]>([
-    { from: "glimmora", text: "Welcome to SOW Oversight. All active Statements of Work are listed here. We will flag any pipeline issues or changes required.", time: "Mar 11, 09:00 AM" },
-    { from: "glimmora", text: "Stage 2 (GlimmoraTeam Commercial) for 'Smart Manufacturing IoT Dashboard' requires attention — budget ceiling appears insufficient for the declared scope.", time: "Mar 11, 02:15 PM" },
-    { from: "enterprise", text: "Understood. We are revising the budget and will submit an updated breakdown shortly.", time: "Mar 12, 09:45 AM", files: [{ name: "Budget_Revision_v2.xlsx", size: 48200, type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }] },
-    { from: "glimmora", text: "Received. Reviewing the updated figures now. Expect a decision within 1 business day.", time: "Mar 12, 11:30 AM" },
-  ]);
-  const [chatInput, setChatInput] = React.useState("");
-  const [chatFiles, setChatFiles] = React.useState<{ name: string; size: number; type: string }[]>([]);
-  const chatFileRef   = React.useRef<HTMLInputElement>(null);
-  const chatScrollRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-  }, [chatMessages]);
-
-  function formatBytes(n: number) {
-    if (n < 1024) return `${n} B`;
-    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  function handleChatSend() {
-    if (!chatInput.trim() && chatFiles.length === 0) return;
-    setChatMessages(prev => [...prev, {
-      from: "enterprise", text: chatInput.trim(),
-      time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-      files: chatFiles.length > 0 ? [...chatFiles] : undefined,
-    }]);
-    setChatInput(""); setChatFiles([]);
-    setTimeout(() => {
-      setChatMessages(prev => [...prev, {
-        from: "glimmora", text: "Message received. Our review team will respond shortly.",
-        time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-      }]);
-    }, 1200);
-  }
-
   const base = React.useMemo(() => {
     if (tab === "approval") return approvalList;
     if (tab === "approved") return approvedList;
@@ -329,8 +288,7 @@ export default function AdminSOWOversightPage() {
   if (!mounted) return <PageSkeleton />;
 
   return (
-    <div className="flex gap-6 items-start">
-    <motion.div variants={stagger} initial="hidden" animate="show" className="flex-1 min-w-0 space-y-6">
+    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
 
       {/* ── Header ── */}
       <motion.div variants={fadeUp} className="flex items-end justify-between gap-4 flex-wrap">
@@ -644,134 +602,42 @@ export default function AdminSOWOversightPage() {
 
         {/* Footer */}
         {sorted.length > 0 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-beige-50">
-            <div className="flex items-center gap-1.5 text-[11px] text-beige-400">
-              <TrendingUp className="w-3 h-3" />
-              {sorted.length} SOW{sorted.length !== 1 ? "s" : ""}
-              {search.trim().length >= 2 ? ` matching "${search}"` : ""}
+          <div className="flex items-center gap-4 px-5 py-2.5 border-t border-beige-100 bg-beige-50/40">
+            {/* Count */}
+            <div className="flex items-center gap-1.5 text-[11px] text-beige-500 shrink-0">
+              <TrendingUp className="w-3 h-3 shrink-0" />
+              <span className="tabular-nums font-semibold text-brown-700">{sorted.length}</span>
+              <span>SOW{sorted.length !== 1 ? "s" : ""}{search.trim().length >= 2 ? ` matching "${search}"` : ""}</span>
             </div>
+
+            {/* Dividers + tab breakdown */}
+            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto">
+              {([
+                { label: "In Approval", count: approvalList.length, color: "text-gold-600 bg-gold-50 border-gold-100" },
+                { label: "Approved",    count: approvedList.length, color: "text-forest-700 bg-forest-50 border-forest-100" },
+                { label: "Changes",     count: changesList.length,  color: "text-amber-700 bg-amber-50 border-amber-100" },
+                { label: "Draft",       count: draftList.length,    color: "text-gray-500 bg-gray-100 border-gray-200" },
+              ] as const).filter(item => item.count > 0).map(item => (
+                <span key={item.label} className={cn("inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md border whitespace-nowrap shrink-0", item.color)}>
+                  {item.label} <span className="tabular-nums">{item.count}</span>
+                </span>
+              ))}
+            </div>
+
+            {/* Pending action */}
             {pendingComm.length > 0 && (
               <button
                 onClick={() => setTab("approval")}
-                className="flex items-center gap-1.5 text-[11px] font-semibold text-gold-600 hover:underline underline-offset-2 transition-all"
+                className="shrink-0 flex items-center gap-1.5 text-[11px] font-semibold text-gold-700 bg-gold-50 hover:bg-gold-100 border border-gold-200 px-3 py-1 rounded-lg transition-all"
               >
                 <Clock className="w-3 h-3" />
-                {pendingComm.length} pending commercial review
+                {pendingComm.length} pending sign-off
               </button>
             )}
           </div>
         )}
       </motion.div>
     </motion.div>
-
-    {/* ── Right: Chat / Notification Panel ── */}
-    <div className="w-[300px] shrink-0 sticky top-[60px]">
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: "calc(100vh - 100px)" }}>
-
-        {/* Header */}
-        <div className="px-4 py-3.5 border-b border-gray-100 flex items-center gap-2.5 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-brown-50 flex items-center justify-center shrink-0">
-            <MessageSquare className="w-4 h-4 text-brown-500" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[12.5px] font-semibold text-gray-900">Pipeline Notifications</p>
-            <p className="text-[10.5px] text-gray-400 mt-0.5">Communicate with enterprise reviewers</p>
-          </div>
-          <div className="w-2 h-2 rounded-full bg-forest-400 shrink-0" />
-        </div>
-
-        {/* Messages */}
-        <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ minHeight: 0 }}>
-          {chatMessages.map((msg, i) => (
-            <div key={i} className={cn("flex gap-2", msg.from === "enterprise" && "justify-end")}>
-              {msg.from === "glimmora" && (
-                <div className="w-6 h-6 rounded-full bg-brown-100 border border-brown-200 flex items-center justify-center shrink-0 mt-0.5">
-                  <Sparkles className="w-3 h-3 text-brown-600" />
-                </div>
-              )}
-              <div className={cn("max-w-[85%] space-y-1.5", msg.from === "enterprise" && "items-end flex flex-col")}>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-[10px] font-semibold text-gray-700">{msg.from === "glimmora" ? "GlimmoraTeam" : "You"}</span>
-                  <span className="text-[9px] text-gray-400">{msg.time}</span>
-                </div>
-                {msg.files && msg.files.length > 0 && (
-                  <div className="flex flex-col gap-1">
-                    {msg.files.map((f, fi) => (
-                      <div key={fi} className={cn("flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[10px]", msg.from === "enterprise" ? "bg-brown-500 text-white" : "bg-gray-100 text-gray-700")}>
-                        <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center shrink-0", msg.from === "enterprise" ? "bg-white/20" : "bg-brown-50")}>
-                          {f.type.startsWith("image/") ? <ImageIcon className={cn("w-3 h-3", msg.from === "enterprise" ? "text-white" : "text-brown-500")} /> : <File className={cn("w-3 h-3", msg.from === "enterprise" ? "text-white" : "text-brown-500")} />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate font-medium max-w-[110px]">{f.name}</p>
-                          <p className={cn("text-[9px]", msg.from === "enterprise" ? "text-white/60" : "text-gray-400")}>{formatBytes(f.size)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {msg.text && (
-                  <div className={cn("rounded-2xl px-3 py-2.5", msg.from === "glimmora" ? "rounded-tl-none bg-gray-50 border border-gray-100" : "rounded-tr-none bg-brown-500")}>
-                    <p className={cn("text-[11.5px] leading-relaxed", msg.from === "glimmora" ? "text-gray-600" : "text-white")}>{msg.text}</p>
-                  </div>
-                )}
-              </div>
-              {msg.from === "enterprise" && (
-                <div className="w-6 h-6 rounded-full bg-teal-100 border border-teal-200 flex items-center justify-center shrink-0 mt-0.5">
-                  <Building2 className="w-3 h-3 text-teal-600" />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Composer */}
-        <div className="px-4 py-3 border-t border-gray-100 bg-white shrink-0">
-          <AnimatePresence>
-            {chatFiles.length > 0 && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-2">
-                <div className="flex flex-wrap gap-1.5 py-1">
-                  {chatFiles.map((f, i) => (
-                    <div key={i} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5">
-                      <div className="w-5 h-5 rounded-md bg-brown-50 flex items-center justify-center shrink-0">
-                        {f.type.startsWith("image/") ? <ImageIcon className="w-3 h-3 text-brown-500" /> : <File className="w-3 h-3 text-brown-500" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-medium text-gray-700 truncate max-w-[100px]">{f.name}</p>
-                        <p className="text-[9px] text-gray-400">{formatBytes(f.size)}</p>
-                      </div>
-                      <button onClick={() => setChatFiles(prev => prev.filter((_, j) => j !== i))} className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-all shrink-0">
-                        <XCircle className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <textarea
-            value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
-            placeholder="Send a notification or message…"
-            rows={2}
-            className="w-full text-[12px] text-gray-700 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-200 outline-none focus:border-brown-300 focus:ring-2 focus:ring-brown-100 transition-all placeholder:text-gray-400 resize-none mb-2"
-          />
-          <input ref={chatFileRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
-            onChange={e => { const files = Array.from(e.target.files ?? []); setChatFiles(prev => [...prev, ...files.map(f => ({ name: f.name, size: f.size, type: f.type }))]); e.target.value = ""; }} />
-          <div className="flex items-center gap-2">
-            <button onClick={() => chatFileRef.current?.click()}
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-brown-500 hover:bg-brown-50 border border-gray-200 hover:border-brown-200 transition-all shrink-0" title="Attach file">
-              <Paperclip className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={handleChatSend} disabled={!chatInput.trim() && chatFiles.length === 0}
-              className={cn("flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2 rounded-xl transition-all",
-                (chatInput.trim() || chatFiles.length > 0) ? "text-white bg-brown-500 hover:bg-brown-600" : "text-gray-400 bg-gray-100 cursor-not-allowed")}>
-              <Send className="w-3.5 h-3.5" /> Send
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-    </div>
   );
 }
+

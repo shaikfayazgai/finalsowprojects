@@ -12,6 +12,7 @@ import {
   Mail,
   Lock,
   Shield,
+  ShieldCheck,
   Globe,
   Users,
   TrendingUp,
@@ -70,21 +71,46 @@ function getSsoDataFromStorage(): SSOData | null {
 
 /* ─────────────────────────── left content (no box) ─────────────────────────── */
 
-const LEFT_STATS = [
-  { value: "50K+",  label: "Students & Pros"   },
-  { value: "120+",  label: "Countries"          },
-  { value: "2.4K+", label: "Companies Hiring"  },
-];
+const CONTENT = {
+  contributor: {
+    eyebrow: "Global Workforce Platform",
+    headline: "Your career",
+    accent: "starts here",
+    desc: "Whether you're a student or a seasoned professional — get AI-matched to real projects and build a verified global portfolio.",
+    stats: [
+      { value: "50K+",  label: "Contributors" },
+      { value: "120+",  label: "Countries"     },
+      { value: "2.4K+", label: "Companies"     },
+    ],
+    badges: [
+      { Icon: BadgeCheck,    label: "Verified Professionals" },
+      { Icon: CreditCard,    label: "Secure Payments"        },
+      { Icon: MessageSquare, label: "Smart Collaboration"    },
+      { Icon: LayoutGrid,    label: "Project Management"     },
+    ],
+  },
+  enterprise: {
+    eyebrow: "Enterprise Platform",
+    headline: "Build your global",
+    accent: "team",
+    desc: "Hire vetted talent, manage distributed projects, and scale with AI-governed workforce intelligence — all in one platform.",
+    stats: [
+      { value: "2,400+", label: "Companies"       },
+      { value: "50K+",   label: "Verified Talent" },
+      { value: "120+",   label: "Countries"        },
+    ],
+    badges: [
+      { Icon: Shield,      label: "SOC 2 Certified"    },
+      { Icon: Lock,        label: "256-bit Encryption" },
+      { Icon: Zap,         label: "99.9% Uptime SLA"   },
+      { Icon: ShieldCheck, label: "GDPR Compliant"     },
+    ],
+  },
+} as const;
 
-const LEFT_FEATURES = [
-  { Icon: BadgeCheck,    label: "Verified Professionals" },
-  { Icon: CreditCard,    label: "Secure Payments"        },
-  { Icon: MessageSquare, label: "Smart Collaboration"    },
-  { Icon: LayoutGrid,    label: "Project Management"     },
-];
+function LeftContent({ role }: { role?: "contributor" | "enterprise" }) {
+  const c = CONTENT[role ?? "contributor"];
 
-
-function LeftContent() {
   return (
     <div className="hidden lg:flex flex-col flex-1 max-w-lg pt-8 pb-8 pr-10 gap-14">
 
@@ -101,25 +127,21 @@ function LeftContent() {
 
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-600 mb-4 flex items-center gap-2">
           <span className="w-5 h-px bg-teal-500" />
-          Global Workforce Platform
+          {c.eyebrow}
         </p>
 
         <h2 className="font-heading text-4xl font-bold text-brown-950 leading-[1.2] mb-5">
-          Your career or company<br />
-          <span className="text-teal-600">starts here</span>.
+          {c.headline} <span className="text-teal-600">{c.accent}</span>.
         </h2>
 
-        <p className="text-sm text-beige-600 leading-relaxed max-w-sm">
-          Whether you&apos;re a student, a professional, or a company scaling with
-          world-class talent — GlimmoraTeam connects you.
-        </p>
+        <p className="text-sm text-beige-600 leading-relaxed max-w-sm">{c.desc}</p>
       </div>
 
       {/* MIDDLE — Stats + Badges */}
       <div>
         <div className="flex items-center gap-8 mb-8">
-          {LEFT_STATS.map(({ value, label }, i) => (
-            <div key={label} className={`${i > 0 ? "pl-8 border-l border-beige-200" : ""}`}>
+          {c.stats.map(({ value, label }, i) => (
+            <div key={label} className={i > 0 ? "pl-8 border-l border-beige-200" : ""}>
               <p className="font-heading text-2xl font-bold text-brown-950">{value}</p>
               <p className="text-xs text-beige-500 mt-1">{label}</p>
             </div>
@@ -127,7 +149,7 @@ function LeftContent() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {LEFT_FEATURES.map(({ Icon, label }) => (
+          {c.badges.map(({ Icon, label }) => (
             <div key={label} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/50 border border-beige-100">
               <Icon className="w-3.5 h-3.5 text-teal-600 shrink-0" />
               <span className="text-xs text-brown-700 font-medium">{label}</span>
@@ -529,7 +551,7 @@ function ContributorRegisterContent() {
   // When SSO pre-fills role
   const activeRole = (reg.registrationRole as "contributor" | "enterprise") || (selectedRole as "contributor" | "enterprise") || undefined;
 
-  const showLeftContent = uiState === "picker";
+  const showLeftContent = uiState === "picker" || uiState === "authOptions";
 
   const logo = (
     <Link href="/" className="flex items-center gap-2 group w-fit">
@@ -574,16 +596,22 @@ function ContributorRegisterContent() {
               animateIn={roleBarAnimated}
             />
 
-            <GlassCard variant="heavy" padding="lg">
-              <GlassCardContent>
-                <AuthMethodPicker
-                  role={activeRole}
-                  onSSO={handleSSO}
-                  onManual={handleManual}
-                  ssoLoading={ssoLoading}
-                />
-              </GlassCardContent>
-            </GlassCard>
+            <div
+              className="rounded-2xl p-8"
+              style={{
+                background: "rgba(255,255,255,0.85)",
+                backdropFilter: "blur(24px)",
+                border: "1px solid rgba(0,0,0,0.06)",
+                boxShadow: "0 4px 32px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04)",
+              }}
+            >
+              <AuthMethodPicker
+                role={activeRole}
+                onSSO={handleSSO}
+                onManual={handleManual}
+                ssoLoading={ssoLoading}
+              />
+            </div>
 
             <p className="text-center text-sm text-beige-600">
               Already have an account?{" "}
@@ -744,23 +772,26 @@ function ContributorRegisterContent() {
 
   /* ── Picker: two-column with left content ── */
   if (showLeftContent) {
+    const isAuthOptions = uiState === "authOptions";
     return (
       <div className="w-full flex items-start gap-16 max-w-7xl mx-auto px-8">
-        <LeftContent />
-        <div className="w-full max-w-xl flex flex-col justify-center">
-          <div className="mb-6">
-            <h1 className="font-heading text-[22px] font-bold text-brown-950">Create your account</h1>
-            <p className="text-sm text-gray-500 mt-1">Join the Global Workforce Intelligence Platform</p>
-          </div>
+        <LeftContent role={isAuthOptions ? (activeRole ?? undefined) : undefined} />
+        <div className={`w-full flex flex-col justify-center pt-8 ${isAuthOptions ? "max-w-[440px]" : "max-w-xl"}`}>
+          {!isAuthOptions && (
+            <div className="mb-6">
+              <h1 className="font-heading text-[22px] font-bold text-brown-950">Create your account</h1>
+              <p className="text-sm text-gray-500 mt-1">Join the Global Workforce Intelligence Platform</p>
+            </div>
+          )}
           {formBody}
         </div>
       </div>
     );
   }
 
-  /* ── Auth options + form: logo top-left, form centered ── */
+  /* ── Registering: no left panel, wider centered form ── */
   return (
-    <div className="w-full mx-auto flex flex-col py-8 max-w-xl">
+    <div className="w-full max-w-[600px] mx-auto flex flex-col py-8 px-4">
       <div className="mb-8">{logo}</div>
       {formBody}
     </div>

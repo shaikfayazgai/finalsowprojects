@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSession } from "next-auth/react";
 import {
   Check,
   CheckCircle2,
@@ -112,6 +113,7 @@ interface AddReviewerModalProps {
 }
 
 export function AddReviewerModal({ open, onClose }: AddReviewerModalProps) {
+  const { data: session } = useSession();
   const [step, setStep] = React.useState<"form" | "success">("form");
   const [form, setForm] = React.useState<FormState>(emptyForm);
   const [errors, setErrors] = React.useState<FormErrors>({});
@@ -135,19 +137,77 @@ export function AddReviewerModal({ open, onClose }: AddReviewerModalProps) {
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const errs = validate(form);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
     }
     setSaving(true);
-    const pwd = generateTempPassword();
-    setTimeout(() => {
-      setTempPassword(pwd);
+    const localPwd = generateTempPassword();
+
+    let resolvedPassword = localPwd;
+
+    try {
+      const res = await fetch("/api/reviewers/invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          email: form.email.trim(),
+          designation: form.designation.trim(),
+          department: form.department.trim(),
+          username: form.username.trim(),
+          role: form.role,
+          status: form.status,
+          language: form.language,
+          timeZone: form.timeZone,
+          tempPassword: localPwd,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setErrors({ email: data?.error ?? data?.message ?? "Failed to send invitation. Please try again." });
+        setSaving(false);
+        return;
+      }
+
+      resolvedPassword = data?.tempPassword ?? localPwd;
+    } catch {
+      setErrors({ email: "Network error. Please try again." });
       setSaving(false);
-      setStep("success");
-    }, 600);
+      return;
+    }
+
+    // Send invitation email using the API-returned password
+    try {
+      await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "reviewer_invitation",
+          to: form.email.trim(),
+          payload: {
+            reviewerName: `${form.firstName.trim()} ${form.lastName.trim()}`,
+            designation: form.designation.trim(),
+            inviterName: session?.user?.name ?? "GlimmoraTeam Admin",
+            inviterOrg: "GlimmoraTeam",
+            loginEmail: form.email.trim(),
+            tempPassword: resolvedPassword,
+            loginUrl: `${window.location.origin}/auth/login`,
+          },
+        }),
+      });
+    } catch {
+      // Email failure is non-blocking — invitation was already created
+    }
+
+    setTempPassword(resolvedPassword);
+    setSaving(false);
+    setStep("success");
   };
 
   const handleCopyCredentials = () => {

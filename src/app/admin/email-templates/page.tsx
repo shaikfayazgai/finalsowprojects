@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
+import { fetchInternal } from "@/lib/api/client";
 import {
   Mail, RotateCcw, Send, Save, Check, Eye, EyeOff,
   SendHorizonal, Info, HelpCircle,
@@ -304,7 +305,7 @@ export default function AdminEmailTemplatesPage() {
     if (!session?.user?.email) return;
     setSendingTest(true);
     try {
-      await fetch("/api/email/send", {
+      await fetchInternal("/api/email/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -332,7 +333,7 @@ export default function AdminEmailTemplatesPage() {
     const results = await Promise.all(
       TEMPLATE_ORDER.map(async (id) => {
         const t = templates[id];
-        const res = await fetch("/api/email/send", {
+        const res = await fetchInternal("/api/email/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
