@@ -274,6 +274,7 @@ export default function AdminEmailTemplatesPage() {
   const [savedId, setSavedId] = React.useState<EmailTemplateId | null>(null);
   const [sendingTest, setSendingTest] = React.useState(false);
   const [testSent, setTestSent] = React.useState(false);
+  const [testError, setTestError] = React.useState(false);
   const [showPreview, setShowPreview] = React.useState(true);
 
   // Send-all state
@@ -304,10 +305,12 @@ export default function AdminEmailTemplatesPage() {
   async function handleSendTest() {
     if (!session?.user?.email) return;
     setSendingTest(true);
+    setTestError(false);
     try {
-      await fetchInternal("/api/email/send", {
+      const res = await fetchInternal("/api/email/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        timeoutMs: 120_000,
         body: JSON.stringify({
           event: selectedId,
           payload: getTestPayload(selectedId),
@@ -319,8 +322,17 @@ export default function AdminEmailTemplatesPage() {
           bodyHtml: draft.bodyHtml,
         }),
       });
-      setTestSent(true);
-      setTimeout(() => setTestSent(false), 3000);
+      const data = await res.json().catch(() => ({ success: false }));
+      if (data.success) {
+        setTestSent(true);
+        setTimeout(() => setTestSent(false), 3000);
+      } else {
+        setTestError(true);
+        setTimeout(() => setTestError(false), 4000);
+      }
+    } catch {
+      setTestError(true);
+      setTimeout(() => setTestError(false), 4000);
     } finally {
       setSendingTest(false);
     }
@@ -330,12 +342,14 @@ export default function AdminEmailTemplatesPage() {
     if (!bulkRecipient) return;
     setSendingAll(true);
     setAllSentResults([]);
-    const results = await Promise.all(
-      TEMPLATE_ORDER.map(async (id) => {
-        const t = templates[id];
+    const results: { id: EmailTemplateId; ok: boolean }[] = [];
+    for (const id of TEMPLATE_ORDER) {
+      const t = templates[id];
+      try {
         const res = await fetchInternal("/api/email/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          timeoutMs: 120_000,
           body: JSON.stringify({
             event: id,
             payload: getTestPayload(id),
@@ -348,9 +362,11 @@ export default function AdminEmailTemplatesPage() {
           }),
         });
         const data = await res.json().catch(() => ({ success: false }));
-        return { id, ok: !!data.success };
-      })
-    );
+        results.push({ id, ok: !!data.success });
+      } catch {
+        results.push({ id, ok: false });
+      }
+    }
     setAllSentResults(results);
     setSendingAll(false);
   }
@@ -613,11 +629,15 @@ export default function AdminEmailTemplatesPage() {
                   <button
                     onClick={handleSendTest}
                     disabled={sendingTest || !session?.user?.email}
-                    style={{ ...secondaryBtn, opacity: sendingTest ? 0.6 : 1 }}
+                    style={{
+                      ...secondaryBtn,
+                      opacity: sendingTest ? 0.6 : 1,
+                      ...(testError ? { borderColor: "rgba(185,28,28,0.4)", color: "#B91C1C" } : {}),
+                    }}
                     title={session?.user?.email ? `Send a test to ${session.user.email}` : "Sign in to send a test"}
                   >
                     <Send size={13} />
-                    {testSent ? "Sent!" : sendingTest ? "Sending…" : "Send Test Email"}
+                    {testError ? "Failed — check SMTP config" : testSent ? "Sent!" : sendingTest ? "Sending…" : "Send Test Email"}
                   </button>
                   <button onClick={handleSave} disabled={!isDirty} style={{ ...primaryBtn, opacity: isDirty ? 1 : 0.45 }}>
                     {savedId === selectedId ? <Check size={13} /> : <Save size={13} />}

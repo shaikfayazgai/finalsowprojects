@@ -4,45 +4,23 @@ import * as React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Search,
-  Filter,
-  Eye,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  ShieldCheck,
-  Scale,
-  UserCheck,
-  DollarSign,
-  Pen,
-  RotateCcw,
-  ChevronDown,
-  Layers,
-  Bell,
-  CheckCheck,
-  Send,
-  X,
-  Sparkles,
-  MessageSquare,
-  Paperclip,
-  File,
-  ImageIcon,
-  Building2,
-  XCircle,
+  Search, Eye, CheckCircle2, Clock, AlertTriangle, ShieldCheck, Scale,
+  UserCheck, DollarSign, Pen, Layers, ChevronDown, ChevronLeft, ChevronRight,
+  X, Check, MessageSquare, Sparkles, Upload,
   type LucideIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils/cn";
-import { stagger, fadeUp, slideInRight, scaleIn } from "@/lib/utils/motion-variants";
-import { Badge, Button, Skeleton } from "@/components/ui";
-import { useSOWPipelineStore, type PipelineSOW, type SLAStatus, type ChangeRequestHistoryEntry } from "@/lib/stores/sow-pipeline-store";
-import { useNotificationStore } from "@/lib/stores/notification-store";
-import { useManualSOWList } from "@/lib/hooks/use-manual-sow";
+import { stagger, fadeUp } from "@/lib/utils/motion-variants";
+import { Badge } from "@/components/ui";
+import {
+  useManualSOWList,
+  useApprovalStages,
+  useRecordApprovalDecision,
+} from "@/lib/hooks/use-manual-sow";
+import { useSowList } from "@/lib/hooks/use-sow-wizard";
 
-/* ═══════════════════════════════════════════════════════════════
-   Types
-   ═══════════════════════════════════════════════════════════════ */
+// ── Types ─────────────────────────────────────────────────────────────────
 
-interface PipelineStage {
+interface PipelineStageConfig {
   number: number;
   name: string;
   shortName: string;
@@ -52,566 +30,563 @@ interface PipelineStage {
   bgColor: string;
 }
 
+interface ApiStage {
+  stage: number;
+  stage_name?: string;
+  status: "pending" | "in_progress" | "approved" | "rejected" | "changes_requested" | string;
+  reviewer?: string;
+  reviewed_at?: string;
+  comments?: string;
+  decision?: string;
+}
 
-/* ═══════════════════════════════════════════════════════════════
-   Constants
-   ═══════════════════════════════════════════════════════════════ */
+interface NormalisedSOW {
+  id: string;
+  title: string;
+  client: string;
+  intakeMode: "ai_generated" | "manual_upload";
+  status: string;
+  submittedAt: string;
+  slaStatus: "on-track" | "at-risk" | "overdue";
+}
 
-const PIPELINE_STAGES: PipelineStage[] = [
-  {
-    number: 1,
-    name: "Business Owner Review",
-    shortName: "Business",
-    icon: UserCheck,
-    slaDescription: "3 business days",
-    color: "#6B7280",
-    bgColor: "rgba(107, 114, 128, 0.08)",
-  },
-  {
-    number: 2,
-    name: "GlimmoraTeam Commercial Review",
-    shortName: "Commercial",
-    icon: DollarSign,
-    slaDescription: "2 business days standard, auto-escalation after 4",
-    color: "#92400E",
-    bgColor: "rgba(146, 64, 14, 0.08)",
-  },
-  {
-    number: 3,
-    name: "Legal / Compliance Review",
-    shortName: "Legal",
-    icon: Scale,
-    slaDescription: "5 business days",
-    color: "#1E40AF",
-    bgColor: "rgba(30, 64, 175, 0.08)",
-  },
-  {
-    number: 4,
-    name: "Security Review",
-    shortName: "Security",
-    icon: ShieldCheck,
-    slaDescription: "3 business days",
-    color: "#065F46",
-    bgColor: "rgba(6, 95, 70, 0.08)",
-  },
-  {
-    number: 5,
-    name: "Final Sign-off",
-    shortName: "Sign-off",
-    icon: Pen,
-    slaDescription: "2 business days",
-    color: "#7C3AED",
-    bgColor: "rgba(124, 58, 237, 0.08)",
-  },
+// ── Stage config ──────────────────────────────────────────────────────────
+
+const PIPELINE_STAGES: PipelineStageConfig[] = [
+  { number: 1, name: "Business Owner Review",          shortName: "Business",   icon: UserCheck,   slaDescription: "3 business days", color: "var(--color-brown-600)",  bgColor: "var(--color-brown-50)"  },
+  { number: 2, name: "GlimmoraTeam Commercial Review", shortName: "Commercial", icon: DollarSign,  slaDescription: "2 business days", color: "var(--color-gold-700)",   bgColor: "var(--color-gold-50)"   },
+  { number: 3, name: "Legal / Compliance Review",      shortName: "Legal",      icon: Scale,       slaDescription: "5 business days", color: "var(--color-teal-700)",   bgColor: "var(--color-teal-50)"   },
+  { number: 4, name: "Security Review",                shortName: "Security",   icon: ShieldCheck, slaDescription: "3 business days", color: "var(--color-forest-700)", bgColor: "var(--color-forest-50)" },
+  { number: 5, name: "Final Sign-off",                 shortName: "Sign-off",   icon: Pen,         slaDescription: "2 business days", color: "var(--color-brown-700)",  bgColor: "var(--color-brown-100)" },
 ];
 
+// ── Helpers ───────────────────────────────────────────────────────────────
 
-
-/* ═══════════════════════════════════════════════════════════════
-   Helpers
-   ═══════════════════════════════════════════════════════════════ */
-
-function getSLABadgeVariant(status: SLAStatus): "forest" | "gold" | "danger" {
-  switch (status) {
-    case "on-track":
-      return "forest";
-    case "at-risk":
-      return "gold";
-    case "overdue":
-      return "danger";
+function extractPipelineStages(res: unknown): ApiStage[] {
+  if (!res) return [];
+  const r = res as Record<string, unknown>;
+  const d = (r.data ?? r) as Record<string, unknown>;
+  for (const key of ["stages", "approval_stages", "pipeline", "items"]) {
+    if (Array.isArray(d[key])) return d[key] as ApiStage[];
   }
+  return [];
 }
 
-function getSLALabel(status: SLAStatus): string {
-  switch (status) {
-    case "on-track":
-      return "On Track";
-    case "at-risk":
-      return "At Risk";
-    case "overdue":
-      return "Overdue";
-  }
-}
-
-function getStageBadgeVariant(stage: number): "beige" | "gold" | "teal" | "forest" | "brown" {
-  switch (stage) {
-    case 1:
-      return "beige";
-    case 2:
-      return "gold";
-    case 3:
-      return "teal";
-    case 4:
-      return "forest";
-    case 5:
-      return "brown";
-    default:
-      return "beige";
-  }
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function countSOWsAtStage(sows: PipelineSOW[], stage: number): number {
-  return sows.filter((s) => s.currentStage === stage).length;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Sub-Components
-   ═══════════════════════════════════════════════════════════════ */
-
-function PipelineProgress({
-  totalStages,
-  currentStage,
-  completedStages,
-  stageColor,
-}: {
-  totalStages: number;
-  currentStage: number;
-  completedStages: number[];
-  stageColor: string;
-}) {
-  return (
-    <div className="w-full space-y-1.5">
-      <div className="flex items-center">
-        {Array.from({ length: totalStages }, (_, i) => {
-          const num = i + 1;
-          const done = completedStages.includes(num);
-          const active = num === currentStage;
-          return (
-            <React.Fragment key={num}>
-              <div
-                className="flex items-center justify-center rounded-full text-[0.5rem] font-bold shrink-0"
-                style={{
-                  width: 18,
-                  height: 18,
-                  background: done ? "#2D6A4F" : active ? stageColor : "transparent",
-                  border: done || active ? "none" : "1.5px solid var(--border-soft)",
-                  color: done || active ? "#fff" : "var(--ink-faint)",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                {done ? <CheckCircle2 size={10} /> : num}
-              </div>
-              {num < totalStages && (
-                <div
-                  className="flex-1 h-[2px] rounded-full"
-                  style={{
-                    background: done ? "#2D6A4F" : "var(--border-soft)",
-                    opacity: done ? 0.7 : 0.35,
-                  }}
-                />
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-      <p className="text-[0.62rem]" style={{ color: "var(--ink-faint)" }}>
-        {completedStages.length}/{totalStages} stages complete
-      </p>
-    </div>
-  );
-}
-
-function PipelineStageCard({ stage, index, sows }: { stage: PipelineStage; index: number; sows: PipelineSOW[] }) {
-  const count = countSOWsAtStage(sows, stage.number);
-  const Icon = stage.icon;
-
-  return (
-    <motion.div
-      variants={fadeUp}
-      className="flex flex-col"
-      style={{
-        background: "var(--card-bg)",
-        border: "1px solid var(--border-soft)",
-        borderRadius: 14,
-        overflow: "hidden",
-        position: "relative",
-      }}
-    >
-      {/* Top color bar */}
-      <div style={{ height: 4, background: stage.color, opacity: 0.7 }} />
-
-      {/* Body */}
-      <div className="flex flex-col flex-1 p-4 gap-3">
-
-        {/* Icon + count row */}
-        <div className="flex items-center justify-between">
-          <div
-            className="flex items-center justify-center rounded-xl"
-            style={{ width: 38, height: 38, background: stage.bgColor }}
-          >
-            <Icon size={18} style={{ color: stage.color }} />
-          </div>
-          <div className="text-right">
-            <span
-              className="font-heading block"
-              style={{ fontSize: "2rem", fontWeight: 700, color: stage.color, lineHeight: 1 }}
-            >
-              {count}
-            </span>
-            <span className="text-[0.6rem] font-medium uppercase tracking-widest" style={{ color: "var(--ink-faint)" }}>
-              SOWs
-            </span>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div style={{ height: 1, background: "var(--border-soft)" }} />
-
-        {/* Stage label + name */}
-        <div>
-          <span
-            className="text-[0.6rem] font-bold uppercase tracking-[0.16em]"
-            style={{ color: stage.color, opacity: 0.8 }}
-          >
-            Stage {stage.number}
-          </span>
-          <h3
-            className="font-heading mt-0.5"
-            style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--ink)", lineHeight: 1.35 }}
-          >
-            {stage.name}
-          </h3>
-        </div>
-
-        {/* SLA */}
-        <div
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 mt-auto"
-          style={{ background: stage.bgColor }}
-        >
-          <Clock size={11} style={{ color: stage.color, opacity: 0.8, flexShrink: 0 }} />
-          <span className="text-[0.68rem]" style={{ color: stage.color, opacity: 0.9 }}>
-            {stage.slaDescription}
-          </span>
-        </div>
-
-        {/* Auto-escalation badge for stage 2 */}
-        {stage.number === 2 && (
-          <div
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5"
-            style={{ background: "rgba(146,64,14,0.06)", border: "1px solid rgba(146,64,14,0.14)" }}
-          >
-            <AlertTriangle size={10} style={{ color: "#92400E", flexShrink: 0 }} />
-            <span className="text-[0.62rem]" style={{ color: "#92400E" }}>
-              Auto-escalates after 4 days
-            </span>
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Main Page
-   ═══════════════════════════════════════════════════════════════ */
-
-function deriveStageFromApprovalStages(stages: Record<string, unknown>[] | undefined): { currentStage: number; completedStages: number[] } {
-  if (!stages || !Array.isArray(stages)) return { currentStage: 1, completedStages: [] };
-  const completed: number[] = [];
-  let current = 1;
-  // API returns stages with `stage` as a number (1-5) and `status` as a string
+function computeActiveStage(stages: ApiStage[]): number {
   for (let i = 1; i <= 5; i++) {
-    const match = stages.find((s) => (s.stage as number) === i);
-    if (match && match.status === "approved") {
-      completed.push(i);
-      current = i + 1;
-    } else {
-      break;
-    }
+    const s = stages.find((x) => x.stage === i);
+    if (!s || s.status === "pending") return i;
+    if (s.status !== "approved") return i;
   }
-  return { currentStage: Math.min(current, 5), completedStages: completed };
+  return 5;
 }
 
-function deriveSLAStatus(submittedAt: string | undefined): SLAStatus {
-  if (!submittedAt) return "on-track";
-  const days = (Date.now() - new Date(submittedAt).getTime()) / (1000 * 60 * 60 * 24);
+function computeCompleted(stages: ApiStage[]): number[] {
+  return stages.filter((s) => s.status === "approved").map((s) => s.stage);
+}
+
+function deriveSLA(submittedAt: string): "on-track" | "at-risk" | "overdue" {
+  const days = (Date.now() - new Date(submittedAt).getTime()) / 86_400_000;
   if (days > 10) return "overdue";
   if (days > 5) return "at-risk";
   return "on-track";
 }
 
-export default function SOWApprovalPipelinePage() {
-  const localSows = useSOWPipelineStore((s) => s.sows);
-  const updateSOW = useSOWPipelineStore((s) => s.updateSOW);
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
-  // Fetch real SOWs from API (status: approval)
-  const { data: apiRes, isLoading } = useManualSOWList({ status: "approval" });
-  const apiItems = ((apiRes?.data ?? apiRes) as Record<string, unknown>[] | undefined);
+function slaLabel(s: "on-track" | "at-risk" | "overdue") {
+  return s === "on-track" ? "On Track" : s === "at-risk" ? "At Risk" : "Overdue";
+}
+function slaVariant(s: "on-track" | "at-risk" | "overdue"): "forest" | "gold" | "danger" {
+  return s === "on-track" ? "forest" : s === "at-risk" ? "gold" : "danger";
+}
 
-  // Merge API SOWs into PipelineSOW shape, deduplicating with local store
-  const sows: PipelineSOW[] = React.useMemo(() => {
-    const apiPipelineSows: PipelineSOW[] = (Array.isArray(apiItems) ? apiItems : []).map((item) => {
-      const id = (item.id ?? item._id ?? "") as string;
-      const approvalStages = (item.approval_stages ?? item.approvalStages) as Record<string, unknown>[] | undefined;
-      const { currentStage, completedStages } = deriveStageFromApprovalStages(approvalStages);
-      const submittedAt = (item.submitted_at ?? item.submittedAt ?? item.created_at ?? item.createdAt) as string | undefined;
-      // If the local store has extra state (changesRequested, etc.), merge it
-      const local = localSows.find((s) => s.id === id);
-      return {
-        id,
-        title: (item.title ?? item.projectTitle ?? item.project_title ?? "Untitled") as string,
-        client: (item.client ?? item.clientOrganisation ?? item.client_organisation ?? "") as string,
-        currentStage,
-        stageApprover: (item.stageApprover ?? local?.stageApprover ?? "Assigned Reviewer") as string,
-        slaStatus: deriveSLAStatus(submittedAt),
-        submittedDate: submittedAt ?? new Date().toISOString(),
-        totalValue: (item.totalValue ?? item.total_value ?? local?.totalValue ?? "$0") as string,
-        completedStages,
-        submittedBy: (item.submittedBy ?? item.submitted_by ?? item.created_by) as string | undefined,
-        changesRequested: local?.changesRequested,
-        changeRequestReason: local?.changeRequestReason,
-        changeRequestedAt: local?.changeRequestedAt,
-        changeRequestedBy: local?.changeRequestedBy,
-        changeRequestHistory: local?.changeRequestHistory,
-      };
-    });
+function stageStatusStyle(status: string) {
+  if (status === "approved")           return { color: "var(--color-forest-700)", bg: "var(--color-forest-50)" };
+  if (status === "rejected")           return { color: "var(--danger)",           bg: "var(--danger-light)"    };
+  if (status === "changes_requested")  return { color: "var(--color-gold-700)",   bg: "var(--color-gold-50)"   };
+  if (status === "in_progress")        return { color: "var(--color-teal-700)",   bg: "var(--color-teal-50)"   };
+  return                                      { color: "var(--color-gray-500)",   bg: "var(--color-gray-100)"  };
+}
 
-    // Include local-only SOWs (not from API) as fallback
-    const apiIds = new Set(apiPipelineSows.map((s) => s.id));
-    const localOnly = localSows.filter((s) => !apiIds.has(s.id));
-    return [...apiPipelineSows, ...localOnly];
-  }, [apiItems, localSows]);
-  const pushNotification = useNotificationStore((s) => s.push);
-  const [stageFilter, setStageFilter] = React.useState<number | null>(null);
-  const [slaFilter, setSLAFilter] = React.useState<SLAStatus | null>(null);
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set());
-  const [expandedMessages, setExpandedMessages] = React.useState<Set<string>>(new Set());
-  const [resolvePanel, setResolvePanel] = React.useState<Record<string, boolean>>({});
-  const [resolveMessages, setResolveMessages] = React.useState<Record<string, string>>({});
+// ── Normalize ─────────────────────────────────────────────────────────────
 
-  function toggleExpand(id: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+function normalizeManualList(res: unknown): NormalisedSOW[] {
+  if (!res) return [];
+  const r = res as Record<string, unknown>;
+  let arr: Record<string, unknown>[] = [];
+  if (Array.isArray(r)) arr = r as Record<string, unknown>[];
+  else if (Array.isArray(r.data)) arr = r.data as Record<string, unknown>[];
+  else {
+    const d = (r.data ?? r) as Record<string, unknown>;
+    for (const k of ["sows", "items", "results", "documents"]) {
+      if (Array.isArray(d[k])) { arr = d[k] as Record<string, unknown>[]; break; }
+    }
   }
-
-  function openResolvePanel(id: string) {
-    setResolvePanel((prev) => ({ ...prev, [id]: true }));
-    setExpandedIds((prev) => { const n = new Set(prev); n.add(id); return n; });
-  }
-
-  function handleAIResolve(sow: PipelineSOW) {
-    const now = new Date().toISOString();
-    const aiMessage = `This change request has been reviewed and resolved automatically. The SOW "${sow.title}" has been assessed against the requested revisions. All noted concerns have been addressed and the document is ready to proceed to the next approval stage.`;
-
-    const historyEntry: ChangeRequestHistoryEntry = {
-      reason: sow.changeRequestReason ?? "",
-      requestedBy: sow.changeRequestedBy ?? "Unknown",
-      requestedAt: sow.changeRequestedAt ?? now,
-      resolvedAt: now,
-      resolveMessage: aiMessage,
-      stageAtRequest: sow.currentStage,
+  return arr.map((item) => {
+    const submittedAt = String(item.submitted_at ?? item.submittedAt ?? item.created_at ?? item.createdAt ?? new Date().toISOString());
+    return {
+      id:         String(item.id ?? item._id ?? ""),
+      title:      String(item.title ?? item.project_title ?? item.document_title ?? "Untitled"),
+      client:     String(item.client ?? item.client_organisation ?? item.clientOrganisation ?? ""),
+      intakeMode: "manual_upload" as const,
+      status:     String(item.status ?? ""),
+      submittedAt,
+      slaStatus:  deriveSLA(submittedAt),
     };
+  });
+}
 
-    updateSOW(sow.id, {
-      changesRequested: false,
-      changeRequestReason: undefined,
-      changeRequestedBy: undefined,
-      changeRequestedAt: undefined,
-      changeRequestHistory: [...(sow.changeRequestHistory ?? []), historyEntry],
-    });
-    pushNotification({
-      title: "AI Resolved Change Request",
-      body: `"${sow.title}" was automatically resolved by AI. The document is ready to proceed.`,
-      severity: "low",
-      href: `/enterprise/sow/${sow.id}/approve`,
-    });
-    setExpandedIds((prev) => { const n = new Set(prev); n.delete(sow.id); return n; });
-    setResolvePanel((prev) => { const n = { ...prev }; delete n[sow.id]; return n; });
-    setResolveMessages((prev) => { const n = { ...prev }; delete n[sow.id]; return n; });
+function normalizeAiList(res: unknown): NormalisedSOW[] {
+  if (!res) return [];
+  const r = res as Record<string, unknown>;
+  let arr: Record<string, unknown>[] = [];
+  if (Array.isArray(r)) arr = r as Record<string, unknown>[];
+  else if (Array.isArray(r.data)) arr = r.data as Record<string, unknown>[];
+  else {
+    const d = (r.data ?? r) as Record<string, unknown>;
+    for (const k of ["sows", "items", "results"]) {
+      if (Array.isArray(d[k])) { arr = d[k] as Record<string, unknown>[]; break; }
+    }
   }
-
-  function handleResolve(sow: PipelineSOW) {
-    const message = resolveMessages[sow.id]?.trim();
-    const now = new Date().toISOString();
-
-    const historyEntry: ChangeRequestHistoryEntry = {
-      reason: sow.changeRequestReason ?? "",
-      requestedBy: sow.changeRequestedBy ?? "Unknown",
-      requestedAt: sow.changeRequestedAt ?? now,
-      resolvedAt: now,
-      resolveMessage: message || undefined,
-      stageAtRequest: sow.currentStage,
+  return arr.map((item) => {
+    const gc = (item.generated_content ?? {}) as Record<string, unknown>;
+    const title = gc.document_title ? String(gc.document_title)
+      : String(item.document_title ?? item.title ?? item.project_title ?? `AI SOW ${String(item.wizard_id ?? item.id ?? "").slice(-6).toUpperCase()}`);
+    const bizOwner = String(item.business_owner_approver_id ?? "");
+    const client = bizOwner.includes(", ") ? bizOwner.split(", ").pop()?.trim() ?? "" : "";
+    const submittedAt = String(item.submitted_at ?? item.created_at ?? new Date().toISOString());
+    return {
+      id:         String(item.id ?? item._id ?? item.sow_id ?? item.wizard_id ?? ""),
+      title,
+      client,
+      intakeMode: "ai_generated" as const,
+      status:     String(item.status ?? "in_review"),
+      submittedAt,
+      slaStatus:  deriveSLA(submittedAt),
     };
+  });
+}
 
-    updateSOW(sow.id, {
-      changesRequested: false,
-      changeRequestReason: undefined,
-      changeRequestedBy: undefined,
-      changeRequestedAt: undefined,
-      changeRequestHistory: [...(sow.changeRequestHistory ?? []), historyEntry],
-    });
-    pushNotification({
-      title: "Change Request Resolved",
-      body: message
-        ? `"${sow.title}" resolved. Message: "${message}"`
-        : `"${sow.title}" has been marked as resolved. Please resume your review.`,
-      severity: "low",
-      href: `/enterprise/sow/${sow.id}/approve`,
-    });
-    setExpandedIds((prev) => { const n = new Set(prev); n.delete(sow.id); return n; });
-    setResolvePanel((prev) => { const n = { ...prev }; delete n[sow.id]; return n; });
-    setResolveMessages((prev) => { const n = { ...prev }; delete n[sow.id]; return n; });
-  }
+const MANUAL_APPROVAL_STATUSES = new Set(["approval", "in_review", "review", "pending_commercial_review", "changes_requested", "in_progress"]);
 
-  const changesRequestedSOWs = React.useMemo(
-    () => sows.filter((s) => s.changesRequested),
-    [sows]
+// ── Pipeline dot progress ─────────────────────────────────────────────────
+
+function PipelineDots({ currentStage, completedStages, stageColor }: {
+  currentStage: number; completedStages: number[]; stageColor: string;
+}) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: 5 }, (_, i) => {
+        const n = i + 1;
+        const done = completedStages.includes(n);
+        const active = n === currentStage;
+        return (
+          <React.Fragment key={n}>
+            <div className="flex items-center justify-center rounded-full shrink-0"
+              style={{ width: 16, height: 16, fontSize: 8, fontWeight: 700,
+                background: done ? "var(--color-forest-600)" : active ? stageColor : "transparent",
+                border: done || active ? "none" : "1.5px solid var(--border-soft)",
+                color: done || active ? "#fff" : "var(--ink-faint)" }}>
+              {done ? <CheckCircle2 size={9} /> : n}
+            </div>
+            {n < 5 && <div className="h-[1.5px] w-3 rounded-full" style={{ background: done ? "var(--color-forest-400)" : "var(--border-soft)", opacity: done ? 0.7 : 0.3 }} />}
+          </React.Fragment>
+        );
+      })}
+    </div>
   );
+}
 
-  const filteredSOWs = React.useMemo(() => {
-    const filtered = sows.filter((sow) => {
-      if (stageFilter !== null && sow.currentStage !== stageFilter) return false;
-      if (slaFilter !== null && sow.slaStatus !== slaFilter) return false;
-      if (
-        searchQuery &&
-        !sow.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !sow.client.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-        return false;
-      return true;
-    });
-    // Changes-requested SOWs always float to the top
-    return [...filtered].sort((a, b) => {
-      if (a.changesRequested && !b.changesRequested) return -1;
-      if (!a.changesRequested && b.changesRequested) return 1;
-      return 0;
-    });
-  }, [sows, stageFilter, slaFilter, searchQuery]);
+// ── Stage detail row (inside expanded panel) ──────────────────────────────
 
-  const totalInPipeline = sows.length;
-  const onTrackCount = sows.filter((s) => s.slaStatus === "on-track").length;
-  const atRiskCount = sows.filter((s) => s.slaStatus === "at-risk").length;
-  const overdueCount = sows.filter((s) => s.slaStatus === "overdue").length;
+function StageDetailRow({ stage, apiStage, isCurrent, onDecide }: {
+  stage: PipelineStageConfig;
+  apiStage?: ApiStage;
+  isCurrent: boolean;
+  onDecide: (stageNum: number, type: "approve" | "request_changes") => void;
+}) {
+  const Icon = stage.icon;
+  const status = apiStage?.status ?? "pending";
+  const { color, bg } = stageStatusStyle(status);
 
-  /* ── Chat panel state ── */
-  type ChatMsg = { from: "enterprise" | "glimmora"; text: string; time: string; files?: { name: string; size: number; type: string }[] };
-  const [chatMessages, setChatMessages] = React.useState<ChatMsg[]>([
-    { from: "glimmora", text: "Welcome to the Approval Pipeline. All SOWs in active review are listed here. We will notify you of any stage decisions or changes required.", time: "Mar 11, 09:00 AM" },
-    { from: "glimmora", text: "Stage 2 (GlimmoraTeam Commercial) for 'Smart Manufacturing IoT Dashboard' requires attention — budget ceiling appears insufficient for the declared scope.", time: "Mar 11, 02:15 PM" },
-    { from: "enterprise", text: "Understood. We are revising the budget and will submit an updated breakdown shortly.", time: "Mar 12, 09:45 AM", files: [{ name: "Budget_Revision_v2.xlsx", size: 48200, type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }] },
-    { from: "glimmora", text: "Received. Reviewing the updated figures now. Expect a decision within 1 business day.", time: "Mar 12, 11:30 AM" },
-  ]);
-  const [chatInput, setChatInput] = React.useState("");
-  const [chatFiles, setChatFiles] = React.useState<{ name: string; size: number; type: string }[]>([]);
-  const chatFileRef   = React.useRef<HTMLInputElement>(null);
-  const chatScrollRef = React.useRef<HTMLDivElement>(null);
+  const statusLabel =
+    status === "approved"          ? "Approved" :
+    status === "rejected"          ? "Rejected" :
+    status === "changes_requested" ? "Changes Requested" :
+    status === "in_progress"       ? "In Progress" : "Pending";
+
+  return (
+    <div className="flex items-start gap-4 px-6 py-3" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+      <div className="flex items-center justify-center rounded-xl shrink-0 mt-0.5"
+        style={{ width: 32, height: 32, background: stage.bgColor }}>
+        <Icon size={14} style={{ color: stage.color }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: stage.color }}>Stage {stage.number}</span>
+          <span className="text-[12.5px] font-semibold" style={{ color: "var(--ink)" }}>{stage.name}</span>
+          {isCurrent && (
+            <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+              style={{ background: stage.bgColor, color: stage.color }}>
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: stage.color }} />
+              Active
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+          <span className="text-[10.5px] px-2 py-0.5 rounded-full font-medium" style={{ background: bg, color }}>{statusLabel}</span>
+          {apiStage?.reviewer && <span className="text-[11px]" style={{ color: "var(--ink-faint)" }}>Reviewer: {apiStage.reviewer}</span>}
+          {apiStage?.reviewed_at && <span className="text-[11px]" style={{ color: "var(--ink-faint)" }}>· {formatDate(apiStage.reviewed_at)}</span>}
+          <span className="text-[10px]" style={{ color: "var(--ink-faint)" }}>SLA: {stage.slaDescription}</span>
+        </div>
+        {apiStage?.comments && (
+          <p className="mt-1.5 text-[11.5px] leading-snug italic" style={{ color: "var(--ink-muted)" }}>&ldquo;{apiStage.comments}&rdquo;</p>
+        )}
+      </div>
+      {isCurrent && (status === "pending" || status === "in_progress") && (
+        <div className="flex items-center gap-2 shrink-0 mt-1">
+          <button onClick={() => onDecide(stage.number, "approve")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-semibold transition-all hover:opacity-85 from-forest-500 to-forest-700 bg-gradient-to-r text-white">
+            <Check size={11} /> Approve
+          </button>
+          <button onClick={() => onDecide(stage.number, "request_changes")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-semibold transition-all hover:opacity-85 from-gold-500 to-gold-700 bg-gradient-to-r text-white">
+            <MessageSquare size={11} /> Request Changes
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Decision panel ────────────────────────────────────────────────────────
+
+function DecisionPanel({ stageNum, decisionType, onSubmit, onCancel, isPending }: {
+  stageNum: number;
+  decisionType: "approve" | "request_changes";
+  onSubmit: (comments: string) => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const [comments, setComments] = React.useState("");
+  const stageCfg = PIPELINE_STAGES[stageNum - 1];
+  const isApprove = decisionType === "approve";
+
+  return (
+    <div className="px-6 py-4" style={{ background: isApprove ? "var(--color-forest-50)" : "var(--color-gold-50)", borderTop: "1px solid var(--border-hair)" }}>
+      <div className="flex items-center gap-2 mb-3">
+        {isApprove
+          ? <Check size={13} style={{ color: "var(--color-forest-700)" }} />
+          : <MessageSquare size={13} style={{ color: "var(--color-gold-700)" }} />}
+        <span className="text-[12px] font-semibold" style={{ color: isApprove ? "var(--color-forest-700)" : "var(--color-gold-700)" }}>
+          {isApprove ? `Approve — Stage ${stageNum}: ${stageCfg.name}` : `Request Changes — Stage ${stageNum}: ${stageCfg.name}`}
+        </span>
+      </div>
+      <textarea rows={3} placeholder={isApprove ? "Optional: add approval comments…" : "Describe the required changes…"}
+        value={comments} onChange={(e) => setComments(e.target.value)}
+        className="w-full resize-none rounded-xl px-4 py-3 text-[12.5px] outline-none"
+        style={{ background: "white", border: `1px solid ${isApprove ? "var(--color-forest-200)" : "var(--color-gold-200)"}`, color: "var(--ink)" }} />
+      <div className="flex items-center justify-end gap-2 mt-3">
+        <button onClick={onCancel} disabled={isPending}
+          className="px-4 py-2 rounded-xl text-[12px] font-medium border transition-all hover:bg-white"
+          style={{ color: "var(--ink-muted)", borderColor: "var(--border-soft)" }}>Cancel</button>
+        <button onClick={() => onSubmit(comments)} disabled={isPending || (!isApprove && !comments.trim())}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all disabled:opacity-50 bg-gradient-to-r ${isApprove ? "from-forest-500 to-forest-700" : "from-gold-500 to-gold-700"}`}>
+          {isPending ? "Submitting…" : isApprove ? "Confirm Approval" : "Send Request"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── SOW pipeline row ──────────────────────────────────────────────────────
+
+function SOWPipelineRow({ sow, onStageResolved }: {
+  sow: NormalisedSOW;
+  onStageResolved?: (sowId: string, activeStage: number) => void;
+}) {
+  const { data: pipelineRes, isLoading: pipelineLoading } = useApprovalStages(sow.id);
+  const recordDecision = useRecordApprovalDecision(sow.id);
+
+  const [expanded, setExpanded] = React.useState(false);
+  const [decidingStage, setDecidingStage] = React.useState<number | null>(null);
+  const [decisionType, setDecisionType] = React.useState<"approve" | "request_changes" | null>(null);
+
+  const apiStages = extractPipelineStages(pipelineRes);
+  const currentStage = apiStages.length > 0 ? computeActiveStage(apiStages) : 1;
+  const completedStages = computeCompleted(apiStages);
+  const stageCfg = PIPELINE_STAGES[currentStage - 1] ?? PIPELINE_STAGES[0];
 
   React.useEffect(() => {
-    if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-  }, [chatMessages]);
+    if (!pipelineLoading) onStageResolved?.(sow.id, currentStage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipelineLoading, currentStage, sow.id]);
 
-  function formatBytes(n: number) {
-    if (n < 1024) return `${n} B`;
-    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  function handleDecide(stageNum: number, type: "approve" | "request_changes") {
+    setDecidingStage(stageNum);
+    setDecisionType(type);
+    setExpanded(true);
   }
 
-  function handleChatSend() {
-    if (!chatInput.trim() && chatFiles.length === 0) return;
-    setChatMessages((prev) => [...prev, {
-      from: "enterprise",
-      text: chatInput.trim(),
-      time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-      files: chatFiles.length > 0 ? [...chatFiles] : undefined,
-    }]);
-    setChatInput("");
-    setChatFiles([]);
-    setTimeout(() => {
-      setChatMessages((prev) => [...prev, {
-        from: "glimmora",
-        text: "Message received. Our review team will respond shortly.",
-        time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-      }]);
-    }, 1200);
+  function submitDecision(comments: string) {
+    if (!decidingStage || !decisionType) return;
+    recordDecision.mutate(
+      { stage: decidingStage, decision: decisionType, comments: comments || undefined },
+      { onSuccess: () => { setDecidingStage(null); setDecisionType(null); } }
+    );
   }
 
+  return (
+    <div style={{ borderBottom: "1px solid var(--border-hair)" }}>
+      {/* Main row */}
+      <div
+        className="grid items-center gap-4 px-6 py-3.5 cursor-pointer transition-colors hover:bg-amber-50/30"
+        style={{ gridTemplateColumns: "2.2fr 1fr 1.6fr 0.9fr 0.8fr auto" }}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {/* Title + intake badge */}
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            {sow.intakeMode === "ai_generated"
+              ? <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(13,148,136,0.1)", color: "#0f766e" }}><Sparkles size={8} />AI</span>
+              : <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(107,114,128,0.1)", color: "#6B7280" }}><Upload size={8} />Manual</span>
+            }
+            <p className="text-[13px] font-semibold truncate" style={{ color: "var(--ink)" }}>{sow.title}</p>
+          </div>
+          {sow.client && <p className="text-[11px] truncate pl-0.5" style={{ color: "var(--ink-faint)" }}>{sow.client}</p>}
+        </div>
+
+        {/* Current stage */}
+        <div>
+          {pipelineLoading
+            ? <div className="h-3 w-16 rounded bg-gray-100 animate-pulse" />
+            : (
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-center rounded shrink-0" style={{ width: 20, height: 20, background: stageCfg.bgColor }}>
+                  {React.createElement(stageCfg.icon, { size: 10, style: { color: stageCfg.color } })}
+                </div>
+                <span className="text-[11.5px] font-medium" style={{ color: stageCfg.color }}>{stageCfg.shortName}</span>
+              </div>
+            )}
+        </div>
+
+        {/* Progress dots */}
+        <div>
+          {pipelineLoading
+            ? <div className="h-3 w-24 rounded bg-gray-100 animate-pulse" />
+            : (
+              <>
+                <PipelineDots currentStage={currentStage} completedStages={completedStages} stageColor={stageCfg.color} />
+                <span className="text-[10px] mt-0.5 block" style={{ color: "var(--ink-faint)" }}>{completedStages.length}/5 stages done</span>
+              </>
+            )}
+        </div>
+
+        {/* SLA */}
+        <Badge variant={slaVariant(sow.slaStatus)} size="sm" dot>{slaLabel(sow.slaStatus)}</Badge>
+
+        {/* Date */}
+        <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--ink-faint)" }}>{formatDate(sow.submittedAt)}</span>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <Link href={`/enterprise/sow/${sow.id}`}>
+            <button className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all hover:opacity-80"
+              style={{ background: stageCfg.bgColor, color: stageCfg.color }}>
+              <Eye size={11} /> View
+            </button>
+          </Link>
+          <button onClick={() => setExpanded((v) => !v)}
+            className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-100 transition-colors"
+            style={{ color: "var(--ink-faint)" }}>
+            <ChevronDown size={14} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded panel */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div key="exp" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }} className="overflow-hidden">
+            <div style={{ background: "var(--color-gray-50)", borderTop: "1px solid var(--border-hair)" }}>
+              {pipelineLoading
+                ? (
+                  <div className="px-6 py-4 space-y-3">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-gray-100 animate-pulse shrink-0" />
+                        <div className="flex-1 space-y-1.5">
+                          <div className="h-3 w-32 rounded bg-gray-100 animate-pulse" />
+                          <div className="h-2.5 w-20 rounded bg-gray-100 animate-pulse" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+                : PIPELINE_STAGES.map((stage) => (
+                  <StageDetailRow key={stage.number} stage={stage}
+                    apiStage={apiStages.find((s) => s.stage === stage.number)}
+                    isCurrent={stage.number === currentStage}
+                    onDecide={handleDecide} />
+                ))
+              }
+
+              <AnimatePresence initial={false}>
+                {decidingStage && decisionType && (
+                  <motion.div key="dec" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}>
+                    <DecisionPanel stageNum={decidingStage} decisionType={decisionType}
+                      onSubmit={submitDecision}
+                      onCancel={() => { setDecidingStage(null); setDecisionType(null); }}
+                      isPending={recordDecision.isPending} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Compact stage summary strip ───────────────────────────────────────────
+
+function StageSummaryStrip({ counts, activeStage, onStageClick }: {
+  counts: Record<number, number>;
+  activeStage: number | null;
+  onStageClick: (n: number | null) => void;
+}) {
+  return (
+    <div className="flex items-stretch gap-0 overflow-x-auto" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+      {PIPELINE_STAGES.map((stage, i) => {
+        const Icon = stage.icon;
+        const count = counts[stage.number] ?? 0;
+        const isActive = activeStage === stage.number;
+        return (
+          <button key={stage.number} onClick={() => onStageClick(isActive ? null : stage.number)}
+            className="flex items-center gap-2.5 px-4 py-3 transition-all relative shrink-0"
+            style={{
+              borderRight: i < 4 ? "1px solid var(--border-hair)" : "none",
+              background: isActive ? stage.bgColor : "transparent",
+              minWidth: 0,
+            }}>
+            {isActive && <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: stage.color }} />}
+            <div className="flex items-center justify-center rounded-lg shrink-0"
+              style={{ width: 28, height: 28, background: isActive ? stage.bgColor : "rgba(0,0,0,0.04)" }}>
+              <Icon size={13} style={{ color: isActive ? stage.color : "#9CA3AF" }} />
+            </div>
+            <div className="text-left min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wide whitespace-nowrap"
+                style={{ color: isActive ? stage.color : "var(--ink-faint)" }}>
+                S{stage.number} · {stage.shortName}
+              </div>
+              <div className="font-mono text-[13px] font-bold leading-none mt-0.5"
+                style={{ color: isActive ? stage.color : "var(--ink)" }}>
+                {count}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────
+
+export default function SOWApprovalPipelinePage() {
+  const [search, setSearch]             = React.useState("");
+  const [stageFilter, setStageFilter]   = React.useState<number | null>(null);
+  const [slaFilter, setSlaFilter]       = React.useState<"on-track" | "at-risk" | "overdue" | null>(null);
+  const [intakeFilter, setIntakeFilter] = React.useState<"all" | "ai_generated" | "manual_upload">("all");
+  const [pageSize, setPageSize]         = React.useState(10);
+  const [currentPage, setCurrentPage]   = React.useState(1);
+
+  // Live stage counts from per-row pipeline fetches
+  const [sowStageMap, setSowStageMap] = React.useState<Record<string, number>>({});
+  const handleRowStage = React.useCallback((sowId: string, activeStage: number) => {
+    setSowStageMap((prev) => prev[sowId] === activeStage ? prev : { ...prev, [sowId]: activeStage });
+  }, []);
+  const computedStageCounts = React.useMemo(() => {
+    const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const stage of Object.values(sowStageMap)) {
+      if (stage >= 1 && stage <= 5) counts[stage] = (counts[stage] ?? 0) + 1;
+    }
+    return counts;
+  }, [sowStageMap]);
+
+  const { data: manualRes, isLoading: manualLoading } = useManualSOWList();
+  const { data: aiRes,     isLoading: aiLoading }     = useSowList();
+  const isLoading = manualLoading || aiLoading;
+
+  const allSows: NormalisedSOW[] = React.useMemo(() => {
+    const manual = normalizeManualList(manualRes).filter((s) => MANUAL_APPROVAL_STATUSES.has(s.status));
+    const ai     = normalizeAiList(aiRes).filter((s) => s.id);
+    const manualIds = new Set(manual.map((s) => s.id));
+    return [...ai.filter((s) => !manualIds.has(s.id)), ...manual];
+  }, [manualRes, aiRes]);
+
+  const filtered = React.useMemo(() => {
+    let list = [...allSows];
+    if (stageFilter !== null)   list = list.filter((s) => sowStageMap[s.id] === stageFilter);
+    if (slaFilter)              list = list.filter((s) => s.slaStatus === slaFilter);
+    if (intakeFilter !== "all") list = list.filter((s) => s.intakeMode === intakeFilter);
+    if (search.trim().length >= 2) {
+      const q = search.toLowerCase();
+      list = list.filter((s) => s.title.toLowerCase().includes(q) || s.client.toLowerCase().includes(q));
+    }
+    return list;
+  }, [allSows, slaFilter, intakeFilter, search, stageFilter, sowStageMap]);
+
+  React.useEffect(() => { setCurrentPage(1); }, [slaFilter, intakeFilter, search, stageFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated  = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const onTrackCount = allSows.filter((s) => s.slaStatus === "on-track").length;
+  const atRiskCount  = allSows.filter((s) => s.slaStatus === "at-risk").length;
+  const overdueCount = allSows.filter((s) => s.slaStatus === "overdue").length;
+  const aiCount      = allSows.filter((s) => s.intakeMode === "ai_generated").length;
+  const manualCount  = allSows.filter((s) => s.intakeMode === "manual_upload").length;
+
+  const activeFilterCount = [stageFilter !== null, !!slaFilter, intakeFilter !== "all", search.trim().length >= 2].filter(Boolean).length;
+
+  // ── Skeleton ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-7xl space-y-8 px-6 py-8 lg:px-8">
-        {/* Header skeleton */}
+      <div className="space-y-6">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
-            <Skeleton className="h-7 w-48" />
-            <Skeleton className="h-4 w-80" />
-          </div>
-          <Skeleton className="h-9 w-40 rounded-lg" />
-        </div>
-
-        {/* Pipeline Stage Cards — 5 columns */}
-        <div className="space-y-4">
-          <Skeleton className="h-5 w-32" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="rounded-xl p-4 space-y-3"
-                style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}
-              >
-                <div className="flex items-center gap-2">
-                  <Skeleton className="w-8 h-8 rounded-lg" />
-                  <div className="space-y-1.5 flex-1">
-                    <Skeleton className="h-3.5 w-3/4" />
-                    <Skeleton className="h-2.5 w-1/2" />
-                  </div>
-                </div>
-                <Skeleton className="h-6 w-10" />
-                <Skeleton className="h-2 w-full" />
-                <Skeleton className="h-2.5 w-24" />
-              </div>
-            ))}
+            <div className="h-7 w-44 rounded-lg bg-gray-100 animate-pulse" />
+            <div className="h-4 w-72 rounded bg-gray-100 animate-pulse" />
           </div>
         </div>
-
-        {/* Filter bar skeleton */}
-        <div
-          className="flex flex-wrap items-center gap-3 rounded-xl p-4"
-          style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}
-        >
-          <Skeleton className="h-4 w-14" />
-          <Skeleton className="h-9 w-56 rounded-lg" />
-          <div className="flex gap-1.5">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-7 w-16 rounded-md" />
-            ))}
-          </div>
-          <Skeleton className="h-9 w-28 rounded-lg ml-auto" />
-        </div>
-
-        {/* SOW cards skeleton */}
-        <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="rounded-xl p-5 space-y-3"
-              style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="space-y-1.5 flex-1">
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-1/3" />
-                </div>
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-6 w-20 rounded-full" />
-                  <Skeleton className="h-6 w-16 rounded-full" />
-                </div>
+            <div key={i} className="rounded-xl p-4 space-y-2" style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}>
+              <div className="h-3 w-20 rounded bg-gray-100 animate-pulse" />
+              <div className="h-7 w-10 rounded bg-gray-100 animate-pulse" />
+            </div>
+          ))}
+        </div>
+        <div className="card-parchment" style={{ overflow: "hidden" }}>
+          <div className="h-12 bg-gray-50 animate-pulse" style={{ borderBottom: "1px solid var(--border-hair)" }} />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-5 px-6 py-4" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3.5 w-2/3 rounded bg-gray-100 animate-pulse" />
+                <div className="h-2.5 w-1/3 rounded bg-gray-100 animate-pulse" />
               </div>
-              <div className="flex items-center gap-4">
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="h-3 w-20" />
-                <Skeleton className="h-3 w-16" />
-              </div>
+              <div className="h-3 w-16 rounded bg-gray-100 animate-pulse" />
+              <div className="h-3 w-24 rounded bg-gray-100 animate-pulse" />
+              <div className="h-5 w-16 rounded-full bg-gray-100 animate-pulse" />
+              <div className="h-3 w-14 rounded bg-gray-100 animate-pulse" />
+              <div className="h-7 w-14 rounded-lg bg-gray-100 animate-pulse" />
             </div>
           ))}
         </div>
@@ -620,739 +595,204 @@ export default function SOWApprovalPipelinePage() {
   }
 
   return (
-    <div className="flex gap-6 items-start">
-    <motion.div
-      className="flex-1 min-w-0 space-y-8"
-      variants={stagger}
-      initial="hidden"
-      animate="show"
-    >
+    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
+
       {/* ── Header ── */}
-      <motion.div variants={fadeUp}>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1
-              className="font-heading"
-              style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--ink)" }}
-            >
-              Approval Pipeline
-            </h1>
-            <p className="mt-1.5 text-sm" style={{ color: "var(--ink-muted)" }}>
-              Track and manage SOW approvals across the five-stage pipeline.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div
-              className="flex items-center gap-2 rounded-lg px-3 py-2"
-              style={{
-                background: "var(--card-bg)",
-                border: "1px solid var(--border-soft)",
-              }}
-            >
-              <Layers size={16} style={{ color: "var(--ink-muted)" }} />
-              <span className="text-sm font-medium" style={{ color: "var(--ink)" }}>
-                {totalInPipeline} SOWs in Pipeline
-              </span>
-            </div>
-          </div>
+      <motion.div variants={fadeUp} className="flex items-end justify-between">
+        <div>
+          <h1 className="font-heading" style={{ fontSize: "1.75rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--ink)" }}>
+            Approval Pipeline
+          </h1>
+          <p className="mt-1 text-[13px]" style={{ color: "var(--ink-muted)" }}>
+            Track and manage SOW approvals across the five-stage review process.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-medium"
+          style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)", color: "var(--ink)" }}>
+          <Layers size={14} style={{ color: "var(--ink-muted)" }} />
+          {allSows.length} SOWs in Pipeline
         </div>
       </motion.div>
 
-      {/* ── Changes Requested Notification Banner ── */}
-      {changesRequestedSOWs.length > 0 && (
-        <motion.div variants={fadeUp} className="max-w-xl">
-          <div
-            className="rounded-xl px-4 py-3"
-            style={{
-              background: "#ffffff",
-              border: "1px solid rgba(166, 119, 99, 0.25)",
-            }}
-          >
-            <div className="flex items-start gap-3">
-              <div
-                className="flex items-center justify-center rounded-lg shrink-0 mt-0.5"
-                style={{ width: 32, height: 32, background: "rgba(166, 119, 99, 0.12)" }}
-              >
-                <AlertTriangle size={15} style={{ color: "#A67763" }} />
+      {/* ── KPI row — 3 cards ── */}
+      <motion.div variants={fadeUp} className="grid grid-cols-3 gap-3">
+        {[
+          { key: "on-track", label: "On Track",  count: onTrackCount, textColor: "var(--color-forest-700)", bgColor: "var(--color-forest-50)", iconGrad: "from-forest-400 to-forest-600", Icon: CheckCircle2 },
+          { key: "at-risk",  label: "At Risk",   count: atRiskCount,  textColor: "var(--color-gold-700)",   bgColor: "var(--color-gold-50)",   iconGrad: "from-gold-400 to-gold-600",     Icon: AlertTriangle },
+          { key: "overdue",  label: "Overdue",   count: overdueCount, textColor: "var(--danger)",           bgColor: "var(--danger-light)",    iconGrad: "from-brown-500 to-brown-700",   Icon: Clock },
+        ].map(({ key, label, count, textColor, bgColor, iconGrad, Icon }) => {
+          const active = slaFilter === key;
+          return (
+            <button key={key} onClick={() => setSlaFilter(active ? null : key as typeof slaFilter)}
+              className="card-parchment flex items-center gap-4 px-5 py-4 text-left transition-all hover:shadow-md"
+              style={{ border: active ? `1.5px solid ${textColor}` : undefined }}>
+              <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${iconGrad} flex items-center justify-center shrink-0`}>
+                <Icon size={18} className="text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold" style={{ color: "#6A4C3F" }}>
-                  {changesRequestedSOWs.length} SOW{changesRequestedSOWs.length > 1 ? "s require" : " requires"} attention
-                </p>
-                <div className="mt-2 space-y-2">
-                  <AnimatePresence initial={false}>
-                  {changesRequestedSOWs.map((sow) => {
-                    const isExpanded = expandedIds.has(sow.id);
-                    return (
-                      <motion.div
-                        key={sow.id}
-                        layout
-                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -12, scale: 0.96, transition: { duration: 0.28, ease: [0.4, 0, 1, 1] } }}
-                        transition={{ duration: 0.22, ease: [0, 0, 0.2, 1] }}
-                        className="rounded-lg"
-                        style={{ border: "1px solid rgba(166,119,99,0.22)", background: "rgba(166,119,99,0.04)" }}
-                      >
-                        {/* Header row — clickable to expand */}
-                        <button
-                          onClick={() => toggleExpand(sow.id)}
-                          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left transition-colors"
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(166,119,99,0.08)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs font-semibold truncate" style={{ color: "#6A4C3F" }}>
-                              {sow.title}
-                            </span>
-                            {sow.changeRequestedBy && (
-                              <span className="text-[0.65rem] shrink-0" style={{ color: "#A67763" }}>
-                                — {sow.changeRequestedBy}
-                              </span>
-                            )}
-                          </div>
-                          <ChevronDown
-                            size={13}
-                            style={{
-                              color: "#A67763",
-                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                              transition: "transform 0.2s ease",
-                              flexShrink: 0,
-                            }}
-                          />
-                        </button>
-
-                        {/* Expanded content — animated */}
-                        <AnimatePresence initial={false}>
-                          {isExpanded && (
-                            <motion.div
-                              key="expanded"
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
-                              className="overflow-hidden"
-                            >
-                              <div
-                                className="px-3 pb-3 pt-2 space-y-2.5"
-                                style={{ borderTop: "1px solid rgba(166,119,99,0.15)" }}
-                              >
-                                {sow.changeRequestReason && (
-                                  <div
-                                    className="rounded-md px-3 py-2"
-                                    style={{ background: "rgba(166,119,99,0.08)" }}
-                                  >
-                                    <p className="text-[0.65rem] font-semibold uppercase tracking-wider mb-1" style={{ color: "#A67763" }}>
-                                      Change Request Message
-                                    </p>
-                                    <p className="text-xs leading-relaxed" style={{ color: "#6A4C3F" }}>
-                                      {sow.changeRequestReason}
-                                    </p>
-                                  </div>
-                                )}
-
-                                <div className="flex items-center justify-between">
-                                  {sow.changeRequestedAt && (
-                                    <span className="text-[0.65rem]" style={{ color: "#A67763", opacity: 0.7 }}>
-                                      {new Date(sow.changeRequestedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                                    </span>
-                                  )}
-                                  {!resolvePanel[sow.id] && (
-                                    <div className="ml-auto flex items-center gap-2">
-                                      <button
-                                        onClick={() => handleAIResolve(sow)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-90"
-                                        style={{ background: "linear-gradient(135deg, #A67763, #8B5E4A)", color: "#fff" }}
-                                      >
-                                        <Sparkles size={12} />
-                                        Resolve with AI
-                                      </button>
-                                      <button
-                                        onClick={() => openResolvePanel(sow.id)}
-                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-90"
-                                        style={{ background: "#1E293B", color: "#fff" }}
-                                      >
-                                        Acknowledge & Resolve
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Resolve comment panel — animated */}
-                                <AnimatePresence initial={false}>
-                                  {resolvePanel[sow.id] && (
-                                    <motion.div
-                                      key="resolve-panel"
-                                      initial={{ height: 0, opacity: 0 }}
-                                      animate={{ height: "auto", opacity: 1 }}
-                                      exit={{ height: 0, opacity: 0 }}
-                                      transition={{ duration: 0.24, ease: [0.4, 0, 0.2, 1] }}
-                                      className="overflow-hidden"
-                                    >
-                                      <div
-                                        className="rounded-lg p-3 space-y-2"
-                                        style={{ background: "rgba(166,119,99,0.06)", border: "1px solid rgba(166,119,99,0.18)" }}
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <p className="text-[0.65rem] font-semibold uppercase tracking-wider" style={{ color: "#A67763" }}>
-                                            Message to Approver
-                                          </p>
-                                          <button
-                                            onClick={() => setResolvePanel((p) => ({ ...p, [sow.id]: false }))}
-                                            className="p-0.5 rounded hover:opacity-60 transition-opacity"
-                                          >
-                                            <X size={12} style={{ color: "#A67763" }} />
-                                          </button>
-                                        </div>
-                                        <textarea
-                                          rows={3}
-                                          placeholder="Explain what was resolved or any follow-up steps..."
-                                          value={resolveMessages[sow.id] ?? ""}
-                                          onChange={(e) => setResolveMessages((p) => ({ ...p, [sow.id]: e.target.value }))}
-                                          className="w-full resize-none rounded-md px-3 py-2 text-xs outline-none transition-all"
-                                          style={{
-                                            background: "var(--page-bg, #fff)",
-                                            border: "1px solid rgba(166,119,99,0.25)",
-                                            color: "var(--ink, #1a1a1a)",
-                                          }}
-                                        />
-                                        <div className="flex justify-end">
-                                          <button
-                                            onClick={() => handleResolve(sow)}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-90"
-                                            style={{ background: "#2D6A4F", color: "#fff" }}
-                                          >
-                                            <Send size={12} />
-                                            Send & Resolve
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
-                    );
-                  })}
-                  </AnimatePresence>
-                </div>
+                <div className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--ink-faint)" }}>{label}</div>
+                <div className="font-heading text-[1.75rem] font-bold leading-none mt-0.5" style={{ color: active ? textColor : "var(--ink-dark)" }}>{count}</div>
               </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* ── Summary Stats Row ── */}
-      <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: "rgba(6, 95, 70, 0.08)" }}>
-          <CheckCircle2 size={14} style={{ color: "#2D6A4F" }} />
-          <span className="text-xs font-medium" style={{ color: "#2D6A4F" }}>{onTrackCount} On Track</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: "rgba(146, 64, 14, 0.08)" }}>
-          <AlertTriangle size={14} style={{ color: "#92400E" }} />
-          <span className="text-xs font-medium" style={{ color: "#92400E" }}>{atRiskCount} At Risk</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: "rgba(185, 28, 28, 0.08)" }}>
-          <Clock size={14} style={{ color: "#B91C1C" }} />
-          <span className="text-xs font-medium" style={{ color: "#B91C1C" }}>{overdueCount} Overdue</span>
-        </div>
-      </motion.div>
-
-      {/* ── Pipeline Stage Overview Cards ── */}
-      <motion.div variants={fadeUp}>
-        <h2
-          className="font-heading mb-4"
-          style={{ fontSize: "1rem", fontWeight: 600, color: "var(--ink)" }}
-        >
-          Pipeline Stages
-        </h2>
-        <motion.div
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
-          variants={stagger}
-          initial="hidden"
-          animate="show"
-        >
-          {PIPELINE_STAGES.map((stage, i) => (
-            <PipelineStageCard key={stage.number} stage={stage} index={i} sows={sows} />
-          ))}
-        </motion.div>
-      </motion.div>
-
-      {/* ── Filters ── */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-wrap items-center gap-3"
-        style={{
-          background: "var(--card-bg)",
-          border: "1px solid var(--border-soft)",
-          borderRadius: 12,
-          padding: "1rem 1.25rem",
-        }}
-      >
-        <div className="flex items-center gap-2 mr-2">
-          <Filter size={16} style={{ color: "var(--ink-muted)" }} />
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--ink-faint)" }}>
-            Filters
-          </span>
-        </div>
-
-        {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2"
-            style={{ color: "var(--ink-faint)" }}
-          />
-          <input
-            type="text"
-            placeholder="Search by title or client..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg py-2 pl-9 pr-3 text-sm outline-none"
-            style={{
-              background: "var(--page-bg)",
-              border: "1px solid var(--border-soft)",
-              color: "var(--ink)",
-            }}
-          />
-        </div>
-
-        {/* Stage filter buttons */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setStageFilter(null)}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-            )}
-            style={{
-              background: stageFilter === null ? "var(--ink)" : "transparent",
-              color: stageFilter === null ? "var(--page-bg)" : "var(--ink-muted)",
-              border: stageFilter === null ? "none" : "1px solid var(--border-soft)",
-            }}
-          >
-            All
-          </button>
-          {PIPELINE_STAGES.map((stage) => (
-            <button
-              key={stage.number}
-              onClick={() => setStageFilter(stageFilter === stage.number ? null : stage.number)}
-              className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-              style={{
-                background:
-                  stageFilter === stage.number ? stage.color : "transparent",
-                color:
-                  stageFilter === stage.number ? "#fff" : "var(--ink-muted)",
-                border:
-                  stageFilter === stage.number
-                    ? "none"
-                    : "1px solid var(--border-soft)",
-              }}
-            >
-              S{stage.number}
+              {active && (
+                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: textColor }} />
+              )}
             </button>
-          ))}
-        </div>
-
-        {/* SLA filter */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[0.65rem] font-semibold uppercase tracking-wider mr-1" style={{ color: "var(--ink-faint)" }}>
-            SLA
-          </span>
-          {(["on-track", "at-risk", "overdue"] as SLAStatus[]).map((status) => (
-            <button
-              key={status}
-              onClick={() => setSLAFilter(slaFilter === status ? null : status)}
-              className="rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
-              style={{
-                background:
-                  slaFilter === status
-                    ? status === "on-track"
-                      ? "#2D6A4F"
-                      : status === "at-risk"
-                      ? "#92400E"
-                      : "#B91C1C"
-                    : "transparent",
-                color:
-                  slaFilter === status ? "#fff" : "var(--ink-muted)",
-                border:
-                  slaFilter === status ? "none" : "1px solid var(--border-soft)",
-              }}
-            >
-              {getSLALabel(status)}
-            </button>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* ── SOW Pipeline Table ── */}
-      <motion.div
-        variants={fadeUp}
-        style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)", borderRadius: 14, overflow: "hidden" }}
-      >
-        {/* Header */}
-        <div
-          className="grid items-center px-6 py-3 gap-5"
-          style={{
-            gridTemplateColumns: "2fr 0.9fr 1.6fr 1.4fr 0.85fr 0.6fr",
-            background: "var(--page-bg)",
-            borderBottom: "1px solid var(--border-soft)",
-          }}
-        >
-          {["SOW", "Client", "Pipeline Progress", "Approver", "SLA", ""].map((h) => (
-            <span key={h || "a"} className="text-[0.62rem] font-bold uppercase tracking-[0.13em]" style={{ color: "var(--ink-faint)" }}>
-              {h}
-            </span>
-          ))}
-        </div>
-
-        {/* Empty */}
-        {filteredSOWs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-2">
-            <Layers size={28} style={{ color: "var(--ink-faint)", opacity: 0.35 }} />
-            <p className="text-sm" style={{ color: "var(--ink-muted)" }}>No SOWs match the current filters.</p>
-          </div>
-        ) : filteredSOWs.map((sow, idx) => {
-          const stage = PIPELINE_STAGES[sow.currentStage - 1];
-          const initials = sow.stageApprover.replace(/\(.*?\)/g, "").trim().split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-
-          return (
-            <motion.div
-              key={sow.id}
-              variants={slideInRight}
-              className="grid items-center px-6 py-4 gap-5 transition-colors"
-              style={{
-                gridTemplateColumns: "2fr 0.9fr 1.6fr 1.4fr 0.85fr 0.6fr",
-                borderBottom: idx < filteredSOWs.length - 1 ? "1px solid var(--border-soft)" : "none",
-                borderLeft: sow.changesRequested ? `3px solid ${stage.color}` : "3px solid transparent",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--page-bg)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              {/* SOW */}
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-[0.83rem] font-semibold leading-tight truncate" style={{ color: "var(--ink)" }}>
-                    {sow.title}
-                  </p>
-                  {sow.changesRequested && (
-                    <span className="inline-flex items-center gap-1 shrink-0 text-[0.58rem] font-bold uppercase tracking-wide rounded-full px-2 py-0.5"
-                      style={{ background: stage.bgColor, color: stage.color }}>
-                      <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: stage.color }} />
-                      Revision
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[0.68rem] font-semibold" style={{ color: "var(--ink-faint)" }}>{sow.totalValue}</span>
-                  {sow.submittedBy && (
-                    <span className="text-[0.68rem]" style={{ color: "var(--ink-faint)" }}>· {sow.submittedBy}</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Client */}
-              <span className="text-[0.78rem] min-w-0 block" style={{ color: "var(--ink-muted)", wordBreak: "break-word" }}>
-                {sow.client}
-              </span>
-
-              {/* Pipeline Progress */}
-              <div className="min-w-0 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-[18px] h-[18px] rounded flex items-center justify-center shrink-0" style={{ background: stage.bgColor }}>
-                      {React.createElement(stage.icon, { size: 10, style: { color: stage.color } })}
-                    </div>
-                    <span className="text-[0.7rem] font-semibold" style={{ color: stage.color }}>{stage.name}</span>
-                  </div>
-                  <span className="text-[0.62rem] font-medium" style={{ color: "var(--ink-faint)" }}>
-                    {sow.completedStages.length}/{5}
-                  </span>
-                </div>
-                <PipelineProgress
-                  totalStages={5}
-                  currentStage={sow.currentStage}
-                  completedStages={sow.completedStages}
-                  stageColor={stage.color}
-                />
-              </div>
-
-              {/* Approver */}
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[0.6rem] font-bold text-white"
-                  style={{ background: `${stage.color}cc` }}>
-                  {initials}
-                </div>
-                <div>
-                  <p className="text-[0.73rem] font-medium leading-tight" style={{ color: "var(--ink)" }}>
-                    {sow.stageApprover.replace(/\(.*?\)/, "").trim()}
-                  </p>
-                  {/\((.+?)\)/.test(sow.stageApprover) && (
-                    <p className="text-[0.62rem]" style={{ color: "var(--ink-faint)" }}>
-                      {sow.stageApprover.match(/\((.+?)\)/)?.[1]}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* SLA + date */}
-              <div className="space-y-1">
-                <Badge variant={getSLABadgeVariant(sow.slaStatus)} size="sm" dot>
-                  {getSLALabel(sow.slaStatus)}
-                </Badge>
-                <p className="text-[0.62rem]" style={{ color: "var(--ink-faint)" }}>{formatDate(sow.submittedDate)}</p>
-              </div>
-
-              {/* Action */}
-              <div className="flex justify-end">
-                <Link href={`/enterprise/sow/${sow.id}`}>
-                  <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold transition-all hover:opacity-80"
-                    style={{ background: stage.bgColor, color: stage.color }}>
-                    <Eye size={12} />
-                    View
-                  </button>
-                </Link>
-              </div>
-            </motion.div>
           );
         })}
       </motion.div>
 
-      {/* ── Change Request History Table ── */}
-      {(() => {
-        const allHistory = sows.flatMap((sow) =>
-          (sow.changeRequestHistory ?? []).map((h) => ({ ...h, sowId: sow.id, sowTitle: sow.title, client: sow.client }))
-        ).sort((a, b) => new Date(b.resolvedAt).getTime() - new Date(a.resolvedAt).getTime());
+      {/* ── Main table card ── */}
+      <motion.div variants={fadeUp} className="card-parchment" style={{ overflow: "hidden" }}>
 
-        return (
-          <motion.div variants={fadeUp}>
-            <div className="flex items-center gap-2 mb-4">
-              <RotateCcw size={18} style={{ color: "var(--ink-muted)" }} />
-              <h2 className="font-heading" style={{ fontSize: "1rem", fontWeight: 600, color: "var(--ink)" }}>
-                Change Request History
-              </h2>
-              {allHistory.length > 0 && (
-                <Badge variant="gold" size="sm">{allHistory.length} resolved</Badge>
+        {/* ── Card header: title + search + intake toggle ── */}
+        <div className="flex items-center justify-between gap-4 px-6 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+          <div className="flex items-center gap-3">
+            <span className="text-[13.5px] font-semibold" style={{ color: "var(--ink)" }}>All SOWs</span>
+            {filtered.length !== allSows.length && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: "var(--color-gray-100)", color: "var(--ink-muted)" }}>
+                {filtered.length} of {allSows.length}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* AI / Manual toggle */}
+            <div className="flex items-center rounded-lg p-0.5" style={{ background: "var(--color-gray-100)", border: "1px solid var(--border-hair)" }}>
+              {([
+                { value: "all",           label: "All" },
+                { value: "ai_generated",  label: "AI",     icon: <Sparkles size={10} /> },
+                { value: "manual_upload", label: "Manual", icon: <Upload size={10} /> },
+              ] as { value: string; label: string; icon?: React.ReactNode }[]).map(({ value, label, icon }) => (
+                <button key={value} onClick={() => setIntakeFilter(value as typeof intakeFilter)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[11.5px] font-medium transition-all"
+                  style={{
+                    background: intakeFilter === value ? "white" : "transparent",
+                    color: intakeFilter === value ? "var(--color-brown-700)" : "var(--ink-faint)",
+                    boxShadow: intakeFilter === value ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                    fontWeight: intakeFilter === value ? 600 : 500,
+                  }}>
+                  {icon}{label}
+                  {value !== "all" && (
+                    <span className="ml-1 font-mono text-[10px]" style={{ color: intakeFilter === value ? "var(--ink-muted)" : "var(--ink-faint)" }}>
+                      {value === "ai_generated" ? aiCount : manualCount}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--ink-faint)" }} />
+              <input type="text" placeholder="Search SOWs…" value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="rounded-lg py-2 pl-8 pr-8 text-[12.5px] outline-none"
+                style={{ width: 200, background: "var(--color-gray-50)", border: "1px solid var(--border-soft)", color: "var(--ink)" }} />
+              {search && (
+                <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                  <X size={12} style={{ color: "var(--ink-faint)" }} />
+                </button>
               )}
             </div>
 
-            <div
-              style={{
-                background: "var(--card-bg)",
-                border: "1px solid var(--border-soft)",
-                borderRadius: 12,
-                overflow: "hidden",
-              }}
-            >
-              {/* Table header */}
-              <div
-                className="grid items-center gap-4 px-5 py-3 text-[0.62rem] font-bold uppercase tracking-[0.13em]"
-                style={{
-                  gridTemplateColumns: "1.6fr 0.9fr 1.2fr 1.4fr 0.8fr",
-                  borderBottom: "1px solid var(--border-soft)",
-                  background: "var(--page-bg)",
-                  color: "var(--ink-faint)",
-                }}
-              >
-                <span>SOW Title</span>
-                <span>Client</span>
-                <span>Requested By</span>
-                <span>Resolve Message</span>
-                <span>Resolved</span>
-              </div>
-
-              {allHistory.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-2">
-                  <RotateCcw size={28} style={{ color: "var(--ink-faint)", opacity: 0.4 }} />
-                  <p className="text-sm" style={{ color: "var(--ink-muted)" }}>No resolved change requests yet.</p>
-                  <p className="text-xs" style={{ color: "var(--ink-faint)" }}>Resolved requests will appear here.</p>
-                </div>
-              ) : (
-                allHistory.map((entry, idx) => {
-
-                  return (
-                    <motion.div
-                      key={`${entry.sowId}-${entry.resolvedAt}`}
-                      variants={slideInRight}
-                      className="grid items-center gap-4 px-5 py-4"
-                      style={{
-                        gridTemplateColumns: "1.6fr 0.9fr 1.2fr 1.4fr 0.8fr",
-                        borderBottom: idx < allHistory.length - 1 ? "1px solid var(--border-soft)" : "none",
-                      }}
-                    >
-                      {/* SOW Title */}
-                      <div>
-                        <p className="text-[0.82rem] font-semibold leading-snug" style={{ color: "var(--ink)" }}>{entry.sowTitle}</p>
-                        <Link href={`/enterprise/sow/${entry.sowId}`} className="text-[0.65rem] hover:underline" style={{ color: "var(--ink-faint)" }}>
-                          View SOW →
-                        </Link>
-                      </div>
-
-                      {/* Client */}
-                      <span className="text-[0.78rem]" style={{ color: "var(--ink-muted)" }}>{entry.client}</span>
-
-                      {/* Requested By */}
-                      <span className="text-[0.75rem]" style={{ color: "var(--ink-muted)" }}>{entry.requestedBy}</span>
-
-                      {/* Resolve Message */}
-                      {entry.resolveMessage ? (
-                        <button
-                          onClick={() => setExpandedMessages((prev) => {
-                            const next = new Set(prev);
-                            const key = `${entry.sowId}-${entry.resolvedAt}`;
-                            next.has(key) ? next.delete(key) : next.add(key);
-                            return next;
-                          })}
-                          className="text-left w-full"
-                        >
-                          <p
-                            className="text-[0.75rem] leading-snug"
-                            style={{ color: "var(--ink-muted)" }}
-                          >
-                            {expandedMessages.has(`${entry.sowId}-${entry.resolvedAt}`)
-                              ? entry.resolveMessage
-                              : entry.resolveMessage.length > 80
-                                ? entry.resolveMessage.slice(0, 80) + "…"
-                                : entry.resolveMessage}
-                          </p>
-                          {entry.resolveMessage.length > 80 && (
-                            <span className="text-[0.62rem] font-medium mt-0.5 block" style={{ color: "var(--ink-faint)" }}>
-                              {expandedMessages.has(`${entry.sowId}-${entry.resolvedAt}`) ? "Show less" : "Show more"}
-                            </span>
-                          )}
-                        </button>
-                      ) : (
-                        <span className="text-[0.75rem] italic" style={{ color: "var(--ink-faint)" }}>No message</span>
-                      )}
-
-                      {/* Resolved date */}
-                      <div>
-                        <p className="text-[0.75rem]" style={{ color: "var(--ink-muted)" }}>{formatDate(entry.resolvedAt)}</p>
-                        <p className="text-[0.62rem]" style={{ color: "var(--ink-faint)" }}>
-                          {formatDate(entry.requestedAt)} requested
-                        </p>
-                      </div>
-                    </motion.div>
-                  );
-                })
-              )}
-            </div>
-          </motion.div>
-        );
-      })()}
-    </motion.div>
-
-    {/* ── Right: Chat / Notification Panel ── */}
-    <div className="w-[300px] shrink-0 sticky top-[60px]">
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: "calc(100vh - 100px)" }}>
-
-        {/* Header */}
-        <div className="px-4 py-3.5 border-b border-gray-100 flex items-center gap-2.5 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-brown-50 flex items-center justify-center shrink-0">
-            <MessageSquare className="w-4 h-4 text-brown-500" />
+            {/* Clear all filters */}
+            {activeFilterCount > 0 && (
+              <button onClick={() => { setSearch(""); setSlaFilter(null); setIntakeFilter("all"); setStageFilter(null); }}
+                className="flex items-center gap-1 text-[11.5px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-brown-50"
+                style={{ color: "var(--color-brown-500)" }}>
+                <X size={11} /> Clear
+              </button>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[12.5px] font-semibold text-gray-900">Pipeline Notifications</p>
-            <p className="text-[10.5px] text-gray-400 mt-0.5">Communicate with GlimmoraTeam reviewers</p>
-          </div>
-          <div className="w-2 h-2 rounded-full bg-forest-400 shrink-0" />
         </div>
 
-        {/* Messages */}
-        <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ minHeight: 0 }}>
-          {chatMessages.map((msg, i) => (
-            <div key={i} className={cn("flex gap-2", msg.from === "enterprise" && "justify-end")}>
-              {msg.from === "glimmora" && (
-                <div className="w-6 h-6 rounded-full bg-brown-100 border border-brown-200 flex items-center justify-center shrink-0 mt-0.5">
-                  <Sparkles className="w-3 h-3 text-brown-600" />
-                </div>
-              )}
-              <div className={cn("max-w-[85%] space-y-1.5", msg.from === "enterprise" && "items-end flex flex-col")}>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-[10px] font-semibold text-gray-700">{msg.from === "glimmora" ? "GlimmoraTeam" : "You"}</span>
-                  <span className="text-[9px] text-gray-400">{msg.time}</span>
-                </div>
-                {msg.files && msg.files.length > 0 && (
-                  <div className="flex flex-col gap-1">
-                    {msg.files.map((f, fi) => (
-                      <div key={fi} className={cn("flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[10px]", msg.from === "enterprise" ? "bg-brown-500 text-white" : "bg-gray-100 text-gray-700")}>
-                        <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center shrink-0", msg.from === "enterprise" ? "bg-white/20" : "bg-brown-50")}>
-                          {f.type.startsWith("image/") ? <ImageIcon className={cn("w-3 h-3", msg.from === "enterprise" ? "text-white" : "text-brown-500")} /> : <File className={cn("w-3 h-3", msg.from === "enterprise" ? "text-white" : "text-brown-500")} />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate font-medium max-w-[110px]">{f.name}</p>
-                          <p className={cn("text-[9px]", msg.from === "enterprise" ? "text-white/60" : "text-gray-400")}>{formatBytes(f.size)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {msg.text && (
-                  <div className={cn("rounded-2xl px-3 py-2.5", msg.from === "glimmora" ? "rounded-tl-none bg-gray-50 border border-gray-100" : "rounded-tr-none bg-brown-500")}>
-                    <p className={cn("text-[11.5px] leading-relaxed", msg.from === "glimmora" ? "text-gray-600" : "text-white")}>{msg.text}</p>
-                  </div>
-                )}
-              </div>
-              {msg.from === "enterprise" && (
-                <div className="w-6 h-6 rounded-full bg-teal-100 border border-teal-200 flex items-center justify-center shrink-0 mt-0.5">
-                  <Building2 className="w-3 h-3 text-teal-600" />
-                </div>
-              )}
-            </div>
+        {/* ── Stage strip (acts as both overview + stage filter) ── */}
+        <StageSummaryStrip counts={computedStageCounts} activeStage={stageFilter} onStageClick={setStageFilter} />
+
+        {/* ── Column headers ── */}
+        <div className="grid items-center gap-4 px-6 py-2.5"
+          style={{ gridTemplateColumns: "2.2fr 1fr 1.6fr 0.9fr 0.8fr auto", background: "var(--color-gray-50)", borderBottom: "1px solid var(--border-hair)" }}>
+          {["SOW / Intake", "Stage", "Progress", "SLA", "Submitted", ""].map((h, i) => (
+            <span key={i} className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--ink-faint)" }}>{h}</span>
           ))}
         </div>
 
-        {/* Composer */}
-        <div className="px-4 py-3 border-t border-gray-100 bg-white shrink-0">
-          <AnimatePresence>
-            {chatFiles.length > 0 && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-2">
-                <div className="flex flex-wrap gap-1.5 py-1">
-                  {chatFiles.map((f, i) => (
-                    <div key={i} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5">
-                      <div className="w-5 h-5 rounded-md bg-brown-50 flex items-center justify-center shrink-0">
-                        {f.type.startsWith("image/") ? <ImageIcon className="w-3 h-3 text-brown-500" /> : <File className="w-3 h-3 text-brown-500" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-medium text-gray-700 truncate max-w-[100px]">{f.name}</p>
-                        <p className="text-[9px] text-gray-400">{formatBytes(f.size)}</p>
-                      </div>
-                      <button onClick={() => setChatFiles((prev) => prev.filter((_, j) => j !== i))} className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-all shrink-0">
-                        <XCircle className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <textarea
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
-            placeholder="Send a notification or message…"
-            rows={2}
-            className="w-full text-[12px] text-gray-700 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-200 outline-none focus:border-brown-300 focus:ring-2 focus:ring-brown-100 transition-all placeholder:text-gray-400 resize-none mb-2"
-          />
-          <input ref={chatFileRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
-            onChange={(e) => { const files = Array.from(e.target.files ?? []); setChatFiles((prev) => [...prev, ...files.map((f) => ({ name: f.name, size: f.size, type: f.type }))]); e.target.value = ""; }} />
-          <div className="flex items-center gap-2">
-            <button onClick={() => chatFileRef.current?.click()}
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-brown-500 hover:bg-brown-50 border border-gray-200 hover:border-brown-200 transition-all shrink-0" title="Attach file">
-              <Paperclip className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={handleChatSend} disabled={!chatInput.trim() && chatFiles.length === 0}
-              className={cn("flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2 rounded-xl transition-all",
-                (chatInput.trim() || chatFiles.length > 0) ? "text-white bg-brown-500 hover:bg-brown-600" : "text-gray-400 bg-gray-100 cursor-not-allowed")}>
-              <Send className="w-3.5 h-3.5" /> Send
+        {/* ── Rows ── */}
+        {allSows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center mb-3">
+              <Layers className="w-5 h-5 text-white" />
+            </div>
+            <p className="text-[13.5px] font-semibold text-gray-800 mb-1">No SOWs in the approval pipeline</p>
+            <p className="text-xs text-gray-500 max-w-[280px]">SOWs submitted for approval will appear here with real-time pipeline status.</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Search size={24} style={{ color: "var(--ink-faint)", opacity: 0.35, marginBottom: 10 }} />
+            <p className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>No SOWs match your filters</p>
+            <button onClick={() => { setSearch(""); setSlaFilter(null); setIntakeFilter("all"); setStageFilter(null); }}
+              className="mt-2.5 text-[12px] font-medium hover:underline" style={{ color: "var(--color-brown-500)" }}>
+              Clear all filters
             </button>
           </div>
-        </div>
-      </div>
-    </div>
-    </div>
+        ) : (
+          paginated.map((sow) => (
+            <SOWPipelineRow key={sow.id} sow={sow} onStageResolved={handleRowStage} />
+          ))
+        )}
+
+        {/* ── Pagination footer ── */}
+        {filtered.length > 0 && (
+          <div className="flex items-center justify-between px-6 py-3" style={{ borderTop: "1px solid var(--border-hair)" }}>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px]" style={{ color: "var(--ink-faint)" }}>Rows per page</span>
+              <div className="flex items-center gap-1">
+                {[10, 25, 50].map((n) => (
+                  <button key={n} onClick={() => { setPageSize(n); setCurrentPage(1); }}
+                    className="w-8 h-7 rounded-md text-[11px] font-medium transition-colors"
+                    style={{ background: pageSize === n ? "var(--ink)" : "transparent", color: pageSize === n ? "var(--page-bg)" : "var(--ink-muted)", border: pageSize === n ? "none" : "1px solid var(--border-soft)" }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-[11px]" style={{ color: "var(--ink-faint)" }}>
+                {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)} of {filtered.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage <= 1}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  style={{ border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}>
+                  <ChevronLeft size={13} />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("…");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) =>
+                    p === "…"
+                      ? <span key={`el-${i}`} className="w-7 text-center text-[11px]" style={{ color: "var(--ink-faint)" }}>…</span>
+                      : <button key={p} onClick={() => setCurrentPage(p as number)}
+                          className="w-7 h-7 rounded-lg text-[11px] font-medium transition-colors"
+                          style={{ background: currentPage === p ? "var(--color-brown-500)" : "transparent", color: currentPage === p ? "#fff" : "var(--ink-muted)", border: currentPage === p ? "none" : "1px solid var(--border-soft)" }}>
+                          {p}
+                        </button>
+                  )}
+                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  style={{ border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}>
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </motion.div>
+
+    </motion.div>
   );
 }

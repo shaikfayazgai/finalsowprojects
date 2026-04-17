@@ -79,12 +79,7 @@ function Drawer({ open, onClose, title, children }: { open: boolean; onClose: ()
 
 /* ═══ Chart ═══ */
 
-const allChartData = [
-  { label: "Apr '25", value: 0 }, { label: "May", value: 0 }, { label: "Jun", value: 120 },
-  { label: "Jul", value: 180 }, { label: "Aug", value: 340 }, { label: "Sep", value: 280 },
-  { label: "Oct", value: 0 }, { label: "Nov", value: 220 }, { label: "Dec", value: 380 },
-  { label: "Jan '26", value: 600 }, { label: "Feb", value: 1480 }, { label: "Mar", value: 1120 },
-];
+const allChartData: { label: string; value: number }[] = [];
 
 function EarningsChart() {
   const [period, setPeriod] = React.useState<"3m" | "6m" | "1y">("6m");
@@ -92,8 +87,9 @@ function EarningsChart() {
 
   const sliceCount = period === "3m" ? 3 : period === "6m" ? 6 : 12;
   const months = allChartData.slice(-sliceCount);
+  const hasData = months.length > 0;
   const max = Math.max(...months.map((m) => m.value), 100);
-  const current = months[months.length - 1];
+  const current = hasData ? months[months.length - 1] : { label: "", value: 0 };
   const prev = months.length >= 2 ? months[months.length - 2] : { value: 0 };
   const diff = current.value - prev.value;
   const up = diff >= 0;
@@ -118,8 +114,8 @@ function EarningsChart() {
     }
     return d;
   }
-  const curvePath = smoothPath(points);
-  const areaPath = `${curvePath} L${points[points.length - 1].x},${PT + chartH} L${points[0].x},${PT + chartH} Z`;
+  const curvePath = hasData ? smoothPath(points) : "";
+  const areaPath = hasData ? `${curvePath} L${points[points.length - 1].x},${PT + chartH} L${points[0].x},${PT + chartH} Z` : "";
 
   return (
     <div className="card-parchment mb-6">
@@ -158,6 +154,9 @@ function EarningsChart() {
 
       {/* Chart body */}
       <div className="px-6 py-5">
+        {!hasData ? (
+          <div className="py-12 text-center text-[12px] text-gray-400">No earnings data yet</div>
+        ) : (
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
           <defs>
             <linearGradient id="earningsAreaGrad" x1="0" y1="0" x2="0" y2="1">
@@ -202,6 +201,7 @@ function EarningsChart() {
             );
           })}
         </svg>
+        )}
       </div>
     </div>
   );
@@ -286,7 +286,7 @@ export default function EarningsPage() {
 
   /* G2 data */
   const processingPayouts = allPayouts.filter((p: any) => p.status === "processing");
-  const hasPayoutMethod = true;
+  const hasPayoutMethod = false;
   const isWomenTrack = profile.track === "women";
 
   /* Column header renderer — matches SOW page exactly */
@@ -500,7 +500,7 @@ export default function EarningsPage() {
                   {/* Date */}
                   <div>
                     <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Scheduled Date</div>
-                    <div className="num-display text-[28px] text-gray-900 leading-none mt-2">Apr 1, 2026</div>
+                    <div className="num-display text-[28px] text-gray-900 leading-none mt-2">—</div>
                   </div>
                   {/* Divider */}
                   <div className="w-px h-12 bg-gray-100 hidden lg:block" />
@@ -516,8 +516,7 @@ export default function EarningsPage() {
                     <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Method</div>
                     <div className="flex items-center gap-2 mt-2">
                       <Building2 className="w-4 h-4 text-gray-400" />
-                      <span className="text-[13px] font-medium text-gray-800">Bank ****4521</span>
-                      <Pill bg="var(--color-forest-50)" color="var(--color-forest-700)">Verified</Pill>
+                      <span className="text-[13px] font-medium text-gray-400">Not configured</span>
                     </div>
                   </div>
                 </div>

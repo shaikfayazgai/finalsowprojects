@@ -270,7 +270,7 @@ export const sowApi = {
     return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`, "PATCH", data);
   },
 
-  deleteManualSOW(sowId: string): Promise<BaseResponse> {
+  deleteSOW(sowId: string): Promise<BaseResponse> {
     return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`, "DELETE");
   },
 
