@@ -454,11 +454,12 @@ export const approvalKeys = {
   pipeline: (sowId: string) => ["approval-pipeline", sowId] as const,
 };
 
-export function useApprovalStages(sowId: string | null) {
+export function useApprovalStages(sowId: string | null, refetchInterval?: number) {
   return useQuery({
     queryKey: approvalKeys.pipeline(sowId ?? ""),
     queryFn: () => sowApi.getApprovalPipeline(sowId!),
     enabled: !!sowId,
+    refetchInterval,
   });
 }
 
