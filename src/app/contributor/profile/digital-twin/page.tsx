@@ -24,7 +24,10 @@ import { mockDigitalTwin, mockContributorProfile } from "@/mocks/data/contributo
 /* ═══ Helpers ═══ */
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -110,6 +113,14 @@ function TrendBadge({ rate }: { rate: number }) {
 function MonthlyActivityChart() {
   const data = mockDigitalTwin.monthlyActivity;
   const maxTasks = Math.max(...data.map((m) => m.tasksCompleted), 1);
+
+  if (data.length === 0) {
+    return (
+      <div className="px-5 py-8 text-center">
+        <p className="text-[12px] text-gray-400">No activity data yet</p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-5 py-5">
@@ -289,6 +300,9 @@ export default function DigitalTwinPage() {
             <span>Avg Score</span>
             <span>Proficiency</span>
           </div>
+          {twin.topSkills.length === 0 ? (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No verified skills yet</p></div>
+          ) : (
           <div className="py-1">
             {twin.topSkills.map((s, i) => {
               /* Proficiency as percentage of 5.0 score */
@@ -334,6 +348,7 @@ export default function DigitalTwinPage() {
               );
             })}
           </div>
+          )}
         </div>
 
         {/* Reliability Trends — 2 cols */}
@@ -397,6 +412,9 @@ export default function DigitalTwinPage() {
               {twin.aiInsights.length}
             </span>
           </div>
+          {twin.aiInsights.length === 0 ? (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No insights yet</p></div>
+          ) : (
           <div className="py-1">
             {twin.aiInsights.map((insight, i) => (
               <div
@@ -412,6 +430,7 @@ export default function DigitalTwinPage() {
               </div>
             ))}
           </div>
+          )}
         </div>
       </motion.div>
     </motion.div>

@@ -53,7 +53,7 @@ const statusConfig: Record<string, { variant: string; label: string; icon: React
 };
 
 /* ═══ Task lookup ═══ */
-const taskMap = new Map(mockContributorTasks.map((t) => [t.id, t]));
+const taskMap = new Map<string, any>(mockContributorTasks.map((t: any) => [t.id, t]));
 function getTaskTitle(taskId: string) {
   return taskMap.get(taskId)?.title ?? taskId;
 }
@@ -66,7 +66,7 @@ function getTaskProject(taskId: string) {
 export default function SubmissionsPage() {
   const submissions = mockSubmissions;
 
-  const statusCounts = submissions.reduce((acc, s) => {
+  const statusCounts = submissions.reduce((acc: Record<string, number>, s: any) => {
     acc[s.status] = (acc[s.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -130,7 +130,14 @@ export default function SubmissionsPage() {
         </div>
 
         {/* Rows */}
-        {submissions.map((sub, i) => {
+        {submissions.length === 0 && (
+          <div className="px-5 py-12 text-center">
+            <ClipboardCheck className="w-8 h-8 mx-auto mb-3 text-gray-300" />
+            <p className="text-[13px] text-gray-500 mb-1">No submissions yet</p>
+            <p className="text-[11px] text-gray-400">Submitted task deliverables will appear here.</p>
+          </div>
+        )}
+        {submissions.map((sub: any, i: number) => {
           const status = statusConfig[sub.status] || statusConfig.pending;
           const StatusIcon = status.icon;
           const taskId = sub.taskId;
@@ -201,8 +208,11 @@ export default function SubmissionsPage() {
           <span className="text-sm font-semibold text-gray-800">Evidence Summary</span>
         </div>
         <div className="py-2">
-          {submissions.map((sub, si) => {
-            const verifiedCount = sub.evidence.filter((e) => e.verified).length;
+          {submissions.length === 0 && (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No evidence to show</p></div>
+          )}
+          {submissions.map((sub: any, si: number) => {
+            const verifiedCount = sub.evidence.filter((e: any) => e.verified).length;
             const totalCount = sub.evidence.length;
             const pct = totalCount ? Math.round((verifiedCount / totalCount) * 100) : 0;
             const status = statusConfig[sub.status] || statusConfig.pending;
@@ -231,7 +241,7 @@ export default function SubmissionsPage() {
                 </div>
                 {sub.files.length > 0 && (
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    {sub.files.map((file) => (
+                    {sub.files.map((file: any) => (
                       <span key={file.name} className="text-[9px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded flex items-center gap-1">
                         <FileText className="w-2.5 h-2.5" />{file.name}
                       </span>

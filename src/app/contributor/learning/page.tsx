@@ -92,6 +92,15 @@ export default function LearningPage() {
         })}
       </motion.div>
 
+      {/* ═══ EMPTY STATE ═══ */}
+      {recommendations.length === 0 && (
+        <motion.div variants={fadeUp} className="card-parchment px-6 py-16 text-center">
+          <Sparkles className="w-8 h-8 mx-auto mb-3 text-gray-300" />
+          <p className="text-[14px] font-medium text-gray-500 mb-1">No recommendations yet</p>
+          <p className="text-[12px] text-gray-400 max-w-[360px] mx-auto">Complete tasks and add skills to your profile to receive personalised AI learning suggestions.</p>
+        </motion.div>
+      )}
+
       {/* ═══ TASK-BASED RECOMMENDATIONS ═══ */}
       {taskBased.length > 0 && (
         <motion.div variants={fadeUp} className="mb-6">

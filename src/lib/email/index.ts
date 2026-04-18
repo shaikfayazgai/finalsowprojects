@@ -9,6 +9,9 @@ const transporter = nodemailer.createTransport({
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_APP_PASSWORD,
   },
+  connectionTimeout: 60_000,
+  greetingTimeout: 30_000,
+  socketTimeout: 90_000,
 });
 
 const FROM = process.env.EMAIL_FROM ?? `GlimmoraTeam <${process.env.GMAIL_USER}>`;

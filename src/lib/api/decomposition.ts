@@ -32,7 +32,9 @@ async function decompositionCall<T>(
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    console.error(`[Decomposition API] ${method} ${path} → ${res.status}`, data);
+    // 5xx = backend unavailable; use warn so it doesn't look like a code error
+    const logFn = res.status >= 500 ? console.warn : console.error;
+    logFn(`[Decomposition API] ${method} ${path} → ${res.status}`, data);
 
     if (data?.errors && Array.isArray(data.errors)) {
       const fieldErrors = data.errors

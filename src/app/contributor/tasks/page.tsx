@@ -150,7 +150,7 @@ export default function ContributorTasksPage() {
       list = list.filter((t) =>
         t.title.toLowerCase().includes(q) ||
         t.projectTitle.toLowerCase().includes(q) ||
-        t.skillsRequired.some((s) => s.toLowerCase().includes(q))
+        t.skillsRequired.some((s: string) => s.toLowerCase().includes(q))
       );
     }
 
@@ -410,7 +410,7 @@ export default function ContributorTasksPage() {
                         <div className="min-w-0">
                           <div className="text-[13px] font-semibold text-gray-800 truncate max-w-[280px]">{task.title}</div>
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            {task.skillsRequired.slice(0, 3).map((skill) => (
+                            {task.skillsRequired.slice(0, 3).map((skill: string) => (
                               <span key={skill} className="font-mono text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">{skill}</span>
                             ))}
                             {task.skillsRequired.length > 3 && <span className="font-mono text-[10px] text-gray-400">+{task.skillsRequired.length - 3}</span>}

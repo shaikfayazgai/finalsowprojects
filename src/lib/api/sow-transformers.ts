@@ -98,6 +98,26 @@ const PLATFORM_TYPE: Record<string, string> = {
   other: "Other",
 };
 
+/**
+ * Backend expects a SINGLE platform_type enum, but the UI lets users
+ * select multiple. Collapse the array to the best-fit single value:
+ *  • web + any mobile → "Web + Mobile"
+ *  • single selection → map directly
+ *  • multiple mobiles → prefer cross-platform
+ *  • anything else    → first selection, mapped
+ */
+function collapsePlatformType(value: string | string[] | undefined): string {
+  const arr = Array.isArray(value) ? value : value ? [value] : [];
+  if (arr.length === 0) return "Other";
+
+  const hasWeb = arr.includes("web");
+  const hasMobile = arr.some((v) => v.startsWith("mobile"));
+  if (hasWeb && hasMobile) return PLATFORM_TYPE.full_stack;
+  if (arr.length === 1) return PLATFORM_TYPE[arr[0]] ?? arr[0];
+  if (arr.includes("mobile_hybrid")) return PLATFORM_TYPE.mobile_hybrid;
+  return PLATFORM_TYPE[arr[0]] ?? arr[0];
+}
+
 const PRIORITY: Record<string, string> = {
   must_have: "Must Have",
   should_have: "Should Have",
@@ -121,10 +141,116 @@ const DEPLOYMENT_SCOPE: Record<string, string> = {
 
 const GO_LIVE_SCOPE: Record<string, string> = {
   not_in_scope: "Not in scope",
+  go_live: "Production go-live included",
+  go_live_hypercare: "Go-live + post-go-live hypercare",
+  // Legacy keys kept for backward compatibility with older drafts.
   production: "Production go-live included",
   production_hypercare: "Go-live + post-go-live hypercare",
   phased_rollout: "Production go-live included",
 };
+
+const HYPERCARE_DURATION: Record<string, string> = {
+  "1_week": "1 week",
+  "2_weeks": "2 weeks",
+  "1_month": "1 month",
+  custom: "Custom",
+};
+
+const USER_REGISTRATION_MODEL: Record<string, string> = {
+  self_registration: "Self-register",
+  admin_only: "Admin-only",
+  admin_invite: "Self-register with admin approval",
+  sso_only: "SSO only",
+  // "hybrid" has no backend equivalent — fall back to SSO only as closest match.
+  hybrid: "SSO only",
+};
+
+/**
+ * Expand the short qaResponsibility enum into a UAT-resource description.
+ * Backend requires ≥ 20 chars for `client_uat_resource`; UI Select values
+ * like "shared" / "client" are too short on their own.
+ */
+const QA_RESPONSIBILITY_UAT: Record<string, string> = {
+  client: "Client-side QA team lead and designated business testers",
+  glimmorateam: "GlimmoraTeam QA team assigned for UAT coordination",
+  shared: "Shared — client business testers and GlimmoraTeam QA engineers",
+  third_party: "Third-party QA vendor engaged for UAT validation",
+};
+
+const PHASING_STRATEGY: Record<string, string> = {
+  sequential: "Sequential phases",
+  parallel: "Parallel workstreams",
+  sprint_based: "Sprint-based (2-week sprints)",
+  milestone_only: "Milestone-only",
+  not_decided: "Not yet decided",
+};
+
+const TEAM_SIZE: Record<string, string> = {
+  "1-3": "1–3",
+  "4-8": "4–8",
+  "9-15": "9–15",
+  "16-25": "16–25",
+  "25+": "25+",
+  not_decided: "Not yet decided",
+};
+
+const WORK_MODEL: Record<string, string> = {
+  fully_remote: "Fully remote",
+  hybrid: "Hybrid",
+  on_site: "On-site only",
+  flexible: "Flexible",
+};
+
+const CONTINGENCY_BUDGET: Record<string, string> = {
+  "5": "5%",
+  "10": "10%",
+  "15": "15%",
+  "20": "20%",
+  custom: "Custom",
+};
+
+const ESCALATION_PROCESS: Record<string, string> = {
+  direct_admin: "Direct to GlimmoraTeam Admin",
+  client_executive: "Client executive",
+  joint_committee: "Joint committee",
+  not_defined: "Not defined",
+};
+
+const SLA_UPTIME: Record<string, string> = {
+  "99.9": "99.9%",
+  "99.95": "99.95%",
+  "99.99": "99.99%",
+  best_effort: "Custom",
+  na: "Not applicable",
+};
+
+const ACCESSIBILITY_STANDARD: Record<string, string> = {
+  wcag_21_aa: "WCAG 2.1 Level AA",
+  wcag_21_aaa: "WCAG 2.1 Level AAA",
+  // WCAG 2.2 AA has no direct backend enum — map to closest 2.1 AA.
+  wcag_22_aa: "WCAG 2.1 Level AA",
+  section_508: "Section 508 (US government)",
+  none: "None required",
+  not_applicable: "Not applicable",
+};
+
+/**
+ * Collapse the free-text "Code Review Process" textarea into one of the 4
+ * backend-allowed enum values. Uses keyword detection; defaults to
+ * "Peer review before merge" as the most common SOW choice.
+ */
+function mapCodeReviewPolicy(value?: string): string | undefined {
+  if (!value) return undefined;
+  const raw = value.trim();
+  if (!raw) return undefined;
+  const exact = ["Peer review before merge", "Lead review only", "No formal policy", "Not applicable"];
+  if (exact.includes(raw)) return raw;
+  const v = raw.toLowerCase();
+  if (/\b(no|none)\b.*\b(review|policy|formal)\b|no\s+formal/.test(v)) return "No formal policy";
+  if (/\blead\b.*\breview\b|\breview.*only\s+by\s+lead\b/.test(v)) return "Lead review only";
+  if (/(n\/?a|not\s+applicable)/.test(v)) return "Not applicable";
+  return "Peer review before merge";
+}
 
 const ETL_APPROACH: Record<string, string> = {
   custom_scripts: "Custom scripts",
@@ -262,7 +388,7 @@ export function toStep1(fd: FD) {
       industry: mapEnum(fd.industry, INDUSTRY),
       industry_other: maybe(fd.industryOther),
       project_category: mapEnum(fd.projectCategory, PROJECT_CATEGORY),
-      platform_type: mapEnum(fd.platformType, PLATFORM_TYPE),
+      platform_type: collapsePlatformType(fd.platformType),
       platform_other: maybe(fd.platformOther),
       client_tech_landscape: maybe(fd.existingTechLandscape),
     },
@@ -336,8 +462,10 @@ export function toStep2(fd: FD) {
         provider: maybe(fd.deploymentProvider),
       },
       go_live: {
-        scope: mapEnum(fd.goLiveScope || "production", GO_LIVE_SCOPE),
-        hypercare_duration: maybe(fd.hypercareDuration),
+        scope: mapEnum(fd.goLiveScope || "go_live", GO_LIVE_SCOPE),
+        hypercare_duration: maybe(fd.hypercareDuration)
+          ? mapEnum(fd.hypercareDuration, HYPERCARE_DURATION)
+          : undefined,
         hypercare_support: maybe(fd.hypercareSupport),
       },
     },
@@ -378,18 +506,20 @@ export function toStep3(fd: FD) {
       integrations: integrations.length ? integrations : undefined,
     },
     section_b: {
-      sso_required: fd.ssoRequired === "yes",
+      sso_required: fd.ssoRequired === "yes" || fd.ssoRequired === "required",
       sso_provider_name: maybe(fd.ssoProviderName),
       sso_protocol: maybe(fd.ssoProtocol),
-      user_registration_model: maybe(fd.userRegistrationModel),
+      user_registration_model: maybe(fd.userRegistrationModel)
+        ? mapEnum(fd.userRegistrationModel, USER_REGISTRATION_MODEL)
+        : undefined,
       use_custom_password_policy: fd.passwordPolicy === "custom",
       custom_password_policy: fd.passwordPolicy === "custom"
         ? {
             min_length: parseInt(fd.passwordMinLength, 10) || 8,
-            complexity: fd.passwordComplexity || "Standard",
+            complexity_requirements: fd.passwordComplexity || "Standard",
             expiry_days: parseInt(fd.passwordExpiry, 10) || 90,
             session_timeout_minutes: parseInt(fd.sessionTimeout, 10) || 30,
-            lockout_attempts: parseInt(fd.lockoutAttempts, 10) || 5,
+            lockout_after_attempts: parseInt(fd.lockoutAttempts, 10) || 5,
           }
         : undefined,
       user_action_audit_logging: fd.auditLogging === "yes",
@@ -426,15 +556,24 @@ export function toStep4(fd: FD) {
     section_a: {
       start_date: fd.startDate || new Date().toISOString().split("T")[0],
       target_end_date: fd.endDate || new Date(Date.now() + 180 * 86400000).toISOString().split("T")[0],
-      phasing_strategy: maybe(fd.phasingStrategy),
+      phasing_strategy: maybe(fd.phasingStrategy)
+        ? mapEnum(fd.phasingStrategy, PHASING_STRATEGY)
+        : undefined,
       key_milestones: (() => {
         const filled = (fd.milestones ?? [])
           .filter((m: any) => m.name?.trim())
-          .map((m: any) => ({
-            name: m.name,
-            target_date: m.targetDate || fd.endDate || new Date(Date.now() + 180 * 86400000).toISOString().split("T")[0],
-            acceptance_criteria: m.acceptanceCriteria || "Stakeholder sign-off",
-          }));
+          .map((m: any) => {
+            const ac = (m.acceptanceCriteria ?? "").trim();
+            // Backend requires ≥ 50 chars on acceptance_criteria.
+            const acceptance_criteria = ac.length >= 50
+              ? ac
+              : `${ac || "Stakeholder sign-off"} — validated against milestone acceptance checklist and signed off by the business owner.`;
+            return {
+              name: m.name,
+              target_date: m.targetDate || fd.endDate || new Date(Date.now() + 180 * 86400000).toISOString().split("T")[0],
+              acceptance_criteria,
+            };
+          });
         return filled.length ? filled : undefined;
       })(),
       client_side_dependencies: nonEmpty(fd.clientDependencies).length ? nonEmpty(fd.clientDependencies) : undefined,
@@ -443,8 +582,12 @@ export function toStep4(fd: FD) {
       required_roles: roles.length > 0
         ? roles
         : [{ role_name: "Full-Stack Developer", seniority: "Mid-level" }],
-      estimated_team_size: maybe(fd.teamSize),
-      work_model: maybe(fd.workModel),
+      estimated_team_size: maybe(fd.teamSize)
+        ? mapEnum(fd.teamSize, TEAM_SIZE)
+        : undefined,
+      work_model: maybe(fd.workModel)
+        ? mapEnum(fd.workModel, WORK_MODEL)
+        : undefined,
       skill_priorities: maybe(fd.skillPriorities),
       knowledge_transfer_included: fd.knowledgeTransfer === "yes",
     },
@@ -453,7 +596,11 @@ export function toStep4(fd: FD) {
       sit_in_scope: false,
       uat: {
         glimmora_support_level: "Full support during UAT",
-        client_uat_resource: fd.qaResponsibility || "Client-side QA team lead and designated testers",
+        client_uat_resource:
+          QA_RESPONSIBILITY_UAT[fd.qaResponsibility]
+          ?? (fd.qaResponsibility && fd.qaResponsibility.length >= 20
+            ? fd.qaResponsibility
+            : "Client-side QA team lead and designated business testers"),
         uat_duration_days: parseInt(fd.uatPeriod, 10) || 14,
         signoff_authority_name: fd.businessOwnerApprover || "Project Owner",
         signoff_authority_title: "Project Manager",
@@ -483,8 +630,12 @@ export function toStep5(fd: FD) {
         impact: "Medium" as const,
       })),
       project_constraints: maybe(fd.projectConstraints),
-      contingency_budget: maybe(fd.contingencyBudget),
-      escalation_process: maybe(fd.escalationProcess),
+      contingency_budget: maybe(fd.contingencyBudget)
+        ? mapEnum(fd.contingencyBudget, CONTINGENCY_BUDGET)
+        : undefined,
+      escalation_process: maybe(fd.escalationProcess)
+        ? mapEnum(fd.escalationProcess, ESCALATION_PROCESS)
+        : undefined,
     },
   };
 }
@@ -498,8 +649,10 @@ export function toStep6(fd: FD) {
       (fd.codingStandards && fd.codingStandards.length >= 30 ? fd.codingStandards : null)
       ?? (fd.testingAcceptanceCriteria && fd.testingAcceptanceCriteria.length >= 30 ? fd.testingAcceptanceCriteria : null)
       ?? "All acceptance criteria met, tested, and signed off by designated stakeholders before release.",
-    sla_uptime: maybe(fd.slaUptimeCommitment),
-    code_review_policy: maybe(fd.codeReviewProcess),
+    sla_uptime: maybe(fd.slaUptimeCommitment)
+      ? mapEnum(fd.slaUptimeCommitment, SLA_UPTIME)
+      : undefined,
+    code_review_policy: mapCodeReviewPolicy(fd.codeReviewProcess),
     documentation_requirements: maybe(fd.documentationLevel) ? [fd.documentationLevel] : undefined,
     browser_compatibility: {
       chrome: browserSupport.includes("Chrome") || true,
@@ -525,13 +678,18 @@ export function toStep7(fd: FD) {
     section_a: {
       non_discrimination_confirmed: true,
       labour_standards: "ILO Core Labour Standards (international)",
-      accessibility_requirements: maybe(fd.accessibilityStandard),
+      accessibility_requirements: maybe(fd.accessibilityStandard)
+        ? mapEnum(fd.accessibilityStandard, ACCESSIBILITY_STANDARD)
+        : undefined,
     },
     section_b: {
       personal_data_involved: fd.dpaRequired || (fd.complianceStandards ?? []).includes("GDPR"),
     },
     section_c: {
-      data_sensitivity_level: mapEnum(fd.dataRetentionPolicy || "confidential", DATA_SENSITIVITY),
+      // The form doesn't currently capture sensitivity — default to Confidential
+      // which is the safe baseline for enterprise SOWs. (Previously this was
+      // incorrectly pulled from dataRetentionPolicy.)
+      data_sensitivity_level: "Confidential",
       regulatory_frameworks: nonEmpty(fd.complianceStandards).length ? nonEmpty(fd.complianceStandards) : undefined,
     },
   };

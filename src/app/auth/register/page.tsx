@@ -2,8 +2,16 @@
 
 import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
+
+const stepAnim = {
+  initial: { opacity: 0, x: 24 },
+  animate: { opacity: 1, x: 0 },
+  exit:    { opacity: 0, x: -24 },
+  transition: { duration: 0.28, ease: "easeOut" as const },
+};
 import {
   Sparkles,
   Briefcase,
@@ -512,18 +520,29 @@ function ContributorRegisterContent() {
 
   const setPendingOnboarding = useAuthStore((s) => s.setPendingOnboarding);
 
-  const handleSSO = (provider: SSOProvider) => {
+  const handleSSO = async (provider: SSOProvider) => {
     setSsoLoading(provider);
     const role = selectedRole === "enterprise" ? "enterprise" : "contributor";
     if (role === "enterprise") {
       setPendingOnboarding(true);
     }
-    const redirectAfter = role === "enterprise" 
-      ? "/enterprise/dashboard" 
-      : "/contributor/dashboard";
-    // Use NextAuth's built-in OAuth instead of Glimmora's endpoints
-    // Glimmora's callback is locked to glimmora-api.onrender.com and can't redirect back
-    signIn(provider, { callbackUrl: redirectAfter });
+
+    // Signal to the NextAuth signIn callback that this is a *registration* flow
+    // so new emails (not yet in the Glimmora DB) are allowed through.
+    try {
+      await fetch("/api/auth/sso-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+    } catch {
+      // If the intent cookie can't be set, continue anyway — worst case the
+      // signIn callback blocks the unregistered email and shows an error.
+    }
+
+    // Map provider names to NextAuth provider IDs
+    const authProvider = provider === "microsoft" ? "microsoft-entra-id" : "google";
+    signIn(authProvider, { callbackUrl: "/auth/redirect" });
   };
 
   const handleManual = () => {
@@ -639,102 +658,112 @@ function ContributorRegisterContent() {
 
             <StepProgress step={reg.step} />
 
-            {reg.step === 1 && (
-              <Step1Identity
-                firstName={reg.firstName} setFirstName={reg.setFirstName}
-                lastName={reg.lastName} setLastName={reg.setLastName}
-                email={reg.email} setEmail={reg.setEmail}
-                password={reg.password} setPassword={reg.setPassword}
-                confirm={reg.confirm} setConfirm={reg.setConfirm}
-                showPw={reg.showPw} setShowPw={reg.setShowPw}
-                showCon={reg.showCon} setShowCon={reg.setShowCon}
-                contribType={reg.contribType} setContribType={reg.setContribType}
-                country={reg.country} setCountry={reg.setCountry}
-                passwordStrength={reg.passwordStrength}
-                error={reg.error}
-                onContinue={reg.goToStep2}
-                isSsoUser={reg.isSsoUser}
-                ssoProvider={reg.ssoProvider}
-              />
-            )}
+            <AnimatePresence mode="wait">
+              {reg.step === 1 && (
+                <motion.div key="c-step-1" {...stepAnim}>
+                  <Step1Identity
+                    firstName={reg.firstName} setFirstName={reg.setFirstName}
+                    lastName={reg.lastName} setLastName={reg.setLastName}
+                    email={reg.email} setEmail={reg.setEmail}
+                    password={reg.password} setPassword={reg.setPassword}
+                    confirm={reg.confirm} setConfirm={reg.setConfirm}
+                    showPw={reg.showPw} setShowPw={reg.setShowPw}
+                    showCon={reg.showCon} setShowCon={reg.setShowCon}
+                    contribType={reg.contribType} setContribType={reg.setContribType}
+                    country={reg.country} setCountry={reg.setCountry}
+                    passwordStrength={reg.passwordStrength}
+                    error={reg.error}
+                    onContinue={reg.goToStep2}
+                    isSsoUser={reg.isSsoUser}
+                    ssoProvider={reg.ssoProvider}
+                  />
+                </motion.div>
+              )}
 
-            {reg.step === 2 && (
-              <Step3Profile
-                contribType={reg.contribType}
-                dob={reg.dob} setDob={reg.setDob}
-                timezone={reg.timezone} setTimezone={reg.setTimezone}
-                departmentCategory={reg.departmentCategory} setDepartmentCategory={reg.setDepartmentCategory}
-                departmentOther={reg.departmentOther} setDepartmentOther={reg.setDepartmentOther}
-                availability={reg.availability} setAvailability={reg.setAvailability}
-                degree={reg.degree} setDegree={reg.setDegree}
-                branch={reg.branch} setBranch={reg.setBranch}
-                linkedin={reg.linkedin} setLinkedin={reg.setLinkedin}
-                mentorAck={reg.mentorAck} setMentorAck={reg.setMentorAck}
-                primarySkills={reg.primarySkills}
-                skillInput={reg.skillInput} setSkillInput={reg.setSkillInput}
-                addPrimarySkill={reg.addPrimarySkill} removePrimarySkill={reg.removePrimarySkill}
-                secondarySkills={reg.secondarySkills}
-                secondarySkillInput={reg.secondarySkillInput} setSecondarySkillInput={reg.setSecondarySkillInput}
-                addSecondarySkill={reg.addSecondarySkill} removeSecondarySkill={reg.removeSecondarySkill}
-                otherSkills={reg.otherSkills}
-                otherSkillInput={reg.otherSkillInput} setOtherSkillInput={reg.setOtherSkillInput}
-                addOtherSkill={reg.addOtherSkill} removeOtherSkill={reg.removeOtherSkill}
-                workStart={reg.workStart} setWorkStart={reg.setWorkStart}
-                workEnd={reg.workEnd} setWorkEnd={reg.setWorkEnd}
-                careerStage={reg.careerStage} setCareerStage={reg.setCareerStage}
-                yearsExperience={reg.yearsExperience} setYearsExperience={reg.setYearsExperience}
-                error={reg.error}
-                onContinue={reg.goToStep3}
-                onBack={() => { reg.setStep(1); reg.setError(""); }}
-              />
-            )}
+              {reg.step === 2 && (
+                <motion.div key="c-step-2" {...stepAnim}>
+                  <Step3Profile
+                    contribType={reg.contribType}
+                    dob={reg.dob} setDob={reg.setDob}
+                    timezone={reg.timezone} setTimezone={reg.setTimezone}
+                    departmentCategory={reg.departmentCategory} setDepartmentCategory={reg.setDepartmentCategory}
+                    departmentOther={reg.departmentOther} setDepartmentOther={reg.setDepartmentOther}
+                    availability={reg.availability} setAvailability={reg.setAvailability}
+                    degree={reg.degree} setDegree={reg.setDegree}
+                    branch={reg.branch} setBranch={reg.setBranch}
+                    linkedin={reg.linkedin} setLinkedin={reg.setLinkedin}
+                    mentorAck={reg.mentorAck} setMentorAck={reg.setMentorAck}
+                    primarySkills={reg.primarySkills}
+                    skillInput={reg.skillInput} setSkillInput={reg.setSkillInput}
+                    addPrimarySkill={reg.addPrimarySkill} removePrimarySkill={reg.removePrimarySkill}
+                    secondarySkills={reg.secondarySkills}
+                    secondarySkillInput={reg.secondarySkillInput} setSecondarySkillInput={reg.setSecondarySkillInput}
+                    addSecondarySkill={reg.addSecondarySkill} removeSecondarySkill={reg.removeSecondarySkill}
+                    otherSkills={reg.otherSkills}
+                    otherSkillInput={reg.otherSkillInput} setOtherSkillInput={reg.setOtherSkillInput}
+                    addOtherSkill={reg.addOtherSkill} removeOtherSkill={reg.removeOtherSkill}
+                    workStart={reg.workStart} setWorkStart={reg.setWorkStart}
+                    workEnd={reg.workEnd} setWorkEnd={reg.setWorkEnd}
+                    careerStage={reg.careerStage} setCareerStage={reg.setCareerStage}
+                    yearsExperience={reg.yearsExperience} setYearsExperience={reg.setYearsExperience}
+                    error={reg.error}
+                    onContinue={reg.goToStep3}
+                    onBack={() => { reg.setStep(1); reg.setError(""); }}
+                  />
+                </motion.div>
+              )}
 
-            {reg.step === 3 && (
-              <Step2Verification
-                registrationEmail={reg.email}
-                phoneCountry={reg.phoneCountry} setPhoneCountry={reg.setPhoneCountry}
-                phone={reg.phone} setPhone={reg.setPhone}
-                otpSent={reg.otpSent}
-                otp={reg.otp} setOtp={reg.setOtp}
-                cooldown={reg.cooldown}
-                phoneVerified={reg.phoneVerified}
-                phoneOtpLoading={reg.phoneOtpLoading}
-                verificationEmail={reg.verificationEmail} setVerificationEmail={reg.setVerificationEmail}
-                emailOtpSent={reg.emailOtpSent}
-                emailOtp={reg.emailOtp} setEmailOtp={reg.setEmailOtp}
-                emailCooldown={reg.emailCooldown}
-                emailVerified={reg.emailVerified}
-                emailOtpLoading={reg.emailOtpLoading}
-                ndaAccepted={reg.ndaAccepted} setNdaAccepted={reg.setNdaAccepted}
-                ndaSignature={reg.ndaSignature} setNdaSignature={reg.setNdaSignature}
-                ndaSignedFile={reg.ndaSignedFile} setNdaSignedFile={reg.setNdaSignedFile}
-                error={reg.error}
-                onSendOTP={reg.sendOTP}
-                onVerifyOTP={reg.verifyOTP}
-                onSendEmailOTP={reg.sendEmailOTP}
-                onVerifyEmailOTP={reg.verifyEmailOTP}
-                onContinue={reg.goToStep4}
-                onBack={() => { reg.setStep(2); reg.setError(""); }}
-              />
-            )}
+              {reg.step === 3 && (
+                <motion.div key="c-step-3" {...stepAnim}>
+                  <Step2Verification
+                    registrationEmail={reg.email}
+                    phoneCountry={reg.phoneCountry} setPhoneCountry={reg.setPhoneCountry}
+                    phone={reg.phone} setPhone={reg.setPhone}
+                    otpSent={reg.otpSent}
+                    otp={reg.otp} setOtp={reg.setOtp}
+                    cooldown={reg.cooldown}
+                    phoneVerified={reg.phoneVerified}
+                    phoneOtpLoading={reg.phoneOtpLoading}
+                    verificationEmail={reg.verificationEmail} setVerificationEmail={reg.setVerificationEmail}
+                    emailOtpSent={reg.emailOtpSent}
+                    emailOtp={reg.emailOtp} setEmailOtp={reg.setEmailOtp}
+                    emailCooldown={reg.emailCooldown}
+                    emailVerified={reg.emailVerified}
+                    emailOtpLoading={reg.emailOtpLoading}
+                    ndaAccepted={reg.ndaAccepted} setNdaAccepted={reg.setNdaAccepted}
+                    ndaSignature={reg.ndaSignature} setNdaSignature={reg.setNdaSignature}
+                    ndaSignedFile={reg.ndaSignedFile} setNdaSignedFile={reg.setNdaSignedFile}
+                    error={reg.error}
+                    onSendOTP={reg.sendOTP}
+                    onVerifyOTP={reg.verifyOTP}
+                    onSendEmailOTP={reg.sendEmailOTP}
+                    onVerifyEmailOTP={reg.verifyEmailOTP}
+                    onContinue={reg.goToStep4}
+                    onBack={() => { reg.setStep(2); reg.setError(""); }}
+                  />
+                </motion.div>
+              )}
 
-            {reg.step === 4 && (
-              <Step4Consent
-                resumeFile={reg.resumeFile} setResumeFile={reg.setResumeFile}
-                resumeDrag={reg.resumeDrag} setResumeDrag={reg.setResumeDrag}
-                acceptTos={reg.acceptTos} setAcceptTos={reg.setAcceptTos}
-                acceptCoc={reg.acceptCoc} setAcceptCoc={reg.setAcceptCoc}
-                acceptPrivacy={reg.acceptPrivacy} setAcceptPrivacy={reg.setAcceptPrivacy}
-                acceptFee={reg.acceptFee} setAcceptFee={reg.setAcceptFee}
-                acceptAhp={reg.acceptAhp} setAcceptAhp={reg.setAcceptAhp}
-                marketingOptIn={reg.marketingOptIn} setMarketingOptIn={reg.setMarketingOptIn}
-                isLoading={reg.isLoading}
-                error={reg.error}
-                onPreview={() => reg.setPreviewOpen(true)}
-                onSubmit={reg.handleFinalSubmit}
-                onBack={() => { reg.setStep(3); reg.setError(""); }}
-              />
-            )}
+              {reg.step === 4 && (
+                <motion.div key="c-step-4" {...stepAnim}>
+                  <Step4Consent
+                    resumeFile={reg.resumeFile} setResumeFile={reg.setResumeFile}
+                    resumeDrag={reg.resumeDrag} setResumeDrag={reg.setResumeDrag}
+                    acceptTos={reg.acceptTos} setAcceptTos={reg.setAcceptTos}
+                    acceptCoc={reg.acceptCoc} setAcceptCoc={reg.setAcceptCoc}
+                    acceptPrivacy={reg.acceptPrivacy} setAcceptPrivacy={reg.setAcceptPrivacy}
+                    acceptFee={reg.acceptFee} setAcceptFee={reg.setAcceptFee}
+                    acceptAhp={reg.acceptAhp} setAcceptAhp={reg.setAcceptAhp}
+                    marketingOptIn={reg.marketingOptIn} setMarketingOptIn={reg.setMarketingOptIn}
+                    isLoading={reg.isLoading}
+                    error={reg.error}
+                    onPreview={() => reg.setPreviewOpen(true)}
+                    onSubmit={reg.handleFinalSubmit}
+                    onBack={() => { reg.setStep(3); reg.setError(""); }}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
 
@@ -791,8 +820,7 @@ function ContributorRegisterContent() {
 
   /* ── Registering: no left panel, wider centered form ── */
   return (
-    <div className="w-full max-w-[600px] mx-auto flex flex-col py-8 px-4">
-      <div className="mb-8">{logo}</div>
+    <div className="w-full max-w-[750px] mx-auto flex flex-col py-8 px-4">
       {formBody}
     </div>
   );

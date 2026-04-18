@@ -88,16 +88,7 @@ function validatePassword(password: string): string[] {
 
 /* ─────────────────────── Mock Recovery Codes ─────────────────────── */
 
-const MOCK_RECOVERY_CODES = [
-  "A7K9-M2X4",
-  "B3P8-N6W1",
-  "C5R2-Q9Y7",
-  "D1T6-S4Z3",
-  "E8U0-V5H2",
-  "F4W3-X7J9",
-  "G6Y1-Z8K5",
-  "H2A9-B0L4",
-];
+const MOCK_RECOVERY_CODES: string[] = [];
 
 /* ═══════════════════════════════════════════════════════════════════ */
 /*  Profile Page                                                      */

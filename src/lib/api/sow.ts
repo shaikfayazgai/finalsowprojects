@@ -270,7 +270,7 @@ export const sowApi = {
     return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`, "PATCH", data);
   },
 
-  deleteManualSOW(sowId: string): Promise<BaseResponse> {
+  deleteSOW(sowId: string): Promise<BaseResponse> {
     return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`, "DELETE");
   },
 
@@ -404,7 +404,7 @@ export const sowApi = {
 
   exportSOW(sowId: string, format: "pdf" | "docx" | "json"): Promise<Blob> {
     return getToken().then(token =>
-      fetch(`${BASE_URL}/api/v1/sow/${sowId}/export/${format}`, {
+      fetch(`${BASE_URL}/api/v1/sows/${sowId}/export/${format}`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(res => {
         if (!res.ok) throw new ApiError(res.status, `Export failed: ${res.status}`);

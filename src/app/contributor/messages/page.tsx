@@ -76,7 +76,7 @@ export default function MessagesPage() {
         t.senderName.toLowerCase().includes(q) ||
         t.projectName?.toLowerCase().includes(q) ||
         t.taskTitle?.toLowerCase().includes(q) ||
-        t.messages.some((m) => m.content.toLowerCase().includes(q))
+        t.messages.some((m: any) => m.content.toLowerCase().includes(q))
       );
     }
     list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -230,7 +230,7 @@ export default function MessagesPage() {
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-                {selected.messages.map((msg) => {
+                {selected.messages.map((msg: any) => {
                   const isUser = msg.sender === "user";
                   const isAI = (msg as any).isAI;
                   const rated = ratedMessages[msg.id];

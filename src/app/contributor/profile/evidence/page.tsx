@@ -77,47 +77,7 @@ const allSkills = [
   "MongoDB", "Redis", "Kubernetes", "CI/CD", "Flutter",
 ];
 
-/* ═══ Mock Evidence ═══ */
-
-const initialEvidence: EvidenceItem[] = [
-  {
-    id: "ev-1",
-    title: "Personal Portfolio Website",
-    type: "link",
-    url: "https://arjunmehta.dev",
-    skills: ["React", "TypeScript"],
-    date: "2026-01-20",
-    description: "Full-stack portfolio showcasing frontend projects",
-  },
-  {
-    id: "ev-2",
-    title: "GitHub Profile",
-    type: "github",
-    url: "https://github.com/arjun-mehta",
-    skills: ["React", "Node.js", "Git"],
-    date: "2026-01-20",
-    description: "Open source contributions and project repositories",
-  },
-  {
-    id: "ev-3",
-    title: "AWS Cloud Practitioner Certificate",
-    type: "file",
-    fileName: "aws-cert.pdf",
-    fileSize: 245000,
-    skills: ["AWS"],
-    date: "2026-02-15",
-    description: "AWS Certified Cloud Practitioner certification",
-  },
-  {
-    id: "ev-4",
-    title: "Hackathon Project - FinTrack",
-    type: "link",
-    url: "https://devpost.com/fintrack",
-    skills: ["React", "Node.js", "PostgreSQL"],
-    date: "2026-03-01",
-    description: "1st place winner at IIT Bangalore Hackathon 2026",
-  },
-];
+const initialEvidence: EvidenceItem[] = [];
 
 /* ═══ Empty form state ═══ */
 

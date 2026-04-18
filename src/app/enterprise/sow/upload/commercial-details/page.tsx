@@ -818,7 +818,7 @@ export default function CommercialDetailsPage() {
             </p>
           </div>
           <Link
-            href={allSectionsComplete ? "/enterprise/sow/upload/preview-confirm" : "#"}
+            href={allSectionsComplete ? "/enterprise/sow/upload/generate" : "#"}
             className={cn(!allSectionsComplete && "pointer-events-none")}
           >
             <Button

@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-const REQUEST_TIMEOUT_MS = 15_000; // 15 seconds — fail fast instead of hanging forever
+const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds — covers Render cold-start delays
 
 /**
  * Wrapper around fetch() for internal Next.js API routes (/api/...).

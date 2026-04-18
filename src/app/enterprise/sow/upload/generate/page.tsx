@@ -36,6 +36,8 @@ import {
   mockGenerationHallucinationLayers,
 } from "@/mocks/data/sow-upload-flow";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { useHallucinationAnalysis, useRiskAssessment, useSow } from "@/lib/hooks/use-sow-wizard";
+import { useManualSOW, useSOWPreview, useHallucinationLayers, useSubmitSOW, useApprovalStages } from "@/lib/hooks/use-manual-sow";
 
 /* ── Generation stages ── */
 const GEN_STAGES = [
@@ -53,6 +55,312 @@ const TABS = [
   { key: "traceability",  label: "Source Traceability" },
 ] as const;
 type TabKey = typeof TABS[number]["key"];
+
+/* ══════════════════════════════════════════════════════════════════
+   Review & Submit SOW — shared, reusable data contract.
+   Consumers (AI flow, manual flow) map their own API response into
+   this shape. Any missing field falls back to the mock defaults so
+   the manual flow keeps working unchanged.
+   ══════════════════════════════════════════════════════════════════ */
+
+export interface SOWReviewMetrics {
+  confidence: number;
+  riskScore: number;
+  hallucinationFlags: number;
+  completeness: number;
+}
+
+export interface SOWReviewSection {
+  title: string;
+  body: string;
+}
+
+export interface SOWReviewRiskFactor {
+  factor: string;
+  weight: string;
+  score: number;
+}
+
+export interface SOWReviewRiskData {
+  riskLevel: string;
+  riskScore: number;
+  factors: SOWReviewRiskFactor[];
+}
+
+export interface SOWReviewHallucinationLayer {
+  layer?: number | string;
+  name?: string;
+  status?: string;
+  details?: string;
+}
+
+export interface SOWReviewTraceability {
+  section: string;
+  source: string;
+}
+
+export interface SOWReviewData {
+  metrics?: Partial<SOWReviewMetrics>;
+  sections?: SOWReviewSection[];
+  riskAssessment?: Partial<SOWReviewRiskData>;
+  hallucinationLayers?: SOWReviewHallucinationLayer[];
+  traceability?: SOWReviewTraceability[];
+}
+
+/**
+ * Map the raw GET /api/v1/sows/{sow_id} response into SOWReviewData.
+ * The backend response shape is still evolving, so this tries several
+ * shapes before giving up:
+ *  • flat array at `data.sections` / `sow_sections` / `generated_sections`
+ *  • array nested one level deep (e.g. data.sow.sections, data.draft.sections)
+ *  • discrete `section_a` / `section_b` / ... keys (matches the wizard save
+ *    shape — see sow-transformers.ts)
+ *  • full-text markdown at `draft_markdown` / `generated_content` / `content`
+ *    — split on `#`/`##` headings
+ */
+function mapSowResponseToReviewData(payload: unknown): SOWReviewData | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Record<string, any>;
+  const data = (root.data && typeof root.data === "object") ? root.data : root;
+
+  const pick = <T,>(source: Record<string, any>, ...keys: string[]): T | undefined => {
+    for (const k of keys) if (source?.[k] != null) return source[k] as T;
+    return undefined;
+  };
+
+  // Metrics can sit at the top level or under any of these nested bags.
+  // Try every candidate bag in priority order; if none has the value, fall back to `data` itself.
+  const metricsBags: Record<string, any>[] = [
+    data,                   // flat — confirmed fields (overall_confidence, risk_score, etc.) sit here
+    data.metrics,
+    data.quality_metrics,
+    data.qualityMetrics,
+    data.ai_metrics,
+    data.aiMetrics,
+    data.scores,
+    data.score,
+    data.analysis,
+    data.summary,
+    data.generated_sow,     // metrics may also live inside the generated_sow object
+  ].filter((b) => b && typeof b === "object" && !Array.isArray(b)) as Record<string, any>[];
+
+  const pickMetric = (...keys: string[]): number | undefined => {
+    for (const bag of metricsBags) {
+      for (const k of keys) {
+        const v = bag?.[k];
+        if (v != null && (typeof v === "number" || (typeof v === "string" && !isNaN(Number(v))))) {
+          return Number(v);
+        }
+      }
+    }
+    return undefined;
+  };
+
+  const confidence = pickMetric(
+    "overall_confidence",                           // confirmed API field
+    "confidence", "confidence_score", "confidenceScore",
+    "ai_confidence", "extraction_confidence", "extraction_quality",
+    "confidence_percentage",
+  );
+  const riskScore = pickMetric(
+    "risk_score", "riskScore",                      // confirmed API field
+    "overall_risk_score", "overallRiskScore",
+    "risk", "risk_level_score", "total_risk",
+  );
+  const hallucinationFlags = pickMetric(
+    "hallucination_flags_count",                    // confirmed API field
+    "hallucination_flags", "hallucinationFlags",
+    "hallucination_count", "flags", "flag_count",
+  );
+  const completeness = pickMetric(
+    "completeness_percentage",                      // confirmed API field
+    "completeness", "completeness_score", "completenessScore",
+    "section_completeness", "coverage",
+  );
+
+  // ── Sections ──
+  // API confirmed field names: `title` for heading, `content` for body text.
+  const normalizeSection = (s: any, fallbackTitle = ""): SOWReviewSection => ({
+    title: String(s?.title ?? s?.section_title ?? s?.heading ?? s?.name ?? s?.header ?? fallbackTitle ?? ""),
+    body: String(
+      s?.content ?? s?.body ?? s?.text ?? s?.markdown ?? s?.description ??
+      (typeof s === "string" ? s : ""),
+    ),
+  });
+
+  // Returns true if an array looks like a sections array (objects with title/content/body).
+  const isSectionArray = (arr: unknown): arr is any[] =>
+    Array.isArray(arr) &&
+    arr.length > 0 &&
+    arr.some(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        (item.title || item.section_title || item.heading || item.name) &&
+        (item.content || item.body || item.text || item.markdown || item.description),
+    );
+
+  // Deep-scan: BFS through the response object, returning the first array that
+  // looks like a sections array. This handles arbitrarily nested shapes without
+  // needing to enumerate every possible key path.
+  function findSectionArray(obj: unknown, depth = 0): any[] | undefined {
+    if (depth > 5 || !obj || typeof obj !== "object") return undefined;
+    if (Array.isArray(obj)) {
+      if (isSectionArray(obj)) return obj;
+      return undefined;
+    }
+    const record = obj as Record<string, unknown>;
+    // Prefer keys that are likely to contain sections — checked first before recursing.
+    const priorityKeys = Object.keys(record).filter((k) =>
+      /section/i.test(k) || k === "generated_sow" || k === "content" || k === "generated" || k === "draft",
+    );
+    const otherKeys = Object.keys(record).filter((k) => !priorityKeys.includes(k));
+    for (const k of [...priorityKeys, ...otherKeys]) {
+      const val = record[k];
+      if (Array.isArray(val) && isSectionArray(val)) return val;
+    }
+    // Recurse into object values (priority keys first)
+    for (const k of [...priorityKeys, ...otherKeys]) {
+      const val = record[k];
+      if (val && typeof val === "object" && !Array.isArray(val)) {
+        const found = findSectionArray(val, depth + 1);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  }
+
+  let sections: SOWReviewSection[] | undefined;
+
+  // 1) Deep scan — finds sections at any nesting level (including generated_sow.sections).
+  const foundArray = findSectionArray(data);
+  if (foundArray) {
+    sections = foundArray.map((s) => normalizeSection(s)).filter((s) => s.title || s.body);
+  }
+
+  // 2) `section_a` / `section_b` / ... keys (wizard save shape)
+  if (!sections || sections.length === 0) {
+    const sectionKeys = Object.keys(data)
+      .filter((k) => /^section[_-][a-z0-9]+$/i.test(k))
+      .sort();
+    if (sectionKeys.length > 0) {
+      sections = sectionKeys
+        .map((k) => {
+          const node = data[k];
+          const fallback = k.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          if (node && typeof node === "object" && !Array.isArray(node)) {
+            const title = String(node.title ?? node.section_title ?? node.heading ?? fallback);
+            const body = String(
+              node.content ?? node.body ?? node.text ?? node.markdown ?? node.description ?? "",
+            );
+            if (body) return { title, body };
+            const kv = Object.entries(node)
+              .filter(([, v]) => v != null && (typeof v === "string" || typeof v === "number" || typeof v === "boolean"))
+              .map(([kk, v]) => `${kk.replace(/_/g, " ")}: ${v}`)
+              .join("\n");
+            return { title, body: kv };
+          }
+          return normalizeSection(node, fallback);
+        })
+        .filter((s) => s.title || s.body);
+    }
+  }
+
+  // 3) Markdown fallback — split a single big string by H1/H2/H3 headings.
+  if (!sections || sections.length === 0) {
+    const md =
+      data.draft_markdown ?? data.draftMarkdown
+      ?? data.generated_content ?? data.generatedContent
+      ?? data.content ?? data.markdown;
+    if (typeof md === "string" && md.trim().length > 0) {
+      const parts = md.split(/\n(?=#{1,3}\s)/g);
+      sections = parts
+        .map((p) => {
+          const m = p.match(/^\s*#{1,3}\s*(.+?)\r?\n([\s\S]*)$/);
+          if (m) return { title: m[1].trim(), body: m[2].trim() };
+          return { title: "", body: p.trim() };
+        })
+        .filter((s) => s.title || s.body);
+    }
+  }
+
+  const metricsPartial = {
+    ...(confidence != null ? { confidence: Number(confidence) } : {}),
+    ...(riskScore != null ? { riskScore: Number(riskScore) } : {}),
+    ...(hallucinationFlags != null ? { hallucinationFlags: Number(hallucinationFlags) } : {}),
+    ...(completeness != null ? { completeness: Number(completeness) } : {}),
+  };
+
+  const hasMetrics = Object.keys(metricsPartial).length > 0;
+  const hasSections = sections && sections.length > 0;
+  // Always return something so the caller knows the query succeeded.
+  // If we genuinely got nothing, return null to fall through to mocks.
+  if (!hasMetrics && !hasSections) return null;
+
+  return {
+    ...(hasMetrics ? { metrics: metricsPartial } : {}),
+    ...(hasSections ? { sections } : {}),
+  };
+}
+
+/**
+ * Map the GET /api/v1/sows/{sow_id}/risk-assessment response into
+ * a partial SOWReviewRiskData. Accepts both snake_case and camelCase keys
+ * and both flat and `{ data: ... }`-wrapped envelopes.
+ */
+function mapRiskAssessmentResponse(payload: unknown): Partial<SOWReviewRiskData> | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Record<string, any>;
+  const data = (root.data && typeof root.data === "object") ? root.data : root;
+
+  const riskLevel = data.risk_level ?? data.riskLevel ?? data.level;
+  const riskScore = data.risk_score ?? data.riskScore ?? data.overall_score ?? data.overallScore;
+  const rawFactors = data.factors ?? data.risk_factors ?? data.riskFactors ?? data.breakdown;
+
+  const factors: SOWReviewRiskFactor[] | undefined = Array.isArray(rawFactors)
+    ? rawFactors
+        .map((f: any) => ({
+          factor: String(f.factor ?? f.name ?? f.label ?? ""),
+          weight: String(f.weight ?? f.weight_display ?? ""),
+          score: Number(f.score ?? f.value ?? 0),
+        }))
+        .filter((f) => f.factor)
+    : undefined;
+
+  const out: Partial<SOWReviewRiskData> = {};
+  if (riskLevel != null) out.riskLevel = String(riskLevel);
+  if (riskScore != null) out.riskScore = Number(riskScore);
+  if (factors && factors.length > 0) out.factors = factors;
+
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * Map the GET /api/v1/sows/{sow_id}/hallucination-analysis response into
+ * an array of `SOWReviewHallucinationLayer`. Backend response shape is
+ * evolving, so both snake_case and camelCase keys are accepted, and both
+ * flat `{ layers: [...] }` and wrapped `{ data: { layers: [...] } }` envelopes.
+ */
+function mapHallucinationAnalysisResponse(payload: unknown): SOWReviewHallucinationLayer[] | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Record<string, any>;
+  const data = (root.data && typeof root.data === "object") ? root.data : root;
+
+  const rawLayers: unknown =
+    data.layers ?? data.hallucination_layers ?? data.hallucinationLayers ?? data.results;
+  if (!Array.isArray(rawLayers)) return null;
+
+  const layers: SOWReviewHallucinationLayer[] = rawLayers
+    .map((l: any) => ({
+      layer: l.layer ?? l.layer_id ?? l.id ?? l.index,
+      name: l.name ?? l.layer_name ?? l.title,
+      status: l.status ?? l.result ?? l.outcome,
+      details: l.details ?? l.description ?? l.message ?? l.detail,
+    }))
+    .filter((l) => l.name || l.status);
+
+  return layers.length > 0 ? layers : null;
+}
 
 /* ═══ Read-only detail row ═══ */
 function ReadOnlyRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -154,7 +462,29 @@ function ReadOnlyDetailsPreview({ details }: { details: any }) {
 
 /* ═══ PAGE ═══ */
 
-export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" }: { sowId?: string | null; flow?: "manual" | "ai" }) {
+export default function GeneratePreviewPage({
+  sowId: sowIdProp,
+  flow = "manual",
+  reviewData,
+  onBack,
+  onRejectRegenerate,
+  detailsOverride,
+}: {
+  sowId?: string | null;
+  flow?: "manual" | "ai";
+  reviewData?: SOWReviewData;
+  /** Override the back-button behaviour. Required for flows (like AI wizard)
+   *  where back must mutate parent state rather than navigate to a URL. */
+  onBack?: () => void;
+  /** Called when the user confirms "Reject & Regenerate". For the AI flow
+   *  this should reset the wizard to step 0. Falls back to navigating to the
+   *  upload selection page for the manual flow. */
+  onRejectRegenerate?: () => void;
+  /** Override the read-only details preview (during "generating" phase).
+   *  AI wizard supplies this built from its own form data so it doesn't
+   *  display the manual flow's commercialDetails. */
+  detailsOverride?: any;
+}) {
   const router = useRouter();
   const store = useSOWUploadStore();
 
@@ -181,12 +511,91 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
   const [activeTab, setActiveTab] = React.useState<TabKey>("sow");
 
   const sowId = sowIdProp ?? store.uploadedSowId;
+  const submitSOW = useSubmitSOW(sowId ?? null, flow);
+  const { refetch: refetchApprovalPipeline } = useApprovalStages(sowId ?? null);
+  const [submitError, setSubmitError] = React.useState<string>("");
 
-  type HallucinationLayer = { layer?: number | string; name?: string; status?: string; details?: string };
+  // ── AI flow queries (endpoint: /api/v1/sows/{id}) ──
+  const sowQuery = useSow(flow === "ai" && sowId ? sowId : null);
+  const fetchedReview = React.useMemo(
+    () => (sowQuery.data ? mapSowResponseToReviewData(sowQuery.data) : null),
+    [sowQuery.data],
+  );
+  const hallucinationQuery = useHallucinationAnalysis(flow === "ai" && sowId ? sowId : null);
+  const fetchedHallucinationLayers = React.useMemo(
+    () => (hallucinationQuery.data ? mapHallucinationAnalysisResponse(hallucinationQuery.data) : null),
+    [hallucinationQuery.data],
+  );
+  const riskQuery = useRiskAssessment(flow === "ai" && sowId ? sowId : null);
+  const fetchedRisk = React.useMemo(
+    () => (riskQuery.data ? mapRiskAssessmentResponse(riskQuery.data) : null),
+    [riskQuery.data],
+  );
 
-  const metrics = mockPreviewMetrics;
-  const riskData = mockRiskAssessment;
-  const hallucinationLayers: HallucinationLayer[] = mockGenerationHallucinationLayers as HallucinationLayer[];
+  // ── Manual flow queries (endpoint: /api/v1/sow/{id}) ──
+  const manualSowQuery = useManualSOW(flow === "manual" && sowId ? sowId : null);
+  const manualPreviewQuery = useSOWPreview(flow === "manual" && sowId ? sowId : null);
+  const manualHallucinationQuery = useHallucinationLayers(flow === "manual" && sowId ? sowId : null);
+
+  // Map manual SOW responses using the same shared mapper so both flows
+  // produce SOWReviewData and merge into the same display variables below.
+  const fetchedManualReview = React.useMemo(
+    () => {
+      // Try the preview endpoint first (richer content), then fall back to the SOW record.
+      const source = manualPreviewQuery.data ?? manualSowQuery.data;
+      return source ? mapSowResponseToReviewData(source) : null;
+    },
+    [manualPreviewQuery.data, manualSowQuery.data],
+  );
+  const fetchedManualHallucinationLayers = React.useMemo(
+    () => (manualHallucinationQuery.data ? mapHallucinationAnalysisResponse(manualHallucinationQuery.data) : null),
+    [manualHallucinationQuery.data],
+  );
+
+  // Unified fetched review: one or the other depending on flow.
+  const activeFetchedReview = flow === "ai" ? fetchedReview : fetchedManualReview;
+  const activeFetchedHallucination = flow === "ai" ? fetchedHallucinationLayers : fetchedManualHallucinationLayers;
+  const activeFetchedRisk = flow === "ai" ? fetchedRisk : null; // manual flow has no separate risk endpoint
+
+  type HallucinationLayer = SOWReviewHallucinationLayer;
+
+  // Merge priority: prop overrides > fetched API data > mocks.
+  const metrics: SOWReviewMetrics = {
+    ...mockPreviewMetrics,
+    ...(activeFetchedReview?.metrics ?? {}),
+    ...(reviewData?.metrics ?? {}),
+  };
+  const riskData: SOWReviewRiskData = {
+    ...mockRiskAssessment,
+    ...(activeFetchedRisk ?? {}),
+    ...(reviewData?.riskAssessment ?? {}),
+    factors:
+      reviewData?.riskAssessment?.factors
+      ?? activeFetchedRisk?.factors
+      ?? mockRiskAssessment.factors,
+  };
+  const hallucinationLayers: HallucinationLayer[] =
+    reviewData?.hallucinationLayers
+    ?? activeFetchedHallucination
+    ?? (mockGenerationHallucinationLayers as HallucinationLayer[]);
+  const sowSections: SOWReviewSection[] =
+    reviewData?.sections ?? activeFetchedReview?.sections ?? mockGeneratedSowSections;
+  const traceability: SOWReviewTraceability[] = reviewData?.traceability ?? mockSourceTraceability;
+
+  // Back-navigation target is flow-specific.
+  // AI wizard → return to the 10-step generator (parent toggles state).
+  // Manual upload → return to the details form (router navigation).
+  const backTarget = flow === "ai"
+    ? { label: "Back to Review",             href: "/enterprise/sow/generate" }
+    : { label: "Back to Commercial Details", href: "/enterprise/sow/upload/commercial-details" };
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
+    router.push(backTarget.href);
+  };
   const hasRedLayers = hallucinationLayers.some((l) => l.status === "failed");
   const isStale = store.previewState?.isStaleDocument || false;
   const canSubmit = genPhase === "complete" && !hasRedLayers && !isStale;
@@ -214,6 +623,16 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
 
   /* Mount-only initializer — guarded against Strict Mode double-invoke */
   const didInitRef = React.useRef(false);
+  /* Redirect to SOW detail page (Approval tab) after successful submission */
+  React.useEffect(() => {
+    if (!submitted) return;
+    const target = sowId ? `/enterprise/sow/${sowId}?tab=approval` : "/enterprise/sow";
+    // Prefetch the route so navigation is instant
+    router.prefetch(target);
+    const timer = setTimeout(() => router.push(target), 600);
+    return () => clearTimeout(timer);
+  }, [submitted, sowId, router]);
+
   React.useEffect(() => {
     if (didInitRef.current) return;
     didInitRef.current = true;
@@ -269,8 +688,24 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
   };
 
   const handleSubmit = () => {
-    setSubmitted(true);
-    /* No auto-redirect — user proceeds manually via the Continue button after submission */
+    setSubmitError("");
+
+    const onSubmitSuccess = () => {
+      // Pre-fetch the approval pipeline so the approve page loads instantly
+      refetchApprovalPipeline();
+      setSubmitted(true);
+    };
+
+    if (!sowId) {
+      onSubmitSuccess();
+      return;
+    }
+
+    submitSOW.mutate(undefined, {
+      onSuccess: onSubmitSuccess,
+      onError: (err) =>
+        setSubmitError(err instanceof Error ? err.message : "Failed to submit SOW. Please try again."),
+    });
   };
 
   /* ── Metric card ── */
@@ -311,17 +746,17 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
       {/* ═══ READ-ONLY DETAILS PREVIEW (visible during generating phase) ═══ */}
       {genPhase === "generating" && (
         <motion.div variants={fadeUp} className="mb-6">
-          <ReadOnlyDetailsPreview details={store.commercialDetails} />
+          <ReadOnlyDetailsPreview details={detailsOverride ?? store.commercialDetails} />
 
-          {/* Action bar — only Back to Details on the right-side main content.
+          {/* Action bar — back button on the right-side main content.
               The forward action (View Progress / Continue to Review) lives in the
               floating pill at the bottom-left. */}
           <div className="mt-5 flex items-center justify-start gap-3">
             <button
-              onClick={() => router.push("/enterprise/sow/upload/details")}
+              onClick={handleBack}
               className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 px-4 py-2.5 rounded-xl transition-all"
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to Details
+              <ArrowLeft className="w-3.5 h-3.5" /> {backTarget.label}
             </button>
           </div>
         </motion.div>
@@ -372,30 +807,55 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
                 <div className="flex items-center gap-4 mb-7">
                   <div className="relative shrink-0">
                     <div
-                      className="w-[60px] h-[60px] rounded-2xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center"
-                      style={{ boxShadow: "0 8px 24px rgba(166,119,99,0.40), inset 0 1px 0 rgba(255,255,255,0.25)" }}
+                      className={cn(
+                        "w-[60px] h-[60px] rounded-2xl flex items-center justify-center transition-colors duration-500",
+                        genReady
+                          ? "bg-gradient-to-br from-forest-500 to-teal-600"
+                          : "bg-gradient-to-br from-brown-400 to-brown-600",
+                      )}
+                      style={{
+                        boxShadow: genReady
+                          ? "0 8px 24px rgba(42,96,104,0.40), inset 0 1px 0 rgba(255,255,255,0.25)"
+                          : "0 8px 24px rgba(166,119,99,0.40), inset 0 1px 0 rgba(255,255,255,0.25)",
+                      }}
                     >
-                      <Loader2 className="w-7 h-7 text-white animate-spin" />
+                      {genReady ? (
+                        <motion.div
+                          initial={{ scale: 0, rotate: -90 }}
+                          animate={{ scale: 1, rotate: 0 }}
+                          transition={{ type: "spring", stiffness: 420, damping: 18 }}
+                        >
+                          <CheckCircle2 className="w-7 h-7 text-white" />
+                        </motion.div>
+                      ) : (
+                        <Loader2 className="w-7 h-7 text-white animate-spin" />
+                      )}
                     </div>
-                    <motion.div
-                      className="absolute inset-0 rounded-2xl"
-                      animate={{ scale: [1, 1.22, 1], opacity: [0.5, 0, 0.5] }}
-                      transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                      style={{ border: "2px solid rgba(166,119,99,0.45)" }}
-                    />
-                    <motion.div
-                      className="absolute inset-0 rounded-2xl"
-                      animate={{ scale: [1, 1.45, 1], opacity: [0.2, 0, 0.2] }}
-                      transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
-                      style={{ border: "1.5px solid rgba(166,119,99,0.25)" }}
-                    />
+                    {!genReady && (
+                      <>
+                        <motion.div
+                          className="absolute inset-0 rounded-2xl"
+                          animate={{ scale: [1, 1.22, 1], opacity: [0.5, 0, 0.5] }}
+                          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                          style={{ border: "2px solid rgba(166,119,99,0.45)" }}
+                        />
+                        <motion.div
+                          className="absolute inset-0 rounded-2xl"
+                          animate={{ scale: [1, 1.45, 1], opacity: [0.2, 0, 0.2] }}
+                          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+                          style={{ border: "1.5px solid rgba(166,119,99,0.25)" }}
+                        />
+                      </>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h2 className="text-[20px] font-extrabold text-gray-900 uppercase tracking-tight leading-tight">
-                      Generating Final SOW
+                      {genReady ? "Generation Complete" : "Generating Final SOW"}
                     </h2>
                     <p className="text-[12.5px] text-gray-400 mt-1 leading-relaxed">
-                      Assembling your document from extracted content and commercial inputs.
+                      {genReady
+                        ? "Your SOW draft is ready for review."
+                        : "Assembling your document from extracted content and commercial inputs."}
                     </p>
                   </div>
                 </div>
@@ -403,8 +863,11 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
                 {/* ── Stages 2-col grid ── */}
                 <div className="grid grid-cols-2 gap-x-6 gap-y-3.5 mb-7">
                   {GEN_STAGES.map((stage, i) => {
-                    const isDone = genStageIdx > i;
-                    const isActive = genStageIdx === i;
+                    // Once generation is ready (progress = 100%), mark every
+                    // stage as done — otherwise the final stage stays "active"
+                    // even though the overall progress bar says complete.
+                    const isDone = genReady || genStageIdx > i;
+                    const isActive = !genReady && genStageIdx === i;
                     return (
                       <motion.div
                         key={stage.key}
@@ -606,7 +1069,7 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
 
               {activeTab === "sow" && (
                 <div className="space-y-5">
-                  {mockGeneratedSowSections.map((sec, i) => (
+                  {sowSections.map((sec, i) => (
                     <div key={`${sec.title}-${i}`}>
                       <p className="text-[12px] font-semibold text-gray-700 mb-1.5">{sec.title}</p>
                       <p className="text-[13px] text-gray-500 leading-relaxed">{sec.body}</p>
@@ -667,8 +1130,8 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
 
               {activeTab === "traceability" && (
                 <div className="space-y-1">
-                  {mockSourceTraceability.map((item, i) => (
-                    <div key={item.section} className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+                  {traceability.map((item, i) => (
+                    <div key={`${item.section}-${i}`} className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-50 transition-colors">
                       <span className="text-[10px] font-mono text-gray-300 w-6 shrink-0">{String(i + 1).padStart(2, "0")}</span>
                       <span className="text-[12px] font-medium text-gray-700 flex-1">{item.section}</span>
                       <span className="text-[10px] text-gray-400">{item.source}</span>
@@ -696,9 +1159,9 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
 
           {/* Action bar */}
           <motion.div variants={fadeUp} className="flex items-center justify-between gap-3">
-            <button onClick={() => router.push("/enterprise/sow/upload/details")}
+            <button onClick={handleBack}
               className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 px-4 py-2.5 rounded-xl transition-all shrink-0">
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to Details
+              <ArrowLeft className="w-3.5 h-3.5" /> {backTarget.label}
             </button>
 
             <div className="flex items-center gap-2">
@@ -827,7 +1290,11 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
                 </button>
                 <button onClick={() => {
                     setShowRejectModal(false);
-                    router.push("/enterprise/sow/upload");
+                    if (onRejectRegenerate) {
+                      onRejectRegenerate();
+                    } else {
+                      router.push("/enterprise/sow/upload");
+                    }
                   }}
                   className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 px-5 py-2.5 rounded-xl transition-all">
                   <RotateCcw className="w-3.5 h-3.5" /> Discard & Regenerate
@@ -996,16 +1463,30 @@ export default function GeneratePreviewPage({ sowId: sowIdProp, flow = "manual" 
                     </div>
 
                     {/* Actions */}
-                    <div className="px-5 pb-5 flex gap-2">
-                      <button onClick={() => setShowSubmitModal(false)}
-                        className="flex-1 text-[11.5px] font-medium text-gray-500 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
-                        Cancel
-                      </button>
-                      <button onClick={handleSubmit}
-                        className="flex-[2] flex items-center justify-center gap-1.5 text-[12px] font-bold text-white py-2.5 rounded-xl transition-all bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700"
-                        style={{ boxShadow: "0 4px 14px rgba(166,119,99,0.35)" }}>
-                        <Send className="w-3.5 h-3.5" /> Confirm &amp; Submit
-                      </button>
+                    <div className="px-5 pb-5">
+                      {submitError && (
+                        <div className="mb-3 rounded-xl bg-red-50 border border-red-100 px-3 py-2.5 flex items-start gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                          <p className="text-[11px] text-red-600 leading-relaxed">{submitError}</p>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowSubmitModal(false)}
+                          disabled={submitSOW.isPending}
+                          className="flex-1 text-[11.5px] font-medium text-gray-500 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                          Cancel
+                        </button>
+                        <button onClick={handleSubmit}
+                          disabled={submitSOW.isPending}
+                          className="flex-[2] flex items-center justify-center gap-1.5 text-[12px] font-bold text-white py-2.5 rounded-xl transition-all bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 disabled:opacity-70 disabled:cursor-wait"
+                          style={{ boxShadow: "0 4px 14px rgba(166,119,99,0.35)" }}>
+                          {submitSOW.isPending ? (
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting...</>
+                          ) : (
+                            <><Send className="w-3.5 h-3.5" /> Confirm &amp; Submit</>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                   </motion.div>

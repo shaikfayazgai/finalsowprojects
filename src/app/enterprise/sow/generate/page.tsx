@@ -13,6 +13,7 @@ import {
   Link2, Scale, Gavel, Upload, Eye, Pencil,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import type { SOWReviewData } from "../upload/generate/page";
 import { cn } from "@/lib/utils/cn";
 
 const SOWAIDraftReviewPage = dynamic(() => import("../upload/generate/page"), { ssr: false });
@@ -44,10 +45,171 @@ const HALLUCINATION_LAYERS = [
   "Confidence Scoring", "Pattern Matching", "Human Approval", "Audit Logging",
 ];
 
-const GENERATION_STAGES = [
-  "Applying template", "Anchoring to business context", "Generating clauses",
-  "Hallucination checks", "Risk scoring", "Finalising",
-];
+/* ── AI-SOW API response → SOWReviewData mapper ──
+   The generate endpoint's response shape is evolving, so we defensively
+   accept both snake_case and camelCase keys. Fields that come back
+   undefined fall through to the mocks inside SOWAIDraftReviewPage. */
+function mapGenerateResponseToReviewData(payload: unknown): SOWReviewData | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, any>;
+  const data = (p.data && typeof p.data === "object") ? p.data : p;
+
+  const pick = <T,>(...keys: string[]): T | undefined => {
+    for (const k of keys) if (data[k] != null) return data[k] as T;
+    return undefined;
+  };
+
+  // Metrics may be nested under various bag names or flat on data.
+  const metricsBags: Record<string, any>[] = [
+    data.metrics, data.quality_metrics, data.qualityMetrics,
+    data.ai_metrics, data.aiMetrics, data.scores, data.analysis, data.summary,
+    data,
+  ].filter((b) => b && typeof b === "object" && !Array.isArray(b)) as Record<string, any>[];
+
+  const pickMetric = (...keys: string[]): number | undefined => {
+    for (const bag of metricsBags) {
+      for (const k of keys) {
+        const v = bag?.[k];
+        if (v != null && (typeof v === "number" || (typeof v === "string" && !isNaN(Number(v))))) {
+          return Number(v);
+        }
+      }
+    }
+    return undefined;
+  };
+
+  const confidence = pickMetric("overall_confidence", "confidence", "confidence_score", "confidenceScore", "ai_confidence", "extraction_confidence", "confidence_percentage");
+  const riskScore = pickMetric("risk_score", "riskScore", "overall_risk_score", "risk", "total_risk");
+  const hallucinationFlags = pickMetric("hallucination_flags_count", "hallucination_flags", "hallucinationFlags", "hallucination_count", "flags", "flag_count");
+  const completeness = pickMetric("completeness_percentage", "completeness", "completeness_score", "completenessScore", "coverage");
+
+  const rawSections = pick<any[]>("sections", "sow_sections", "generated_sections");
+  const sections = Array.isArray(rawSections)
+    ? rawSections.map((s) => ({
+        title: String(s.title ?? s.section_title ?? s.heading ?? ""),
+        body: String(s.content ?? s.body ?? s.text ?? ""),
+      })).filter((s) => s.title || s.body)
+    : undefined;
+
+  const riskPayload = pick<any>("risk_assessment", "riskAssessment", "risk");
+  const rawFactors = riskPayload?.factors ?? pick<any[]>("risk_factors", "riskFactors");
+  const factors = Array.isArray(rawFactors)
+    ? rawFactors.map((f: any) => ({
+        factor: String(f.factor ?? f.name ?? ""),
+        weight: String(f.weight ?? ""),
+        score: Number(f.score ?? 0),
+      }))
+    : undefined;
+
+  const rawLayers = pick<any[]>("hallucination_layers", "hallucinationLayers", "layers");
+  const hallucinationLayers = Array.isArray(rawLayers)
+    ? rawLayers.map((l: any) => ({
+        layer: l.layer ?? l.layer_id ?? l.id,
+        name: l.name ?? l.layer_name,
+        status: l.status,
+        details: l.details ?? l.description ?? l.message,
+      }))
+    : undefined;
+
+  const rawTraceability = pick<any[]>("traceability", "source_traceability", "sourceTraceability");
+  const traceability = Array.isArray(rawTraceability)
+    ? rawTraceability.map((t: any) => ({
+        section: String(t.section ?? t.name ?? ""),
+        source: String(t.source ?? t.origin ?? ""),
+      }))
+    : undefined;
+
+  const metricsPartial = {
+    ...(confidence != null ? { confidence } : {}),
+    ...(riskScore != null ? { riskScore } : {}),
+    ...(hallucinationFlags != null ? { hallucinationFlags } : {}),
+    ...(completeness != null ? { completeness } : {}),
+  };
+
+  const riskPartial = {
+    ...(riskPayload?.risk_level ?? riskPayload?.riskLevel ? { riskLevel: String(riskPayload.risk_level ?? riskPayload.riskLevel) } : {}),
+    ...(riskScore != null ? { riskScore } : {}),
+    ...(factors ? { factors } : {}),
+  };
+
+  const anyField =
+    Object.keys(metricsPartial).length > 0 ||
+    sections ||
+    Object.keys(riskPartial).length > 0 ||
+    hallucinationLayers ||
+    traceability;
+  if (!anyField) return null;
+
+  // Only emit arrays when non-empty; an empty array would shadow the
+  // full-SOW fetch (`useSow`) downstream via `reviewData.sections ?? fetched`.
+  return {
+    ...(Object.keys(metricsPartial).length > 0 ? { metrics: metricsPartial } : {}),
+    ...(sections && sections.length > 0 ? { sections } : {}),
+    ...(Object.keys(riskPartial).length > 0 ? { riskAssessment: riskPartial } : {}),
+    ...(hallucinationLayers && hallucinationLayers.length > 0 ? { hallucinationLayers } : {}),
+    ...(traceability && traceability.length > 0 ? { traceability } : {}),
+  };
+}
+
+/* ── AI wizard formData → ReadOnlyDetailsPreview shape ──
+   SOWAIDraftReviewPage's preview is keyed by the manual-flow commercialDetails
+   shape (businessContext, deliveryScope, etc.). This adapter projects the
+   wizard's flat FormData into that nested shape so the "generating" screen
+   shows the user's actual wizard inputs, not the manual flow's state. */
+function wizardFormDataToDetails(fd: Record<string, any>): Record<string, any> {
+  const budget = {
+    budgetMinimum: fd.budgetMin,
+    budgetMaximum: fd.budgetMax,
+    currency: fd.currency,
+  };
+  return {
+    businessContext: {
+      projectVision: fd.projectVision,
+      businessCriticality: fd.businessCriticality,
+      currentState: fd.currentState,
+      desiredFutureState: fd.desiredFutureState,
+      definitionOfSuccess: fd.definitionOfSuccess,
+    },
+    deliveryScope: {
+      developmentScope: Array.isArray(fd.developmentScope) ? fd.developmentScope.join(", ") : fd.developmentScope,
+      uiuxDesignScope: fd.uiuxDesignScope,
+      deploymentScope: fd.deploymentScope,
+      goLiveScope: fd.goLiveScope,
+      dataMigrationScope: fd.dataMigrationScope,
+    },
+    techIntegrations: {
+      technologyStack: fd.techStack,
+      scalabilityRequirements: fd.scalabilityRequirements,
+      userManagementScope: fd.userRegistrationModel,
+      ssoRequired: fd.ssoRequired === "required" || fd.ssoRequired === "yes",
+    },
+    timelineTeam: {
+      startDate: fd.startDate,
+      targetEndDate: fd.endDate,
+      estimatedTeamSize: fd.teamSize,
+      workModel: fd.workModel,
+      uatSignOffAuthority: fd.businessOwnerApprover,
+    },
+    budgetRisk: {
+      ...budget,
+      pricingModel: fd.pricingModel,
+      contingencyPercent: fd.contingencyBudget,
+    },
+    governance: {
+      nonDiscriminationConfirmed: true,
+      dataSensitivityLevel: "Confidential",
+      personalDataInvolved: fd.dpaRequired ? "Yes" : "No",
+      dataResidency: fd.dataRetentionPolicy,
+      regulatoryFrameworks: Array.isArray(fd.complianceStandards) ? fd.complianceStandards.join(", ") : fd.complianceStandards,
+    },
+    commercialLegal: {
+      ipOwnership: fd.ipOwnership,
+      sourceCodeOwnership: fd.ipOwnership,
+      thirdPartyCosts: fd.expensesPolicy,
+      changeRequestProcess: fd.changeManagementProcess,
+    },
+  };
+}
 
 /* ══════════════════════════════════════════ Form data ══════════════════════════════════════════ */
 
@@ -379,6 +541,245 @@ const initialFormData: FormData = {
   finalApprover: "",
   legalReviewer: "",
   securityReviewer: "",
+};
+
+/* ══════════════════════════════════════════ Dummy data (dev helper) ══════════════════════════════════════════ */
+
+const DUMMY_FORM_DATA: FormData = {
+  // Section 1: Strategic Context & Vision
+  projectVision:
+    "Build a unified customer experience platform that consolidates our fragmented tooling into a single pane of glass, enabling support agents to resolve tickets 40% faster while giving leadership real-time visibility into SLA performance.",
+  businessObjectives: [
+    { objective: "Reduce average ticket resolution time", measurableTarget: "From 26h to 15h", timeline: "Q4 2026" },
+    { objective: "Increase CSAT for digital support", measurableTarget: "From 78% to 90%", timeline: "Q2 2027" },
+  ],
+  painPoints: [
+    { problemDescription: "Agents toggle between 5 tools to resolve a single ticket", whoExperiences: "Tier 1 & Tier 2 support agents" },
+    { problemDescription: "Leadership has no real-time SLA visibility across regions", whoExperiences: "VP of Support, Regional Directors" },
+  ],
+  businessCriticality: "business_important",
+  strategicContext: "digital_transformation",
+  currentStateType: "existing",
+  currentState: "We run a patchwork of legacy ticketing, chat, and knowledge-base tools deployed region by region over the last decade.",
+  desiredFutureState: "A single cloud-native workspace where every customer interaction, SLA signal, and knowledge asset lives together with AI-assisted routing.",
+  previousAttempts: "One consolidation attempt was paused in 2024 due to data-migration risk and lack of executive sponsorship.",
+  endUserProfiles: [
+    { roleName: "Support Agent", count: "450", ageRange: "25-35", techLiteracy: "medium", primaryDevice: "desktop", geography: "Global (NA, EU, APAC)", accessibilityNeeds: "yes" },
+    { roleName: "Team Lead", count: "60", ageRange: "35-45", techLiteracy: "high", primaryDevice: "both", geography: "NA, EU", accessibilityNeeds: "no" },
+  ],
+  languageRequirements: ["english", "french", "other"],
+  customLanguages: ["Spanish", "German"],
+  userExpectations: [
+    "Single login across all surfaces",
+    "Context-aware AI suggestions during ticket handling",
+    "Mobile-responsive interface for on-call leads",
+  ],
+  successMetrics: [
+    { metricName: "Average Resolution Time", baseline: "26h", target: "15h", measurementMethod: "Platform analytics, weekly rollup", timeframe: "12 months post go-live" },
+    { metricName: "CSAT score", baseline: "78%", target: "90%", measurementMethod: "Post-ticket survey, NPS tool", timeframe: "6 months post go-live" },
+  ],
+  enterpriseExpectations:
+    "A production-ready platform with 99.95% uptime, WCAG 2.1 AA compliance, and a clear migration path off our three legacy ticketing tools.",
+  definitionOfSuccess:
+    "All 450 agents migrated, legacy systems decommissioned, CSAT above 85%, and a documented runbook for ongoing operations.",
+
+  // Section 2: Project Identity & Scope
+  title: "Unified Customer Experience Platform",
+  client: "Northwind Global Services",
+  industry: "technology",
+  projectCategory: "new_build",
+  platformType: ["web", "mobile_hybrid", "api_backend"],
+  existingTechLandscape:
+    "Salesforce Service Cloud (legacy), Zendesk (APAC), custom in-house ticketing (EU). Identity via Okta. Data warehouse on Snowflake.",
+  featureModules: [
+    { moduleName: "Unified Ticket Inbox", description: "Cross-channel ticket view with AI triage", priority: "must_have" },
+    { moduleName: "SLA Dashboard", description: "Real-time SLA health by region/team", priority: "must_have" },
+    { moduleName: "Knowledge Base Search", description: "Semantic search across articles and past resolutions", priority: "should_have" },
+  ],
+  userRoles: [
+    { roleName: "Support Agent", primaryActions: "View, respond to, and resolve tickets; browse knowledge base" },
+    { roleName: "Team Lead", primaryActions: "Assign tickets, monitor SLA health, run reports" },
+    { roleName: "Admin", primaryActions: "Manage users, configure routing rules, audit logs" },
+  ],
+  businessWorkflows: [
+    { name: "Ticket Intake to Resolution", steps: "Channel capture → AI triage → Agent assignment → Resolution → Customer confirmation", outcome: "Ticket closed with CSAT captured" },
+    { name: "Escalation to Tier 2", steps: "Tier 1 flags → Lead review → Tier 2 reassignment → Resolution", outcome: "Escalated ticket resolved with SLA metadata" },
+  ],
+  estimatedScreenCount: "45",
+  criticalBusinessRules: [
+    "Tickets older than 48h must auto-escalate to team lead",
+    "PII fields must be masked in all non-agent views",
+  ],
+  outOfScope: ["Telephony / voice channel integration", "Customer-facing self-service portal"],
+  assumptions: [
+    "Client provides cleaned data extracts from legacy systems",
+    "Okta SSO is already configured and available for integration",
+  ],
+  constraints: [
+    "Must go live before the APAC peak-support season (October)",
+    "Total headcount of implementation team capped at 14",
+  ],
+  dataMigrationScope: "in_scope",
+  dataMigrationSource: "Salesforce Service Cloud, Zendesk, in-house MySQL DB",
+  dataMigrationVolume: "1M–100M rows",
+  dataMigrationApproach: "Incremental",
+  dataMigrationExtractOwnership: "Client",
+  dataMigrationValidation: "Both",
+  dataMigrationRollback: "yes",
+
+  // Section 3: Delivery Scope & Technical Architecture
+  developmentScope: ["Frontend web app", "Mobile hybrid app", "Backend services & APIs", "Admin console"],
+  uiuxDesignScope: "in_scope",
+  uiuxDesignDeliverables: ["wireframes", "high_fidelity", "design_system", "prototype"],
+  clientDesignAssets: [],
+  deploymentScope: "cloud",
+  deploymentProvider: "AWS",
+  deploymentServices: ["EC2/ECS/EKS", "RDS/Aurora", "S3", "CloudFront"],
+  deploymentContainerisation: true,
+  deploymentEnvironments: ["Dev", "Staging", "Production"],
+  onPremiseServices: [],
+  goLiveScope: "go_live_hypercare",
+  hypercareDuration: "1_month",
+  hypercareSupport: "24x5 coverage during hypercare with on-call rotation for Sev-1 incidents",
+  techStack: "React + Next.js (web), React Native (mobile), Node.js + NestJS (API), PostgreSQL, Redis, OpenSearch",
+  scalabilityRequirements: "Must support 10k concurrent agents and 200 req/sec sustained on ticket endpoints",
+  etlApproach: "custom_scripts",
+  transformationComplexity: "complex_business_logic",
+  dataValidationMethod: "Automated row-count + checksum reconciliation, plus spot-check sampling by client SME",
+  integrationPoints: [
+    { name: "Okta SSO", direction: "Inbound", protocol: "REST", authentication: "OAuth 2.0", dataFormat: "JSON", sandboxCredentials: "Client", testingResponsibility: "Both", errorHandlingSLA: "Same-day" },
+    { name: "Snowflake Analytics Export", direction: "Outbound", protocol: "REST", authentication: "API Key", dataFormat: "JSON", sandboxCredentials: "Client", testingResponsibility: "GlimmoraTeam", errorHandlingSLA: "4-hour" },
+  ],
+  ssoRequired: "required",
+  ssoProviderName: "Okta",
+  ssoProtocol: "SAML 2.0",
+  userRegistrationModel: "sso_only",
+  passwordPolicy: "custom",
+  passwordMinLength: "12",
+  passwordComplexity: "Strong",
+  passwordExpiry: "90",
+  sessionTimeout: "30",
+  lockoutAttempts: "5",
+  auditLogging: "yes",
+  auditLogEvents: ["login_logout", "data_access", "record_modifications", "configuration_changes"],
+  approvalWorkflows: "Required for role changes and bulk data exports; two-person approval for admin escalation",
+  notifications: "in_scope",
+  notificationEvents: [
+    { trigger: "Ticket assigned", channel: ["Email", "In-app"] },
+    { trigger: "SLA breach warning", channel: ["Email", "Slack"] },
+  ],
+  scheduledJobsScope: "in_scope",
+  scheduledJobItems: [
+    { jobName: "Nightly SLA rollup", frequency: "Daily 02:00 UTC", triggerCondition: "After ingest completion" },
+    { jobName: "Weekly leadership report", frequency: "Monday 07:00 local", triggerCondition: "End of business week" },
+  ],
+
+  // Section 4: Timeline, Team & Budget
+  startDate: "2026-06-01",
+  endDate: "2027-03-31",
+  phasingStrategy: "sprint_based",
+  milestones: [
+    { name: "Discovery & Architecture Sign-off", targetDate: "2026-07-15", acceptanceCriteria: "Architecture doc signed by client CTO; validated data model" },
+    { name: "MVP Release (Ticket Inbox + SLA Dashboard)", targetDate: "2026-11-30", acceptanceCriteria: "All must-have features passing UAT in staging" },
+    { name: "Global Go-Live", targetDate: "2027-03-15", acceptanceCriteria: "All regions migrated; legacy read-only; hypercare handoff complete" },
+  ],
+  clientDependencies: [
+    "Access to Okta tenant and service account within 2 weeks of kickoff",
+    "Dedicated product owner available 20 hours/week",
+    "Data extracts from legacy systems by end of Sprint 2",
+  ],
+  teamSize: "9-15",
+  workModel: "hybrid",
+  roles: [
+    { roleName: "Tech Lead", seniority: "lead" },
+    { roleName: "Backend Engineer", seniority: "senior" },
+    { roleName: "Frontend Engineer", seniority: "mid" },
+    { roleName: "QA Engineer", seniority: "senior" },
+  ],
+  skillPriorities:
+    "Deep expertise in Next.js, NestJS, AWS infrastructure, and prior experience migrating large-scale ticketing systems.",
+  knowledgeTransfer:
+    "Weekly KT sessions during hypercare, full architecture walkthrough at go-live, and recorded runbooks for client ops team.",
+
+  // Section 5: QA & Testing
+  testingTypes: ["unit_testing", "integration_testing", "uat_testing", "security_testing", "performance_testing"],
+  targetEnvironments: ["dev", "staging", "uat", "prod"],
+  testingToolsPreference: "Jest, Playwright, k6 for load testing, OWASP ZAP for security scans.",
+  testingAcceptanceCriteria:
+    "All P0/P1 bugs resolved pre-release. >85% unit test coverage. UAT sign-off from client QA lead.",
+  uatPeriod: "2 weeks prior to each major milestone; 3 weeks before global go-live.",
+  bugSeverityDefinitions: "standard_p0_p4",
+  travelRequirements: "occasional",
+  onboardingProcess: "standard_access",
+  teamLocation: "remote",
+  workingHoursTimezone: "overlap_us",
+  testDataProvisioning: "shared",
+
+  // Section 6: Budget & Risk
+  budgetMin: "850000",
+  budgetMax: "1200000",
+  currency: "USD",
+  pricingModel: "fixed_price",
+  breakdownPreference: "milestone",
+  knownRisks: [
+    "Scope expansion from additional integrations surfaced post-kickoff",
+    "Delays in client data extracts impacting migration timeline",
+  ],
+  projectConstraints:
+    "Go-live must precede APAC peak season (October). Budget fixed at approved ceiling with change-request governance.",
+  contingencyBudget: "10",
+  escalationProcess: "joint_committee",
+
+  // Section 7: QA Standards
+  codingStandards: "clean_code_solid",
+  documentationLevel: "high_technical_user",
+  testCoverageTarget: "85",
+  securityTestingRequirements: "owasp_top10",
+  codeReviewProcess:
+    "All PRs require 2 approvals including 1 senior engineer; automated lint + security scan gates must pass before merge.",
+  performanceKpis: "core_web_vitals",
+  browserDeviceSupport: ["chrome_latest", "safari_latest", "firefox_latest", "edge_latest", "ios_safari", "android_chrome"],
+  accessibilityStandard: "wcag_21_aa",
+  qaResponsibility: "shared",
+  defectManagementTool: "jira",
+  postLaunchSupportPeriod: "90_days",
+  maintenanceScope:
+    "Bug fixes, minor enhancements (up to 20 hrs/month), security patching, and monthly availability review.",
+
+  // Section 8: Governance & Compliance
+  reportingFrequency: "weekly",
+  communicationChannels: "slack_email",
+  steeringCommitteeFrequency: "bi_weekly",
+  changeManagementProcess:
+    "All scope changes routed through a joint change-control board; documented CR with impact and sign-off before execution.",
+  projectMethodology: "agile_scrum",
+  dataRetentionPolicy: "7_years",
+  complianceStandards: ["gdpr", "soc2", "iso_27001"],
+  auditFrequency: "quarterly",
+  securityAuditFrequency: "bi_annually",
+  dataPrivacyOfficer: "Priya Rao — privacy@northwindglobal.example",
+  dpaRequired: true,
+  slaUptimeCommitment: "99.95",
+
+  // Section 9: Commercial & Legal
+  paymentTerms: "net_30",
+  warrantyPeriod: "90_days",
+  invoicingSchedule: "Invoices issued at milestone completion, payable Net 30.",
+  ipOwnership: "client",
+  terminationNoticePeriod: "30_days",
+  liabilityCap: "100_percent_fees",
+  governingLaw: "delaware_usa",
+  disputeResolution: "mediation_then_arbitration",
+  nonSolicitationPeriod: "12_months",
+  insuranceRequirements: "enhanced_pi",
+  confidentialityTerms: "mutual_nda",
+  expensesPolicy: "Pre-approved travel and tooling reimbursed at cost with itemised receipts.",
+
+  // Section 10: Sign-off
+  businessOwnerApprover: "Maya Chen — VP Customer Support, Northwind Global Services",
+  finalApprover: "David Mueller — CTO, Northwind Global Services",
+  legalReviewer: "Alicia Brown — General Counsel, Northwind Global Services",
+  securityReviewer: "Jordan Patel — CISO, Northwind Global Services",
 };
 
 /* ══════════════════════════════════════════ Step transition ══════════════════════════════════════════ */
@@ -825,23 +1226,32 @@ function SOWGenerateWizardPageInner() {
   }, []);
 
   const [currentStep, setCurrentStepRaw] = React.useState(initialStep);
+  const currentStepRef = React.useRef(currentStep);
 
-  // Wrapper that accepts updater function or direct value (mirrors setState API)
-  // Pushes step changes into browser history so back/forward works
+  // Wrapper that accepts updater function or direct value (mirrors setState API).
+  // Side effects (history pushState) must live OUTSIDE the state updater — updater
+  // functions run during React's render/reconciliation phase and Next.js 16's
+  // router synchronously reacts to history changes, which would violate React's
+  // "no setState during render of another component" rule.
   const setCurrentStep: React.Dispatch<React.SetStateAction<number>> = React.useCallback(
     (action) => {
-      setCurrentStepRaw((prev) => {
-        const next = typeof action === "function" ? action(prev) : action;
-        if (next !== prev) {
-          const url = new URL(window.location.href);
-          url.searchParams.set("step", String(next));
-          window.history.pushState({ sowStep: next }, "", url.toString());
-        }
-        return next;
-      });
+      const prev = currentStepRef.current;
+      const next = typeof action === "function" ? (action as (p: number) => number)(prev) : action;
+      if (next !== prev) {
+        currentStepRef.current = next;
+        const url = new URL(window.location.href);
+        url.searchParams.set("step", String(next));
+        window.history.pushState({ sowStep: next }, "", url.toString());
+      }
+      setCurrentStepRaw(next);
     },
     [],
   );
+
+  // Keep ref in sync when step is updated via setCurrentStepRaw (popstate handler).
+  React.useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
 
   // Listen for browser back/forward to sync step state
   React.useEffect(() => {
@@ -884,14 +1294,12 @@ function SOWGenerateWizardPageInner() {
     return merged;
   });
   const [skippedSteps, setSkippedSteps] = React.useState<Set<number>>(new Set(draft.current?.skippedSteps ?? []));
-  const [generating, setGenerating] = React.useState(false);
-  const [genStage, setGenStage] = React.useState(0);
-  const [genLayer, setGenLayer] = React.useState(0);
   const [stepErrors, setStepErrors] = React.useState<StepErrors>({});
   const [touchedFields, setTouchedFields] = React.useState<Set<string>>(new Set());
   const [cameFromReview, setCameFromReview] = React.useState(false);
   const [generationComplete, setGenerationComplete] = React.useState(false);
   const [generatedSowId, setGeneratedSowId] = React.useState<string | null>(null);
+  const [generatedReviewData, setGeneratedReviewData] = React.useState<SOWReviewData | null>(null);
 
   // ── API integration (wizard session + step mutations) ──
   const [wizardId, setWizardId] = React.useState<string | null>(() => {
@@ -987,24 +1395,20 @@ function SOWGenerateWizardPageInner() {
   }, [formData, currentStep, skippedSteps]);
 
   const updateField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
-    setFormData((prev) => {
-      const next = { ...prev, [key]: value };
-      // Re-validate ALL touched fields so remaining errors stay visible
-      if (touchedFields.size > 0) {
-        const allErrors = validateStep(currentStep, next);
-        setStepErrors(() => {
-          // Only show errors for fields that have been touched
-          const filtered: StepErrors = {};
-          for (const [field, msg] of Object.entries(allErrors)) {
-            if (touchedFields.has(field)) {
-              filtered[field] = msg;
-            }
-          }
-          return filtered;
-        });
+    // Compute next state outside the setter so we can also update errors
+    // without calling setStepErrors inside setFormData's updater (React violation).
+    const next = { ...formData, [key]: value };
+    setFormData(next);
+    // Re-validate touched fields with the new value so error messages
+    // appear immediately after the user types or selects.
+    if (touchedFields.size > 0) {
+      const allErrors = validateStep(currentStep, next);
+      const filtered: StepErrors = {};
+      for (const [field, msg] of Object.entries(allErrors)) {
+        if (touchedFields.has(field)) filtered[field] = msg;
       }
-      return next;
-    });
+      setStepErrors(filtered);
+    }
   };
 
   const blurField = (field: string) => {
@@ -1024,34 +1428,30 @@ function SOWGenerateWizardPageInner() {
     setFormData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }));
   };
   const removeListItem = (key: keyof FormData, idx: number) => {
-    setFormData((prev) => {
-      const next = { ...prev, [key]: (prev[key] as string[]).filter((_: string, i: number) => i !== idx) };
-      if (touchedFields.has(key as string)) {
-        const err = validateField(currentStep, key as string, next);
-        setStepErrors((prev) => {
-          const updated = { ...prev };
-          if (err) updated[key as string] = err;
-          else delete updated[key as string];
-          return updated;
-        });
-      }
-      return next;
-    });
+    const next = { ...formData, [key]: (formData[key] as string[]).filter((_: string, i: number) => i !== idx) };
+    setFormData(next);
+    if (touchedFields.has(key as string)) {
+      const err = validateField(currentStep, key as string, next);
+      setStepErrors((prev) => {
+        const updated = { ...prev };
+        if (err) updated[key as string] = err;
+        else delete updated[key as string];
+        return updated;
+      });
+    }
   };
   const updateListItem = (key: keyof FormData, idx: number, value: string) => {
-    setFormData((prev) => {
-      const next = { ...prev, [key]: (prev[key] as string[]).map((item: string, i: number) => (i === idx ? value : item)) };
-      if (touchedFields.has(key as string)) {
-        const err = validateField(currentStep, key as string, next);
-        setStepErrors((prev) => {
-          const updated = { ...prev };
-          if (err) updated[key as string] = err;
-          else delete updated[key as string];
-          return updated;
-        });
-      }
-      return next;
-    });
+    const next = { ...formData, [key]: (formData[key] as string[]).map((item: string, i: number) => (i === idx ? value : item)) };
+    setFormData(next);
+    if (touchedFields.has(key as string)) {
+      const err = validateField(currentStep, key as string, next);
+      setStepErrors((prev) => {
+        const updated = { ...prev };
+        if (err) updated[key as string] = err;
+        else delete updated[key as string];
+        return updated;
+      });
+    }
   };
 
   /* ── Confidence calculation ── */
@@ -1227,7 +1627,9 @@ function SOWGenerateWizardPageInner() {
     }
   };
 
-  /* ── Generate handler with validation + API ── */
+  /* ── Generate handler with validation + API ──
+     Hands off to SOWAIDraftReviewPage, which shows the shared manual-sow
+     "GENERATING MODAL" on mount while the API call completes in the background. */
   const handleGenerate = () => {
     if (formData.businessOwnerApprover.trim().length === 0) {
       setStepErrors({ businessOwnerApprover: "Business owner approver is required" });
@@ -1237,49 +1639,26 @@ function SOWGenerateWizardPageInner() {
     }
 
     setApiError("");
-    setGenerating(true);
-    setGenStage(0);
-    setGenLayer(0);
 
-    // Fire the API generation call in parallel with the animation
     if (wizardId) {
       generateMutation.mutate(
         formData as unknown as Record<string, unknown>,
         {
           onSuccess: (data) => {
-            const id = (data as any)?.data?.sow_id ?? (data as any)?.data?._id ?? (data as any)?.sow_id ?? null;
-            if (id) setGeneratedSowId(id);
+            const inner = (data as any)?.data ?? data;
+            const id =
+              inner?.sow_id ?? inner?._id ?? inner?.id ??
+              (data as any)?.sow_id ?? (data as any)?._id ?? (data as any)?.id ?? null;
+            if (id) setGeneratedSowId(String(id));
+            const mapped = mapGenerateResponseToReviewData(data);
+            if (mapped) setGeneratedReviewData(mapped);
           },
           onError: (err) => setApiError(friendlyApiError(err)),
         },
       );
     }
 
-    let layer = 0;
-    let stage = 0;
-    // Cycle hallucination layers (8 layers, ~900ms each)
-    const layerInterval = setInterval(() => {
-      layer++;
-      if (layer >= HALLUCINATION_LAYERS.length) {
-        clearInterval(layerInterval);
-      } else {
-        setGenLayer(layer);
-      }
-    }, 900);
-    // Cycle generation stages (6 stages, ~1200ms each)
-    const stageInterval = setInterval(() => {
-      stage++;
-      if (stage >= GENERATION_STAGES.length) {
-        clearInterval(stageInterval);
-        clearInterval(layerInterval);
-        setTimeout(() => {
-          setGenerating(false);
-          setGenerationComplete(true);
-        }, 800);
-      } else {
-        setGenStage(stage);
-      }
-    }, 1200);
+    setGenerationComplete(true);
   };
 
   /* ── Next handler with validation + API save ── */
@@ -1350,7 +1729,27 @@ function SOWGenerateWizardPageInner() {
 
 
   if (generationComplete) {
-    return <SOWAIDraftReviewPage sowId={generatedSowId} flow="ai" />;
+    return (
+      <SOWAIDraftReviewPage
+        sowId={generatedSowId}
+        flow="ai"
+        reviewData={generatedReviewData ?? undefined}
+        detailsOverride={wizardFormDataToDetails(formData as unknown as Record<string, any>)}
+        onBack={() => {
+          // Return to the wizard form. Keep generatedSowId/reviewData so the
+          // user can regenerate without losing prior API results until they
+          // explicitly click "Generate SOW with AI" again.
+          setGenerationComplete(false);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        onRejectRegenerate={() => {
+          // Discard the generated draft and restart the wizard from step 0.
+          setGenerationComplete(false);
+          setCurrentStep(0);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+      />
+    );
   }
 
   return (
@@ -1386,13 +1785,39 @@ function SOWGenerateWizardPageInner() {
               Walk through 10 structured steps — our AI crafts a verified Statement of Work from your parameters.
             </p>
           </div>
-          <div className="shrink-0 rounded-lg" style={{
-            padding: '6px 14px',
-            background: 'rgba(166,119,99,0.06)',
-            border: '1px solid rgba(166,119,99,0.12)',
-            fontSize: 12, fontWeight: 600, color: '#A67763',
-          }}>
-            Step {currentStep + 1} of {STEPS.length}
+          <div className="shrink-0 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setFormData(DUMMY_FORM_DATA);
+                setStepErrors({});
+                setTouchedFields(new Set());
+                setApiError("");
+              }}
+              title="Populate every field with realistic sample values (dev helper)"
+              className="inline-flex items-center gap-1.5 rounded-lg transition-all duration-200"
+              style={{
+                padding: '6px 12px',
+                fontSize: 11, fontWeight: 600,
+                color: '#86713D',
+                background: 'rgba(208,176,96,0.08)',
+                border: '1px dashed rgba(208,176,96,0.35)',
+                cursor: 'pointer',
+                letterSpacing: '0.02em',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(208,176,96,0.14)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(208,176,96,0.08)'; }}
+            >
+              <Sparkles style={{ width: 12, height: 12 }} /> Fill Dummy Data
+            </button>
+            <div className="rounded-lg" style={{
+              padding: '6px 14px',
+              background: 'rgba(166,119,99,0.06)',
+              border: '1px solid rgba(166,119,99,0.12)',
+              fontSize: 12, fontWeight: 600, color: '#A67763',
+            }}>
+              Step {currentStep + 1} of {STEPS.length}
+            </div>
           </div>
         </div>
       </motion.div>
@@ -1754,163 +2179,6 @@ function SOWGenerateWizardPageInner() {
           </div>
         </div>
       </motion.div>
-
-      {/* ═══════════════════════════════════
-          GENERATION OVERLAY — AI Drafting Popup
-          ═══════════════════════════════════ */}
-      <AnimatePresence>
-        {generating && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center"
-            style={{ background: 'rgba(33,23,19,0.35)', backdropFilter: 'blur(10px)' }}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: 30 }}
-              transition={{ type: "spring", stiffness: 350, damping: 28 }}
-              className="rounded-2xl"
-              style={{
-                background: '#FEFEFE',
-                boxShadow: '0 40px 100px rgba(33,23,19,0.12), 0 8px 32px rgba(33,23,19,0.08), 0 0 0 1px var(--border-soft)',
-                padding: '48px 56px 44px',
-                width: 520,
-                maxWidth: '92vw',
-              }}
-            >
-              <div className="flex flex-col items-center" style={{ gap: 28 }}>
-
-                {/* Animated ring + sparkle icon */}
-                <div style={{ position: 'relative', width: 140, height: 140 }}>
-                  {/* Outer rotating ring */}
-                  <svg viewBox="0 0 140 140" style={{ position: 'absolute', inset: 0, width: 140, height: 140 }}>
-                    <defs>
-                      <linearGradient id="gen-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#A67763" />
-                        <stop offset="50%" stopColor="#C4956E" />
-                        <stop offset="100%" stopColor="transparent" />
-                      </linearGradient>
-                    </defs>
-                    <circle cx="70" cy="70" r="64" fill="none" stroke="var(--border-soft)" strokeWidth="2" />
-                    <motion.circle
-                      cx="70" cy="70" r="64" fill="none"
-                      stroke="url(#gen-ring-grad)" strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeDasharray="200 400"
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
-                      style={{ transformOrigin: "70px 70px" }}
-                    />
-                  </svg>
-                  {/* Inner glow circle */}
-                  <div className="flex items-center justify-center" style={{
-                    position: 'absolute',
-                    top: 20, left: 20, width: 100, height: 100,
-                    borderRadius: '50%',
-                    background: 'rgba(166,119,99,0.06)',
-                    border: '1px solid rgba(166,119,99,0.15)',
-                  }}>
-                    <motion.div
-                      animate={{ scale: [1, 1.1, 1] }}
-                      transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                    >
-                      <Sparkles style={{ width: 32, height: 32, color: '#A67763' }} />
-                    </motion.div>
-                  </div>
-                </div>
-
-                {/* Title */}
-                <div style={{ textAlign: 'center' }}>
-                  <h2 style={{
-                    fontSize: 20, fontWeight: 700, letterSpacing: '0.04em',
-                    color: 'var(--ink)',
-                    fontFamily: 'var(--font-heading)',
-                    marginBottom: 8,
-                    textTransform: 'uppercase',
-                  }}>
-                    AI Drafting Engine Active
-                  </h2>
-                  <p style={{
-                    fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.7,
-                    maxWidth: 360, margin: '0 auto',
-                  }}>
-                    Our AI is processing your inputs through {HALLUCINATION_LAYERS.length} hallucination prevention layers to generate a production-ready Statement of Work.
-                  </p>
-                </div>
-
-                {/* Hallucination layer progress bar */}
-                <div style={{ width: '100%', maxWidth: 360 }}>
-                  <div className="rounded-full" style={{
-                    width: '100%', height: 5,
-                    background: 'var(--color-beige-200)',
-                    overflow: 'hidden',
-                  }}>
-                    <motion.div
-                      style={{
-                        height: '100%', borderRadius: 4,
-                        background: 'linear-gradient(90deg, #A67763, #C4956E)',
-                      }}
-                      animate={{ width: `${((genLayer + 1) / HALLUCINATION_LAYERS.length) * 100}%` }}
-                      transition={{ duration: 0.6, ease: "easeOut" }}
-                    />
-                  </div>
-                  <div style={{ textAlign: 'center', marginTop: 10 }}>
-                    <span style={{
-                      fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
-                      color: '#A67763', textTransform: 'uppercase',
-                    }}>
-                      Layer {genLayer + 1}/{HALLUCINATION_LAYERS.length}: Active
-                    </span>
-                    <div style={{
-                      fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
-                      color: 'var(--ink-mid)', marginTop: 3,
-                      textTransform: 'uppercase',
-                    }}>
-                      {HALLUCINATION_LAYERS[genLayer]}
-                      {genLayer < 3 ? " & Clause Alignment" : genLayer < 6 ? " & Validation" : " & Finalisation"}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Generation stages — horizontal bars */}
-                <div className="flex items-center gap-2" style={{ width: '100%', maxWidth: 360 }}>
-                  {GENERATION_STAGES.map((stage, idx) => {
-                    const done = idx < genStage;
-                    const active = idx === genStage;
-                    return (
-                      <div key={idx} style={{ flex: 1 }} title={stage}>
-                        <div className="rounded-full" style={{
-                          height: 5,
-                          background: 'var(--color-beige-200)',
-                          overflow: 'hidden',
-                        }}>
-                          <motion.div
-                            style={{
-                              height: '100%', borderRadius: 4,
-                              background: done
-                                ? 'linear-gradient(90deg, #A67763, #C4956E)'
-                                : active
-                                  ? 'linear-gradient(90deg, rgba(166,119,99,0.5), rgba(196,149,110,0.5))'
-                                  : 'transparent',
-                            }}
-                            animate={{ width: done ? '100%' : active ? '60%' : '0%' }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
 
     </motion.div>
   );
@@ -2561,23 +2829,62 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
           </div>
           <div>
             <FieldLabel>Data Volume</FieldLabel>
-            <Input placeholder="e.g., 2TB, 50M records" value={formData.dataMigrationVolume} onChange={(e) => updateField("dataMigrationVolume", e.target.value)} />
+            <Select value={formData.dataMigrationVolume} onValueChange={(v) => updateField("dataMigrationVolume", v)}>
+              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="< 10K rows">&lt; 10K rows</SelectItem>
+                <SelectItem value="10K–1M rows">10K–1M rows</SelectItem>
+                <SelectItem value="1M–100M rows">1M–100M rows</SelectItem>
+                <SelectItem value="> 100M rows">&gt; 100M rows</SelectItem>
+                <SelectItem value="Volume in GB">Volume in GB</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <FieldLabel>Migration Approach</FieldLabel>
-            <Input placeholder="e.g., Big-bang, phased" value={formData.dataMigrationApproach} onChange={(e) => updateField("dataMigrationApproach", e.target.value)} />
+            <Select value={formData.dataMigrationApproach} onValueChange={(v) => updateField("dataMigrationApproach", v)}>
+              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="One-time cutover">One-time cutover</SelectItem>
+                <SelectItem value="Incremental">Incremental</SelectItem>
+                <SelectItem value="Ongoing sync">Ongoing sync</SelectItem>
+                <SelectItem value="Delta">Delta</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <FieldLabel>Extract Ownership</FieldLabel>
-            <Input placeholder="e.g., Client / GlimmoraTeam" value={formData.dataMigrationExtractOwnership} onChange={(e) => updateField("dataMigrationExtractOwnership", e.target.value)} />
+            <Select value={formData.dataMigrationExtractOwnership} onValueChange={(v) => updateField("dataMigrationExtractOwnership", v)}>
+              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Client">Client</SelectItem>
+                <SelectItem value="GlimmoraTeam">GlimmoraTeam</SelectItem>
+                <SelectItem value="Both">Both</SelectItem>
+                <SelectItem value="Third-party">Third-party</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <FieldLabel>Validation Responsibility</FieldLabel>
-            <Input placeholder="e.g., Joint validation" value={formData.dataMigrationValidation} onChange={(e) => updateField("dataMigrationValidation", e.target.value)} />
+            <Select value={formData.dataMigrationValidation} onValueChange={(v) => updateField("dataMigrationValidation", v)}>
+              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Client">Client</SelectItem>
+                <SelectItem value="GlimmoraTeam">GlimmoraTeam</SelectItem>
+                <SelectItem value="Both">Both</SelectItem>
+                <SelectItem value="Third-party">Third-party</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <FieldLabel>Rollback Plan</FieldLabel>
-            <Input placeholder="e.g., Full rollback capability" value={formData.dataMigrationRollback} onChange={(e) => updateField("dataMigrationRollback", e.target.value)} />
+            <Select value={formData.dataMigrationRollback} onValueChange={(v) => updateField("dataMigrationRollback", v)}>
+              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="yes">Yes</SelectItem>
+                <SelectItem value="no">No</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       )}
@@ -3103,9 +3410,9 @@ function Step3IntegrationsUserMgmt({ formData, updateField, errors = {}, blurFie
                   <Select value={intg.direction} onValueChange={(v) => updateIntegration(idx, "direction", v)}>
                     <SelectTrigger><SelectValue placeholder="Select direction" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="inbound">Inbound</SelectItem>
-                      <SelectItem value="outbound">Outbound</SelectItem>
-                      <SelectItem value="bidirectional">Bidirectional</SelectItem>
+                      <SelectItem value="Inbound">Inbound</SelectItem>
+                      <SelectItem value="Outbound">Outbound</SelectItem>
+                      <SelectItem value="Bidirectional">Bidirectional</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -3165,9 +3472,10 @@ function Step3IntegrationsUserMgmt({ formData, updateField, errors = {}, blurFie
                   <Select value={intg.testingResponsibility} onValueChange={(v) => updateIntegration(idx, "testingResponsibility", v)}>
                     <SelectTrigger><SelectValue placeholder="Select responsibility" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Joint">Joint</SelectItem>
                       <SelectItem value="Client">Client</SelectItem>
-                      <SelectItem value="Vendor">Vendor</SelectItem>
+                      <SelectItem value="GlimmoraTeam">GlimmoraTeam</SelectItem>
+                      <SelectItem value="Both">Both</SelectItem>
+                      <SelectItem value="Third-party">Third-party</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -3177,9 +3485,9 @@ function Step3IntegrationsUserMgmt({ formData, updateField, errors = {}, blurFie
                     <SelectTrigger><SelectValue placeholder="Select SLA" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Same-day">Same-day</SelectItem>
-                      <SelectItem value="Next business day">Next business day</SelectItem>
-                      <SelectItem value="48 hours">48 hours</SelectItem>
-                      <SelectItem value="72 hours">72 hours</SelectItem>
+                      <SelectItem value="4-hour">4-hour</SelectItem>
+                      <SelectItem value="1-hour">1-hour</SelectItem>
+                      <SelectItem value="Custom">Custom</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

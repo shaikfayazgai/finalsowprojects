@@ -8,29 +8,8 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils/cn";
-import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
+import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { mockContributorProfile } from "@/mocks/data/contributor";
-
-/* ═══ Badge ═══ */
-
-const badgeStyles: Record<string, { bg: string; text: string; dot: string }> = {
-  forest: { bg: "bg-forest-50", text: "text-forest-700", dot: "bg-forest-500" },
-  teal: { bg: "bg-teal-50", text: "text-teal-700", dot: "bg-teal-500" },
-  gold: { bg: "bg-gold-50", text: "text-gold-700", dot: "bg-gold-500" },
-  brown: { bg: "bg-brown-50", text: "text-brown-700", dot: "bg-brown-500" },
-  beige: { bg: "bg-gray-100", text: "text-gray-600", dot: "bg-gray-400" },
-  danger: { bg: "bg-red-50", text: "text-red-600", dot: "bg-red-500" },
-};
-
-function Badge({ variant, dot, children }: { variant: string; dot?: boolean; children: React.ReactNode }) {
-  const s = badgeStyles[variant] || badgeStyles.beige;
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 text-[9px] font-medium tracking-wide uppercase px-2.5 py-0.5 rounded-full", s.bg, s.text)}>
-      {dot && <span className={cn("w-1.5 h-1.5 rounded-full", s.dot)} />}
-      {children}
-    </span>
-  );
-}
 
 /* ═══ Toggle ═══ */
 
@@ -174,7 +153,7 @@ export default function SettingsPage() {
           <div
             className="flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-black/[0.02] transition-colors"
             style={{ borderBottom: "1px solid var(--border-hair)" }}
-            onClick={() => { setEditField("Language"); setEditValue("English (US)"); }}
+            onClick={() => { setEditField("Language"); setEditValue(profile.language || ""); }}
           >
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center">
@@ -182,7 +161,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <span className="text-[11px] text-gray-400 block">Language</span>
-                <span className="text-[13px] font-medium text-gray-800">English (US)</span>
+                <span className="text-[13px] font-medium text-gray-800">{profile.language || "Not set"}</span>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-300" />
@@ -197,7 +176,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <span className="text-[11px] text-gray-400 block">Timezone</span>
-                <span className="text-[13px] font-medium text-gray-800">{profile.timezone}</span>
+                <span className="text-[13px] font-medium text-gray-800">{profile.timezone || "Not set"}</span>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-300" />
@@ -218,11 +197,11 @@ export default function SettingsPage() {
             <div className="flex-1">
               <span className="text-[12px] text-gray-400 block mb-1">No notifications between</span>
               <div className="flex items-center gap-2">
-                <span className="text-[14px] font-mono font-semibold text-gray-800 bg-gray-50 px-3 py-1.5 rounded-lg">22:00</span>
+                <span className="text-[14px] font-mono font-semibold text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg">--:--</span>
                 <span className="text-[12px] text-gray-400">to</span>
-                <span className="text-[14px] font-mono font-semibold text-gray-800 bg-gray-50 px-3 py-1.5 rounded-lg">07:00</span>
-                <Badge variant="teal">IST</Badge>
+                <span className="text-[14px] font-mono font-semibold text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg">--:--</span>
               </div>
+              <span className="text-[11px] text-gray-400 mt-2 block">Quiet hours not configured</span>
             </div>
           </div>
         </div>

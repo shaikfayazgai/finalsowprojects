@@ -13,6 +13,8 @@ export const sowKeys = {
   reviewSummary: (id: string) => [...sowKeys.all, "review", id] as const,
   sows: () => [...sowKeys.all, "sows"] as const,
   sow: (id: string) => [...sowKeys.all, "sow", id] as const,
+  hallucinationAnalysis: (id: string) => [...sowKeys.all, "sow", id, "hallucination"] as const,
+  riskAssessment: (id: string) => [...sowKeys.all, "sow", id, "risk"] as const,
 };
 
 // ── Create wizard ─────────────────────────────────────────────────────────
@@ -121,6 +123,44 @@ export function useSow(sowId: string | null) {
   return useQuery({
     queryKey: sowKeys.sow(sowId ?? ""),
     queryFn: () => sowApi.getSow(sowId!),
+    enabled: !!sowId,
+  });
+}
+
+// ── Delete AI SOW (reject_regenerate action) ──────────────────────────────
+
+export function useDeleteAiSOW() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sowId, changeNotes }: { sowId: string; changeNotes?: string | null }) =>
+      sowApi.sowAction(sowId, { action: "reject_regenerate", change_notes: changeNotes ?? null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: sowKeys.sows() });
+      qc.invalidateQueries({ queryKey: sowKeys.all });
+    },
+    onError: (err: unknown) => {
+      console.error("[DeleteAiSOW]", err instanceof Error ? err.message : err);
+    },
+  });
+}
+
+// ── Hallucination Analysis ────────────────────────────────────────────────
+
+export function useHallucinationAnalysis(sowId: string | null) {
+  return useQuery({
+    queryKey: sowKeys.hallucinationAnalysis(sowId ?? ""),
+    queryFn: () => sowApi.getHallucinationAnalysis(sowId!),
+    enabled: !!sowId,
+  });
+}
+
+// ── Risk Assessment ───────────────────────────────────────────────────────
+
+export function useRiskAssessment(sowId: string | null) {
+  return useQuery({
+    queryKey: sowKeys.riskAssessment(sowId ?? ""),
+    queryFn: () => sowApi.getRiskAssessment(sowId!),
     enabled: !!sowId,
   });
 }

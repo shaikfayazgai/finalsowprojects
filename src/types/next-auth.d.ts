@@ -21,6 +21,8 @@ declare module "next-auth" {
       provider?: string;
       /** Glimmora API access token — attach as Bearer for authenticated API calls */
       accessToken?: string;
+      /** True when the SSO user has no Glimmora account yet — send to onboarding */
+      isNewSsoUser?: boolean;
     };
   }
 }
@@ -35,5 +37,7 @@ declare module "next-auth/jwt" {
     glimmoraRefreshToken?: string;
     /** Unix timestamp (seconds) when the access token expires */
     glimmoraExpiresAt?: number;
+    /** True when the SSO user authenticated but has no Glimmora account yet */
+    isNewSsoUser?: boolean;
   }
 }
