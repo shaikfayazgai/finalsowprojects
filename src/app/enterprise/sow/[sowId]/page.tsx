@@ -1799,6 +1799,13 @@ export default function SOWDetailPage() {
                 const stageName = activeMeta?.name ?? `Stage ${activeApprovalIdx + 1}`;
                 const noteText = requestChangesNote || PRE_FILLED_NOTES[activeApprovalIdx] || "Please review and address the feedback.";
 
+                // Send to decide API with decision: request_changes
+                recordDecision.mutate({
+                  stage: activeApprovalIdx + 1,
+                  decision: "request_changes",
+                  comments: `[${requestSection}] ${noteText}`,
+                });
+
                 // Push into global notification bell
                 pushNotification({
                   title: `Changes Requested — ${stageName}`,
@@ -2223,13 +2230,15 @@ export default function SOWDetailPage() {
                           Request Changes
                         </button>
                       )}
-                      <button
-                        onClick={() => { setShowComment(v => !v); setShowRequestChanges(false); }}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold border border-beige-200 text-brown-700 bg-beige-50 hover:bg-beige-100 transition-all"
-                      >
-                        <MessageSquareDiff className="w-4 h-4" />
-                        Comment
-                      </button>
+                      {activeApprovalIdx !== 1 && (
+                        <button
+                          onClick={() => { setShowComment(v => !v); setShowRequestChanges(false); }}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold border border-beige-200 text-brown-700 bg-beige-50 hover:bg-beige-100 transition-all"
+                        >
+                          <MessageSquareDiff className="w-4 h-4" />
+                          Comment
+                        </button>
+                      )}
                     </div>
                   )}
 

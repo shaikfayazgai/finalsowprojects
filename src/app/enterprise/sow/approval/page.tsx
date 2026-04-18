@@ -31,6 +31,20 @@ interface PipelineStageConfig {
   bgColor: string;
 }
 
+interface ApiStageDecision {
+  decision?: string;
+  comments?: string;
+  message?: string;
+  text?: string;
+  decided_at?: string;
+  created_at?: string;
+  decided_by?: string | { name?: string; email?: string };
+  reviewer?: string;
+  resolved?: boolean;
+  resolved_at?: string;
+  resolve_message?: string;
+}
+
 interface ApiStage {
   stage: number;
   stage_name?: string;
@@ -39,6 +53,21 @@ interface ApiStage {
   reviewed_at?: string;
   comments?: string;
   decision?: string;
+  decisions?: ApiStageDecision[];
+}
+
+export interface ChangeRequestRow {
+  id: string;
+  sowId: string;
+  sowTitle: string;
+  client: string;
+  requestedBy: string;
+  message: string;
+  resolveMessage?: string;
+  resolved: boolean;
+  resolvedAt?: string;
+  stage: number;
+  kind: "comment" | "request_changes";
 }
 
 interface NormalisedSOW {
@@ -208,9 +237,10 @@ function PipelineDots({ currentStage, completedStages, stageColor }: {
 
 // ── SOW pipeline row ──────────────────────────────────────────────────────
 
-function SOWPipelineRow({ sow, onStageResolved }: {
+function SOWPipelineRow({ sow, onStageResolved, onDecisionsResolved }: {
   sow: NormalisedSOW;
   onStageResolved?: (sowId: string, activeStage: number) => void;
+  onDecisionsResolved?: (sowId: string, rows: ChangeRequestRow[]) => void;
 }) {
   const { data: pipelineRes, isLoading: pipelineLoading } = useApprovalStages(sow.id);
   // Keep hook instantiated so we don't break rules of hooks, even though we no longer render decision panels here
@@ -221,10 +251,45 @@ function SOWPipelineRow({ sow, onStageResolved }: {
   const completedStages = computeCompleted(apiStages);
   const stageCfg = PIPELINE_STAGES[currentStage - 1] ?? PIPELINE_STAGES[0];
 
+  // Extract comment + request_changes decisions for the Change Request History table
+  const decisionRows = React.useMemo<ChangeRequestRow[]>(() => {
+    const rows: ChangeRequestRow[] = [];
+    apiStages.forEach((s) => {
+      const ds = s.decisions ?? [];
+      ds.forEach((d, i) => {
+        const decisionType = String(d.decision ?? "").toLowerCase();
+        if (decisionType !== "comment" && decisionType !== "request_changes") return;
+        const requestedBy = typeof d.decided_by === "string"
+          ? d.decided_by
+          : String((d.decided_by as { name?: string; email?: string })?.name ?? (d.decided_by as { name?: string; email?: string })?.email ?? d.reviewer ?? "Enterprise Admin");
+        rows.push({
+          id: `${sow.id}-${s.stage}-${i}`,
+          sowId: sow.id,
+          sowTitle: sow.title,
+          client: sow.client,
+          requestedBy,
+          message: String(d.comments ?? d.message ?? d.text ?? ""),
+          resolveMessage: d.resolve_message,
+          resolved: !!d.resolved || !!d.resolved_at,
+          resolvedAt: d.resolved_at ?? d.decided_at ?? d.created_at,
+          stage: s.stage,
+          kind: decisionType as "comment" | "request_changes",
+        });
+      });
+    });
+    return rows;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipelineRes]);
+
   React.useEffect(() => {
     if (!pipelineLoading) onStageResolved?.(sow.id, currentStage);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pipelineLoading, currentStage, sow.id]);
+
+  React.useEffect(() => {
+    if (!pipelineLoading) onDecisionsResolved?.(sow.id, decisionRows);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipelineLoading, decisionRows, sow.id]);
 
   // Initials for approver avatar
   const initials = "EA";
@@ -326,6 +391,24 @@ export default function SOWApprovalPipelinePage() {
     }
     return counts;
   }, [sowStageMap]);
+
+  // Aggregate change-request decisions (comment + request_changes) from all pipelines
+  const [decisionsMap, setDecisionsMap] = React.useState<Record<string, ChangeRequestRow[]>>({});
+  const handleRowDecisions = React.useCallback((sowId: string, rows: ChangeRequestRow[]) => {
+    setDecisionsMap((prev) => {
+      const prevJson = JSON.stringify(prev[sowId] ?? []);
+      const nextJson = JSON.stringify(rows);
+      if (prevJson === nextJson) return prev;
+      return { ...prev, [sowId]: rows };
+    });
+  }, []);
+  const allDecisionRows = React.useMemo<ChangeRequestRow[]>(() => {
+    return Object.values(decisionsMap).flat().sort((a, b) => {
+      const ta = a.resolvedAt ? new Date(a.resolvedAt).getTime() : 0;
+      const tb = b.resolvedAt ? new Date(b.resolvedAt).getTime() : 0;
+      return tb - ta;
+    });
+  }, [decisionsMap]);
 
   const { data: manualRes, isLoading: manualLoading } = useManualSOWList();
   const { data: aiRes,     isLoading: aiLoading }     = useSowList();
@@ -660,7 +743,7 @@ export default function SOWApprovalPipelinePage() {
           </div>
         ) : (
           paginated.map((sow) => (
-            <SOWPipelineRow key={sow.id} sow={sow} onStageResolved={handleRowStage} />
+            <SOWPipelineRow key={sow.id} sow={sow} onStageResolved={handleRowStage} onDecisionsResolved={handleRowDecisions} />
           ))
         )}
 
@@ -679,8 +762,9 @@ export default function SOWApprovalPipelinePage() {
 
       {/* ── Change Request History ── */}
       <motion.div variants={fadeUp} className="rounded-2xl overflow-hidden" style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}>
-        <div className="px-5 py-3.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+        <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-hair)" }}>
           <span className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>Change Request History</span>
+          <span className="text-[11px]" style={{ color: "var(--ink-faint)" }}>{allDecisionRows.length} total</span>
         </div>
 
         {/* Column headers */}
@@ -692,16 +776,57 @@ export default function SOWApprovalPipelinePage() {
             borderBottom: "1px solid var(--border-hair)",
           }}
         >
-          {["SOW TITLE", "CLIENT", "REQUESTED BY", "RESOLVE MESSAGE", "RESOLVED"].map((h) => (
+          {["SOW TITLE", "CLIENT", "REQUESTED BY", "MESSAGE", "STATUS"].map((h) => (
             <span key={h} className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--ink-faint)" }}>{h}</span>
           ))}
         </div>
 
-        {/* Empty state */}
-        <div className="flex flex-col items-center justify-center py-12 gap-2">
-          <Clock size={22} style={{ color: "var(--ink-faint)", opacity: 0.35 }} />
-          <p className="text-[12.5px]" style={{ color: "var(--ink-faint)" }}>No resolved change requests yet.</p>
-        </div>
+        {allDecisionRows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-2">
+            <Clock size={22} style={{ color: "var(--ink-faint)", opacity: 0.35 }} />
+            <p className="text-[12.5px]" style={{ color: "var(--ink-faint)" }}>No change requests yet.</p>
+          </div>
+        ) : (
+          allDecisionRows.map((row, i) => (
+            <div
+              key={row.id}
+              className="grid items-start gap-4 px-5 py-3.5 transition-colors hover:bg-amber-50/20"
+              style={{
+                gridTemplateColumns: "2fr 1fr 1fr 2fr 0.7fr",
+                borderBottom: i < allDecisionRows.length - 1 ? "1px solid var(--border-hair)" : undefined,
+              }}
+            >
+              <div className="min-w-0">
+                <Link href={`/enterprise/sow/${row.sowId}`} className="text-[11.5px] font-semibold leading-snug hover:underline" style={{ color: "var(--ink)" }}>
+                  {row.sowTitle}
+                </Link>
+                <p className="text-[10px] font-medium mt-0.5" style={{ color: "var(--ink-faint)" }}>
+                  Stage {row.stage} · {row.kind === "comment" ? "Comment" : "Change Request"}
+                </p>
+              </div>
+              <div className="min-w-0 pt-0.5">
+                <p className="text-[11.5px] leading-snug" style={{ color: "var(--ink-muted)" }}>{row.client || "—"}</p>
+              </div>
+              <div className="min-w-0 pt-0.5">
+                <p className="text-[11.5px] leading-snug" style={{ color: "var(--ink-muted)" }}>{row.requestedBy}</p>
+                {row.resolvedAt && (
+                  <p className="text-[10px] mt-0.5" style={{ color: "var(--ink-faint)" }}>{formatDate(row.resolvedAt)}</p>
+                )}
+              </div>
+              <div className="min-w-0 pt-0.5">
+                <p className="text-[11.5px] leading-snug" style={{ color: "var(--ink-muted)" }}>{row.message || "—"}</p>
+                {row.resolveMessage && (
+                  <p className="text-[10.5px] italic mt-1" style={{ color: "var(--ink-faint)" }}>Resolved: {row.resolveMessage}</p>
+                )}
+              </div>
+              <div className="pt-0.5">
+                <Badge variant={row.resolved ? "forest" : row.kind === "request_changes" ? "gold" : "teal"} size="sm" dot>
+                  {row.resolved ? "Resolved" : row.kind === "request_changes" ? "Pending" : "Open"}
+                </Badge>
+              </div>
+            </div>
+          ))
+        )}
       </motion.div>
 
     </motion.div>
