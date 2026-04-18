@@ -424,6 +424,39 @@ export default function SOWDetailPage() {
     }));
   }, [apiSowData, sowId]);
   const sections = apiSections ?? (sow ? mockSOWSections.filter((s) => s.sowId === sow.id) : []);
+
+  // Derive approval stages from GET /api/v1/approvals/{sow_id} when available,
+  // so the stepper always reflects the real pipeline state.
+  const pipelineResolvedStages = React.useMemo(() => {
+    const pRaw = (pipelineApiData as any)?.data;
+    const pArr: Record<string, unknown>[] = Array.isArray(pRaw)
+      ? pRaw
+      : Array.isArray((pRaw as any)?.stages)
+      ? (pRaw as any).stages
+      : Array.isArray((pRaw as any)?.approval_stages)
+      ? (pRaw as any).approval_stages
+      : [];
+    if (pArr.length === 0) return null;
+    const stageKeyMap: Record<number, string> = { 1: "business", 2: "glimmora_commercial", 3: "legal", 4: "security", 5: "final" };
+    return [1, 2, 3, 4, 5].map((num) => {
+      const apiSt = pArr.find((s) => Number(s.stage ?? s.stage_number) === num);
+      const rawStatus = String(apiSt?.status ?? "pending").toLowerCase();
+      const status: import("@/types/enterprise").ApprovalStatus =
+        rawStatus === "approved" ? "approved" :
+        rawStatus === "rejected" || rawStatus === "changes_requested" ? "changes_requested" :
+        rawStatus === "in_review" || rawStatus === "active" || rawStatus === "in_progress" ? "in_review" :
+        "pending";
+      return {
+        stage: stageKeyMap[num] as import("@/types/enterprise").ApprovalStage,
+        status,
+        reviewer: String(apiSt?.reviewer_name ?? apiSt?.reviewer ?? "") || undefined,
+      } satisfies import("@/types/enterprise").SOWApprovalStage;
+    });
+  }, [pipelineApiData]);
+
+  // Use pipeline API stages for the stepper display; fall back to sow.approvalStages
+  const displayStages = pipelineResolvedStages ?? sow?.approvalStages ?? DEFAULT_APPROVAL_STAGES;
+
   const clauses = sow ? mockSOWClauses.filter((c) => c.sowId === sow.id) : [];
   const versions = sow ? generateVersionHistory(sow) : [];
   const auditTrail = sow ? generateAuditTrail(sow) : [];
@@ -1680,9 +1713,13 @@ export default function SOWDetailPage() {
                 ],
               };
 
-              const totalStages     = sow.approvalStages.length;
-              const isDone         = totalStages > 0 && activeApprovalIdx >= totalStages;
+              const totalStages = displayStages.length;
+              // isDone: pipeline says all approved, OR local index has passed all stages
+              const isDone = pipelineResolvedStages
+                ? displayStages.every((s) => s.status === "approved")
+                : totalStages > 0 && activeApprovalIdx >= totalStages;
               const activeStageIdx = isDone ? totalStages - 1 : activeApprovalIdx;
+              // activeStage for checklist/form uses local index so user can still interact
               const activeStage    = sow.approvalStages[activeApprovalIdx];
               const activeMeta     = !isDone && activeStage ? STAGE_META[activeStage.stage] : null;
               const checklist      = !isDone && activeStage ? (STAGE_CHECKLISTS[activeStage.stage] ?? []) : [];
@@ -1857,11 +1894,16 @@ export default function SOWDetailPage() {
                     <div className="relative flex items-start justify-between">
                       {/* connecting line behind circles */}
                       <div className="absolute top-5 left-0 right-0 h-px bg-beige-200 z-0" />
-                      {sow.approvalStages.map((stage, idx) => {
-                        const isApproved = idx < activeApprovalIdx;
-                        const isActive   = idx === activeApprovalIdx && !isDone;
-                        const isRejected = false;
-                        const meta       = STAGE_META[stage.stage] ?? { name: stage.stage, role: "" };
+                      {displayStages.map((stage, idx) => {
+                        // Use real pipeline status when available, else fall back to local index
+                        const isApproved = pipelineResolvedStages
+                          ? stage.status === "approved"
+                          : idx < activeApprovalIdx;
+                        const isActive = pipelineResolvedStages
+                          ? stage.status === "in_review"
+                          : idx === activeApprovalIdx && !isDone;
+                        const isRejected = stage.status === "changes_requested";
+                        const meta = STAGE_META[stage.stage] ?? { name: stage.stage, role: "" };
                         return (
                           <div key={stage.stage} className="relative z-10 flex flex-col items-center gap-2 flex-1">
                             <div className={cn(
