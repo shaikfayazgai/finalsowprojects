@@ -254,6 +254,14 @@ function SOWPipelineRow({ sow, onStageResolved, onDecisionsResolved }: {
   useRecordApprovalDecision(sow.id);
 
   const apiStages = extractPipelineStages(pipelineRes);
+
+  // Debug: log the raw pipeline response so we can inspect its shape
+  React.useEffect(() => {
+    if (pipelineRes && typeof window !== "undefined") {
+      console.log(`[pipeline:${sow.id}]`, pipelineRes);
+    }
+  }, [pipelineRes, sow.id]);
+
   const currentStage = apiStages.length > 0 ? computeActiveStage(apiStages) : 1;
   const completedStages = computeCompleted(apiStages);
   const stageCfg = PIPELINE_STAGES[currentStage - 1] ?? PIPELINE_STAGES[0];
@@ -264,33 +272,80 @@ function SOWPipelineRow({ sow, onStageResolved, onDecisionsResolved }: {
     return st === "changes_requested" || st === "rejected";
   });
 
-  // Extract comment + request_changes decisions for the Change Request History table
+  // Extract comment + request_changes decisions for the Change Request History table.
+  // Handles multiple API shapes:
+  //   1. stage.decisions[] — array of decision records
+  //   2. stage.comments (string) + stage.status === changes_requested/rejected
+  //   3. data.decisions / data.comments at the pipeline root level
   const decisionRows = React.useMemo<ChangeRequestRow[]>(() => {
     const rows: ChangeRequestRow[] = [];
+
+    const pushDecision = (
+      d: ApiStageDecision,
+      stageNum: number,
+      idxKey: string | number,
+    ) => {
+      const decisionType = String(d.decision ?? "").toLowerCase();
+      if (decisionType !== "comment" && decisionType !== "request_changes") return;
+      const requestedBy = typeof d.decided_by === "string"
+        ? d.decided_by
+        : String((d.decided_by as { name?: string; email?: string })?.name ?? (d.decided_by as { name?: string; email?: string })?.email ?? d.reviewer ?? "Enterprise Admin");
+      rows.push({
+        id: `${sow.id}-${stageNum}-${idxKey}`,
+        sowId: sow.id,
+        sowTitle: sow.title,
+        client: sow.client,
+        requestedBy,
+        message: String(d.comments ?? d.message ?? d.text ?? ""),
+        resolveMessage: d.resolve_message,
+        resolved: !!d.resolved || !!d.resolved_at,
+        resolvedAt: d.resolved_at ?? d.decided_at ?? d.created_at,
+        stage: stageNum,
+        kind: decisionType as "comment" | "request_changes",
+      });
+    };
+
     apiStages.forEach((s) => {
-      const ds = s.decisions ?? [];
-      ds.forEach((d, i) => {
-        const decisionType = String(d.decision ?? "").toLowerCase();
-        if (decisionType !== "comment" && decisionType !== "request_changes") return;
-        const requestedBy = typeof d.decided_by === "string"
-          ? d.decided_by
-          : String((d.decided_by as { name?: string; email?: string })?.name ?? (d.decided_by as { name?: string; email?: string })?.email ?? d.reviewer ?? "Enterprise Admin");
+      const stageNum = s.stage;
+      // Case 1: array of decisions on the stage
+      const ds = Array.isArray(s.decisions) ? s.decisions : [];
+      ds.forEach((d, i) => pushDecision(d, stageNum, i));
+
+      // Case 2: single comment stored on the stage + changes_requested/rejected status
+      const st = String(s.status ?? "").toLowerCase();
+      const stageComment = s.comments ? String(s.comments) : "";
+      if (stageComment && (st === "changes_requested" || st === "rejected")) {
         rows.push({
-          id: `${sow.id}-${s.stage}-${i}`,
+          id: `${sow.id}-${stageNum}-rc`,
           sowId: sow.id,
           sowTitle: sow.title,
           client: sow.client,
-          requestedBy,
-          message: String(d.comments ?? d.message ?? d.text ?? ""),
-          resolveMessage: d.resolve_message,
-          resolved: !!d.resolved || !!d.resolved_at,
-          resolvedAt: d.resolved_at ?? d.decided_at ?? d.created_at,
-          stage: s.stage,
-          kind: decisionType as "comment" | "request_changes",
+          requestedBy: String(s.reviewer ?? "Glimmora Admin"),
+          message: stageComment,
+          resolved: false,
+          resolvedAt: s.reviewed_at,
+          stage: stageNum,
+          kind: "request_changes",
         });
-      });
+      }
     });
-    return rows;
+
+    // Case 3: decisions at the pipeline root level (not nested per stage)
+    const r = pipelineRes as Record<string, unknown> | undefined;
+    const d = (r?.data ?? r) as Record<string, unknown> | undefined;
+    for (const key of ["decisions", "comments", "history", "change_requests"]) {
+      const arr = d?.[key];
+      if (Array.isArray(arr)) {
+        arr.forEach((entry, i) => {
+          const rawStage = (entry as Record<string, unknown>).stage ?? (entry as Record<string, unknown>).stage_number ?? 1;
+          pushDecision(entry as ApiStageDecision, Number(rawStage), `root-${i}`);
+        });
+      }
+    }
+
+    // Deduplicate by id
+    const seen = new Set<string>();
+    return rows.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pipelineRes]);
 
