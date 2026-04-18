@@ -733,8 +733,8 @@ export function Step3Profile({
             <div className="space-y-4">
               <div>
                 <SkillAutocomplete
-                  label="Primary Skills"
-                  badge={`(${primarySkills.length}/20) — required`}
+                  label="Primary Skills *"
+                  badge={`(${primarySkills.length}/20)`}
                   skills={primarySkills}
                   onAdd={addPrimarySkill}
                   onRemove={removePrimarySkill}
