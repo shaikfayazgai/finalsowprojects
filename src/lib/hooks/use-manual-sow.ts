@@ -471,13 +471,19 @@ export function useRecordApprovalDecision(sowId: string | null) {
       stage,
       decision,
       comments,
+      reviewer,
     }: {
       stage: number;
       decision: "approve" | "request_changes" | "reject_regenerate";
       comments?: string;
+      reviewer?: string;
     }) => {
       if (!sowId) throw new Error("No SOW id");
-      return sowApi.recordApprovalDecision(sowId, stage, { decision, comments });
+      return sowApi.recordApprovalDecision(sowId, stage, {
+        decision,
+        comments,
+        ...(reviewer ? { reviewer, decided_by: reviewer } : {}),
+      });
     },
     onSuccess: () => {
       if (sowId) {

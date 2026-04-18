@@ -254,6 +254,16 @@ export default function SOWListPage() {
     return [];
   }
 
+  /* Derive SOW-level status from the approval pipeline (source of truth). */
+  function deriveStatusFromStages(stages: import("@/types/enterprise").SOWApprovalStage[], fallback: string): string {
+    if (!stages || stages.length === 0) return fallback;
+    if (stages.every((s) => s.status === "approved")) return "approved";
+    if (stages.some((s) => s.status === "rejected")) return "changes_requested";
+    if (stages.some((s) => s.status === "in_review")) return "approval";
+    if (stages.some((s) => s.status === "approved")) return "approval";
+    return fallback;
+  }
+
   function normaliseToSOW(item: Record<string, unknown>, mode: "ai_generated" | "manual_upload") {
     const updatedAt = String(item.updated_at ?? item.updatedAt ?? item.created_at ?? item.createdAt ?? new Date().toISOString());
     const gc = mode === "ai_generated" ? ((item.generated_content ?? {}) as Record<string, unknown>) : {};
@@ -281,11 +291,15 @@ export default function SOWListPage() {
       riskOverall = conf > 0 ? Math.round(100 - conf) : 0;
     }
 
+    const rawApprovalStages = ((item.approval_stages ?? item.approvalStages ?? []) as import("@/types/enterprise").SOWApprovalStage[]);
+    const rawStatus = String(item.status ?? "draft");
+    const derivedStatus = deriveStatusFromStages(rawApprovalStages, rawStatus);
+
     return {
       id:               String(item.id ?? item._id ?? item.sow_id ?? item.wizard_id ?? ""),
       title,
       client,
-      status:           String(item.status ?? "draft"),
+      status:           derivedStatus,
       intakeMode:       mode,
       dataSensitivity:  String(item.data_sensitivity ?? item.dataSensitivity ?? "internal"),
       riskScore:        { overall: riskOverall, completeness: 0, confidence: 0, compliance: 0, patternMatch: 0 },
@@ -295,7 +309,7 @@ export default function SOWListPage() {
       estimatedBudget:  Number(item.estimated_budget ?? item.estimatedBudget ?? 0),
       createdBy:        String(item.created_by ?? item.createdBy ?? ""),
       approvedBy:       String(item.approved_by ?? item.approvedBy ?? ""),
-      approvalStages:   (item.approval_stages ?? item.approvalStages ?? []) as import("@/types/enterprise").SOWApprovalStage[],
+      approvalStages:   rawApprovalStages,
       parsedSections:   Number(item.parsed_sections ?? item.parsedSections ?? 0),
       totalSections:    Number(item.total_sections ?? item.totalSections ?? 0),
       pages:            Number(item.pages ?? 0),

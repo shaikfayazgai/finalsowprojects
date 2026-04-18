@@ -50,6 +50,9 @@ export interface SOWActionRequest {
 export interface ApprovalDecision {
   decision: string;
   comments?: string | null;
+  /** Reviewer identity — sent as both `reviewer` and `decided_by` for backend compatibility. */
+  reviewer?: string;
+  decided_by?: string;
 }
 
 // ── Token cache ───────────────────────────────────────────────────────────

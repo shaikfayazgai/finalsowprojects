@@ -486,6 +486,23 @@ export default function SOWApprovePage() {
               </div>
             </motion.div>
 
+            {/* ── GlimmoraTeam Commercial is admin-only — enterprise sees a waiting banner, no sign-off UI ── */}
+            {activeStage.stage === "glimmora_commercial" ? (
+              <motion.div variants={fadeUp} className="mb-6">
+                <div className="card-parchment px-5 py-5 flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-gold-50 border border-gold-100 flex items-center justify-center shrink-0">
+                    <Clock className="w-4 h-4 text-gold-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-[14px] font-semibold text-gray-800 mb-0.5">Awaiting GlimmoraTeam admin review</h3>
+                    <p className="text-[12px] text-gray-500 leading-relaxed">
+                      This stage is reviewed by a GlimmoraTeam admin. You&apos;ll be notified once the commercial review is complete and the SOW advances to Legal &amp; Compliance.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+            <>
             {/* Checklist */}
             <motion.div variants={fadeUp} className="mb-6">
               <div className="flex items-center justify-between mb-3">
@@ -573,6 +590,8 @@ export default function SOWApprovePage() {
                 </motion.div>
               )}
             </AnimatePresence>
+            </>
+            )}
           </>
         )}
 
