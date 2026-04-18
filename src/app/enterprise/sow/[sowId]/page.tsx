@@ -403,10 +403,10 @@ export default function SOWDetailPage() {
           if (num === current) return { stage: key, status: "in_review" as const, reviewer: "Enterprise Admin" };
           return { stage: key, status: "pending" as const };
         }),
-      };
+      } as import("@/types/enterprise").SOW;
     }
 
-    return { ...SOW_DEFAULTS, id: sowId };
+    return { ...SOW_DEFAULTS, id: sowId } as import("@/types/enterprise").SOW;
   }, [apiSowData, apiFlow, allSows, pipelineSows, sowId]);
   const linkedProject = sow ? mockProjects.find((p) => p.sowId === sow.id) : undefined;
   const apiSections = React.useMemo(() => {
@@ -1283,7 +1283,7 @@ export default function SOWDetailPage() {
                               />
                             </div>
                             <span className="text-[11px] font-mono font-semibold text-beige-600 w-8 text-right">{section.confidence}%</span>
-                            {section.aiSuggestion && <Sparkles className="w-3.5 h-3.5 text-gold-500 shrink-0" />}
+                            {(section as { aiSuggestion?: string }).aiSuggestion && <Sparkles className="w-3.5 h-3.5 text-gold-500 shrink-0" />}
                           </div>
                           {isExpanded ? <ChevronUp className="w-4 h-4 text-beige-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-beige-400 shrink-0" />}
                         </button>

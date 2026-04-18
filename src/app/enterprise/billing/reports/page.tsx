@@ -197,7 +197,7 @@ async function generateMockReport(reportId: string, fmt: string): Promise<void> 
   }
 
   const pdfBytes = await buildPdfBytes(reportId);
-  triggerDownload(new Blob([pdfBytes], { type: "application/pdf" }), filename);
+  triggerDownload(new Blob([pdfBytes as BlobPart], { type: "application/pdf" }), filename);
 }
 
 export default function FinancialReportsPage() {
@@ -220,7 +220,7 @@ export default function FinancialReportsPage() {
     setPreviewing(true);
     try {
       const pdfBytes = await buildPdfBytes(selectedReport);
-      const url = URL.createObjectURL(new Blob([pdfBytes], { type: "application/pdf" }));
+      const url = URL.createObjectURL(new Blob([pdfBytes as BlobPart], { type: "application/pdf" }));
       setPreviewUrl(url);
     } catch {
       toast.error("Preview Failed", "Could not generate the preview. Please try again.");
