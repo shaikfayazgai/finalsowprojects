@@ -55,6 +55,10 @@ import {
   Badge,
   Button,
   Progress,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
   Select,
   SelectTrigger,
   SelectContent,
@@ -67,7 +71,6 @@ import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { useSowStore, INITIAL_APPROVAL_STAGES } from "@/lib/stores/sow-store";
 import { useSOWPipelineStore } from "@/lib/stores/sow-pipeline-store";
 import { useConfirmAndSubmit, useManualSOW } from "@/lib/hooks/use-manual-sow";
-import { useSow } from "@/lib/hooks/use-sow-wizard";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
 import {
   mockSOWClauses,
@@ -158,8 +161,7 @@ function formatDateTime(iso: string): string {
 
 /* ── Mock generators ── */
 
-function generateVersionHistory(sow: import("@/types/enterprise").SOW | undefined) {
-  if (!sow) return [];
+function generateVersionHistory(sow: import("@/types/enterprise").SOW) {
   const versions = [];
   for (let v = sow.version; v >= 1; v--) {
     const date = new Date(sow.createdAt);
@@ -189,8 +191,7 @@ type AuditEvent = {
   details: string;
 };
 
-function generateAuditTrail(sow: import("@/types/enterprise").SOW | undefined) {
-  if (!sow) return [];
+function generateAuditTrail(sow: import("@/types/enterprise").SOW) {
   const events: AuditEvent[] = [
     {
       id: "audit-1",
@@ -276,34 +277,18 @@ export default function SOWDetailPage() {
   const addPipelineSOW = useSOWPipelineStore((s) => s.addSOW);
   const updatePipelineSOW = useSOWPipelineStore((s) => s.updateSOW);
   const pipelineSows = useSOWPipelineStore((s) => s.sows);
-  const { data: manualApiRes, isFetching: manualApiFetching } = useManualSOW(sowId);
-  const { data: aiApiRes, isFetching: aiApiFetching } = useSow(sowId);
-  const apiSowFetching = manualApiFetching || aiApiFetching;
+  const { data: apiSowRes } = useManualSOW(sowId);
   const confirmAndSubmit = useConfirmAndSubmit(sowId);
-
-  /* Prefer whichever endpoint returned real data */
-  const rawApiData = (manualApiRes?.data ?? aiApiRes?.data) as Record<string, unknown> | null | undefined;
-
+  /* If the API returned a SOW, merge its fields on top of the mock/store record */
+  const apiSowData = apiSowRes?.data as Record<string, unknown> | null | undefined;
   const normalizedApiSow = React.useMemo(() => {
-    if (!rawApiData) return null;
-    const d = { ...rawApiData } as Record<string, unknown>;
-    /* Snake-case → camelCase aliases */
+    if (!apiSowData) return null;
+    const d = { ...apiSowData } as Record<string, unknown>;
     if (d.approval_stages && !d.approvalStages) d.approvalStages = d.approval_stages;
     if (d.parsed_sections && !d.parsedSections) d.parsedSections = d.parsed_sections;
     if (d.total_sections && !d.totalSections) d.totalSections = d.total_sections;
-    if (d.project_title && !d.title) d.title = d.project_title;
-    if (d.client_organisation && !d.client) d.client = d.client_organisation;
-    if (d.data_sensitivity && !d.dataSensitivity) d.dataSensitivity = d.data_sensitivity;
-    if (d.estimated_budget && !d.estimatedBudget) d.estimatedBudget = d.estimated_budget;
-    if (d.created_at && !d.createdAt) d.createdAt = d.created_at;
-    if (d.updated_at && !d.updatedAt) d.updatedAt = d.updated_at;
-    /* AI SOW: extract title from generated_content */
-    if (!d.title && d.generated_content) {
-      const gc = d.generated_content as Record<string, unknown>;
-      if (gc.document_title) d.title = gc.document_title;
-    }
     return d;
-  }, [rawApiData]);
+  }, [apiSowData]);
   const sow = React.useMemo(() => {
     // Try to find the SOW by its actual ID first
     const exactMatch = allSows.find((s) => s.id === sowId)
@@ -315,15 +300,9 @@ export default function SOWDetailPage() {
       return normalizedApiSow ? { ...exactMatch, ...normalizedApiSow, id: sowId } : exactMatch;
     }
 
-    // API-only SOW (no local store match) — build from API data directly
+    // API-only SOW (no local store match) — use the API payload atop a base shape
     if (normalizedApiSow) {
-      const base = allSows[0] ?? {};
-      return {
-        ...base,
-        ...normalizedApiSow,
-        id: sowId,
-        riskScore: { overall: 0, completeness: 0, confidence: 0, compliance: 0, patternMatch: 0 },
-      };
+      return { ...allSows[0], ...normalizedApiSow, id: sowId };
     }
 
     // SOW only exists in the pipeline store (no mock/store entry).
@@ -348,19 +327,19 @@ export default function SOWDetailPage() {
       };
     }
 
-    // Last resort fallback — only return if store has data
-    return allSows.length > 0 ? allSows[0] : null;
+    // Last resort fallback
+    return allSows[0];
   }, [allSows, pipelineSows, sowId, normalizedApiSow]);
-  const linkedProject = sow ? mockProjects.find((p) => p.sowId === sow.id) : undefined;
-  const sections = sow ? mockSOWSections.filter((s) => s.sowId === sow.id) : [];
-  const clauses = sow ? mockSOWClauses.filter((c) => c.sowId === sow.id) : [];
+  const linkedProject = mockProjects.find((p) => p.sowId === sow.id);
+  const sections = mockSOWSections.filter((s) => s.sowId === sow.id);
+  const clauses = mockSOWClauses.filter((c) => c.sowId === sow.id);
   const versions = generateVersionHistory(sow);
   const auditTrail = generateAuditTrail(sow);
-  const ethicsScreening = sow ? mockEthicsScreening[sow.id] || [] : [];
-  const regulatoryItems = sow ? mockRegulatoryAlignment[sow.id] || [] : [];
-  const genParams = sow ? mockGenerationParams[sow.id] : undefined;
-  const hallucinationLayers = sow ? mockHallucinationLayers[sow.id] || [] : [];
-  const sensitivityReqs = sow ? sensitivityHandlingRequirements[sow.dataSensitivity] || [] : [];
+  const ethicsScreening = mockEthicsScreening[sow.id] || [];
+  const regulatoryItems = mockRegulatoryAlignment[sow.id] || [];
+  const genParams = mockGenerationParams[sow.id];
+  const hallucinationLayers = mockHallucinationLayers[sow.id] || [];
+  const sensitivityReqs = sensitivityHandlingRequirements[sow.dataSensitivity] || [];
 
   /* UI state */
   const [expandedSections, setExpandedSections] = React.useState<Set<string>>(
@@ -387,17 +366,16 @@ export default function SOWDetailPage() {
   // Sync the active approval stage index to the first in_review stage whenever
   // the SOW changes (e.g. navigating from the pipeline page to a SOW at stage 3+).
   React.useEffect(() => {
-    if (!sow) return;
-    const stages = sow.approvalStages ?? [];
-    const idx = stages.findIndex((s) => s.status === "in_review");
+    const idx = sow.approvalStages.findIndex((s) => s.status === "in_review");
     if (idx >= 0) {
       setActiveApprovalIdx(idx);
     } else {
-      const pendingIdx = stages.findIndex((s) => s.status === "pending");
-      setActiveApprovalIdx(pendingIdx >= 0 ? pendingIdx : stages.length);
+      // All approved or all pending — fall back to first pending, or last stage
+      const pendingIdx = sow.approvalStages.findIndex((s) => s.status === "pending");
+      setActiveApprovalIdx(pendingIdx >= 0 ? pendingIdx : sow.approvalStages.length);
     }
     setApprovalChecked({});
-  }, [sow?.id]);
+  }, [sow.id]);
 
   React.useEffect(() => {
     if (!sectionDropdownOpen) return;
@@ -425,7 +403,6 @@ export default function SOWDetailPage() {
 
   // Seed initial stage_activated message on first visit
   React.useEffect(() => {
-    if (!sow) return;
     const thread = useSowMessagesStore.getState().getThread(sow.id);
     if (thread.length === 0) {
       const activatedMsg = buildActivatedMessage(sow.id, 0, sow.title);
@@ -438,7 +415,7 @@ export default function SOWDetailPage() {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sow?.id]);
+  }, [sow.id]);
 
   const toggleSection = (id: string) => {
     setExpandedSections((prev) => {
@@ -450,7 +427,7 @@ export default function SOWDetailPage() {
   };
 
   /* SOW is ready for submission only if it's been parsed and has content */
-  const isValidated = (sow?.parsedSections ?? 0) > 0 && (sow?.totalSections ?? 0) > 0;
+  const isValidated = sow.parsedSections > 0 && sow.totalSections > 0;
 
   function handleConfirmSubmit() {
     if (confirmAndSubmit.isPending) return;
@@ -571,50 +548,6 @@ export default function SOWDetailPage() {
     );
   }, [sections, docSearch]);
 
-  if (!sow) {
-    if (apiSowFetching) {
-      return (
-        <div className="max-w-[1400px] mx-auto space-y-5">
-          {/* Back link skeleton */}
-          <div className="h-4 w-32 rounded animate-pulse" style={{ background: "var(--color-beige-100)" }} />
-          {/* Header skeleton */}
-          <div className="rounded-2xl border border-beige-100 bg-white/70 p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div className="space-y-2 flex-1">
-                <div className="h-6 w-2/3 rounded animate-pulse" style={{ background: "var(--color-beige-100)" }} />
-                <div className="h-4 w-1/3 rounded animate-pulse" style={{ background: "var(--color-beige-100)" }} />
-              </div>
-              <div className="h-9 w-28 rounded-xl animate-pulse" style={{ background: "var(--color-beige-100)" }} />
-            </div>
-            <div className="grid grid-cols-4 gap-4 pt-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-beige-100 p-4 space-y-2">
-                  <div className="h-3 w-16 rounded animate-pulse" style={{ background: "var(--color-beige-100)" }} />
-                  <div className="h-5 w-24 rounded animate-pulse" style={{ background: "var(--color-beige-100)" }} />
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Content skeleton */}
-          <div className="rounded-2xl border border-beige-100 bg-white/70 p-6 space-y-4">
-            <div className="h-5 w-48 rounded animate-pulse" style={{ background: "var(--color-beige-100)" }} />
-            <div className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-4 rounded animate-pulse" style={{ background: "var(--color-beige-100)", width: `${70 + (i % 3) * 10}%` }} />
-              ))}
-            </div>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="rounded-2xl border border-beige-100 bg-beige-50/50 px-6 py-16 text-center">
-        <p className="text-[14px] font-medium text-brown-600 mb-1">SOW not found</p>
-        <p className="text-[12px] text-beige-400">This statement of work could not be loaded.</p>
-      </div>
-    );
-  }
-
   return (
     <motion.div
       variants={stagger}
@@ -671,18 +604,16 @@ export default function SOWDetailPage() {
                   <><Upload className="w-3 h-3" /> Manual Upload</>
                 )}
               </Badge>
-              {sow.confidentiality && (
-                <Badge variant={confidentialityVariantMap[sow.confidentiality]} size="sm">
-                  <Shield className="w-3 h-3" />
-                  {sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1)}
-                </Badge>
-              )}
-              {(sow.riskScore?.overall ?? 0) > 0 && (
+              <Badge variant={confidentialityVariantMap[sow.confidentiality]} size="sm">
+                <Shield className="w-3 h-3" />
+                {sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1)}
+              </Badge>
+              {sow.riskScore.overall > 0 && (
                 <Badge
-                  variant={(sow.riskScore?.overall ?? 0) <= 25 ? "forest" : (sow.riskScore?.overall ?? 0) <= 50 ? "gold" : "brown"}
+                  variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"}
                   size="sm"
                 >
-                  Risk {sow.riskScore?.overall ?? 0}/100
+                  Risk {sow.riskScore.overall}/100
                 </Badge>
               )}
             </div>
@@ -736,12 +667,12 @@ export default function SOWDetailPage() {
       <motion.div variants={fadeUp} className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm px-5 py-4">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {[
-            { icon: BookOpen, label: "Pages", value: `${sow.pages ?? 0}` },
-            { icon: Layers, label: "Sections", value: `${sow.parsedSections ?? 0}/${sow.totalSections ?? 0}` },
-            { icon: DollarSign, label: "Est. Budget", value: (sow.estimatedBudget ?? 0) > 0 ? `$${((sow.estimatedBudget ?? 0) / 1000).toFixed(0)}K` : "TBD" },
-            { icon: Clock, label: "Duration", value: sow.estimatedDuration ?? "TBD" },
-            { icon: Users, label: "Stakeholders", value: `${(sow.stakeholders ?? []).length}` },
-            { icon: Calendar, label: "Updated", value: formatDate(sow.updatedAt ?? new Date().toISOString()) },
+            { icon: BookOpen, label: "Pages", value: `${sow.pages}` },
+            { icon: Layers, label: "Sections", value: `${sow.parsedSections}/${sow.totalSections}` },
+            { icon: DollarSign, label: "Est. Budget", value: sow.estimatedBudget > 0 ? `$${(sow.estimatedBudget / 1000).toFixed(0)}K` : "TBD" },
+            { icon: Clock, label: "Duration", value: sow.estimatedDuration },
+            { icon: Users, label: "Stakeholders", value: `${sow.stakeholders.length}` },
+            { icon: Calendar, label: "Updated", value: formatDate(sow.updatedAt) },
           ].map(({ icon: Icon, label, value }, i) => (
             <div key={label} className={cn("flex items-center gap-3", i > 0 && "lg:border-l lg:border-beige-200/50 lg:pl-4")}>
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-beige-50 to-beige-100 border border-beige-200/50 flex items-center justify-center shrink-0">
@@ -757,15 +688,804 @@ export default function SOWDetailPage() {
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════
-         APPROVAL STATUS
+         9-TAB CONTENT (B6 Steps 2-10)
          ══════════════════════════════════════════════════════════════ */}
       <motion.div variants={fadeUp} className="rounded-2xl border border-beige-100 bg-beige-50/50 overflow-hidden">
-        <div className="w-full">
+        <Tabs defaultValue="approval" className="w-full">
+          <div className="border-b border-beige-200/50 bg-beige-50/30">
+            <TabsList className="flex flex-wrap bg-transparent gap-0 p-0 px-3">
+              <TabsTrigger value="approval" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Approval
+              </TabsTrigger>
+              <TabsTrigger value="ai-analysis" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <Sparkles className="w-3.5 h-3.5 shrink-0" /> AI Analysis
+              </TabsTrigger>
+              <TabsTrigger value="audit" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <History className="w-3.5 h-3.5 shrink-0" /> Audit
+              </TabsTrigger>
+              <TabsTrigger value="clauses" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <Scale className="w-3.5 h-3.5 shrink-0" /> Clauses
+                {prohibitedCount > 0 && (
+                  <span className="ml-1 w-4 h-4 rounded-full bg-brown-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {prohibitedCount}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="document" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <BookOpen className="w-3.5 h-3.5 shrink-0" /> Document
+              </TabsTrigger>
+              <TabsTrigger value="linked" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <Link2 className="w-3.5 h-3.5 shrink-0" /> Linked
+              </TabsTrigger>
+              <TabsTrigger value="metadata" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <FileText className="w-3.5 h-3.5 shrink-0" /> Metadata
+              </TabsTrigger>
+              <TabsTrigger value="risk" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" /> Risk & Compliance
+              </TabsTrigger>
+              <TabsTrigger value="versions" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
+                <GitBranch className="w-3.5 h-3.5 shrink-0" /> Versions
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* ═══════════════════════════════════════════════════
-             Approval Status
+             TAB 1: Metadata (B6 Step 2)
              ═══════════════════════════════════════════════════ */}
-          <div>
+          <TabsContent value="metadata" className="mt-0">
+            <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
+              <div className="lg:col-span-2 space-y-4">
+                {/* Core Details */}
+                <div className="rounded-2xl border border-beige-200/50 bg-beige-50/30 p-5">
+                  <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">
+                    SOW Details
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { label: "Client", value: sow.client },
+                      { label: "Created By", value: sow.createdBy },
+                      { label: "Created", value: formatDateTime(sow.createdAt) },
+                      { label: "Last Updated", value: formatDateTime(sow.updatedAt) },
+                      { label: "File Size", value: sow.fileSize },
+                      { label: "Pages", value: `${sow.pages} pages` },
+                      { label: "Estimated Budget", value: sow.estimatedBudget > 0 ? `$${sow.estimatedBudget.toLocaleString()}` : "TBD" },
+                      { label: "Estimated Duration", value: sow.estimatedDuration },
+                      { label: "Version", value: `v${sow.version}` },
+                      { label: "Approved By", value: sow.approvedBy || "--" },
+                      { label: "SLA Compliance", value: sow.slaCompliance ? `${sow.slaCompliance}%` : "--" },
+                      { label: "Confidentiality", value: sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1) },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex flex-col gap-0.5">
+                        <span className="text-[11px] font-semibold text-beige-500 uppercase tracking-wider">{label}</span>
+                        <span className="text-[13px] font-medium text-brown-800">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stakeholders */}
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                  <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-3">Stakeholders</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {sow.stakeholders.map((name) => (
+                      <div key={name} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-beige-50 border border-beige-200/50">
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brown-200 to-beige-200 flex items-center justify-center">
+                          <User className="w-3.5 h-3.5 text-brown-600" />
+                        </div>
+                        <span className="text-[13px] font-medium text-brown-800">{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tags */}
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                  <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-3">Tags</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {sow.tags.map((tag) => (
+                      <Badge key={tag} variant="beige" size="md">
+                        <Tag className="w-3 h-3" /> {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right sidebar: AI Confidence + quick risk */}
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5 text-center">
+                  <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-4">
+                    Overall AI Confidence
+                  </h3>
+                  <div className="flex justify-center mb-3">
+                    <MetricRing
+                      value={sow.aiConfidence}
+                      size={110}
+                      strokeWidth={8}
+                      color={confidenceColor(sow.aiConfidence)}
+                      label="Confidence"
+                    />
+                  </div>
+                  <p className="text-[12px] text-beige-600 mt-2">
+                    {sow.aiConfidence >= 90 ? "High confidence -- ready for review"
+                      : sow.aiConfidence >= 70 ? "Good confidence -- some sections need attention"
+                      : sow.aiConfidence > 0 ? "Needs review -- several sections below threshold"
+                      : "Not yet parsed"}
+                  </p>
+                </div>
+
+                {/* Quick risk summary */}
+                {sow.riskScore.overall > 0 && (
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                    <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-3">Risk Score</h3>
+                    <div className="flex items-center gap-2 mb-3">
+                      <ShieldCheck className={cn("w-5 h-5", sow.riskScore.overall <= 30 ? "text-forest-500" : sow.riskScore.overall <= 60 ? "text-gold-500" : "text-brown-600")} />
+                      <span className={cn("text-[18px] font-bold", sow.riskScore.overall <= 30 ? "text-forest-600" : sow.riskScore.overall <= 60 ? "text-gold-600" : "text-brown-700")}>
+                        {sow.riskScore.overall}/100
+                      </span>
+                      <Badge variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"} size="sm">
+                        {sow.riskScore.overall <= 25 ? "Low" : sow.riskScore.overall <= 50 ? "Medium" : sow.riskScore.overall <= 75 ? "High" : "Critical"}
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-beige-500">See Risk & Compliance tab for full breakdown.</p>
+                  </div>
+                )}
+
+                {/* Deliverables summary */}
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                  <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-3">Content Summary</h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] text-beige-600">Sections parsed</span>
+                      <span className="text-[12px] font-bold text-brown-800">{sow.parsedSections}/{sow.totalSections}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] text-beige-600">Clauses tagged</span>
+                      <span className="text-[12px] font-bold text-brown-800">{clauses.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] text-beige-600">Prohibited clauses</span>
+                      <span className={cn("text-[12px] font-bold", prohibitedCount > 0 ? "text-brown-700" : "text-forest-600")}>
+                        {prohibitedCount}
+                      </span>
+                    </div>
+                    {sow.industry && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-beige-600">Industry</span>
+                        <span className="text-[12px] font-bold text-brown-800">{sow.industry}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════
+             TAB 2: Clauses (B6 Step 3)
+             ═══════════════════════════════════════════════════ */}
+          <TabsContent value="clauses" className="mt-0">
+            <div className="p-5 space-y-4">
+              {/* Header + filters */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">
+                  Tagged Clauses
+                  <span className="ml-2 text-[12px] font-normal text-beige-500">({clauses.length} total)</span>
+                </h2>
+                <div className="flex items-center gap-2">
+                  <Select value={clauseTypeFilter} onValueChange={setClauseTypeFilter}>
+                    <SelectTrigger className="h-8 text-xs w-[160px]">
+                      <Filter className="w-3 h-3 mr-1 text-beige-400" />
+                      <SelectValue placeholder="All Types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types ({clauses.length})</SelectItem>
+                      {Object.entries(clauseTypeCounts).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
+                        <SelectItem key={type} value={type}>
+                          {clauseTypeConfig[type]?.label || type} ({count})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400" />
+                    <input
+                      type="text"
+                      value={clauseSearch}
+                      onChange={(e) => setClauseSearch(e.target.value)}
+                      placeholder="Search clauses..."
+                      className="h-8 pl-8 pr-3 text-xs rounded-lg border border-beige-200 bg-white/80 text-brown-800 placeholder:text-beige-400 focus:outline-none focus:ring-2 focus:ring-brown-200 w-[180px]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Prohibited clauses warning */}
+              {prohibitedCount > 0 && (
+                <div className="rounded-xl bg-gradient-to-r from-brown-50 to-beige-50 border border-brown-200/60 p-4 flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-brown-100 flex items-center justify-center shrink-0">
+                    <Ban className="w-4 h-4 text-brown-600" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-brown-800">
+                      {prohibitedCount} Prohibited Clause{prohibitedCount > 1 ? "s" : ""} Detected
+                    </p>
+                    <p className="text-[12px] text-beige-600 mt-0.5">
+                      These clauses violate standard risk allocation policy and must be addressed before approval.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Clause list */}
+              <div className="space-y-2">
+                {filteredClauses.length === 0 ? (
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-12 text-center">
+                    <p className="text-sm text-beige-500">No clauses match your filters.</p>
+                  </div>
+                ) : (
+                  filteredClauses.map((clause) => (
+                    <div
+                      key={clause.id}
+                      className={cn(
+                        "rounded-xl border p-4 transition-all",
+                        clause.isProhibited
+                          ? "border-brown-200/80 bg-brown-50/30"
+                          : "border-beige-200/50 bg-white/70 backdrop-blur-sm hover:shadow-sm"
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        {clause.isProhibited && (
+                          <div className="w-7 h-7 rounded-full bg-brown-100 flex items-center justify-center shrink-0 mt-0.5">
+                            <Ban className="w-3.5 h-3.5 text-brown-600" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <Badge variant={clauseTypeConfig[clause.type]?.variant || "beige"} size="sm">
+                              {clauseTypeConfig[clause.type]?.label || clause.type}
+                            </Badge>
+                            <span className="text-[10px] text-beige-500 font-mono">{clause.sectionRef}</span>
+                            {clause.isProhibited && (
+                              <Badge variant="brown" size="sm">
+                                <Ban className="w-2.5 h-2.5" /> Prohibited
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-[13px] text-brown-800 leading-relaxed">{clause.text}</p>
+                          {clause.isProhibited && clause.prohibitedReason && (
+                            <div className="mt-2 rounded-lg bg-brown-50 border border-brown-200/50 p-3">
+                              <p className="text-[11px] font-semibold text-brown-700 mb-0.5">Violation</p>
+                              <p className="text-[12px] text-brown-600">{clause.prohibitedReason}</p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="w-10 h-1.5 rounded-full bg-beige-100 overflow-hidden">
+                            <div
+                              className={cn(
+                                "h-full rounded-full",
+                                clause.confidence >= 90 ? "bg-forest-500" : clause.confidence >= 75 ? "bg-teal-500" : "bg-gold-500"
+                              )}
+                              style={{ width: `${clause.confidence}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-mono text-beige-600 w-7 text-right">{clause.confidence}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════
+             TAB 3: Document (B6 Step 4)
+             ═══════════════════════════════════════════════════ */}
+          <TabsContent value="document" className="mt-0">
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">
+                  {sow.intakeMode === "ai_generated" ? "Generated Document" : "Uploaded Document"}
+                  <span className="ml-2 text-[12px] font-normal text-beige-500">({sections.length} sections)</span>
+                </h2>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400" />
+                    <input
+                      type="text"
+                      value={docSearch}
+                      onChange={(e) => setDocSearch(e.target.value)}
+                      placeholder="Search document..."
+                      className="h-8 pl-8 pr-3 text-xs rounded-lg border border-beige-200 bg-white/80 text-brown-800 placeholder:text-beige-400 focus:outline-none focus:ring-2 focus:ring-brown-200 w-[180px]"
+                    />
+                  </div>
+                  <Button variant="outline" size="sm" className="h-8 text-xs">
+                    <Download className="w-3.5 h-3.5" /> Download
+                  </Button>
+                </div>
+              </div>
+
+              {/* Expand/collapse all */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    if (expandedSections.size === sections.length) setExpandedSections(new Set());
+                    else setExpandedSections(new Set(sections.map((s) => s.id)));
+                  }}
+                  className="text-[12px] text-teal-600 hover:text-teal-700 font-medium transition-colors"
+                >
+                  {expandedSections.size === sections.length ? "Collapse all" : "Expand all"}
+                </button>
+              </div>
+
+              {filteredDocSections.length === 0 ? (
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-12 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-beige-100 flex items-center justify-center mx-auto mb-4">
+                    <Layers className="w-7 h-7 text-beige-400" />
+                  </div>
+                  <p className="text-sm font-semibold text-brown-800 mb-1">
+                    {sections.length === 0 ? "No sections parsed yet" : "No matching sections"}
+                  </p>
+                  <p className="text-xs text-beige-500">
+                    {sections.length === 0
+                      ? "Sections will appear here once the AI finishes parsing the document."
+                      : "Try different search terms."}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredDocSections.map((section, idx) => {
+                    const isExpanded = expandedSections.has(section.id);
+                    const realIdx = sections.findIndex((s) => s.id === section.id);
+                    return (
+                      <div
+                        key={section.id}
+                        className="rounded-2xl border border-beige-100 bg-beige-50/50 overflow-hidden hover:shadow-md transition-all"
+                      >
+                        <button
+                          onClick={() => toggleSection(section.id)}
+                          className="w-full flex items-center gap-3 p-4 text-left hover:bg-beige-50/40 transition-colors"
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-beige-100 flex items-center justify-center shrink-0">
+                            <span className="text-[11px] font-bold text-beige-600">
+                              {String(realIdx + 1).padStart(2, "0")}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-[13px] font-semibold text-brown-900 truncate">{section.title}</h3>
+                            {!isExpanded && (
+                              <p className="text-[11px] text-beige-500 truncate mt-0.5">
+                                {section.content.substring(0, 80)}...
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <div className="w-16 h-1.5 rounded-full bg-beige-100 overflow-hidden hidden sm:block">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all",
+                                  section.confidence >= 90 ? "bg-forest-500" : section.confidence >= 75 ? "bg-teal-500" : "bg-gold-500"
+                                )}
+                                style={{ width: `${section.confidence}%` }}
+                              />
+                            </div>
+                            <span className="text-[11px] font-mono font-semibold text-beige-600 w-8 text-right">{section.confidence}%</span>
+                            {section.aiSuggestion && <Sparkles className="w-3.5 h-3.5 text-gold-500 shrink-0" />}
+                          </div>
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-beige-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-beige-400 shrink-0" />}
+                        </button>
+
+                        {isExpanded && (
+                          <div className="px-4 pb-4 pt-0 border-t border-beige-100">
+                            <p className="text-[13px] text-brown-700 leading-relaxed mt-3">{section.content}</p>
+                            {section.aiSuggestion && (
+                              <div className="mt-3 rounded-xl bg-gradient-to-r from-gold-50 to-beige-50 border border-gold-200/60 p-3.5">
+                                <div className="flex items-start gap-2">
+                                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-gold-400 to-gold-500 flex items-center justify-center shrink-0 mt-0.5">
+                                    <Sparkles className="w-3 h-3 text-white" />
+                                  </div>
+                                  <div>
+                                    <p className="text-[11px] font-bold text-gold-800 uppercase tracking-wider mb-0.5">AI Suggestion</p>
+                                    <p className="text-[12px] text-gold-700 leading-relaxed">{section.aiSuggestion}</p>
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <Button variant="secondary" size="sm" className="text-[11px] h-7">
+                                        <CheckCircle2 className="w-3 h-3" /> Accept
+                                      </Button>
+                                      <Button variant="outline" size="sm" className="text-[11px] h-7">
+                                        <X className="w-3 h-3" /> Dismiss
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            <div className="mt-3 flex items-center gap-2">
+                              <span className="text-[10px] font-semibold text-beige-500 uppercase tracking-wider">Confidence</span>
+                              <div className="flex-1">
+                                <Progress value={section.confidence} size="sm" variant={confidenceVariant(section.confidence)} />
+                              </div>
+                              <span className="text-[11px] font-mono font-bold text-brown-700">{section.confidence}%</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════
+             TAB 4: AI Analysis (B6 Step 5)
+             ═══════════════════════════════════════════════════ */}
+          <TabsContent value="ai-analysis" className="mt-0">
+            <div className="p-5 space-y-5">
+              {sow.intakeMode === "ai_generated" ? (
+                /* ── AI-Generated SOWs ── */
+                <>
+                  <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">AI Generation Analysis</h2>
+
+                  {/* Generation Parameters */}
+                  {genParams && (
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                      <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Generation Parameters</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {[
+                          { label: "Template", value: genParams.templateUsed },
+                          { label: "Industry", value: genParams.industry },
+                          { label: "Project Type", value: genParams.projectType },
+                          { label: "Wizard Progress", value: `${genParams.wizardStepsCompleted}/${genParams.totalWizardSteps} steps` },
+                          { label: "Generated At", value: formatDateTime(genParams.generatedAt) },
+                          { label: "Duration", value: genParams.generationDuration },
+                          { label: "Guardrails Passed", value: `${genParams.guardrailsPassed}/${genParams.totalGuardrails}` },
+                        ].map(({ label, value }) => (
+                          <div key={label}>
+                            <span className="text-[10px] font-semibold text-beige-500 uppercase tracking-wider">{label}</span>
+                            <p className="text-[13px] font-medium text-brown-800 mt-0.5">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Confidence Breakdown */}
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                    <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Confidence Score Breakdown</h3>
+                    <div className="flex items-center gap-4 mb-4">
+                      <MetricRing value={sow.aiConfidence} size={80} strokeWidth={7} color={confidenceColor(sow.aiConfidence)} label="Overall" />
+                      <div>
+                        <p className="text-[18px] font-bold text-brown-900">{sow.aiConfidence}% Confidence</p>
+                        <p className="text-[12px] text-beige-600">
+                          {sow.aiConfidence >= 90 ? "High confidence — all sections above threshold" : "Some sections need review"}
+                        </p>
+                      </div>
+                    </div>
+                    {sections.length > 0 && (
+                      <div className="space-y-2 mt-4">
+                        <p className="text-[11px] font-semibold text-beige-500 uppercase tracking-wider">Per-Section Confidence</p>
+                        {sections.map((sec) => (
+                          <div key={sec.id} className="flex items-center gap-3">
+                            <span className="text-[12px] text-brown-700 w-[200px] truncate">{sec.title}</span>
+                            <div className="flex-1 h-1.5 rounded-full bg-beige-100 overflow-hidden">
+                              <div
+                                className={cn("h-full rounded-full", sec.confidence >= 90 ? "bg-forest-500" : sec.confidence >= 75 ? "bg-teal-500" : "bg-gold-500")}
+                                style={{ width: `${sec.confidence}%` }}
+                              />
+                            </div>
+                            <span className="text-[11px] font-mono text-beige-600 w-8 text-right">{sec.confidence}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 8-Layer Hallucination Prevention */}
+                  {hallucinationLayers.length > 0 && (
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                      <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">
+                        8-Layer Hallucination Prevention
+                      </h3>
+                      <div className="space-y-3">
+                        {hallucinationLayers.map((layer) => {
+                          const statusConfig = {
+                            passed: { badge: "forest" as const, icon: CheckCircle2, label: "Passed" },
+                            warning: { badge: "gold" as const, icon: AlertTriangle, label: "Warning" },
+                            failed: { badge: "brown" as const, icon: X, label: "Failed" },
+                            skipped: { badge: "beige" as const, icon: Clock, label: "Skipped" },
+                          }[layer.status];
+                          return (
+                            <div key={layer.layer} className="flex items-start gap-3 p-3 rounded-xl bg-beige-50/50 border border-beige-200/30">
+                              <div className={cn(
+                                "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
+                                layer.status === "passed" ? "bg-forest-100" : layer.status === "warning" ? "bg-gold-100" : layer.status === "failed" ? "bg-brown-100" : "bg-beige-100"
+                              )}>
+                                <statusConfig.icon className={cn("w-3.5 h-3.5",
+                                  layer.status === "passed" ? "text-forest-600" : layer.status === "warning" ? "text-gold-600" : layer.status === "failed" ? "text-brown-600" : "text-beige-500"
+                                )} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="text-[10px] font-bold text-beige-500">Layer {layer.layer}</span>
+                                  <span className="text-[13px] font-semibold text-brown-800">{layer.name}</span>
+                                  <Badge variant={statusConfig.badge} size="sm">{statusConfig.label}</Badge>
+                                </div>
+                                <p className="text-[11px] text-beige-500 mb-1">{layer.description}</p>
+                                <p className="text-[12px] text-brown-700">{layer.details}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Overall status */}
+                      <div className="mt-4 pt-4 border-t border-beige-200/50 flex items-center gap-3">
+                        {hallucinationLayers.some((l) => l.status === "failed") ? (
+                          <Badge variant="brown" size="md"><X className="w-3 h-3" /> Issues Found</Badge>
+                        ) : hallucinationLayers.some((l) => l.status === "warning") ? (
+                          <Badge variant="gold" size="md"><AlertTriangle className="w-3 h-3" /> Warnings Detected</Badge>
+                        ) : (
+                          <Badge variant="forest" size="md"><CheckCircle2 className="w-3 h-3" /> All Clear</Badge>
+                        )}
+                        <span className="text-[12px] text-beige-600">
+                          {hallucinationLayers.filter((l) => l.status === "passed").length}/{hallucinationLayers.length} layers passed
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hallucination Flags */}
+                  {sow.hallucinationFlags && sow.hallucinationFlags.length > 0 && (
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                      <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Red-Flag Detections</h3>
+                      <div className="space-y-3">
+                        {sow.hallucinationFlags.map((flag) => (
+                          <div key={flag.id} className={cn("rounded-xl border p-4", flag.resolved ? "border-forest-200/50 bg-forest-50/20" : "border-gold-200/50 bg-gold-50/20")}>
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className={cn("w-4 h-4 shrink-0 mt-0.5", flag.resolved ? "text-forest-500" : flag.severity === "high" ? "text-brown-600" : "text-gold-500")} />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant={flag.severity === "high" ? "brown" : flag.severity === "medium" ? "gold" : "beige"} size="sm">
+                                    {flag.severity}
+                                  </Badge>
+                                  {flag.resolved && <Badge variant="forest" size="sm">Resolved</Badge>}
+                                </div>
+                                <p className="text-[13px] font-medium text-brown-800 mb-1">&ldquo;{flag.clause}&rdquo;</p>
+                                <p className="text-[12px] text-beige-600">{flag.reason}</p>
+                                <p className="text-[12px] text-teal-700 mt-1">Suggestion: {flag.suggestion}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* ── Manual Upload SOWs ── */
+                <>
+                  <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Parsing & Analysis Results</h2>
+
+                  {/* Completeness Score */}
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                    <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Completeness Score</h3>
+                    <div className="flex items-center gap-4 mb-4">
+                      <MetricRing
+                        value={sow.gapAnalysisScore || Math.round(sections.length > 0 ? (sections.reduce((s, sec) => s + sec.confidence, 0) / sections.length) : 0)}
+                        size={80}
+                        strokeWidth={7}
+                        color={confidenceColor(sow.gapAnalysisScore || 0)}
+                        label="Complete"
+                      />
+                      <div>
+                        <p className="text-[18px] font-bold text-brown-900">
+                          {sow.gapAnalysisScore || "--"}% Complete
+                        </p>
+                        <p className="text-[12px] text-beige-600">Minimum recommended: 80%</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gap Analysis */}
+                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                    <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Gap Analysis</h3>
+                    <p className="text-[12px] text-beige-600 mb-4">Comparison against platform SOW standard template.</p>
+                    {sections.length > 0 ? (
+                      <div className="space-y-3">
+                        {sections.map((sec) => (
+                          <div key={sec.id} className="flex items-center gap-3">
+                            <span className="text-[12px] text-brown-700 w-[200px] truncate">{sec.title}</span>
+                            <div className="flex-1 h-2 rounded-full bg-beige-100 overflow-hidden">
+                              <div
+                                className={cn("h-full rounded-full", sec.confidence >= 90 ? "bg-forest-500" : sec.confidence >= 75 ? "bg-teal-500" : "bg-gold-500")}
+                                style={{ width: `${sec.confidence}%` }}
+                              />
+                            </div>
+                            <span className="text-[11px] font-mono font-semibold text-brown-700 w-8 text-right">{sec.confidence}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[12px] text-beige-500">No sections parsed yet.</p>
+                    )}
+                  </div>
+
+                  {/* Hallucination Flags (manual uploads can have them too) */}
+                  {sow.hallucinationFlags && sow.hallucinationFlags.length > 0 && (
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                      <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Red-Flag Detections</h3>
+                      <div className="space-y-3">
+                        {sow.hallucinationFlags.map((flag) => (
+                          <div key={flag.id} className="rounded-xl border border-gold-200/50 bg-gold-50/20 p-4">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="w-4 h-4 text-gold-500 shrink-0 mt-0.5" />
+                              <div>
+                                <Badge variant={flag.severity === "high" ? "brown" : "gold"} size="sm">{flag.severity}</Badge>
+                                <p className="text-[13px] text-brown-800 mt-1">&ldquo;{flag.clause}&rdquo;</p>
+                                <p className="text-[12px] text-beige-600 mt-0.5">{flag.reason}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════
+             TAB 5: Risk & Compliance (B6 Step 6)
+             ═══════════════════════════════════════════════════ */}
+          <TabsContent value="risk" className="mt-0">
+            <div className="p-5 space-y-5">
+              <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Risk & Compliance</h2>
+
+              {/* Risk Score Breakdown */}
+              {sow.riskScore.overall > 0 && (
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider">Risk Score Breakdown</h3>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className={cn("w-5 h-5", sow.riskScore.overall <= 30 ? "text-forest-500" : sow.riskScore.overall <= 60 ? "text-gold-500" : "text-brown-600")} />
+                      <span className={cn("text-[20px] font-bold", sow.riskScore.overall <= 30 ? "text-forest-600" : sow.riskScore.overall <= 60 ? "text-gold-600" : "text-brown-700")}>
+                        {sow.riskScore.overall}/100
+                      </span>
+                      <Badge variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"} size="md">
+                        {sow.riskScore.overall <= 25 ? "Low Risk" : sow.riskScore.overall <= 50 ? "Medium Risk" : sow.riskScore.overall <= 75 ? "High Risk" : "Critical Risk"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[
+                      { label: "Completeness", value: sow.riskScore.completeness, max: 30, weight: "30%" },
+                      { label: "Confidence", value: sow.riskScore.confidence, max: 25, weight: "25%" },
+                      { label: "Compliance", value: sow.riskScore.compliance, max: 25, weight: "25%" },
+                      { label: "Pattern Match", value: sow.riskScore.patternMatch, max: 20, weight: "20%" },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-xl bg-beige-50/60 border border-beige-200/30 p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-semibold text-beige-600">{item.label}</span>
+                          <span className="text-[10px] text-beige-400">Weight: {item.weight}</span>
+                        </div>
+                        <div className="flex items-baseline gap-1 mb-2">
+                          <span className="text-[18px] font-bold text-brown-800">{item.value}</span>
+                          <span className="text-[12px] text-beige-500">/{item.max}</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-beige-100 overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full",
+                              (item.value / item.max) >= 0.85 ? "bg-forest-500" : (item.value / item.max) >= 0.6 ? "bg-teal-500" : "bg-gold-500"
+                            )}
+                            style={{ width: `${(item.value / item.max) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Ethics Screening */}
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Ethics Screening</h3>
+                {ethicsScreening.length > 0 ? (
+                  <div className="space-y-2">
+                    {ethicsScreening.map((item) => {
+                      const statusStyle = {
+                        pass: { bg: "bg-forest-100", text: "text-forest-700", icon: CheckCircle2, label: "Pass" },
+                        fail: { bg: "bg-brown-100", text: "text-brown-700", icon: X, label: "Fail" },
+                        warning: { bg: "bg-gold-100", text: "text-gold-700", icon: AlertTriangle, label: "Warning" },
+                        not_applicable: { bg: "bg-beige-100", text: "text-beige-600", icon: Clock, label: "N/A" },
+                      }[item.status];
+                      return (
+                        <div key={item.id} className="flex items-start gap-3 p-3 rounded-xl border border-beige-200/30 bg-beige-50/30">
+                          <div className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0", statusStyle.bg)}>
+                            <statusStyle.icon className={cn("w-3.5 h-3.5", statusStyle.text)} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-[13px] font-semibold text-brown-800">{item.criterion}</span>
+                              <Badge
+                                variant={item.status === "pass" ? "forest" : item.status === "fail" ? "brown" : item.status === "warning" ? "gold" : "beige"}
+                                size="sm"
+                              >
+                                {statusStyle.label}
+                              </Badge>
+                            </div>
+                            <p className="text-[12px] text-beige-600">{item.details}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-beige-500">No ethics screening data available.</p>
+                )}
+              </div>
+
+              {/* Data Sensitivity Handling */}
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider">
+                    Data Sensitivity: {sow.dataSensitivity.charAt(0).toUpperCase() + sow.dataSensitivity.slice(1)}
+                  </h3>
+                  <Badge variant={confidentialityVariantMap[sow.dataSensitivity]} size="sm">
+                    <Lock className="w-2.5 h-2.5" />
+                    {sow.dataSensitivity.charAt(0).toUpperCase() + sow.dataSensitivity.slice(1)}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  {sensitivityReqs.map((req, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-beige-50/50">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-forest-500 shrink-0" />
+                      <span className="text-[12px] text-brown-700">{req}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Regulatory Alignment */}
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider mb-4">Regulatory Alignment</h3>
+                {regulatoryItems.length > 0 ? (
+                  <div className="space-y-2">
+                    {regulatoryItems.map((item) => {
+                      const statusStyle = {
+                        compliant: { variant: "forest" as const, label: "Compliant" },
+                        non_compliant: { variant: "brown" as const, label: "Non-Compliant" },
+                        partial: { variant: "gold" as const, label: "Partial" },
+                        not_assessed: { variant: "beige" as const, label: "Not Assessed" },
+                      }[item.status];
+                      return (
+                        <div key={item.id} className="flex items-start gap-3 p-3 rounded-xl border border-beige-200/30 bg-beige-50/30">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-[13px] font-semibold text-brown-800">{item.regulation}</span>
+                              <Badge variant={statusStyle.variant} size="sm">{statusStyle.label}</Badge>
+                            </div>
+                            <p className="text-[11px] text-beige-500 mb-1">{item.description}</p>
+                            <p className="text-[12px] text-brown-700">{item.notes}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-beige-500">No regulatory alignment data available.</p>
+                )}
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════
+             TAB 6: Approval Status (B6 Step 7)
+             ═══════════════════════════════════════════════════ */}
+          <TabsContent value="approval" className="mt-0">
             {(() => {
               const STAGE_META: Record<string, { name: string; role: string }> = {
                 business:            { name: "Business Owner Review",        role: "Enterprise Admin" },
@@ -1255,8 +1975,233 @@ export default function SOWDetailPage() {
                 </div>
               );
             })()}
-          </div>{/* end approval */}
-        </div>
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════
+             TAB 7: Versions (B6 Step 8 + B8)
+             ═══════════════════════════════════════════════════ */}
+          <TabsContent value="versions" className="mt-0">
+            <div className="p-5 space-y-3">
+              <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">
+                Version History
+                <span className="ml-2 text-[12px] font-normal text-beige-500">({versions.length} versions)</span>
+              </h2>
+
+              <div className="space-y-0">
+                {versions.map((ver, idx) => (
+                  <div key={ver.version} className="flex gap-4 relative">
+                    <div className="flex flex-col items-center w-10 shrink-0">
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold",
+                        idx === 0 ? "bg-gradient-to-br from-brown-400 to-brown-500 text-white ring-4 ring-brown-100" : "bg-beige-100 text-beige-600"
+                      )}>
+                        v{ver.version}
+                      </div>
+                      {idx < versions.length - 1 && <div className="w-0.5 flex-1 bg-beige-200 mt-1" />}
+                    </div>
+
+                    <div className={cn(
+                      "flex-1 rounded-2xl border p-4 mb-3",
+                      idx === 0 ? "border-brown-200/60 bg-brown-50/30" : "border-beige-200/50 bg-white/70 backdrop-blur-sm"
+                    )}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-[13px] font-semibold text-brown-900">Version {ver.version}</span>
+                            {idx === 0 && <Badge variant="brown" size="sm">Current</Badge>}
+                            <Badge variant={ver.status === "approved" ? "forest" : "beige"} size="sm" dot>
+                              {ver.status === "approved" ? "Approved" : "Draft"}
+                            </Badge>
+                            {/* B8 spec: intake mode indicator per version */}
+                            <Badge variant={ver.intakeMode === "ai_generated" ? "teal" : "beige"} size="sm">
+                              {ver.intakeMode === "ai_generated" ? (
+                                <><Bot className="w-2.5 h-2.5" /> AI</>
+                              ) : (
+                                <><Upload className="w-2.5 h-2.5" /> Upload</>
+                              )}
+                            </Badge>
+                          </div>
+                          <p className="text-[12px] text-beige-600 leading-relaxed">{ver.changes}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 mt-2 text-[11px] text-beige-500">
+                        <div className="flex items-center gap-1">
+                          <User className="w-3 h-3" /> {ver.changedBy}
+                        </div>
+                        <span className="w-1 h-1 rounded-full bg-beige-300" />
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" /> {formatDateTime(ver.date)}
+                        </div>
+                        {idx !== 0 && (
+                          <Link
+                            href={`/enterprise/sow/${sow.id}/compare`}
+                            className="text-[11px] font-medium text-teal-600 hover:text-teal-700 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Compare with current
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════
+             TAB 8: Audit History (B6 Step 9)
+             ═══════════════════════════════════════════════════ */}
+          <TabsContent value="audit" className="mt-0">
+            <div className="p-5 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Audit Trail</h2>
+                <div className="flex items-center gap-2">
+                  {/* Event type filter (B6 spec: filter by type) */}
+                  <Select value={auditTypeFilter} onValueChange={setAuditTypeFilter}>
+                    <SelectTrigger className="h-8 text-xs w-[140px]">
+                      <Filter className="w-3 h-3 mr-1 text-beige-400" />
+                      <SelectValue placeholder="All Events" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Events</SelectItem>
+                      <SelectItem value="created">Created</SelectItem>
+                      <SelectItem value="updated">Updated</SelectItem>
+                      <SelectItem value="submitted">Submitted</SelectItem>
+                      <SelectItem value="parsed">Parsed</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {/* Export button (B6 spec: export audit log) */}
+                  <Button variant="outline" size="sm" className="h-8 text-xs">
+                    <Download className="w-3.5 h-3.5" /> Export
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-beige-100 bg-beige-50/50 overflow-hidden">
+                {filteredAudit.map((event, idx) => {
+                  const config = auditActionConfig[event.action] || auditActionConfig.updated;
+                  const IconComp = auditActionIcon[event.action] || ClipboardList;
+                  return (
+                    <div
+                      key={event.id}
+                      className={cn("flex items-start gap-4 p-4", idx < filteredAudit.length - 1 && "border-b border-beige-100")}
+                    >
+                      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", config.bg)}>
+                        <IconComp className={cn("w-4 h-4", config.color)} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[13px] font-semibold text-brown-900">{event.actor}</span>
+                          <Badge
+                            variant={event.action === "approved" ? "forest" : event.action === "created" || event.action === "parsed" ? "teal" : event.action === "submitted" ? "brown" : "gold"}
+                            size="sm"
+                          >
+                            {event.action.charAt(0).toUpperCase() + event.action.slice(1)}
+                          </Badge>
+                        </div>
+                        <p className="text-[12px] text-beige-600 leading-relaxed">{event.details}</p>
+                        <p className="text-[11px] text-beige-400 mt-1">{formatDateTime(event.timestamp)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {filteredAudit.length === 0 && (
+                  <div className="p-12 text-center">
+                    <p className="text-sm text-beige-500">No audit events match your filter.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════
+             TAB 9: Linked Projects (B6 Step 10)
+             ═══════════════════════════════════════════════════ */}
+          <TabsContent value="linked" className="mt-0">
+            <div className="p-5 space-y-4">
+              <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Linked Resources</h2>
+
+              {sow.planId ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Link href={`/enterprise/decomposition/${sow.planId}`} className="block group">
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5 hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center shrink-0">
+                          <GitBranch className="w-6 h-6 text-teal-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-bold text-beige-500 uppercase tracking-wider mb-0.5">Decomposition Plan</p>
+                          <p className="text-[14px] font-semibold text-brown-900 group-hover:text-brown-700 transition-colors">
+                            {sow.title} -- Plan
+                          </p>
+                          <p className="text-[12px] text-beige-600 mt-1">Plan ID: {sow.planId}</p>
+                        </div>
+                        <ExternalLink className="w-4 h-4 text-beige-400 group-hover:text-teal-500 transition-colors shrink-0 mt-1" />
+                      </div>
+                    </div>
+                  </Link>
+
+                  {linkedProject ? (
+                    <Link href={`/enterprise/projects/${linkedProject.id}`} className="block group">
+                      <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5 hover:shadow-lg hover:shadow-brown-100/20 hover:-translate-y-0.5 transition-all duration-300">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-forest-100 to-forest-200 flex items-center justify-center shrink-0">
+                            <ClipboardList className="w-6 h-6 text-forest-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-bold text-beige-500 uppercase tracking-wider mb-0.5">Active Project</p>
+                            <p className="text-[14px] font-semibold text-brown-900 group-hover:text-brown-700 transition-colors">{linkedProject.title}</p>
+                            <p className="text-[12px] text-beige-600 mt-1">Client: {linkedProject.client}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-[11px] text-beige-500">Progress:</span>
+                              <Badge variant={linkedProject.health === "on_track" ? "forest" : "gold"} size="sm">
+                                {linkedProject.progress}%
+                              </Badge>
+                            </div>
+                          </div>
+                          <ExternalLink className="w-4 h-4 text-beige-400 group-hover:text-forest-500 transition-colors shrink-0 mt-1" />
+                        </div>
+                      </div>
+                    </Link>
+                  ) : (
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-beige-100 to-beige-200 flex items-center justify-center shrink-0">
+                          <ClipboardList className="w-6 h-6 text-beige-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-bold text-beige-500 uppercase tracking-wider mb-0.5">Project</p>
+                          <p className="text-[14px] font-semibold text-brown-900">No project created yet</p>
+                          <p className="text-[12px] text-beige-500 mt-1">
+                            A project will be created once the plan is approved and a team is assigned.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-12 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-beige-100 flex items-center justify-center mx-auto mb-4">
+                    <Link2 className="w-7 h-7 text-beige-400" />
+                  </div>
+                  <p className="text-sm font-semibold text-brown-800 mb-1">No linked resources yet</p>
+                  <p className="text-xs text-beige-500 max-w-sm mx-auto">
+                    Once this SOW is approved and decomposed, linked plans and projects will appear here.
+                  </p>
+                  {(sow.status === "draft" || sow.status === "review") && isValidated && (
+                    <Button variant="outline" size="sm" className="mt-4" onClick={() => setShowSubmitModal(true)}>
+                      <Send className="w-3.5 h-3.5" /> Submit for Approval
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
       </motion.div>
 
       {/* ═══════════════════════════════════════════════════
