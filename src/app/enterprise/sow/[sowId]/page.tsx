@@ -3,7 +3,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -55,6 +55,7 @@ import {
   Badge,
   Button,
   Progress,
+  Skeleton,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -264,12 +265,34 @@ const auditActionIcon: Record<string, React.ElementType> = {
   reviewed: Eye,
 };
 
+const DEFAULT_APPROVAL_STAGES = [
+  { stage: "business" as const,            status: "in_review" as const, reviewer: "Enterprise Admin" },
+  { stage: "glimmora_commercial" as const, status: "pending" as const },
+  { stage: "legal" as const,               status: "pending" as const },
+  { stage: "security" as const,            status: "pending" as const },
+  { stage: "final" as const,               status: "pending" as const },
+];
+
+const SOW_DEFAULTS = {
+  title: "Untitled SOW", client: "", status: "draft" as const,
+  intakeMode: "manual_upload" as const, confidentiality: "internal" as const,
+  dataSensitivity: "internal" as const, version: 1,
+  createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  createdBy: "", fileSize: "—", pages: 0, parsedSections: 0, totalSections: 0,
+  aiConfidence: 0, riskScore: { overall: 0, completeness: 0, confidence: 0, compliance: 0, patternMatch: 0 },
+  tags: [], estimatedBudget: 0, estimatedDuration: "", stakeholders: [],
+  approvalStages: DEFAULT_APPROVAL_STAGES,
+};
+
 /* ══════════════════════════════════════════════════════════════
    Main Component
    ══════════════════════════════════════════════════════════════ */
 
 export default function SOWDetailPage() {
   const params = useParams();
+  const pathname = usePathname();
+  const backHref = pathname.includes("/approval/") ? "/enterprise/sow/approval" : "/enterprise/sow";
+  const backLabel = pathname.includes("/approval/") ? "Approval Pipeline" : "SOW Repository";
   const sowId = params.sowId as string;
   const allSows = useSowStore((s) => s.sows);
   const addSow = useSowStore((s) => s.addSow);
@@ -277,43 +300,24 @@ export default function SOWDetailPage() {
   const addPipelineSOW = useSOWPipelineStore((s) => s.addSOW);
   const updatePipelineSOW = useSOWPipelineStore((s) => s.updateSOW);
   const pipelineSows = useSOWPipelineStore((s) => s.sows);
-  const { data: apiSowRes } = useManualSOW(sowId);
+  const { data: apiSowRes, isLoading: apiSowLoading } = useManualSOW(null); // API disabled — using mock
   const confirmAndSubmit = useConfirmAndSubmit(sowId);
-  /* If the API returned a SOW, merge its fields on top of the mock/store record */
-  const apiSowData = apiSowRes?.data as Record<string, unknown> | null | undefined;
-  const normalizedApiSow = React.useMemo(() => {
-    if (!apiSowData) return null;
-    const d = { ...apiSowData } as Record<string, unknown>;
-    if (d.approval_stages && !d.approvalStages) d.approvalStages = d.approval_stages;
-    if (d.parsed_sections && !d.parsedSections) d.parsedSections = d.parsed_sections;
-    if (d.total_sections && !d.totalSections) d.totalSections = d.total_sections;
-    return d;
-  }, [apiSowData]);
+  const normalizedApiSow = null;
+  const apiSowData = apiSowRes?.data; // unused while API is disabled
+  void apiSowData; void apiSowLoading;
   const sow = React.useMemo(() => {
-    // Try to find the SOW by its actual ID first
     const exactMatch = allSows.find((s) => s.id === sowId)
       ?? mockSOWs.find((s) => s.id === sowId);
     const pipelineMeta = pipelineSows.find((s) => s.id === sowId);
 
-    if (exactMatch) {
-      // Found in a real store — merge API data on top for real-time fields
-      return normalizedApiSow ? { ...exactMatch, ...normalizedApiSow, id: sowId } : exactMatch;
-    }
+    if (exactMatch) return exactMatch;
 
-    // API-only SOW (no local store match) — use the API payload atop a base shape
-    if (normalizedApiSow) {
-      return { ...allSows[0], ...normalizedApiSow, id: sowId };
-    }
-
-    // SOW only exists in the pipeline store (no mock/store entry).
-    // Build a synthetic record from the pipeline metadata so the correct
-    // approval stage is shown instead of whatever allSows[0] happens to have.
     if (pipelineMeta) {
       const stageKeys = ["business", "glimmora_commercial", "legal", "security", "final"] as const;
       const completed = pipelineMeta.completedStages;
       const current = pipelineMeta.currentStage;
       return {
-        ...(allSows[0]),   // use as a shape template for fields like riskScore, pages, etc.
+        ...SOW_DEFAULTS,
         id: sowId,
         title: pipelineMeta.title,
         client: pipelineMeta.client,
@@ -327,19 +331,18 @@ export default function SOWDetailPage() {
       };
     }
 
-    // Last resort fallback
-    return allSows[0];
-  }, [allSows, pipelineSows, sowId, normalizedApiSow]);
-  const linkedProject = mockProjects.find((p) => p.sowId === sow.id);
-  const sections = mockSOWSections.filter((s) => s.sowId === sow.id);
-  const clauses = mockSOWClauses.filter((c) => c.sowId === sow.id);
-  const versions = generateVersionHistory(sow);
-  const auditTrail = generateAuditTrail(sow);
-  const ethicsScreening = mockEthicsScreening[sow.id] || [];
-  const regulatoryItems = mockRegulatoryAlignment[sow.id] || [];
-  const genParams = mockGenerationParams[sow.id];
-  const hallucinationLayers = mockHallucinationLayers[sow.id] || [];
-  const sensitivityReqs = sensitivityHandlingRequirements[sow.dataSensitivity] || [];
+    return { ...SOW_DEFAULTS, id: sowId };
+  }, [allSows, pipelineSows, sowId]);
+  const linkedProject = sow ? mockProjects.find((p) => p.sowId === sow.id) : undefined;
+  const sections = sow ? mockSOWSections.filter((s) => s.sowId === sow.id) : [];
+  const clauses = sow ? mockSOWClauses.filter((c) => c.sowId === sow.id) : [];
+  const versions = sow ? generateVersionHistory(sow) : [];
+  const auditTrail = sow ? generateAuditTrail(sow) : [];
+  const ethicsScreening = sow ? mockEthicsScreening[sow.id] || [] : [];
+  const regulatoryItems = sow ? mockRegulatoryAlignment[sow.id] || [] : [];
+  const genParams = sow ? mockGenerationParams[sow.id] : undefined;
+  const hallucinationLayers = sow ? mockHallucinationLayers[sow.id] || [] : [];
+  const sensitivityReqs = sow ? sensitivityHandlingRequirements[sow.dataSensitivity] || [] : [];
 
   /* UI state */
   const [expandedSections, setExpandedSections] = React.useState<Set<string>>(
@@ -366,16 +369,16 @@ export default function SOWDetailPage() {
   // Sync the active approval stage index to the first in_review stage whenever
   // the SOW changes (e.g. navigating from the pipeline page to a SOW at stage 3+).
   React.useEffect(() => {
+    if (!sow) return;
     const idx = sow.approvalStages.findIndex((s) => s.status === "in_review");
     if (idx >= 0) {
       setActiveApprovalIdx(idx);
     } else {
-      // All approved or all pending — fall back to first pending, or last stage
       const pendingIdx = sow.approvalStages.findIndex((s) => s.status === "pending");
       setActiveApprovalIdx(pendingIdx >= 0 ? pendingIdx : sow.approvalStages.length);
     }
     setApprovalChecked({});
-  }, [sow.id]);
+  }, [sow?.id]);
 
   React.useEffect(() => {
     if (!sectionDropdownOpen) return;
@@ -403,6 +406,7 @@ export default function SOWDetailPage() {
 
   // Seed initial stage_activated message on first visit
   React.useEffect(() => {
+    if (!sow) return;
     const thread = useSowMessagesStore.getState().getThread(sow.id);
     if (thread.length === 0) {
       const activatedMsg = buildActivatedMessage(sow.id, 0, sow.title);
@@ -415,7 +419,30 @@ export default function SOWDetailPage() {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sow.id]);
+  }, [sow?.id]);
+
+  if (!sow) {
+    if (apiSowLoading) {
+      return (
+        <div className="max-w-[1400px] mx-auto space-y-5 p-6">
+          <Skeleton className="h-5 w-40 rounded" />
+          <div className="rounded-2xl border border-beige-200/50 bg-white/70 p-6 space-y-4">
+            <Skeleton className="h-7 w-2/3 rounded" />
+            <Skeleton className="h-4 w-1/3 rounded" />
+            <div className="flex gap-2 mt-2">
+              <Skeleton className="h-6 w-20 rounded-full" />
+              <Skeleton className="h-6 w-24 rounded-full" />
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+          </div>
+          <Skeleton className="h-[400px] rounded-2xl" />
+        </div>
+      );
+    }
+    return null;
+  }
 
   const toggleSection = (id: string) => {
     setExpandedSections((prev) => {
@@ -558,11 +585,11 @@ export default function SOWDetailPage() {
       {/* ── Breadcrumb ── */}
       <motion.div variants={fadeUp}>
         <Link
-          href="/enterprise/sow"
+          href={backHref}
           className="inline-flex items-center gap-2 text-sm text-beige-600 hover:text-brown-700 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          SOW Repository
+          {backLabel}
         </Link>
       </motion.div>
 
@@ -1532,11 +1559,10 @@ export default function SOWDetailPage() {
                 ],
               };
 
-              const approvalStages  = sow.approvalStages ?? [];
-              const totalStages     = approvalStages.length;
-              const isDone         = activeApprovalIdx >= totalStages;
+              const totalStages     = sow.approvalStages.length;
+              const isDone         = totalStages > 0 && activeApprovalIdx >= totalStages;
               const activeStageIdx = isDone ? totalStages - 1 : activeApprovalIdx;
-              const activeStage    = approvalStages[activeApprovalIdx];
+              const activeStage    = sow.approvalStages[activeApprovalIdx];
               const activeMeta     = !isDone && activeStage ? STAGE_META[activeStage.stage] : null;
               const checklist      = !isDone && activeStage ? (STAGE_CHECKLISTS[activeStage.stage] ?? []) : [];
               const allChecked     = checklist.every((_, i) => approvalChecked[`${activeApprovalIdx}-${i}`]);
@@ -1660,7 +1686,7 @@ export default function SOWDetailPage() {
                     <div className="relative flex items-start justify-between">
                       {/* connecting line behind circles */}
                       <div className="absolute top-5 left-0 right-0 h-px bg-beige-200 z-0" />
-                      {(sow.approvalStages ?? []).map((stage, idx) => {
+                      {sow.approvalStages.map((stage, idx) => {
                         const isApproved = idx < activeApprovalIdx;
                         const isActive   = idx === activeApprovalIdx && !isDone;
                         const isRejected = false;

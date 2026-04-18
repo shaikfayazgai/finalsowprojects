@@ -6,16 +6,17 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   FileText, Search, Plus, DollarSign, Shield, Upload, Sparkles, AlertTriangle,
-  ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Clock,
+  ArrowUp, ArrowDown, Clock,
   MoreVertical, Eye, Download, Archive, CheckCircle2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
+import { TablePagination } from "@/components/ui/table-pagination";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { useSowStore } from "@/lib/stores/sow-store";
 import { useManualSOWList, useDeleteManualSOW } from "@/lib/hooks/use-manual-sow";
-import { useSowList } from "@/lib/hooks/use-sow-wizard";
+import { useSowList, useDeleteAiSOW } from "@/lib/hooks/use-sow-wizard";
 
 /* ══════════════════════════════════════════ Status config (per FSD §7.1.4) ══════════════════════════════════════════ */
 
@@ -92,7 +93,7 @@ const riskFilterOptions = [
 
 function Pill({ bg, color, children, bold, className }: { bg: string; color: string; children: React.ReactNode; bold?: boolean; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 text-[9px] tracking-wide uppercase px-2.5 py-0.5 rounded-full", bold ? "font-bold" : "font-medium", className)}
+    <span className={cn("inline-flex items-center gap-1 text-[9px] tracking-wide uppercase px-2.5 py-0.5 rounded-full whitespace-nowrap", bold ? "font-bold" : "font-medium", className)}
       style={{ background: bg, color }}>
       {children}
     </span>
@@ -117,7 +118,7 @@ function RiskBar({ score }: { score: number }) {
 
 /* ══════════════════════════════════════════ Row Kebab Menu (FSD §7.1.5) ══════════════════════════════════════════ */
 
-function RowKebab({ sow, onAction }: { sow: typeof mockSOWs[0]; onAction: (action: string, sowId: string) => void }) {
+function RowKebab({ sow, onAction }: { sow: typeof mockSOWs[0]; onAction: (action: string, sowId: string, sow: typeof mockSOWs[0]) => void }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
 
@@ -127,31 +128,33 @@ function RowKebab({ sow, onAction }: { sow: typeof mockSOWs[0]; onAction: (actio
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const items: { label: string; action: string; show: boolean }[] = [
+  const items: { label: string; action: string; show: boolean; danger?: boolean }[] = [
     { label: "View Detail",            action: "view",     show: true },
     { label: "Edit",                   action: "edit",     show: sow.status === "draft" },
     { label: "Download PDF",           action: "download", show: true },
     { label: "View Approval Progress", action: "approval", show: ["approval", "review", "pending_commercial_review"].includes(sow.status) },
-    { label: "Archive",                action: "archive",  show: ["approved", "rejected"].includes(sow.status) },
+    { label: "Delete",                 action: "delete",   show: true, danger: true },
   ];
 
   return (
     <div ref={ref} className="relative">
       <button onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
-        className="flex items-center justify-center w-7 h-7 rounded-lg text-beige-400 hover:text-brown-600 hover:bg-beige-50 transition-all">
-        <MoreVertical className="w-3.5 h-3.5" />
+        className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-gray-100"
+        style={{ color: "var(--ink)" }}>
+        <MoreVertical className="w-4 h-4" />
       </button>
       {open && (
         <div className="absolute right-0 top-8 z-50 w-52 rounded-xl bg-white py-1.5 border border-beige-200/60"
           style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
           {items.filter((i) => i.show).map((item) => (
-            <button key={item.action} onClick={(e) => { e.stopPropagation(); onAction(item.action, sow.id); setOpen(false); }}
-              className="flex items-center gap-2.5 w-full px-4 py-2 text-[12px] text-brown-700 hover:bg-beige-50 transition-colors text-left">
+            <button key={item.action} onClick={(e) => { e.stopPropagation(); onAction(item.action, sow.id, sow); setOpen(false); }}
+              className="flex items-center gap-2.5 w-full px-4 py-2 text-[12px] hover:bg-beige-50 transition-colors text-left"
+              style={{ color: item.danger ? "var(--danger)" : undefined }}>
               {item.action === "view" && <Eye className="w-3.5 h-3.5" />}
               {item.action === "edit" && <FileText className="w-3.5 h-3.5" />}
               {item.action === "download" && <Download className="w-3.5 h-3.5" />}
               {item.action === "approval" && <CheckCircle2 className="w-3.5 h-3.5" />}
-              {item.action === "archive" && <Archive className="w-3.5 h-3.5" />}
+              {item.action === "delete" && <Archive className="w-3.5 h-3.5" />}
               {item.label}
             </button>
           ))}
@@ -218,12 +221,25 @@ export default function SOWListPage() {
   const [searchFocused, setSearchFocused] = React.useState(false);
   const [recentViewedOpen, setRecentViewedOpen] = React.useState(false);
 
+  const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string; intakeMode: "ai_generated" | "manual_upload" } | null>(null);
+
   const storeSows = useSowStore((s) => s.sows);
   const { data: manualSowListRes, isFetching: manualFetching, isLoading: manualLoading } = useManualSOWList();
   const { data: aiSowListRes, isFetching: aiFetching, isLoading: aiLoading } = useSowList();
   const isFetchingAny = manualFetching || aiFetching;
   const isLoading = manualLoading || aiLoading;
-  const deleteSow = useDeleteManualSOW();
+  const deleteManualSow = useDeleteManualSOW();
+  const deleteAiSow = useDeleteAiSOW();
+  const isDeleting = deleteManualSow.isPending || deleteAiSow.isPending;
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    if (deleteTarget.intakeMode === "ai_generated") {
+      deleteAiSow.mutate({ sowId: deleteTarget.id }, { onSuccess: () => setDeleteTarget(null) });
+    } else {
+      deleteManualSow.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
+    }
+  }
 
   /* Normalise raw API responses into the shape the table expects */
   function extractList(res: unknown): Record<string, unknown>[] {
@@ -394,14 +410,14 @@ export default function SOWListPage() {
   }
 
   /* Row action handler — FSD §7.1.5 */
-  function handleRowAction(action: string, sowId: string) {
+  function handleRowAction(action: string, sowId: string, sow?: import("@/types/enterprise").SOW) {
     switch (action) {
       case "view": router.push(`/enterprise/sow/${sowId}`); break;
       case "edit": router.push(`/enterprise/sow/${sowId}`); break;
-      case "download": break; /* PDF download */
-      case "approval": router.push(`/enterprise/sow/${sowId}`); break;
-      case "archive":
-        deleteSow.mutate(sowId);
+      case "download": break;
+      case "approval": router.push(`/enterprise/sow/approval`); break;
+      case "delete":
+        if (sow) setDeleteTarget({ id: sow.id, title: sow.title, intakeMode: sow.intakeMode });
         break;
     }
   }
@@ -409,12 +425,11 @@ export default function SOWListPage() {
   const columns = [
     { field: "title" as SortField, label: "Project Title", align: "left", minW: 240 },
     { field: "client" as SortField, label: "Client", align: "left", minW: 120 },
-    { field: "intake" as SortField, label: "Intake", align: "left", minW: 130 },
     { field: "status" as SortField, label: "Status", align: "left", minW: 130 },
     { field: "sensitivity" as SortField, label: "Sensitivity", align: "left", minW: 100 },
     { field: "risk" as SortField, label: "Risk", align: "center", minW: 110 },
     { field: "version" as SortField, label: "Version", align: "center", minW: 70 },
-    { field: "modified" as SortField, label: "Modified ↓", align: "left", minW: 100 },
+    { field: "modified" as SortField, label: "Modified", align: "left", minW: 100 },
   ];
 
   if (isLoading) {
@@ -487,6 +502,7 @@ export default function SOWListPage() {
   }
 
   return (
+    <>
     <motion.div variants={stagger} initial="hidden" animate="show">
 
       {/* ═══ HERO ═══ */}
@@ -545,247 +561,304 @@ export default function SOWListPage() {
       </motion.div>
 
       {/* ═══ TABLE CARD ═══ */}
-        <motion.div variants={fadeUp} className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm overflow-hidden mb-5">
+        <motion.div variants={fadeUp} className="rounded-2xl mb-5"
+          style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "visible" }}>
 
           {/* Card header */}
-          <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
-            <span className="text-[14px] font-semibold text-brown-900">All Statements of Work</span>
+          <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg" style={{ background: "var(--color-brown-50)", border: "1px solid var(--color-brown-100)" }}>
+                <FileText className="w-4 h-4" style={{ color: "var(--color-brown-600)" }} />
+              </div>
+              <div>
+                <span className="text-[13.5px] font-semibold" style={{ color: "var(--ink)" }}>All Statements of Work</span>
+                {filtered.length !== allSows.length && (
+                  <span className="ml-2 text-[11px] font-medium px-1.5 py-0.5 rounded-md" style={{ background: "var(--color-brown-50)", color: "var(--color-brown-600)" }}>
+                    {filtered.length} of {allSows.length}
+                  </span>
+                )}
+                {filtered.length === allSows.length && allSows.length > 0 && (
+                  <span className="ml-2 text-[11px] font-medium px-1.5 py-0.5 rounded-md" style={{ background: "var(--color-gray-100)", color: "var(--ink-faint)" }}>
+                    {allSows.length} total
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* Recently Viewed */}
+            <div className="relative">
+              <button onClick={() => setRecentViewedOpen(!recentViewedOpen)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium transition-all hover:bg-gray-50"
+                style={{ border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}>
+                <Clock className="w-3.5 h-3.5" />
+                Recent
+              </button>
+              <RecentlyViewedPanel open={recentViewedOpen} onClose={() => setRecentViewedOpen(false)} />
+            </div>
           </div>
 
-          {/* ═══ FILTER BAR — FSD §7.1.3 ═══ */}
-          <div className="flex items-center justify-between gap-3 px-6 py-3" style={{ borderBottom: "1px solid var(--border-hair)" }}>
-            {/* Search — FSD §7.1.3: "Search SOWs by title, client, or ID..." + ⌘K */}
-            <div className={cn("flex items-center gap-2 rounded-xl transition-all duration-200 shrink-0 bg-white/80 backdrop-blur-sm", searchFocused ? "w-64" : "w-[240px]")}
+          {/* ═══ FILTER BAR ═══ */}
+          <div className="flex items-center gap-3 px-6 py-3" style={{ borderBottom: "1px solid var(--border-hair)", background: "rgba(249,247,245,0.4)" }}>
+            {/* Search */}
+            <div className={cn("flex items-center gap-2 rounded-lg transition-all duration-200 shrink-0 bg-white", searchFocused ? "w-72" : "w-60")}
               style={{
-                border: searchFocused ? "1px solid var(--color-brown-300)" : "1px solid rgba(222,207,196,0.6)",
-                padding: "7px 12px",
-                boxShadow: searchFocused ? "0 0 0 3px color-mix(in srgb, var(--color-brown-500) 8%, transparent)" : undefined,
+                border: searchFocused ? "1px solid var(--color-brown-400)" : "1px solid var(--border-soft)",
+                padding: "6px 11px",
+                boxShadow: searchFocused ? "0 0 0 3px color-mix(in srgb, var(--color-brown-500) 8%, transparent)" : "none",
               }}
             >
-              <Search className="w-3.5 h-3.5 shrink-0 text-beige-400" />
-              <input ref={searchRef} type="text" placeholder="Search SOWs by title, client, or ID..." value={search}
+              <Search className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--ink-faint)" }} />
+              <input ref={searchRef} type="text" placeholder="Search by title, client, or ID…" value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)}
-                className="border-none outline-none bg-transparent w-full text-[12.5px] text-brown-800 placeholder:text-beige-400" />
+                className="border-none outline-none bg-transparent w-full text-[12px]"
+                style={{ color: "var(--ink)" }} />
               {search ? (
-                <button onClick={() => setSearch("")} className="shrink-0 p-0.5 rounded text-beige-400 hover:text-brown-600"><X className="w-3 h-3" /></button>
+                <button onClick={() => setSearch("")} className="shrink-0"><X className="w-3 h-3" style={{ color: "var(--ink-faint)" }} /></button>
               ) : !searchFocused ? (
-                <kbd className="font-mono whitespace-nowrap shrink-0 text-[9px] text-beige-400 bg-beige-100 border border-beige-200 px-1.5 py-px rounded">⌘K</kbd>
+                <kbd className="font-mono whitespace-nowrap shrink-0 text-[9px] px-1.5 py-px rounded" style={{ color: "var(--ink-faint)", background: "var(--color-gray-100)", border: "1px solid var(--border-soft)" }}>⌘K</kbd>
               ) : null}
             </div>
 
-            {/* Filters + Recently Viewed — FSD §7.1.3 */}
-            <div className="flex items-center gap-2">
-              {/* STATUS filter */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-8 rounded-xl bg-white/80 border border-beige-200/60 px-3 text-[12px] text-brown-700 hover:border-beige-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 130 }}><SelectValue placeholder="STATUS: ALL" /></SelectTrigger>
-                <SelectContent>{statusFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-              </Select>
-              {/* INTAKE filter */}
-              <Select value={intakeFilter} onValueChange={setIntakeFilter}>
-                <SelectTrigger className="h-8 rounded-xl bg-white/80 border border-beige-200/60 px-3 text-[12px] text-brown-700 hover:border-beige-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 120 }}><SelectValue placeholder="INTAKE: ALL" /></SelectTrigger>
-                <SelectContent>{intakeFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-              </Select>
-              {/* RISK filter */}
-              <Select value={riskFilter} onValueChange={setRiskFilter}>
-                <SelectTrigger className="h-8 rounded-xl bg-white/80 border border-beige-200/60 px-3 text-[12px] text-brown-700 hover:border-beige-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 110 }}><SelectValue placeholder="RISK: ALL" /></SelectTrigger>
-                <SelectContent>{riskFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-              </Select>
+            <div className="w-px h-5" style={{ background: "var(--border-soft)" }} />
 
-              {activeFilterCount > 0 && (
-                <button onClick={clearAllFilters} className="flex items-center gap-1.5 text-[11px] font-medium text-teal-600 hover:text-teal-700 px-2.5 py-1 rounded-xl hover:bg-teal-50 transition-all underline underline-offset-2">
-                  <X className="w-3 h-3" /> Clear
-                </button>
-              )}
+            {/* STATUS filter */}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 rounded-lg bg-white px-3 text-[12px] transition-all" style={{ minWidth: 130, border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}><SelectValue placeholder="Status: All" /></SelectTrigger>
+              <SelectContent>{statusFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={intakeFilter} onValueChange={setIntakeFilter}>
+              <SelectTrigger className="h-8 rounded-lg bg-white px-3 text-[12px] transition-all" style={{ minWidth: 120, border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}><SelectValue placeholder="Intake: All" /></SelectTrigger>
+              <SelectContent>{intakeFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={riskFilter} onValueChange={setRiskFilter}>
+              <SelectTrigger className="h-8 rounded-lg bg-white px-3 text-[12px] transition-all" style={{ minWidth: 110, border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}><SelectValue placeholder="Risk: All" /></SelectTrigger>
+              <SelectContent>{riskFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+            </Select>
 
-              {/* Clock icon — Recently Viewed (FSD §7.1.3) */}
-              <div className="relative">
-                <button onClick={() => setRecentViewedOpen(!recentViewedOpen)}
-                  className="flex items-center justify-center w-8 h-8 rounded-xl text-beige-400 hover:text-brown-600 hover:bg-beige-50 border border-beige-200/60 transition-all">
-                  <Clock className="w-3.5 h-3.5" />
-                </button>
-                <RecentlyViewedPanel open={recentViewedOpen} onClose={() => setRecentViewedOpen(false)} />
-              </div>
-            </div>
+            {activeFilterCount > 0 && (
+              <button onClick={clearAllFilters}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11.5px] font-medium transition-all hover:opacity-80"
+                style={{ background: "var(--color-brown-50)", color: "var(--color-brown-700)", border: "1px solid var(--color-brown-100)" }}>
+                <X className="w-3 h-3" /> Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
+              </button>
+            )}
           </div>
 
-          {/* ═══ TABLE — FSD §7.1.4 ═══ */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <colgroup>
-                <col style={{ minWidth: 300 }} />
-                <col style={{ width: 140 }} />
-                <col style={{ width: 150 }} />
-                <col style={{ width: 160 }} />
-                <col style={{ width: 110 }} />
-                <col style={{ width: 120 }} />
-                <col style={{ width: 80 }} />
-                <col style={{ width: 110 }} />
-                <col style={{ width: 52 }} />
-              </colgroup>
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-hair)" }}>
-                  {columns.map((col) => {
-                    const active = sortField === col.field;
-                    return (
-                      <th key={col.field} onClick={() => handleSort(col.field)}
-                        className="cursor-pointer select-none transition-colors"
-                        style={{
-                          padding: "11px 16px", textAlign: col.align as "left" | "center",
-                          fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase",
-                          color: active ? "var(--color-brown-700)" : "var(--color-beige-500)",
-                          background: "rgba(249,247,245,0.6)",
-                        }}>
-                        <div className="flex items-center gap-1" style={{ justifyContent: col.align === "center" ? "center" : "flex-start" }}>
-                          <span>{col.label}</span>
-                          <span style={{ opacity: active ? 1 : 0, transition: "opacity 0.15s" }}>
-                            {active && sortDir === "asc" ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
-                          </span>
-                        </div>
-                      </th>
-                    );
-                  })}
-                  {/* Actions column */}
-                  <th style={{ padding: "11px 12px", background: "rgba(249,247,245,0.6)" }} />
-                </tr>
-              </thead>
-              <tbody>
-                {/* Skeleton rows — show when fetching and no data yet */}
-                {isFetchingAny && paginated.length === 0 && Array.from({ length: 7 }).map((_, i) => (
-                  <tr key={`sk-${i}`} style={{ borderBottom: "1px solid var(--border-hair)" }}>
-                    <td style={{ padding: "14px 16px" }}>
-                      <div className="animate-pulse rounded" style={{ height: 13, width: "75%", background: "var(--color-beige-100)" }} />
-                    </td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <div className="animate-pulse rounded" style={{ height: 12, width: "65%", background: "var(--color-beige-100)" }} />
-                    </td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <div className="animate-pulse rounded-full" style={{ height: 20, width: 90, background: "var(--color-beige-100)" }} />
-                    </td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <div className="animate-pulse rounded-full" style={{ height: 20, width: 90, background: "var(--color-beige-100)" }} />
-                    </td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <div className="animate-pulse rounded" style={{ height: 12, width: "60%", background: "var(--color-beige-100)" }} />
-                    </td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <div className="flex items-center gap-2 justify-center">
-                        <div className="animate-pulse rounded-full" style={{ height: 6, width: 56, background: "var(--color-beige-100)" }} />
-                        <div className="animate-pulse rounded" style={{ height: 12, width: 20, background: "var(--color-beige-100)" }} />
-                      </div>
-                    </td>
-                    <td style={{ padding: "14px 16px", textAlign: "center" }}>
-                      <div className="animate-pulse rounded mx-auto" style={{ height: 12, width: 24, background: "var(--color-beige-100)" }} />
-                    </td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <div className="animate-pulse rounded" style={{ height: 12, width: "70%", background: "var(--color-beige-100)" }} />
-                    </td>
-                    <td style={{ padding: "8px 12px" }} />
-                  </tr>
-                ))}
-                {/* Empty state — not fetching, no data */}
-                {!isFetchingAny && paginated.length === 0 && (
-                  <tr>
-                    <td colSpan={9} style={{ padding: "40px 16px", textAlign: "center" }}>
-                      <span className="text-[13px] text-beige-400">No statements of work found.</span>
-                    </td>
-                  </tr>
-                )}
-                {/* Data rows */}
-                {paginated.map((sow) => {
-                  const sc = statusConfig[sow.status] || statusConfig.draft;
-                  const sens = sensitivityConfig[sow.dataSensitivity] || sensitivityConfig.internal;
-                  /* FSD §7.1.4: Pending Commercial Review uses amber-orange, bold */
-                  const isPendingCommercial = sow.status === "pending_commercial_review";
+          {/* ═══ TABLE ═══ */}
+          <table className="w-full table-fixed">
+            <colgroup>
+              <col style={{ width: "27%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "5%" }} />
+            </colgroup>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border-hair)", background: "rgba(249,247,245,0.8)" }}>
+                {columns.map((col) => {
+                  const active = sortField === col.field;
                   return (
-                    <tr key={sow.id} onClick={() => router.push(`/enterprise/sow/${sow.id}`)}
-                      className="group cursor-pointer transition-colors hover:bg-beige-50/40"
-                      style={{ borderBottom: "1px solid var(--border-hair)" }}>
-
-                      {/* Project Title */}
-                      <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
-                        <div className="text-[13px] font-semibold text-brown-900 group-hover:text-teal-700 transition-colors">{sow.title}</div>
-                      </td>
-
-                      {/* Client */}
-                      <td className="text-[12.5px] text-brown-700" style={{ padding: "13px 16px", verticalAlign: "middle" }}>{sow.client}</td>
-
-                      {/* Intake — FSD §7.1.4: Sparkle + "AI-GENERATED" or Upload arrow + "MANUAL UPLOAD" */}
-                      <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
-                        <Pill bg={sow.intakeMode === "ai_generated" ? "var(--color-teal-50)" : "var(--color-gray-100)"}
-                              color={sow.intakeMode === "ai_generated" ? "var(--color-teal-700)" : "var(--color-gray-600)"}>
-                          {sow.intakeMode === "ai_generated"
-                            ? <><Sparkles className="w-2.5 h-2.5" /> AI-Generated</>
-                            : <><Upload className="w-2.5 h-2.5" /> Manual Upload</>}
-                        </Pill>
-                      </td>
-
-                      {/* Status — FSD §7.1.4 */}
-                      <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
-                        <Pill bg={sc.bg} color={sc.color} bold={isPendingCommercial}>{sc.label}</Pill>
-                      </td>
-
-                      {/* Sensitivity */}
-                      <td className="text-[12px] text-brown-700" style={{ padding: "13px 16px", verticalAlign: "middle" }}>{sens.label}</td>
-
-                      {/* Risk — FSD §7.1.4: Coloured progress bar + numeric score */}
-                      <td style={{ padding: "13px 16px", verticalAlign: "middle", textAlign: "center" }}>
-                        <RiskBar score={sow.riskScore?.overall ?? 0} />
-                      </td>
-
-                      {/* Version */}
-                      <td style={{ padding: "13px 16px", verticalAlign: "middle", textAlign: "center" }}>
-                        <span className="font-mono text-[12px] font-medium text-brown-600">v{sow.version}</span>
-                      </td>
-
-                      {/* Modified */}
-                      <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
-                        <span className="text-[11.5px] text-beige-500">{formatDate(sow.updatedAt)}</span>
-                      </td>
-
-                      {/* Kebab menu — FSD §7.1.5 */}
-                      <td style={{ padding: "8px 12px", verticalAlign: "middle" }} onClick={(e) => e.stopPropagation()}>
-                        <RowKebab sow={sow} onAction={handleRowAction} />
-                      </td>
-                    </tr>
+                    <th key={col.field} onClick={() => handleSort(col.field)}
+                      className="cursor-pointer select-none"
+                      style={{
+                        padding: "10px 14px", textAlign: col.align as "left" | "center",
+                        fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase",
+                        color: active ? "var(--color-brown-600)" : "var(--ink-faint)",
+                        whiteSpace: "nowrap",
+                      }}>
+                      <div className="flex items-center gap-1" style={{ justifyContent: col.align === "center" ? "center" : "flex-start" }}>
+                        <span>{col.label}</span>
+                        <span style={{ opacity: active ? 1 : 0, transition: "opacity 0.15s" }}>
+                          {sortDir === "asc" ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                        </span>
+                      </div>
+                    </th>
                   );
                 })}
-              </tbody>
-            </table>
+                <th style={{ width: 40 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {/* Skeleton rows */}
+              {isFetchingAny && paginated.length === 0 && Array.from({ length: 7 }).map((_, i) => (
+                <tr key={`sk-${i}`} style={{ borderBottom: "1px solid var(--border-hair)" }}>
+                  <td style={{ padding: "13px 14px" }}>
+                    <div className="animate-pulse rounded" style={{ height: 13, width: "72%", background: "var(--color-beige-100)" }} />
+                  </td>
+                  <td style={{ padding: "13px 14px" }}>
+                    <div className="animate-pulse rounded" style={{ height: 12, width: "65%", background: "var(--color-beige-100)" }} />
+                  </td>
+                  {[80, 60, 60, 24, 50, 0].map((w, j) => (
+                    <td key={j} style={{ padding: "13px 14px", textAlign: j === 3 ? "center" : "left" }}>
+                      {w > 0 && <div className="animate-pulse rounded-full" style={{ height: 20, width: w, background: "var(--color-beige-100)" }} />}
+                    </td>
+                  ))}
+                </tr>
+              ))}
 
-          </div>
+              {/* Empty state */}
+              {!isFetchingAny && paginated.length === 0 && (
+                <tr>
+                  <td colSpan={8} style={{ padding: "56px 16px", textAlign: "center" }}>
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex items-center justify-center w-12 h-12 rounded-2xl" style={{ background: "var(--color-brown-50)", border: "1px solid var(--color-brown-100)" }}>
+                        <FileText className="w-5 h-5" style={{ color: "var(--color-brown-400)" }} />
+                      </div>
+                      <div>
+                        <p className="text-[13.5px] font-semibold mb-1" style={{ color: "var(--ink)" }}>
+                          {activeFilterCount > 0 || search ? "No SOWs match your filters" : "No statements of work yet"}
+                        </p>
+                        <p className="text-[12px]" style={{ color: "var(--ink-faint)" }}>
+                          {activeFilterCount > 0 || search ? "Try adjusting your search or filter criteria." : "Create your first SOW to get started."}
+                        </p>
+                      </div>
+                      {(activeFilterCount > 0 || search) && (
+                        <button onClick={clearAllFilters}
+                          className="mt-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-80"
+                          style={{ background: "var(--color-brown-50)", color: "var(--color-brown-700)", border: "1px solid var(--color-brown-100)" }}>
+                          Clear filters
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
+
+              {/* Data rows */}
+              {paginated.map((sow, rowIdx) => {
+                const sc = statusConfig[sow.status] || statusConfig.draft;
+                const sens = sensitivityConfig[sow.dataSensitivity] || sensitivityConfig.internal;
+
+                return (
+                  <tr key={sow.id}
+                    className="group"
+                    style={{
+                      borderBottom: "1px solid var(--border-hair)",
+                      background: rowIdx % 2 === 0 ? "transparent" : "rgba(249,247,245,0.4)",
+                    }}
+                  >
+                    {/* Project Title + Intake */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle" }}>
+                      <span className="text-[12.5px] font-semibold leading-snug block mb-1.5" style={{ color: "var(--ink)" }}>{sow.title}</span>
+                      <Pill bg={sow.intakeMode === "ai_generated" ? "var(--color-teal-50)" : "var(--color-gray-100)"}
+                            color={sow.intakeMode === "ai_generated" ? "var(--color-teal-700)" : "var(--color-gray-600)"}>
+                        {sow.intakeMode === "ai_generated"
+                          ? <><Sparkles className="w-2.5 h-2.5" /> AI-Generated</>
+                          : <><Upload className="w-2.5 h-2.5" /> Manual Upload</>}
+                      </Pill>
+                    </td>
+
+                    {/* Client */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle" }}>
+                      <span className="text-[12px] block" style={{ color: sow.client ? "var(--ink-muted)" : "var(--ink-faint)" }}>
+                        {sow.client || "—"}
+                      </span>
+                    </td>
+
+                    {/* Status */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle" }}>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap"
+                        style={{ background: sc.bg, color: sc.color }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sc.color }} />
+                        {sc.label}
+                      </span>
+                    </td>
+
+                    {/* Sensitivity */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle" }}>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium whitespace-nowrap" style={{ color: sens.color }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sens.color }} />
+                        {sens.label}
+                      </span>
+                    </td>
+
+                    {/* Risk */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle", textAlign: "center" }}>
+                      <RiskBar score={sow.riskScore?.overall ?? 0} />
+                    </td>
+
+                    {/* Version */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle", textAlign: "center" }}>
+                      <span className="font-mono text-[11px] font-semibold px-2 py-0.5 rounded-md"
+                        style={{ background: "var(--color-gray-100)", color: "var(--ink-muted)" }}>
+                        v{sow.version}
+                      </span>
+                    </td>
+
+                    {/* Modified */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle" }}>
+                      <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--ink-faint)" }}>{formatDate(sow.updatedAt)}</span>
+                    </td>
+
+                    {/* Kebab */}
+                    <td style={{ padding: "12px 12px", verticalAlign: "middle", textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
+                      <RowKebab sow={sow} onAction={handleRowAction} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
 
           {/* Pagination */}
-          {totalPages > 1 && <div className="flex items-center justify-between px-6 py-3" style={{ borderTop: "1px solid var(--border-hair)" }}>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-beige-400">Rows per page</span>
-              <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
-                <SelectTrigger className="h-7 w-auto rounded-xl bg-white/80 border border-beige-200/60 px-2.5 text-[11px] text-brown-700 hover:border-beige-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 52 }}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
+          {totalPages > 1 && (
+            <div className="rounded-b-2xl overflow-hidden">
+              <TablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filtered.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(n) => { setPageSize(n); setCurrentPage(1); }}
+              />
             </div>
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[11px] text-beige-400">
-                {filtered.length > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filtered.length)} of ${filtered.length}` : "0 results"}
-              </span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage <= 1}
-                  className="flex items-center justify-center w-7 h-7 rounded-xl text-beige-400 hover:text-brown-600 hover:bg-beige-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}
-                  className="flex items-center justify-center w-7 h-7 rounded-xl text-beige-400 hover:text-brown-600 hover:bg-beige-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>}
+          )}
 
         </motion.div>
     </motion.div>
+
+    {/* ── Delete confirmation dialog ── */}
+    {deleteTarget && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }}>
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6" style={{ boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0" style={{ background: "rgba(239,68,68,0.1)" }}>
+              <Archive className="w-5 h-5" style={{ color: "var(--danger)" }} />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold" style={{ color: "var(--ink)" }}>Delete SOW</p>
+              <p className="text-[11.5px] mt-0.5" style={{ color: "var(--ink-faint)" }}>
+                {deleteTarget.intakeMode === "ai_generated" ? "AI-generated" : "Manual"} SOW
+              </p>
+            </div>
+          </div>
+          <p className="text-[13px] mb-5" style={{ color: "var(--ink-muted)" }}>
+            Are you sure you want to delete <span className="font-semibold" style={{ color: "var(--ink)" }}>&ldquo;{deleteTarget.title}&rdquo;</span>? This action cannot be undone.
+          </p>
+          <div className="flex items-center gap-2.5 justify-end">
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+              className="px-4 py-2 rounded-xl text-[12.5px] font-semibold transition-colors hover:bg-gray-50 disabled:opacity-50"
+              style={{ border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="px-4 py-2 rounded-xl text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ background: "var(--danger)" }}
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
