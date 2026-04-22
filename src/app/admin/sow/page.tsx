@@ -11,8 +11,8 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
-import { useManualSOWList } from "@/lib/hooks/use-manual-sow";
-import { useSowList } from "@/lib/hooks/use-sow-wizard";
+import { useAdminManualSOWList } from "@/lib/hooks/use-manual-sow";
+import { useAdminSowList } from "@/lib/hooks/use-sow-wizard";
 import type { SOW, SOWApprovalStage } from "@/types/enterprise";
 
 /* ════════════════════════ API normalisation (matches enterprise SOW repository) ════════════════════════ */
@@ -311,9 +311,9 @@ export default function AdminSOWOversightPage() {
   const [sortDir, setSortDir]     = React.useState<SortDir>("desc");
   const searchRef = React.useRef<HTMLInputElement>(null);
 
-  /* ── API: manual + AI SOW lists (matches enterprise SOW repository) ── */
-  const { data: manualSowListRes, isLoading: manualLoading } = useManualSOWList();
-  const { data: aiSowListRes,     isLoading: aiLoading     } = useSowList();
+  /* ── API: manual + AI SOW lists (admin scope — enterprise service token) ── */
+  const { data: manualSowListRes, isLoading: manualLoading } = useAdminManualSOWList();
+  const { data: aiSowListRes,     isLoading: aiLoading     } = useAdminSowList();
   const isLoading = manualLoading || aiLoading;
 
   const manualSows = React.useMemo(

@@ -115,9 +115,11 @@ export default function HomePage() {
               <>
                 <Link
                   href={
+                    session?.user?.role === "admin"       ? "/admin/dashboard" :
+                    session?.user?.role === "reviewer"    ? "/enterprise/reviewer" :
                     session?.user?.role === "contributor" ? "/contributor/dashboard" :
-                    session?.user?.role === "mentor"      ? "/mentor/dashboard" :
-                                                            "/enterprise/dashboard"
+                    session?.user?.role === "enterprise"  ? "/enterprise/dashboard" :
+                                                            "/auth/login"
                   }
                   className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors"
                 >
@@ -188,7 +190,7 @@ export default function HomePage() {
       </section>
 
       {/* ── Features Edge ───────────────────────────────── */}
-      <section id="features" className="max-w-6xl mx-auto px-6 py-20 border-t border-beige-200/50">
+      <section id="features" className="scroll-mt-24 max-w-6xl mx-auto px-6 py-20 border-t border-beige-200/50">
         <div className="text-center mb-16">
           <Badge variant="teal" className="mb-4">Why GlimmoraTeam</Badge>
           <h2 className="font-heading text-3xl font-bold text-brown-950 mb-4">
@@ -212,7 +214,7 @@ export default function HomePage() {
       </section>
 
       {/* ── Role Cards ──────────────────────────────────── */}
-      <section id="roles" className="max-w-6xl mx-auto px-6 py-20">
+      <section id="roles" className="scroll-mt-24 max-w-6xl mx-auto px-6 py-20">
         <div className="text-center mb-12">
           <h2 className="font-heading text-3xl font-bold text-brown-950 mb-3">
             Built for Every Role

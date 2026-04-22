@@ -87,9 +87,22 @@ export function TopBar({ config }: TopBarProps) {
   const { data: session } = useSession();
   const { openMobile } = useSidebarStore();
   const [searchFocused, setSearchFocused] = React.useState(false);
-  const userName = session?.user?.name || "User";
   const userEmail = session?.user?.email || "";
-  const userInitials = (session?.user as any)?.initials || userName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+  // Fallback to the email local-part when the session has no display name
+  // (common for SSO/OTP users), so the dropdown never shows a bare "User".
+  const rawName = session?.user?.name?.trim();
+  const userName = rawName && rawName.length > 0
+    ? rawName
+    : (userEmail.split("@")[0] || "User");
+  const userInitials =
+    (session?.user as { initials?: string })?.initials ||
+    userName
+      .split(/[\s._-]+/)
+      .filter(Boolean)
+      .map((n: string) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
 
   const breadcrumbs = React.useMemo(() => {
     const allSegments = pathname.split("/").filter(Boolean);

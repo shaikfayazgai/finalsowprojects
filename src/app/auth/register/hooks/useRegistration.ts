@@ -171,7 +171,8 @@ export function useRegistration(ssoData?: SSOData | null) {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.message ?? "Failed to send verification email. Please try again.");
+        const base = data.message ?? "Failed to send verification email. Please try again.";
+        setError(data.detail ? `${base} — ${data.detail}` : base);
         return;
       }
       setEmailOtpSent(true);
@@ -311,7 +312,7 @@ export function useRegistration(ssoData?: SSOData | null) {
 
       if (!result.success) {
         // Show friendly message for duplicate email
-        if (result.error?.toLowerCase().includes("already") || 
+        if (result.error?.toLowerCase().includes("already") ||
             result.error?.toLowerCase().includes("exists") ||
             result.error?.toLowerCase().includes("duplicate")) {
           setError("This email is already registered. Please sign in instead.");
@@ -320,6 +321,10 @@ export function useRegistration(ssoData?: SSOData | null) {
         }
         setIsLoading(false);
         return;
+      }
+
+      if (result.emailWarning) {
+        console.warn("[registration] welcome email failed:", result.emailWarning);
       }
 
       const signInResult = await signIn("credentials", {

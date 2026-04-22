@@ -57,7 +57,21 @@ function LoginPageContent() {
 
   const [step, setStep] = useState<Step>("credentials");
   const [userRole, setUserRole] = useState<string>("");
+  // Role returned by /api/auth/validate — used to decide whether the MFA-prompt
+  // screen shows a "Skip for now" option (contributors and admins only).
+  const [pendingRole, setPendingRole] = useState<string>("");
   const mfaPendingTokenRef = useRef<string>("");
+
+  // Credentials validated on the Sign In click but not yet exchanged for a
+  // NextAuth session. The session is only created when the user clicks
+  // "Skip for now" on the MFA prompt (or after completing MFA setup).
+  const pendingCredsRef = useRef<{
+    email: string;
+    password: string;
+    mfaSetupRequired: boolean;
+    mfaSetupPendingToken?: string;
+    user?: { id: string; email: string; firstName: string; lastName: string };
+  } | null>(null);
 
   const redirectTo = callbackUrl || (
     userRole === "contributor" ? "/contributor/dashboard" :
@@ -79,64 +93,30 @@ function LoginPageContent() {
   // redirected to the OAuth provider without completing sign-in).
   useEffect(() => {
     const handlePageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) {
-        setSsoLoading(null);
-        const mfaPending = sessionStorage.getItem("_mfa_prompt_pending");
-        if (mfaPending) {
-          setStep("mfa-prompt");
-          return;
-        }
-        getSession().then((session) => {
-          if (!session?.user) return;
-          const u = session.user as { role?: string };
-          const dest =
-            u.role === "contributor" ? "/contributor/dashboard" :
-            u.role === "mentor"      ? "/mentor/dashboard" :
-            u.role === "admin"       ? "/admin/dashboard" :
-                                     "/enterprise/dashboard";
-          window.location.replace(dest);
-        });
-      }
+      if (e.persisted) setSsoLoading(null);
     };
-
-    const handlePopState = (e: PopStateEvent) => {
-      if (e.state?.mfaPrompt) {
-        sessionStorage.removeItem("_mfa_prompt_pending");
-        setStep("credentials");
-      }
-    };
-
     window.addEventListener("pageshow", handlePageShow);
-    window.addEventListener("popstate", handlePopState);
-    return () => {
-      window.removeEventListener("pageshow", handlePageShow);
-      window.removeEventListener("popstate", handlePopState);
-    };
+    return () => window.removeEventListener("pageshow", handlePageShow);
   }, []);
 
-  // If an active session already exists, redirect straight to the dashboard.
-  // This prevents the case where clicking Google/Microsoft while already logged in
-  // skips OAuth entirely and lands on the dashboard silently.
+  // If the user was redirected here by a protected route (callbackUrl present)
+  // and they already have a valid session, send them on to their destination.
+  // When they navigate to /auth/login directly, let them see the form so they
+  // can sign in as a different user.
   useEffect(() => {
-    // Don't auto-redirect if user is on MFA prompt step
-    const mfaPending = sessionStorage.getItem("_mfa_prompt_pending");
-    if (mfaPending) {
-      setStep("mfa-prompt");
-      return;
-    }
-
+    if (!callbackUrl) return;
     getSession().then((session) => {
       if (!session?.user) return;
       const u = session.user as { role?: string; isNewSsoUser?: boolean };
       if (u.isNewSsoUser) { window.location.replace("/contributor/onboarding"); return; }
-      const dest =
-        u.role === "contributor" ? "/contributor/dashboard" :
-        u.role === "mentor"      ? "/mentor/dashboard" :
-        u.role === "admin"       ? "/admin/dashboard" :
-                                 "/enterprise/dashboard";
-      window.location.replace(dest);
+      // Delegate role-based routing to the server so contributor, admin,
+      // reviewer, and enterprise all land on the right dashboard without
+      // relying on the client-side role ternary that previously missed
+      // reviewer and assumed an enterprise default.
+      window.location.replace(callbackUrl || "/auth/redirect");
     });
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callbackUrl]);
 
   const [errorCode, setErrorCode] = useState<string>("");
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
@@ -197,9 +177,10 @@ function LoginPageContent() {
     setIsLoading(true);
     try {
       await authApi.verifyMfaCode(mfaCode, mfaPendingTokenRef.current);
-      // MFA verified — refresh the NextAuth session to pick up the new token state
-      await getSession();
-      window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
+      // MFA verified — route through /auth/redirect so the server picks the
+      // correct dashboard after the cookie is fully committed (avoids a
+      // production race where getSession() returns stale role info).
+      window.location.href = loginDest || callbackUrl || "/auth/redirect";
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Invalid code. Please try again.";
       setError(msg);
@@ -213,7 +194,7 @@ function LoginPageContent() {
     }
   }, [mfaCode, step, isLoading, handleMFA]);
 
-  /* ── Email + Password login via NextAuth Credentials ── */
+  /* ── Sign In click: validate only. Session is created on Skip / after MFA. ── */
   const handleCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -235,7 +216,9 @@ function LoginPageContent() {
     setErrorCode("");
 
     try {
-      // Pre-validate credentials to get specific error messages
+      // Verify the user exists and the password is correct. This does NOT
+      // create a NextAuth session — signIn() is deferred to the Skip handler
+      // (or the MFA-setup flow) so clicking "Sign In" is only a user-exists check.
       const validateRes = await fetchInternal("/api/auth/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -252,7 +235,7 @@ function LoginPageContent() {
 
       const validateData = await validateRes.json();
 
-      // MFA required — skip signIn, store the pending token and show TOTP step
+      // MFA required — show TOTP step. Session created after code verification.
       if (validateData.mfaRequired) {
         mfaPendingTokenRef.current = validateData.mfaPendingToken ?? "";
         setStep("mfa");
@@ -260,95 +243,93 @@ function LoginPageContent() {
         return;
       }
 
-      // MFA setup required — create session via glimmora-oauth (no second login call)
-      // and go straight to MFA prompt.
-      if (validateData.mfaSetupRequired) {
-        // Set flag BEFORE creating session to block auto-redirect
-        sessionStorage.setItem("_mfa_prompt_pending", "true");
+      // Stash validated credentials for the Skip / MFA-setup handlers.
+      pendingCredsRef.current = {
+        email: email.trim().toLowerCase(),
+        password,
+        mfaSetupRequired: Boolean(validateData.mfaSetupRequired),
+        mfaSetupPendingToken: validateData.mfaSetupPendingToken,
+        user: validateData.user,
+      };
 
-        const u = validateData.user || {};
+      // Role reported by the validate endpoint (used to decide if "Skip for now"
+      // should be visible on the MFA prompt screen).
+      setPendingRole(String(validateData.role ?? validateData.user?.role ?? "").toLowerCase());
+
+      // Stash credentials/token so the MFA setup page can pick them up.
+      try {
+        sessionStorage.setItem("_mfa_setup_email", email.trim().toLowerCase());
+        sessionStorage.setItem("_mfa_setup_password", password);
+        if (validateData.mfaSetupPendingToken) {
+          sessionStorage.setItem("_mfa_pending_token", validateData.mfaSetupPendingToken);
+        }
+      } catch { /* sessionStorage unavailable */ }
+
+      setLoginDest(callbackUrl || "");
+      setStep("mfa-prompt");
+      setIsLoading(false);
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setIsLoading(false);
+    }
+  };
+
+  /* ── Skip for now: finally create the NextAuth session, then navigate. ── */
+  const handleSkipMfa = async () => {
+    const creds = pendingCredsRef.current;
+    if (!creds) {
+      setError("Session expired. Please sign in again.");
+      resetToCredentials();
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      if (creds.mfaSetupRequired && creds.user) {
+        // Backend blocks tokens until MFA is set up — use the oauth shim
+        // to create a session without real tokens.
         const oauthResult = await signIn("glimmora-oauth", {
-          userId: u.id || "",
-          email: u.email || email.trim().toLowerCase(),
-          firstName: u.firstName || "",
-          lastName: u.lastName || "",
+          userId: creds.user.id || "",
+          email: creds.user.email || creds.email,
+          firstName: creds.user.firstName || "",
+          lastName: creds.user.lastName || "",
           role: "enterprise",
-          accessToken: "", // No token yet — MFA blocks issuance
+          accessToken: "",
           refreshToken: "",
           expiresIn: "0",
           provider: "credentials",
           redirect: false,
         });
 
-        if (oauthResult?.ok) {
-          const dest = callbackUrl || "/enterprise/dashboard";
-          setLoginDest(dest);
-          setUserRole("enterprise");
-
-          // Store pending token for MFA setup page
-          try {
-            if (validateData.mfaSetupPendingToken) {
-              sessionStorage.setItem("_mfa_pending_token", validateData.mfaSetupPendingToken);
-            }
-            sessionStorage.setItem("_mfa_setup_email", email.trim().toLowerCase());
-            sessionStorage.setItem("_mfa_setup_password", password);
-          } catch { /* sessionStorage unavailable */ }
-
-          sessionStorage.setItem("_mfa_prompt_pending", "true");
-          // Push history so back arrow returns to credentials step
-          window.history.pushState({ mfaPrompt: true }, "", "/auth/login");
-          setStep("mfa-prompt");
+        if (!oauthResult?.ok) {
+          setError("Sign-in failed. Please try again.");
           setIsLoading(false);
           return;
         }
+
+        window.location.href = callbackUrl || "/enterprise/dashboard";
+        return;
       }
 
       const result = await signIn("credentials", {
-        email: email.trim().toLowerCase(),
-        password,
+        email: creds.email,
+        password: creds.password,
         redirect: false,
       });
 
-      if (result?.error) {
-        setError("Something went wrong. Please try again.");
+      if (!result?.ok || result.error) {
+        setError("Sign-in failed. Please try again.");
         setIsLoading(false);
         return;
       }
 
-      if (result?.ok) {
-        const session = await getSession();
-        const role = (session?.user as { role?: string })?.role;
-
-        setUserRole(role || "enterprise");
-
-        // Login = returning user — send straight to dashboard.
-        // Onboarding wizard is only for first-time SSO users (handled in auth.ts signIn callback).
-        const dest = callbackUrl || (
-          role === "contributor" ? "/contributor/dashboard" :
-          role === "mentor"      ? "/mentor/dashboard" :
-          role === "admin"       ? "/admin/dashboard" :
-                                   "/enterprise/dashboard"
-        );
-        
-        setLoginDest(dest);
-
-        // Admin role skips MFA prompt — navigate directly to dashboard.
-        if (role === "admin") {
-          window.location.href = dest;
-          return;
-        }
-
-        // Store credentials for MFA setup page
-        try {
-          sessionStorage.setItem("_mfa_prompt_pending", "true");
-          sessionStorage.setItem("_mfa_setup_email", email.trim().toLowerCase());
-          sessionStorage.setItem("_mfa_setup_password", password);
-        } catch { /* sessionStorage unavailable */ }
-
-        window.history.pushState({ mfaPrompt: true }, "", "/auth/login");
-        setStep("mfa-prompt");
-        setIsLoading(false);
-      }
+      // Let the server-side /auth/redirect read the freshly-set session cookie
+      // and choose the dashboard. This avoids the client-side getSession()
+      // race in production where the role hasn't hydrated yet and we'd send
+      // the user to the wrong portal (or trigger the role-guard loop).
+      window.location.href = callbackUrl || "/auth/redirect";
     } catch {
       setError("Something went wrong. Please try again.");
       setIsLoading(false);
@@ -388,7 +369,6 @@ function LoginPageContent() {
   };
 
   const resetToCredentials = () => {
-    sessionStorage.removeItem("_mfa_prompt_pending");
     setStep("credentials");
     setMfaCode("");
     setRecoveryCode("");
@@ -690,16 +670,16 @@ function LoginPageContent() {
                 <Shield className="w-4 h-4" /> Set Up MFA Now
               </Button>
 
-              <button
-                type="button"
-                onClick={() => {
-                sessionStorage.removeItem("_mfa_prompt_pending");
-                window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
-              }}
-                className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
-              >
-                Skip for now
-              </button>
+              {(pendingRole === "contributor" || pendingRole === "admin") && (
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={handleSkipMfa}
+                  className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-1 disabled:opacity-50"
+                >
+                  {isLoading ? "Signing in…" : "Skip for now"}
+                </button>
+              )}
 
               <button
                 type="button"
