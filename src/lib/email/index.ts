@@ -1,20 +1,22 @@
 import nodemailer from "nodemailer";
 import type { ReactElement } from "react";
 
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASSWORD;
+
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
+  host: process.env.SMTP_HOST ?? "smtp.office365.com",
+  port: Number(process.env.SMTP_PORT ?? 587),
   secure: false,
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
+  requireTLS: true,
+  auth: { user: SMTP_USER, pass: SMTP_PASS },
   connectionTimeout: 60_000,
   greetingTimeout: 30_000,
   socketTimeout: 90_000,
+  tls: { ciphers: "TLSv1.2" },
 });
 
-const FROM = process.env.EMAIL_FROM ?? `GlimmoraTeam <${process.env.GMAIL_USER}>`;
+const FROM = process.env.EMAIL_FROM ?? `GlimmoraTeam <${SMTP_USER}>`;
 
 export interface SendEmailOptions {
   to: string | string[];
@@ -26,6 +28,7 @@ export interface SendEmailOptions {
 export interface SendEmailResult {
   success: boolean;
   messageId?: string;
+  error?: string;
 }
 
 /** Build a professional branded HTML email from a body snippet and template settings. */
@@ -106,7 +109,14 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
 
     return { success: true, messageId: info.messageId };
   } catch (err) {
-    console.error("[sendEmail] error:", err);
-    return { success: false };
+    const e = err as { message?: string; responseCode?: number; response?: string; code?: string };
+    const error = [
+      e.message,
+      e.code ? `code=${e.code}` : null,
+      e.responseCode ? `responseCode=${e.responseCode}` : null,
+      e.response ? `response=${e.response}` : null,
+    ].filter(Boolean).join(" | ");
+    console.error("[sendEmail] error:", error);
+    return { success: false, error };
   }
 }
