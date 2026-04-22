@@ -32,11 +32,10 @@ const esgMetrics = [
   { id: "underrepresented_pct", label: "% workforce from underrepresented groups", description: "Percentage of total workforce from underrepresented groups", icon: BarChart3 },
 ];
 
-/* ── Mock ESG summary data ── */
 const mockEsgSummary = {
-  womenHours: 1240,
-  studentHours: 680,
-  underrepresentedPct: 34,
+  womenHours: 0,
+  studentHours: 0,
+  underrepresentedPct: 0,
   totalProjects: mockProjects.length,
 };
 

@@ -184,8 +184,8 @@ function fmtDate(d: string) {
   });
 }
 
-/* ── Mock exceptions — FSD-compliant data ── */
-const mockExceptions: ExceptionItem[] = [
+const mockExceptions: ExceptionItem[] = [];
+const _unusedExceptions: ExceptionItem[] = [
   {
     id: "exc-001",
     type: "evidence_dispute",

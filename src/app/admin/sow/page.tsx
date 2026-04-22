@@ -6,12 +6,98 @@ import { motion } from "framer-motion";
 import {
   FileText, Search, Clock, CheckCircle2, AlertTriangle,
   DollarSign, ShieldAlert, ArrowUp, ArrowDown, ChevronRight,
-  Building2, Eye, TrendingUp, ArrowUpDown,
+  Building2, Eye, TrendingUp, ArrowUpDown, Sparkles, Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
-import type { SOW } from "@/types/enterprise";
+import { useManualSOWList } from "@/lib/hooks/use-manual-sow";
+import { useSowList } from "@/lib/hooks/use-sow-wizard";
+import type { SOW, SOWApprovalStage } from "@/types/enterprise";
+
+/* ════════════════════════ API normalisation (matches enterprise SOW repository) ════════════════════════ */
+
+function extractList(res: unknown): Record<string, unknown>[] {
+  if (!res) return [];
+  const r = res as Record<string, unknown>;
+  if (Array.isArray(r)) return r as Record<string, unknown>[];
+  if (Array.isArray(r.data)) return r.data as Record<string, unknown>[];
+  const d = (r.data ?? r) as Record<string, unknown>;
+  for (const k of ["sows", "items", "results", "documents", "list"]) {
+    if (Array.isArray(d[k])) return d[k] as Record<string, unknown>[];
+  }
+  return [];
+}
+
+/* Derive SOW-level status from the approval pipeline (source of truth).
+   Falls back to the raw list status when no pipeline data is attached. */
+function deriveStatusFromStages(stages: SOWApprovalStage[], fallback: SOW["status"]): SOW["status"] {
+  if (!stages || stages.length === 0) return fallback;
+  if (stages.every(s => s.status === "approved")) return "approved";
+  if (stages.some(s => s.status === "rejected")) return "changes_requested";
+  if (stages.some(s => s.status === "in_review")) return "approval";
+  /* Mix of pending + approved (some signed off) → still in approval */
+  if (stages.some(s => s.status === "approved")) return "approval";
+  return fallback;
+}
+
+function normaliseToSOW(item: Record<string, unknown>, mode: "ai_generated" | "manual_upload"): SOW {
+  const updatedAt = String(item.updated_at ?? item.updatedAt ?? item.created_at ?? item.createdAt ?? new Date().toISOString());
+  const gc = mode === "ai_generated" ? ((item.generated_content ?? {}) as Record<string, unknown>) : {};
+
+  const title = String(gc.document_title ?? item.title ?? item.project_title ?? item.document_title ?? "Untitled SOW");
+
+  let client = String(item.client ?? item.client_organisation ?? item.clientOrganisation ?? gc.client_name ?? gc.client ?? "");
+  if (!client && mode === "ai_generated") {
+    const bizOwner = String(item.business_owner_approver_id ?? "");
+    if (bizOwner.includes(", ")) client = bizOwner.split(", ").pop()?.trim() ?? "";
+  }
+
+  const qm = (item.quality_metrics ?? item.qualityMetrics ?? {}) as Record<string, unknown>;
+  const riskRaw = item.risk_score ?? item.riskScore ?? qm.risk_score ?? qm.riskScore;
+  let riskOverall = 0;
+  if (typeof riskRaw === "number") {
+    riskOverall = riskRaw;
+  } else if (riskRaw && typeof riskRaw === "object") {
+    riskOverall = Number((riskRaw as Record<string, unknown>).overall ?? 0);
+  } else if (mode === "ai_generated") {
+    const conf = Number(qm.overall_confidence ?? item.confidence_score ?? item.confidenceScore ?? 0);
+    riskOverall = conf > 0 ? Math.round(100 - conf) : 0;
+  }
+
+  const aiConfidence = Number(qm.overall_confidence ?? item.confidence_score ?? item.confidenceScore ?? item.ai_confidence ?? 0);
+
+  const rawApprovalStages = ((item.approval_stages ?? item.approvalStages ?? []) as SOWApprovalStage[]);
+  const rawStatus = String(item.status ?? "draft") as SOW["status"];
+  const derivedStatus = deriveStatusFromStages(rawApprovalStages, rawStatus);
+
+  return {
+    id:               String(item.id ?? item._id ?? item.sow_id ?? item.wizard_id ?? ""),
+    title,
+    client,
+    status:           derivedStatus,
+    intakeMode:       mode,
+    confidentiality:  (String(item.confidentiality ?? item.data_sensitivity ?? item.dataSensitivity ?? "internal") as SOW["confidentiality"]),
+    dataSensitivity:  (String(item.data_sensitivity ?? item.dataSensitivity ?? "internal") as SOW["dataSensitivity"]),
+    riskScore:        { overall: riskOverall, completeness: 0, confidence: 0, compliance: 0, patternMatch: 0 },
+    version:          Number(item.version ?? 1),
+    updatedAt,
+    createdAt:        String(item.created_at ?? item.createdAt ?? updatedAt),
+    estimatedBudget:  Number(item.estimated_budget ?? item.estimatedBudget ?? 0),
+    estimatedDuration:String(item.estimated_duration ?? item.estimatedDuration ?? ""),
+    createdBy:        String(item.created_by ?? item.createdBy ?? ""),
+    approvedBy:       String(item.approved_by ?? item.approvedBy ?? ""),
+    approvalStages:   rawApprovalStages,
+    parsedSections:   Number(item.parsed_sections ?? item.parsedSections ?? 0),
+    totalSections:    Number(item.total_sections ?? item.totalSections ?? 0),
+    pages:            Number(item.pages ?? 0),
+    fileSize:         String(item.file_size ?? item.fileSize ?? ""),
+    aiConfidence,
+    tags:             ((item.tags ?? []) as string[]),
+    stakeholders:     ((item.stakeholders ?? []) as string[]),
+    industry:         String(item.industry ?? gc.industry ?? ""),
+  };
+}
 
 /* ════════════════════════ Helpers ════════════════════════ */
 
@@ -225,6 +311,24 @@ export default function AdminSOWOversightPage() {
   const [sortDir, setSortDir]     = React.useState<SortDir>("desc");
   const searchRef = React.useRef<HTMLInputElement>(null);
 
+  /* ── API: manual + AI SOW lists (matches enterprise SOW repository) ── */
+  const { data: manualSowListRes, isLoading: manualLoading } = useManualSOWList();
+  const { data: aiSowListRes,     isLoading: aiLoading     } = useSowList();
+  const isLoading = manualLoading || aiLoading;
+
+  const manualSows = React.useMemo(
+    () => extractList(manualSowListRes).map((item) => normaliseToSOW(item, "manual_upload")),
+    [manualSowListRes],
+  );
+  const aiSows = React.useMemo(
+    () => extractList(aiSowListRes).map((item) => normaliseToSOW(item, "ai_generated")),
+    [aiSowListRes],
+  );
+
+  /* Merge AI + manual SOWs from API; fall back to mockSOWs when empty */
+  const apiCombined = React.useMemo(() => [...aiSows, ...manualSows], [aiSows, manualSows]);
+  const sows: SOW[] = apiCombined.length > 0 ? apiCombined : mockSOWs;
+
   React.useEffect(() => {
     setMounted(true);
     const onKey = (e: KeyboardEvent) => {
@@ -240,20 +344,20 @@ export default function AdminSOWOversightPage() {
   }
 
   /* ── Derived lists ── */
-  const approvalList = mockSOWs.filter(s => s.status === "approval" || s.status === "review");
-  const approvedList = mockSOWs.filter(s => s.status === "approved");
-  const changesList  = mockSOWs.filter(s => s.status === "changes_requested");
-  const draftList    = mockSOWs.filter(s => s.status === "draft" || s.status === "parsing");
-  const pendingComm  = mockSOWs.filter(needsCommercialReview);
+  const approvalList = sows.filter(s => s.status === "approval" || s.status === "review");
+  const approvedList = sows.filter(s => s.status === "approved");
+  const changesList  = sows.filter(s => s.status === "changes_requested");
+  const draftList    = sows.filter(s => s.status === "draft" || s.status === "parsing");
+  const pendingComm  = sows.filter(needsCommercialReview);
 
   const base = React.useMemo(() => {
     if (tab === "approval") return approvalList;
     if (tab === "approved") return approvedList;
     if (tab === "changes")  return changesList;
     if (tab === "draft")    return draftList;
-    return mockSOWs;
+    return sows;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [tab, sows]);
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -277,15 +381,15 @@ export default function AdminSOWOversightPage() {
   }), [filtered, sortField, sortDir]);
 
   const tabCounts: Record<TabId, number> = {
-    all: mockSOWs.length, approval: approvalList.length,
+    all: sows.length, approval: approvalList.length,
     approved: approvedList.length, changes: changesList.length, draft: draftList.length,
   };
 
   const totalValue = approvedList.reduce((a, s) => a + s.estimatedBudget, 0);
-  const avgRisk    = mockSOWs.length
-    ? Math.round(mockSOWs.reduce((a, s) => a + s.riskScore.overall, 0) / mockSOWs.length) : 0;
+  const avgRisk    = sows.length
+    ? Math.round(sows.reduce((a, s) => a + s.riskScore.overall, 0) / sows.length) : 0;
 
-  if (!mounted) return <PageSkeleton />;
+  if (!mounted || isLoading) return <PageSkeleton />;
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
@@ -318,7 +422,7 @@ export default function AdminSOWOversightPage() {
       <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Total SOWs"
-          value={String(mockSOWs.length)}
+          value={String(sows.length)}
           sub={`${draftList.length} in draft · ${approvalList.length} in approval`}
           icon={FileText}
           iconBg="bg-brown-50"
@@ -410,7 +514,7 @@ export default function AdminSOWOversightPage() {
         {/* Table body */}
         {sorted.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px]">
+            <table className="w-full min-w-[1080px]">
               <thead>
                 <tr className="border-b border-beige-50 bg-beige-50/40">
                   <th className="text-left px-5 py-3 w-[30%]">
@@ -476,15 +580,30 @@ export default function AdminSOWOversightPage() {
                             )} />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[13px] font-semibold text-brown-950 leading-snug truncate max-w-[210px]">
-                              {sow.title}
-                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-[13px] font-semibold text-brown-950 leading-snug">
+                                {sow.title}
+                              </p>
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full border shrink-0",
+                                  sow.intakeMode === "ai_generated"
+                                    ? "bg-teal-50 text-teal-700 border-teal-100"
+                                    : "bg-brown-50 text-brown-700 border-brown-100",
+                                )}
+                                title={sow.intakeMode === "ai_generated" ? "AI-generated" : "Manual upload"}
+                              >
+                                {sow.intakeMode === "ai_generated"
+                                  ? <><Sparkles className="w-2 h-2" /> AI</>
+                                  : <><Upload className="w-2 h-2" /> Manual</>}
+                              </span>
+                            </div>
                             <div className="flex items-center gap-1 mt-0.5 text-[10px] text-beige-400">
-                              <span className="truncate max-w-[110px]">{sow.createdBy}</span>
+                              <span>{sow.createdBy}</span>
                               {sow.industry && (
                                 <>
                                   <span className="text-beige-200">·</span>
-                                  <span className="truncate max-w-[80px]">{sow.industry}</span>
+                                  <span>{sow.industry}</span>
                                 </>
                               )}
                             </div>
@@ -496,7 +615,7 @@ export default function AdminSOWOversightPage() {
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-1.5">
                           <Building2 className="w-3 h-3 text-beige-300 shrink-0" />
-                          <span className="text-[12px] font-medium text-brown-700 truncate max-w-[95px]">
+                          <span className="text-[12px] font-medium text-brown-700">
                             {sow.client}
                           </span>
                         </div>

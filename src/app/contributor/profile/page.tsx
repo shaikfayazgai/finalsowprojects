@@ -2,11 +2,12 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
+import { useSession } from "next-auth/react";
 import {
-  User, Mail, Clock, Globe, MapPin, Shield, CheckCircle2,
+  Mail, Clock, Globe, Shield, CheckCircle2,
   Calendar, Pencil, Award, ExternalLink, FileText, Github,
   Link2, Briefcase, TrendingUp, Target, RotateCcw, Zap,
-  BarChart3, ShieldCheck, ArrowRight,
+  ShieldCheck, ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
@@ -37,7 +38,10 @@ function Badge({ variant, dot, children }: { variant: string; dot?: boolean; chi
 /* ═══ Helpers ═══ */
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 const proficiencyPercent: Record<string, number> = {
@@ -76,7 +80,18 @@ const evidenceIcons: Record<string, React.ElementType> = {
 /* ═══ PAGE ═══ */
 
 export default function ProfilePage() {
-  const profile = mockContributorProfile;
+  const { data: session } = useSession();
+  const sessionName = session?.user?.name ?? "";
+  const sessionEmail = session?.user?.email ?? "";
+  const initials = sessionName
+    ? sessionName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()
+    : "";
+  const profile = {
+    ...mockContributorProfile,
+    displayName: mockContributorProfile.displayName || sessionName || "Contributor",
+    email: mockContributorProfile.email || sessionEmail,
+    avatar: mockContributorProfile.avatar || initials,
+  };
   const twin = mockDigitalTwin;
   const track = trackConfig[profile.track] || trackConfig.general;
   const avail = availabilityConfig[profile.availability] || availabilityConfig.available;
@@ -174,6 +189,9 @@ export default function ProfilePage() {
             Manage Evidence <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
+        {profile.skills.length === 0 ? (
+          <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No skills added yet</p></div>
+        ) : (
         <div className="py-2">
           {profile.skills.map((skill, i) => {
             const pct = proficiencyPercent[skill.proficiency] || 50;
@@ -205,6 +223,7 @@ export default function ProfilePage() {
             );
           })}
         </div>
+        )}
       </motion.div>
 
       {/* ═══ DIGITAL TWIN METRICS ═══ */}
@@ -216,7 +235,7 @@ export default function ProfilePage() {
               View Full Profile <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          <span className="text-[11px] text-gray-400">Last updated {formatDate(twin.updatedAt)}</span>
+          <span className="text-[11px] text-gray-400">Last updated {twin.updatedAt ? formatDate(twin.updatedAt) : "—"}</span>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {[
@@ -274,6 +293,9 @@ export default function ProfilePage() {
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
             <span className="text-sm font-semibold text-gray-800">Verified Skills</span>
           </div>
+          {twin.topSkills.length === 0 ? (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No verified skills yet</p></div>
+          ) : (
           <div className="py-2">
             {twin.topSkills.map((s, i) => (
               <div key={s.skill} className="flex items-center justify-between px-5 py-3"
@@ -289,6 +311,7 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
+          )}
         </div>
 
         {/* Strengths & Growth */}

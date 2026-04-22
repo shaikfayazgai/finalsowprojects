@@ -84,6 +84,25 @@ function LoginPageContent() {
     window.addEventListener("pageshow", handlePageShow);
     return () => window.removeEventListener("pageshow", handlePageShow);
   }, []);
+
+  // If an active session already exists, redirect straight to the dashboard.
+  // This prevents the case where clicking Google/Microsoft while already logged in
+  // skips OAuth entirely and lands on the dashboard silently.
+  useEffect(() => {
+    getSession().then((session) => {
+      if (!session?.user) return;
+      const u = session.user as { role?: string; isNewSsoUser?: boolean };
+      if (u.isNewSsoUser) { window.location.replace("/contributor/onboarding"); return; }
+      const dest =
+        u.role === "contributor" ? "/contributor/dashboard" :
+        u.role === "mentor"      ? "/mentor/dashboard"      :
+        u.role === "admin"       ? "/admin/dashboard"       :
+                                   "/enterprise/dashboard";
+      window.location.replace(dest);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [errorCode, setErrorCode] = useState<string>("");
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [timeLeft, setTimeLeft] = useState(30);
@@ -94,23 +113,34 @@ function LoginPageContent() {
     if (urlError) {
       switch (urlError) {
         case "OAuthAccountNotLinked":
-          setError("This email is already associated with another sign-in method. Please use your original sign-in method to continue.");
+        case "AccountNotLinked":
+          setError("This email is already used with a different login method. Try signing in with email and password instead.");
           break;
         case "OAuthCallbackError":
-          setError("We were unable to complete the sign-in with your provider. Please try again or use a different method.");
+        case "OAuthCallback":
+        case "CallbackRouteError":
+          setError("Sign-in failed. Please try again.");
+          break;
+        case "OAuthSignin":
+          setError("Could not connect to the sign-in provider. Please try again.");
+          break;
+        case "Configuration":
+          setError("Sign-in is not set up correctly. Please contact support.");
           break;
         case "AccessDenied":
-          setError("Access denied. Your account may not have the required permissions. Please contact your administrator.");
+          setError("You don't have access. Please contact your administrator.");
           break;
         case "CredentialsSignin":
-          setError("The email or password you entered is incorrect. Please verify your credentials and try again.");
+          setError("Incorrect email or password. Please try again.");
           break;
-        case "SsoNotRegistered":
-          setError("No account found for this Google/Microsoft login. Please register first.");
+        case "SsoNotRegistered": {
+          const ssoEmail = searchParams.get("email");
+          setError(ssoEmail ?? "");
           setErrorCode("NO_ACCOUNT");
           break;
+        }
         default:
-          setError("Something went wrong on our end. Please try again shortly or contact support if the issue persists.");
+          setError("Something went wrong. Please try again.");
       }
     }
   }, [searchParams]);
@@ -330,12 +360,11 @@ function LoginPageContent() {
   /* ── Google / Microsoft SSO via Glimmora OAuth API ── */
   const handleSSO = (provider: "google" | "microsoft") => {
     setError("");
+    setErrorCode("");
     setSsoLoading(provider);
-    // Fall back to /auth/redirect which reads the session role and routes accordingly
     const redirectAfter = callbackUrl || "/auth/redirect";
-    // Use NextAuth's built-in OAuth instead of Glimmora's endpoints
-    // Glimmora's callback is locked to glimmora-api.onrender.com and can't redirect back
-    signIn(provider, { callbackUrl: redirectAfter });
+    const providerId = provider === "microsoft" ? "microsoft-entra-id" : "google";
+    signIn(providerId, { callbackUrl: redirectAfter });
   };
 
   const resetToCredentials = () => {
@@ -499,14 +528,14 @@ function LoginPageContent() {
                   >
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
-                      <p>{error}</p>
-                      {errorCode === "NO_ACCOUNT" && (
-                        <Link
-                          href="/auth/register"
-                          className="inline-flex items-center gap-1 mt-1.5 text-teal-600 hover:text-teal-700 font-semibold transition-colors"
-                        >
-                          Create an account <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
+                      {errorCode === "NO_ACCOUNT" ? (
+                        <p>
+                          No account found for{" "}
+                          <span className="text-teal-600 font-medium">{error}</span>
+                          . Please register first.
+                        </p>
+                      ) : (
+                        <p>{error}</p>
                       )}
                     </div>
                   </motion.div>
