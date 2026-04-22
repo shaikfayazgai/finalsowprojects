@@ -257,6 +257,55 @@ export function useRegistration(ssoData?: SSOData | null) {
     setIsLoading(true);
 
     try {
+      const result = await registerContributor({
+        firstName,
+        lastName,
+        email,
+        password,
+        contribType,
+        country,
+        dob,
+        timezone,
+        departmentCategory,
+        departmentOther: departmentCategory === "other" ? departmentOther : undefined,
+        primarySkills,
+        secondarySkills,
+        otherSkills,
+        availability,
+        degree: degree || undefined,
+        branch: branch || undefined,
+        linkedin: linkedin || undefined,
+        careerStage: careerStage || undefined,
+        yearsExperience: yearsExperience || undefined,
+        workStart: workStart || undefined,
+        workEnd: workEnd || undefined,
+        phone: phone || undefined,
+        ndaSignature,
+        acceptTos,
+        acceptCoc,
+        acceptPrivacy,
+        acceptFee,
+        acceptAhp,
+        marketingOptIn,
+      });
+
+      if (!result.success) {
+        // Show friendly message for duplicate email
+        if (result.error?.toLowerCase().includes("already") ||
+            result.error?.toLowerCase().includes("exists") ||
+            result.error?.toLowerCase().includes("duplicate")) {
+          setError("This email is already registered. Please sign in instead.");
+        } else {
+          setError(result.error);
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      if (result.emailWarning) {
+        console.warn("[registration] welcome email failed:", result.emailWarning);
+      }
+
       const signInResult = await signIn("credentials", {
         email,
         password,

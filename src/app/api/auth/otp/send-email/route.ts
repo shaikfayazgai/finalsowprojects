@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const tpl = DEFAULT_TEMPLATES.otp_email;
 
     console.log(`[send-email OTP] Sending code to: ${email}`);
-    const { success } = await sendEmail({
+    const result = await sendEmail({
       to: email,
       subject: tpl.subject,
       html: buildEmailHtml({

@@ -146,7 +146,10 @@ export const authApi = {
       body: JSON.stringify({ email }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new ApiError(res.status, data?.message ?? "Failed to send reset email");
+    if (!res.ok) {
+      const base = data?.message ?? "Failed to send reset email";
+      throw new ApiError(res.status, data?.detail ? `${base} — ${data.detail}` : base);
+    }
     return data;
   },
 

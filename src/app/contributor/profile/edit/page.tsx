@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { mockContributorProfile } from "@/mocks/data/contributor";
+import { useContributorPhonePrefill } from "@/lib/stores/contributor-phone-store";
 
 /* ═══ Badge ═══ */
 
@@ -141,8 +142,15 @@ export default function ProfileEditPage() {
   const [displayName, setDisplayName] = React.useState(profile.displayName);
   const [bio, setBio] = React.useState(profile.bio || "");
   const [phone, setPhone] = React.useState(profile.phone || "");
-  const [country, setCountry] = React.useState(profile.country || "");
-  const [city, setCity] = React.useState(profile.city || "");
+  const [country, setCountry] = React.useState(profile.country || "India");
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time hydrate from registration
+  React.useEffect(() => {
+    const { phone: stored } = useContributorPhonePrefill.getState();
+    if (!stored || stored.replace(/\D/g, "").length < 7) return;
+    setPhone((prev) => (prev.replace(/\D/g, "").length >= 7 ? prev : stored));
+  }, []);
+  const [city, setCity] = React.useState(profile.city || "Bangalore");
   const [timezone, setTimezone] = React.useState(profile.timezone);
   const [weeklyHours, setWeeklyHours] = React.useState(profile.weeklyHours);
   const [availability, setAvailability] = React.useState(profile.availability);
@@ -268,7 +276,6 @@ export default function ProfileEditPage() {
         </div>
         <div className="px-5 py-5 space-y-4">
           <Select label="Country" icon={Globe} value={country} onChange={(e) => setCountry(e.target.value)}>
-            <option value="">Select country</option>
             {countries.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
@@ -283,7 +290,6 @@ export default function ProfileEditPage() {
           />
 
           <Select label="Timezone" icon={Clock} value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-            <option value="">Select timezone</option>
             {timezones.map((tz) => (
               <option key={tz} value={tz}>{tz}</option>
             ))}

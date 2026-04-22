@@ -303,7 +303,13 @@ export default function SOWDetailPage() {
   const pipelineSows = useSOWPipelineStore((s) => s.sows);
   const { data: apiSowData, isLoading: apiSowLoading, flow: apiFlow } = useSOWDetail(sowId);
   const confirmAndSubmit = useConfirmAndSubmit(sowId);
-  const { data: pipelineApiData } = useApprovalStages(sowId);
+  // Declared up here so the approval-pipeline query below can enable polling
+  // while stage 2 is active (the enterprise user waits for GlimmoraTeam admin).
+  const [activeApprovalIdx, setActiveApprovalIdx] = React.useState(0);
+  const { data: pipelineApiData } = useApprovalStages(
+    sowId,
+    activeApprovalIdx === 1 ? 10000 : undefined,
+  );
   const recordDecision = useRecordApprovalDecision(sowId);
   const sow = React.useMemo(() => {
     // Real-time API data takes priority (works for both manual and AI SOWs)
@@ -501,7 +507,6 @@ export default function SOWDetailPage() {
   const [docSearch, setDocSearch] = React.useState("");
   const [approvalChecked, setApprovalChecked] = React.useState<Record<string, boolean>>({});
   const [signatureText, setSignatureText] = React.useState("");
-  const [activeApprovalIdx, setActiveApprovalIdx] = React.useState(0);
   const [showRequestChanges, setShowRequestChanges] = React.useState(false);
   const [requestChangesNote, setRequestChangesNote] = React.useState("");
   const [requestCategory, setRequestCategory] = React.useState<"scope"|"deliverables"|"timeline"|"other">("scope");
@@ -1751,7 +1756,12 @@ export default function SOWDetailPage() {
               // activeStage for checklist/form uses local index so user can still interact
               const activeStage    = sow.approvalStages[activeApprovalIdx];
               const activeMeta     = !isDone && activeStage ? STAGE_META[activeStage.stage] : null;
-              const checklist      = !isDone && activeStage ? (STAGE_CHECKLISTS[activeStage.stage] ?? []) : [];
+              // Stage 2 is owned by the GlimmoraTeam admin — enterprise users
+              // cannot act on it, only wait for the admin's approval.
+              const isGlimmoraCommercialStage = activeStage?.stage === "glimmora_commercial";
+              const checklist      = !isDone && activeStage && !isGlimmoraCommercialStage
+                ? (STAGE_CHECKLISTS[activeStage.stage] ?? [])
+                : [];
               const allChecked     = checklist.every((_, i) => approvalChecked[`${activeApprovalIdx}-${i}`]);
 
               const handleApprove = () => {
@@ -1929,7 +1939,7 @@ export default function SOWDetailPage() {
                       <Clock className="w-4 h-4 text-teal-600 shrink-0" />
                       <p className="text-[13px] text-teal-800">
                         {activeMeta.name} — waiting for:{" "}
-                        <span className="font-bold">Enterprise Admin</span>
+                        <span className="font-bold">{activeMeta.role}</span>
                       </p>
                     </div>
                   )}
@@ -2045,8 +2055,33 @@ export default function SOWDetailPage() {
                     </div>
                   )}
 
+                  {/* ── GlimmoraTeam-owned stage notice ── */}
+                  {!isChangesRequested && !isDone && isGlimmoraCommercialStage && (
+                    <div className="px-6 py-6 border-b border-beige-100 bg-teal-50/40">
+                      <div className="flex items-start gap-3 max-w-2xl">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                          style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.3)" }}
+                        >
+                          <Clock className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-[13px] font-bold text-teal-900 mb-1">
+                            Awaiting GlimmoraTeam Admin review
+                          </p>
+                          <p className="text-[12px] text-teal-800 leading-relaxed">
+                            Stage 2 — GlimmoraTeam Commercial Review — is signed off by the GlimmoraTeam Admin.
+                            No action is required from you. This SOW will automatically advance to{" "}
+                            <span className="font-semibold">Stage 3 — Legal / Compliance Review</span>{" "}
+                            as soon as the admin approves.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── Digital Signature ── */}
-                  {!isChangesRequested && !isDone && activeStage && (
+                  {!isChangesRequested && !isDone && activeStage && !isGlimmoraCommercialStage && (
                     <div className="px-6 py-3.5 border-b border-beige-100">
                       <p className="text-[9px] font-bold text-beige-500 uppercase tracking-widest mb-1">
                         Digital Signature
@@ -2232,7 +2267,7 @@ export default function SOWDetailPage() {
                   </AnimatePresence>
 
                   {/* ── Action buttons ── */}
-                  {!isChangesRequested && !isDone && activeStage && (
+                  {!isChangesRequested && !isDone && activeStage && !isGlimmoraCommercialStage && (
                     <div className="px-6 py-4 flex items-center gap-3">
                       <button
                         onClick={handleApprove}

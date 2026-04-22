@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
 
     // Dev-only hardcoded admin bypass
     if (email?.trim().toLowerCase() === "admin@glimmora.dev" && password === "Admin@1234") {
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, role: "admin" });
     }
 
     const response = await authApi.login(
@@ -28,11 +28,13 @@ export async function POST(req: NextRequest) {
           ok: true,
           mfaSetupRequired: true,
           mfaSetupPendingToken: response.mfa_pending_token,
+          role: (u as { role?: string }).role ?? null,
           user: {
             id: u.id,
             email: u.email,
             firstName: u.firstName,
             lastName: u.lastName,
+            role: (u as { role?: string }).role ?? null,
           },
         });
       }
@@ -49,6 +51,7 @@ export async function POST(req: NextRequest) {
     // into the NextAuth session (stored in the JWT via the jwt callback).
     return NextResponse.json({
       ok: true,
+      role: response.user?.role ?? null,
       accessToken: response.access_token,
       refreshToken: response.refresh_token,
       expiresIn: response.expires_in,
