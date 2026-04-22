@@ -178,9 +178,10 @@ function LoginPageContent() {
     setIsLoading(true);
     try {
       await authApi.verifyMfaCode(mfaCode, mfaPendingTokenRef.current);
-      // MFA verified — refresh the NextAuth session to pick up the new token state
-      await getSession();
-      window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
+      // MFA verified — route through /auth/redirect so the server picks the
+      // correct dashboard after the cookie is fully committed (avoids a
+      // production race where getSession() returns stale role info).
+      window.location.href = loginDest || callbackUrl || "/auth/redirect";
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Invalid code. Please try again.";
       setError(msg);
@@ -325,18 +326,11 @@ function LoginPageContent() {
         return;
       }
 
-      const session = await getSession();
-      const role = (session?.user as { role?: string })?.role;
-      setUserRole(role || "enterprise");
-
-      const dest = callbackUrl || (
-        role === "admin"       ? "/admin/dashboard"       :
-        role === "reviewer"    ? "/enterprise/reviewer"   :
-        role === "contributor" ? "/contributor/dashboard" :
-        role === "enterprise"  ? "/enterprise/dashboard"  :
-                                 "/enterprise/dashboard"
-      );
-      window.location.href = dest;
+      // Let the server-side /auth/redirect read the freshly-set session cookie
+      // and choose the dashboard. This avoids the client-side getSession()
+      // race in production where the role hasn't hydrated yet and we'd send
+      // the user to the wrong portal (or trigger the role-guard loop).
+      window.location.href = callbackUrl || "/auth/redirect";
     } catch {
       setError("Something went wrong. Please try again.");
       setIsLoading(false);

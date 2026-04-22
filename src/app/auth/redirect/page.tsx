@@ -26,6 +26,8 @@ export default async function AuthRedirectPage() {
   if (user.role === "reviewer")    redirect("/enterprise/reviewer");
   if (user.role === "enterprise")  redirect("/enterprise/dashboard");
 
-  // Unknown role — send back to login
-  redirect("/auth/login");
+  // Role missing from the session (race between sign-in and JWT hydration in
+  // production) — land on the enterprise dashboard instead of bouncing back
+  // to /auth/login, which would re-auth and loop.
+  redirect("/enterprise/dashboard");
 }
