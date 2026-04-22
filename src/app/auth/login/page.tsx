@@ -145,6 +145,9 @@ function LoginPageContent() {
         case "AccessDenied":
           setError("You don't have access. Please contact your administrator.");
           break;
+        case "UnknownRole":
+          setError("Your account role is not configured. Please contact your administrator.");
+          break;
         case "CredentialsSignin":
           setError("Incorrect email or password. Please try again.");
           break;
