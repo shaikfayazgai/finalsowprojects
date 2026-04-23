@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
   Sparkles, ArrowRight, Globe, Shield, Zap, BarChart3, Users,
@@ -85,8 +87,23 @@ const TESTIMONIALS = [
 ];
 
 export default function HomePage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const isLoggedIn = !!session?.user;
+
+  // Authenticated users should never see the marketing page — send them
+  // straight to their portal as soon as the session is confirmed.
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const role = (session?.user as { role?: string })?.role;
+    const dest =
+      role === "admin"       ? "/admin/dashboard" :
+      role === "reviewer"    ? "/enterprise/reviewer" :
+      role === "contributor" ? "/contributor/dashboard" :
+      role === "enterprise"  ? "/enterprise/dashboard" :
+      null;
+    if (dest) router.replace(dest);
+  }, [status, session, router]);
 
   return (
     <MeshBackground variant="warm" className="min-h-screen">

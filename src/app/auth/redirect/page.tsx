@@ -26,8 +26,11 @@ export default async function AuthRedirectPage() {
   if (user.role === "reviewer")    redirect("/enterprise/reviewer");
   if (user.role === "enterprise")  redirect("/enterprise/dashboard");
 
-  // Role missing from the session (race between sign-in and JWT hydration in
-  // production) — land on the enterprise dashboard instead of bouncing back
-  // to /auth/login, which would re-auth and loop.
+  // Non-empty but unrecognised role → show an error on the login page.
+  if (user.role) redirect("/auth/login?error=UnknownRole");
+
+  // Role is null/undefined — JWT hydration race in production where the
+  // cookie is set but the token hasn't decoded yet on the first server request.
+  // Fall back to enterprise dashboard instead of bouncing the user back to login.
   redirect("/enterprise/dashboard");
 }

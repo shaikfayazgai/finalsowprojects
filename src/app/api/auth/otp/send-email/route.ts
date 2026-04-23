@@ -44,20 +44,32 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    if (!result.success) {
-      return NextResponse.json(
-        {
-          error: "SEND_FAILED",
-          message: "Could not send verification email. Please try again.",
-          detail: result.error,
-        },
-        { status: 500 },
+    const isDev = process.env.NODE_ENV !== "production";
+    if (!success) {
+      if (!isDev) {
+        return NextResponse.json(
+          { error: "SEND_FAILED", message: "Could not send verification email. Please try again." },
+          { status: 500 },
+        );
+      }
+
+      console.warn(
+        `[send-email OTP] Email provider failed in development. Using local OTP fallback for: ${email}`,
       );
+    } else {
+      console.log(`[send-email OTP] Sent successfully to: ${email}`);
     }
 
-    console.log(`[send-email OTP] Sent successfully to: ${email}`);
-
-    const res = NextResponse.json({ ok: true });
+    const res = NextResponse.json(
+      success
+        ? { ok: true }
+        : {
+            ok: true,
+            devFallback: true,
+            devOtp: code,
+            message: "Email provider failed in development. OTP generated locally.",
+          },
+    );
     res.cookies.set("email_otp_token", token, {
       httpOnly: true,
       sameSite: "strict",

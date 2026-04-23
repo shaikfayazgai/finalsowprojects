@@ -59,7 +59,10 @@ export function useRoleGuard(allowed: Role[]) {
         router.replace(target);
       }
     }
-  }, [status, session, allowedKey, pathname, router, allowed]);
+  // `allowed` is intentionally omitted — `allowedKey` already serializes its
+  // content, and including the array identity would re-fire on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, session, allowedKey, pathname, router]);
 
   return status;
 }

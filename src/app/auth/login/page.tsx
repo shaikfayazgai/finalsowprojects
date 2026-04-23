@@ -145,6 +145,9 @@ function LoginPageContent() {
         case "AccessDenied":
           setError("You don't have access. Please contact your administrator.");
           break;
+        case "UnknownRole":
+          setError("Your account role is not configured. Please contact your administrator.");
+          break;
         case "CredentialsSignin":
           setError("Incorrect email or password. Please try again.");
           break;
@@ -177,10 +180,17 @@ function LoginPageContent() {
     setIsLoading(true);
     try {
       await authApi.verifyMfaCode(mfaCode, mfaPendingTokenRef.current);
-      // MFA verified — route through /auth/redirect so the server picks the
-      // correct dashboard after the cookie is fully committed (avoids a
-      // production race where getSession() returns stale role info).
-      window.location.href = loginDest || callbackUrl || "/auth/redirect";
+      // MFA verified — refresh the NextAuth session to pick up the new token state
+      const session = await getSession();
+      const accessToken = (session?.user as { accessToken?: string })?.accessToken;
+      if (accessToken) {
+        try {
+          sessionStorage.setItem("admin_token", accessToken);
+        } catch {
+          // sessionStorage unavailable
+        }
+      }
+      window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Invalid code. Please try again.";
       setError(msg);
@@ -225,17 +235,16 @@ function LoginPageContent() {
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
 
-      if (!validateRes.ok) {
-        const data = await validateRes.json();
-        setError(data.message);
-        setErrorCode(data.error);
+      const validateData = await validateRes.json().catch(() => ({} as Record<string, unknown>));
+      if (!validateRes.ok || validateData.ok === false) {
+        const data = validateData as { message?: string; error?: string };
+        setError(data.message ?? "Unable to sign in. Please try again.");
+        setErrorCode(data.error ?? "");
         setIsLoading(false);
         return;
       }
 
-      const validateData = await validateRes.json();
-
-      // MFA required — show TOTP step. Session created after code verification.
+      // MFA required — skip signIn, store the pending token and show TOTP step
       if (validateData.mfaRequired) {
         mfaPendingTokenRef.current = validateData.mfaPendingToken ?? "";
         setStep("mfa");
@@ -325,11 +334,46 @@ function LoginPageContent() {
         return;
       }
 
-      // Let the server-side /auth/redirect read the freshly-set session cookie
-      // and choose the dashboard. This avoids the client-side getSession()
-      // race in production where the role hasn't hydrated yet and we'd send
-      // the user to the wrong portal (or trigger the role-guard loop).
-      window.location.href = callbackUrl || "/auth/redirect";
+      if (result?.ok) {
+        const session = await getSession();
+        const role = (session?.user as { role?: string })?.role;
+        const accessToken = (session?.user as { accessToken?: string })?.accessToken;
+        if (accessToken) {
+          try {
+            sessionStorage.setItem("admin_token", accessToken);
+          } catch {
+            // sessionStorage unavailable
+          }
+        }
+
+        setUserRole(role || "enterprise");
+
+        // Login = returning user — send straight to dashboard.
+        // Onboarding wizard is only for first-time SSO users (handled in auth.ts signIn callback).
+        const dest = callbackUrl || (
+          role === "contributor" ? "/contributor/dashboard" :
+          role === "mentor"      ? "/mentor/dashboard" :
+          role === "admin"       ? "/admin/dashboard" :
+                                   "/enterprise/dashboard"
+        );
+        
+        setLoginDest(dest);
+
+        // Admin role skips MFA prompt — navigate directly to dashboard.
+        if (role === "admin") {
+          window.location.href = dest;
+          return;
+        }
+
+        // Store credentials for MFA setup page
+        try {
+          sessionStorage.setItem("_mfa_setup_email", email.trim().toLowerCase());
+          sessionStorage.setItem("_mfa_setup_password", password);
+        } catch { /* sessionStorage unavailable */ }
+
+        setStep("mfa-prompt");
+        setIsLoading(false);
+      }
     } catch {
       setError("Something went wrong. Please try again.");
       setIsLoading(false);
@@ -349,7 +393,15 @@ function LoginPageContent() {
     setIsLoading(true);
     try {
       await authApi.redeemRecoveryCode(recoveryCode, mfaPendingTokenRef.current);
-      await getSession();
+      const session = await getSession();
+      const accessToken = (session?.user as { accessToken?: string })?.accessToken;
+      if (accessToken) {
+        try {
+          sessionStorage.setItem("admin_token", accessToken);
+        } catch {
+          // sessionStorage unavailable
+        }
+      }
       window.location.href = loginDest || callbackUrl || "/enterprise/dashboard";
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Invalid recovery code. Please try again.";

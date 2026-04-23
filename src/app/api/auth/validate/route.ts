@@ -67,21 +67,21 @@ export async function POST(req: NextRequest) {
         if (isNotFound) {
           return NextResponse.json(
             {
+              ok: false,
               error: "NO_ACCOUNT",
               message:
                 "We couldn't find an account associated with this email. Please check your email or create a new account to get started.",
             },
-            { status: 401 },
           );
         }
 
         return NextResponse.json(
           {
+            ok: false,
             error: "WRONG_PASSWORD",
             message:
               "The password you entered is incorrect. Please try again or reset your password.",
           },
-          { status: 401 },
         );
       }
     }

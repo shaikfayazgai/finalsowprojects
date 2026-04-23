@@ -664,6 +664,8 @@ function ContributorRegisterContent() {
                   <Step1Identity
                     firstName={reg.firstName} setFirstName={reg.setFirstName}
                     lastName={reg.lastName} setLastName={reg.setLastName}
+                    phoneCountry={reg.phoneCountry} setPhoneCountry={reg.setPhoneCountry}
+                    phone={reg.phone} setPhone={reg.setPhone}
                     email={reg.email} setEmail={reg.setEmail}
                     password={reg.password} setPassword={reg.setPassword}
                     confirm={reg.confirm} setConfirm={reg.setConfirm}
@@ -704,8 +706,15 @@ function ContributorRegisterContent() {
                     addOtherSkill={reg.addOtherSkill} removeOtherSkill={reg.removeOtherSkill}
                     workStart={reg.workStart} setWorkStart={reg.setWorkStart}
                     workEnd={reg.workEnd} setWorkEnd={reg.setWorkEnd}
+                    jobTitle={reg.jobTitle} setJobTitle={reg.setJobTitle}
                     careerStage={reg.careerStage} setCareerStage={reg.setCareerStage}
                     yearsExperience={reg.yearsExperience} setYearsExperience={reg.setYearsExperience}
+                    studentCurrency={reg.studentCurrency}
+                    studentHourlyRate={reg.studentHourlyRate}
+                    womenRateCurrency={reg.womenRateCurrency}
+                    womenRateTable={reg.womenRateTable}
+                    generalRateCurrency={reg.generalRateCurrency}
+                    generalRateTable={reg.generalRateTable}
                     error={reg.error}
                     onContinue={reg.goToStep3}
                     onBack={() => { reg.setStep(1); reg.setError(""); }}

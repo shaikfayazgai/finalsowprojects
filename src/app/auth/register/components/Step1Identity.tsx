@@ -5,18 +5,22 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertCircle, ArrowRight, CheckCircle,
-  GraduationCap, Briefcase, Users,
+  GraduationCap, Briefcase, Users, Smartphone,
 } from "lucide-react";
 import {
   GlassCard, GlassCardContent, Button, Input, Label,
 } from "@/components/ui";
 import { CountryCombobox } from "./CountryCombobox";
+import { CountryDialPicker } from "./CountryDialPicker";
+import { COUNTRIES_DATA } from "../data";
 import type { PasswordStrength } from "../types";
 import type { ContributorType } from "../types";
 
 interface Props {
   firstName: string;       setFirstName: (v: string) => void;
   lastName: string;        setLastName: (v: string) => void;
+  phoneCountry: string;    setPhoneCountry: (v: string) => void;
+  phone: string;           setPhone: (v: string) => void;
   email: string;           setEmail: (v: string) => void;
   password: string;        setPassword: (v: string) => void;
   confirm: string;         setConfirm: (v: string) => void;
@@ -69,6 +73,8 @@ const CONTRIBUTOR_TYPES: {
 export function Step1Identity({
   firstName, setFirstName,
   lastName, setLastName,
+  phoneCountry, setPhoneCountry,
+  phone, setPhone,
   email, setEmail,
   password, setPassword,
   confirm, setConfirm,
@@ -83,6 +89,8 @@ export function Step1Identity({
   hideSignInLink = false,
 }: Props) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const selectedPhoneCountry = COUNTRIES_DATA.find((c) => c.name === phoneCountry);
+  const phoneMaxLen = selectedPhoneCountry?.phoneMaxLength ?? 12;
 
   const validateField = (field: string, value: string) => {
     const errs = { ...fieldErrors };
@@ -95,6 +103,12 @@ export function Step1Identity({
         if (!value.trim()) errs.lastName = "Last name is required";
         else delete errs.lastName;
         break;
+      case "phone": {
+        const digits = value.replace(/\D/g, "");
+        if (digits.length < 7) errs.phone = "Enter a valid mobile number";
+        else delete errs.phone;
+        break;
+      }
       case "email":
         if (!value.trim()) errs.email = "Email is required";
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
@@ -149,6 +163,42 @@ export function Step1Identity({
                 className={isSsoUser ? "bg-beige-50 text-beige-700" : ""} />
               {fieldErrors.lastName && <p className="text-xs text-red-500">{fieldErrors.lastName}</p>}
             </div>
+          </div>
+
+          {/* Mobile number */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Smartphone className="w-3.5 h-3.5 text-beige-500 shrink-0" />
+              <Label htmlFor="mobile-step1" className="mb-0">
+                Mobile Number <span className="text-red-400">*</span>
+              </Label>
+            </div>
+            <div className="flex flex-1 items-center rounded-xl border border-beige-200 bg-white shadow-sm transition-all focus-within:border-brown-500 focus-within:ring-2 focus-within:ring-brown-500/20">
+              <CountryDialPicker
+                value={phoneCountry}
+                onChange={(name) => {
+                  const c = COUNTRIES_DATA.find((x) => x.name === name)!;
+                  setPhoneCountry(c.name);
+                  setPhone(c.code + " ");
+                }}
+              />
+              <input
+                id="mobile-step1"
+                type="tel"
+                placeholder={`Number (${phoneMaxLen} digits)`}
+                value={phone.replace(/^\+\d+\s?/, "")}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "").slice(0, phoneMaxLen);
+                  const cc = selectedPhoneCountry?.code ?? "";
+                  setPhone(`${cc} ${digits}`);
+                }}
+                onBlur={() => validateField("phone", phone)}
+                maxLength={phoneMaxLen}
+                autoComplete="tel-national"
+                className="flex-1 h-11 px-3 text-sm text-brown-950 bg-transparent outline-none placeholder:text-beige-400"
+              />
+            </div>
+            {fieldErrors.phone && <p className="text-xs text-red-500">{fieldErrors.phone}</p>}
           </div>
 
           {/* Email */}

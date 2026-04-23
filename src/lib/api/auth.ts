@@ -186,48 +186,6 @@ export const authApi = {
     );
   },
 
-  /** Register a new contributor account. */
-  async registerContributor(data: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    password: string;
-    confirmPassword: string;
-    contributorType: string;
-    countryOfResidence: string;
-    dateOfBirth: string;
-    timeZone: string;
-    weeklyAvailabilityHours: string;
-    departmentCategory: string;
-    primarySkills: string[];
-    // Optional extended fields
-    secondarySkills?: string[];
-    otherSkills?: string[];
-    phone: string;  // required by API
-    degree?: string;
-    branch?: string;
-    linkedin?: string;
-    careerStage?: string;
-    yearsExperience?: string;
-    workStart?: string;
-    workEnd?: string;
-    // Acknowledgement fields (actual API field names)
-    ndaSignatoryLegalName?: string;
-    mentorGuideAcknowledged?: boolean;
-    acceptTermsOfUse?: boolean;
-    acceptCodeOfConduct?: boolean;
-    acceptPrivacyPolicy?: boolean;
-    acceptHarassmentPolicy?: boolean;
-    acknowledgmentsAccepted?: boolean;
-    notifyNewTasksOptIn?: boolean;
-    marketingOptIn?: boolean;
-  }): Promise<{ user: GlimmoraUser }> {
-    return apiCall<{ user: GlimmoraUser }>("/api/v1/auth/register/contributor", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
   /**
    * Build the Glimmora OAuth authorize URL for the given provider.
    * The `state` blob encodes where to redirect after the OAuth callback lands
