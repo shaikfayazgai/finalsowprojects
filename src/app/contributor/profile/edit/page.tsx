@@ -3,13 +3,15 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useSession } from "next-auth/react";
 import {
   User, Mail, Phone, Globe, MapPin, Clock,
-  Lock, CheckCircle2, Plus, Trash2,
+  Lock, CheckCircle2, Plus, Trash2, AlertCircle, RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { mockContributorProfile } from "@/mocks/data/contributor";
+import { useContributorPhonePrefill } from "@/lib/stores/contributor-phone-store";
 
 /* ═══ Badge ═══ */
 
@@ -132,6 +134,12 @@ const availableSkills = [
   "Flutter", "Swift", "Kotlin", "Figma", "TensorFlow",
 ];
 
+function normalizeProficiency(p?: string) {
+  const v = (p ?? "intermediate").toLowerCase();
+  if (v === "beginner" || v === "intermediate" || v === "advanced" || v === "expert") return v;
+  return "intermediate";
+}
+
 /* ═══ PAGE ═══ */
 
 export default function ProfileEditPage() {
@@ -142,6 +150,13 @@ export default function ProfileEditPage() {
   const [bio, setBio] = React.useState(profile.bio || "");
   const [phone, setPhone] = React.useState(profile.phone || "");
   const [country, setCountry] = React.useState(profile.country || "India");
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time hydrate from registration
+  React.useEffect(() => {
+    const { phone: stored } = useContributorPhonePrefill.getState();
+    if (!stored || stored.replace(/\D/g, "").length < 7) return;
+    setPhone((prev) => (prev.replace(/\D/g, "").length >= 7 ? prev : stored));
+  }, []);
   const [city, setCity] = React.useState(profile.city || "Bangalore");
   const [timezone, setTimezone] = React.useState(profile.timezone);
   const [weeklyHours, setWeeklyHours] = React.useState(profile.weeklyHours);
@@ -154,11 +169,90 @@ export default function ProfileEditPage() {
 
   const [showSuccess, setShowSuccess] = React.useState(false);
 
-  /* ─── Handlers ─── */
+  const displayInitials = displayName
+    ? displayName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()
+    : "—";
 
-  const handleSave = () => {
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+  const applyProfileFromApi = React.useCallback((data: ContributorProfileResponse) => {
+    setDisplayName(String(data.display_name ?? ""));
+    setEmail(String(data.email ?? ""));
+    setAnonymousId(String(data.anonymous_id ?? ""));
+    setAvatar(String(data.avatar ?? ""));
+    setBio(String(data.bio ?? ""));
+    setPhone(String(data.phone ?? ""));
+    setCountry(String(data.country ?? ""));
+    setCity(String(data.city ?? ""));
+    setTimezone(String(data.timezone ?? ""));
+    setWeeklyHours(Number(data.weekly_hours ?? 0));
+    setAvailability(String(data.availability ?? "available").toLowerCase() || "available");
+    setLanguage(String(data.language ?? "en"));
+    setSkills(
+      (data.skills ?? []).map((s) => ({
+        name: String(s.name ?? ""),
+        proficiency: normalizeProficiency(s.proficiency),
+      })),
+    );
+  }, []);
+
+  React.useEffect(() => {
+    if (sessionStatus === "loading") return;
+    if (!token || !contributorId) {
+      setLoading(false);
+      setLoadError("Please sign in to edit your profile.");
+      return;
+    }
+    setLoading(true);
+    setLoadError(null);
+    const sk = sessionKeyFragment(token);
+    let live = true;
+    void dedupeAsync(`contrib:profile-edit:${contributorId}:${sk}:${retryKey}`, () =>
+      fetchContributorProfile(token, contributorId),
+    )
+      .then((data) => {
+        if (!live) return;
+        applyProfileFromApi(data);
+        setLoading(false);
+      })
+      .catch((err: Error) => {
+        if (!live) return;
+        setLoadError(err.message ?? "Failed to load profile");
+        setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [token, contributorId, sessionStatus, retryKey, applyProfileFromApi]);
+
+  const handleSave = async () => {
+    if (!token || !contributorId || saving) return;
+    setSaveError(null);
+    setSaving(true);
+    try {
+      await patchContributorProfile(token, contributorId, {
+        display_name: displayName,
+        bio,
+        phone,
+        country,
+        city,
+        timezone,
+        weekly_hours: Number.isFinite(weeklyHours) ? weeklyHours : 0,
+        availability,
+        language,
+      });
+      const updated = await putContributorProfileSkills(token, contributorId, {
+        skills: skills
+          .map((s) => ({ name: s.name.trim(), proficiency: normalizeProficiency(s.proficiency) }))
+          .filter((s) => s.name.length > 0),
+      });
+      applyProfileFromApi(updated);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Save failed";
+      setSaveError(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateSkillProficiency = (index: number, proficiency: string) => {
@@ -177,8 +271,56 @@ export default function ProfileEditPage() {
     }
   };
 
+  if (sessionStatus === "loading" || (token && contributorId && loading)) {
+    return (
+      <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
+        <div className="h-8 w-40 bg-gray-200 rounded-lg animate-pulse" />
+        <div className="card-parchment h-48 bg-[#faf8f5] animate-pulse" />
+        <div className="card-parchment h-36 bg-[#faf8f5] animate-pulse" />
+      </motion.div>
+    );
+  }
+
+  if (!token || !contributorId) {
+    return (
+      <motion.div variants={stagger} initial="hidden" animate="show" className="card-parchment px-6 py-10">
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 text-amber-800 text-[13px]">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {loadError || "You need to be signed in to edit your profile."}
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <motion.div variants={stagger} initial="hidden" animate="show" className="card-parchment px-6 py-10">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 text-red-700 text-[13px]">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {loadError}
+          </div>
+          <button
+            type="button"
+            onClick={() => setRetryKey((k) => k + 1)}
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-red-800 px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Retry
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
+
+      {saveError && (
+        <motion.div variants={fadeUp} className="mb-4 card-parchment px-4 py-3 text-[13px] text-red-700 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {saveError}
+        </motion.div>
+      )}
 
       {/* ═══ SUCCESS TOAST ═══ */}
       {showSuccess && (
@@ -211,12 +353,16 @@ export default function ProfileEditPage() {
         <div className="px-5 py-5 space-y-4">
           {/* Avatar display (non-editable) */}
           <div className="flex items-center gap-4 mb-2">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-lg font-semibold shrink-0">
-              {profile.avatar}
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-lg font-semibold shrink-0 overflow-hidden">
+              {isAvatarImageUrl(avatar) ? (
+                <img src={avatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                (avatar || displayInitials).slice(0, 2)
+              )}
             </div>
             <div>
-              <span className="text-[12px] font-medium text-gray-700 block">{profile.anonymousId}</span>
-              <span className="text-[10px] text-gray-400">Avatar initials are auto-generated</span>
+              <span className="text-[12px] font-medium text-gray-700 block">{anonymousId || "—"}</span>
+              <span className="text-[10px] text-gray-400">Avatar from your Glimmora profile</span>
             </div>
           </div>
 
@@ -247,7 +393,7 @@ export default function ProfileEditPage() {
           <Input
             label="Email"
             icon={Mail}
-            value={profile.email}
+            value={email}
             readOnly
           />
           <Input
@@ -268,6 +414,7 @@ export default function ProfileEditPage() {
         </div>
         <div className="px-5 py-5 space-y-4">
           <Select label="Country" icon={Globe} value={country} onChange={(e) => setCountry(e.target.value)}>
+            <option value="">Select country</option>
             {countries.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
@@ -282,6 +429,7 @@ export default function ProfileEditPage() {
           />
 
           <Select label="Timezone" icon={Clock} value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+            <option value="">Select timezone</option>
             {timezones.map((tz) => (
               <option key={tz} value={tz}>{tz}</option>
             ))}
@@ -300,7 +448,7 @@ export default function ProfileEditPage() {
             <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">Weekly Hours</label>
             <input
               type="number"
-              min={1}
+              min={0}
               max={60}
               value={weeklyHours}
               onChange={(e) => setWeeklyHours(Number(e.target.value))}
@@ -371,10 +519,15 @@ export default function ProfileEditPage() {
       {/* ═══ BOTTOM ACTIONS ═══ */}
       <motion.div variants={fadeUp} className="flex items-center gap-3 mb-8">
         <button
+          type="button"
           onClick={handleSave}
-          className="bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 text-white rounded-xl px-6 py-2.5 text-[13px] font-medium transition-all"
+          disabled={saving}
+          className={cn(
+            "text-white rounded-xl px-6 py-2.5 text-[13px] font-medium transition-all",
+            saving ? "bg-gray-300 cursor-not-allowed" : "bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700",
+          )}
         >
-          Save Changes
+          {saving ? "Saving…" : "Save Changes"}
         </button>
         <Link href="/contributor/profile">
           <button className="border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl px-6 py-2.5 text-[13px] font-medium transition-all">

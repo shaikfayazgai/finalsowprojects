@@ -111,257 +111,32 @@ function DetailSkeleton() {
 export default function CredentialDetailPage() {
   const params = useParams();
   const credentialId = params.credentialId as string;
-  const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const credential = mockCredentials.find((c) => c.id === credentialId);
+  const isStudent = mockContributorProfile.track === "student";
 
-  /* ── Credential state ── */
-  const [credential, setCredential] = React.useState<Credential | null>(null);
-  const [loading, setLoading]       = React.useState(true);
-  const [error, setError]           = React.useState<string | null>(null);
-  const [notFound, setNotFound]     = React.useState(false);
-  const [retryKey, setRetryKey]     = React.useState(0);
+  /* H3 Step 3 — Share with University state (must be declared before any early return) */
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [shareConsent, setShareConsent] = React.useState(false);
+  const [shareSubmitted, setShareSubmitted] = React.useState(false);
 
-  /* ── Certificate download state ── */
-  const [certLoading, setCertLoading] = React.useState(false);
-
-  /* ── Verification state ── */
-  const [verification, setVerification]         = React.useState<CredentialVerificationData | null>(null);
-  const [loadingVerification, setLoadingVerification] = React.useState(false);
-  const [verificationError, setVerificationError]     = React.useState<string | null>(null);
-
-  /* ── Share credential state ── */
-  const [shareOpen, setShareOpen]             = React.useState(false);
-  const [shareTargetType, setShareTargetType] = React.useState("university");
-  const [shareTargetId, setShareTargetId]     = React.useState("");
-  const [shareConsent, setShareConsent]       = React.useState(false);
-  const [shareFields, setShareFields]         = React.useState<string[]>(["skill", "level", "score"]);
-  const [shareLoading, setShareLoading]       = React.useState(false);
-  const [shareResult, setShareResult]         = React.useState<ShareCredentialResponse | null>(null);
-  const [shareError, setShareError]           = React.useState<string | null>(null);
-
-  /* ── Academic portfolio state ── */
-  const [portfolioOpen, setPortfolioOpen]         = React.useState(false);
-  const [portfolioFormat, setPortfolioFormat]     = React.useState("pdf");
-  const [portfolioOptions, setPortfolioOptions]   = React.useState({
-    include_tasks: true,
-    include_credentials: true,
-    include_hours: true,
-    include_feedback: false,
-  });
-  const [portfolioLoading, setPortfolioLoading]   = React.useState(false);
-  const [portfolioResult, setPortfolioResult]     = React.useState<AcademicPortfolioResponse | null>(null);
-  const [portfolioError, setPortfolioError]       = React.useState<string | null>(null);
-
-  /* ── Fetch credential detail ── */
-  React.useEffect(() => {
-    if (sessionStatus === "loading") return;
-    if (!token) { setLoading(false); return; }
-    if (!credentialId) { setLoading(false); return; }
-
-    setLoading(true);
-    setError(null);
-    setNotFound(false);
-
-    const sk = sessionKeyFragment(token);
-    let live = true;
-    void dedupeAsync(`contrib:credential-detail:${credentialId}:${sk}:${retryKey}`, () =>
-      fetchCredentialDetail(token, credentialId),
-    )
-      .then((data) => {
-        if (!live) return;
-        setCredential(data);
-        setLoading(false);
-      })
-      .catch((err: Error) => {
-        if (!live) return;
-        if (err.message?.includes("404")) setNotFound(true);
-        else setError(err.message);
-        setLoading(false);
-      });
-
-    return () => {
-      live = false;
-    };
-  }, [token, sessionStatus, credentialId, retryKey]);
-
-  /* ── Fetch per-credential verification ── */
-  React.useEffect(() => {
-    if (sessionStatus === "loading") return;
-    if (!token || !credentialId) return;
-
-    setLoadingVerification(true);
-    setVerificationError(null);
-
-    const sk = sessionKeyFragment(token);
-    let live = true;
-    void dedupeAsync(`contrib:credential-verify:${credentialId}:${sk}:${retryKey}`, () =>
-      fetchCredentialVerification(token, credentialId),
-    )
-      .then((data) => {
-        if (!live) return;
-        setVerification(data);
-        setLoadingVerification(false);
-      })
-      .catch((err: Error) => {
-        if (!live) return;
-        setVerificationError(err.message);
-        setLoadingVerification(false);
-      });
-
-    return () => {
-      live = false;
-    };
-  }, [token, sessionStatus, credentialId, retryKey]);
-
-  /* ── Certificate download handler ── */
-  async function handleDownloadCertificate() {
-    if (certLoading) return;
-    setCertLoading(true);
-
-    const filename = `credential-${credentialId}.pdf`;
-
-    /*
-     * Priority order:
-     *  1. certificate_file_url  — already on the credential detail, instant
-     *  2. /certificate API      — calls backend, may be slow or unavailable
-     *  3. verification_url      — last resort public link
-     */
-    const staticUrl = credential?.certificate_file_url;
-
-    if (staticUrl) {
-      console.log("[CredentialDetail] Certificate: using certificate_file_url →", staticUrl);
-      triggerDownload(staticUrl, filename);
-      toast.success("Certificate ready", "Your certificate is opening now.");
-      setCertLoading(false);
-      return;
-    }
-
-    /* No static URL — try the certificate API */
-    if (!token || !credentialId) {
-      toast.error("Not signed in", "Please sign in to download your certificate.");
-      setCertLoading(false);
-      return;
-    }
-
-    console.log(`[CredentialDetail] → GET /api/contributor/credentials/${credentialId}/certificate?format=pdf`);
-    try {
-      const result = await fetchCredentialCertificate(token, credentialId, "pdf");
-      console.log("[CredentialDetail] ✓ 200 certificate —", typeof result, String(result).substring(0, 80));
-
-      if (typeof result === "string" && result.length > 0) {
-        triggerDownload(result, filename);
-        toast.success("Certificate ready", "Your certificate is opening/downloading now.");
-        return;
-      }
-
-      /* API returned empty string */
-      toast.error(
-        "Certificate not available",
-        "The certificate file is not ready yet. Please try again later.",
-      );
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Download failed";
-      console.error("[CredentialDetail] ✗ certificate —", message);
-
-      /* Try verification_url as very last resort */
-      const verUrl = credential?.verification_url;
-      if (verUrl) {
-        console.log("[CredentialDetail] Falling back to verification_url");
-        triggerDownload(verUrl, filename);
-        toast.success("Verification link opened", "Direct certificate download is temporarily unavailable.");
-      } else {
-        toast.error(
-          "Certificate unavailable",
-          "The certificate service is temporarily unavailable. Please try again shortly.",
-        );
-      }
-    } finally {
-      setCertLoading(false);
-    }
+  if (!credential) {
+    return (
+      <motion.div variants={stagger} initial="hidden" animate="show">
+        <motion.div variants={fadeUp} className="card-parchment px-6 py-16 text-center">
+          <Award className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+          <p className="text-[14px] font-medium text-gray-600 mb-1">Credential not found</p>
+          <p className="text-[12px] text-gray-400 mb-4">This credential may have been revoked or doesn&apos;t exist.</p>
+          <Link href="/contributor/credentials" className="text-[12px] font-medium text-brown-600 hover:text-brown-700">
+            ← Back to credentials
+          </Link>
+        </motion.div>
+      </motion.div>
+    );
   }
 
-  function triggerDownload(url: string, filename: string) {
-    const link = document.createElement("a");
-    link.href = url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    /* Only set download attr for same-origin or blob URLs */
-    if (url.startsWith("blob:") || url.startsWith("/")) {
-      link.download = filename;
-    }
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    if (url.startsWith("blob:")) {
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    }
-  }
-
-  /* ── Share credential handler ── */
-  async function handleShareCredential() {
-    if (!token || !credentialId || shareLoading) return;
-    if (!shareConsent) {
-      toast.error("Consent required", "Please check the consent box to continue.");
-      return;
-    }
-    if (!shareTargetId.trim()) {
-      toast.error("Target required", "Please enter a target institution or employer ID.");
-      return;
-    }
-    setShareLoading(true);
-    setShareError(null);
-    console.log(`[CredentialDetail] → POST /api/contributor/credentials/${credentialId}/share`);
-    try {
-      const result = await shareCredential(token, credentialId, {
-        target_type: shareTargetType,
-        target_id: shareTargetId.trim(),
-        consent: shareConsent,
-        share_fields: shareFields,
-      });
-      console.log("[CredentialDetail] ✓ 200 share —", result);
-      setShareResult(result);
-      toast.success("Credential shared", "Your credential has been shared successfully.");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Share failed";
-      console.error("[CredentialDetail] ✗ share —", message);
-      setShareError(message);
-      toast.error("Share failed", message);
-    } finally {
-      setShareLoading(false);
-    }
-  }
-
-  /* ── Academic portfolio handler ── */
-  async function handleCreatePortfolio() {
-    if (!token || !credentialId || portfolioLoading) return;
-    setPortfolioLoading(true);
-    setPortfolioError(null);
-    console.log(`[CredentialDetail] → POST /api/contributor/credentials/${credentialId}/academic-portfolio`);
-    try {
-      const result = await createAcademicPortfolio(token, credentialId, {
-        format: portfolioFormat,
-        ...portfolioOptions,
-      });
-      console.log("[CredentialDetail] ✓ 200 academic-portfolio —", result);
-      setPortfolioResult(result);
-      if (result.download_url) {
-        toast.success("Portfolio ready", "Your academic portfolio is ready to download.");
-        triggerDownload(result.download_url, `academic-portfolio-${credentialId}.${portfolioFormat}`);
-      } else {
-        toast.success("Portfolio queued", `Job ID: ${result.job_id}. You will be notified when it is ready.`);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Portfolio generation failed";
-      console.error("[CredentialDetail] ✗ academic-portfolio —", message);
-      setPortfolioError(message);
-      toast.error("Portfolio failed", message);
-    } finally {
-      setPortfolioLoading(false);
-    }
-  }
-
-  /* ── Loading ── */
-  if (sessionStatus === "loading" || loading) return <DetailSkeleton />;
+  const level = levelConfig[credential.level] || levelConfig.beginner;
+  const acad = credential.academicMapping;
+  const acadStatus = acad ? (academicStatusMap[acad.status] || academicStatusMap.pending_approval) : null;
 
   /* ── Not found ── */
   if (notFound || (!loading && !credential && !error)) {
@@ -378,43 +153,6 @@ export default function CredentialDetailPage() {
       </motion.div>
     );
   }
-
-  /* ── Error ── */
-  if (error) {
-    return (
-      <motion.div variants={stagger} initial="hidden" animate="show">
-        <motion.div variants={fadeUp} className="card-parchment px-6 py-12">
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-red-50 mb-5">
-            <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-            <div className="flex-1">
-              <p className="text-[13px] font-semibold text-red-700">Failed to load credential</p>
-              <p className="text-[11px] text-red-600 mt-0.5">{error}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => setRetryKey((k) => k + 1)}
-              className="flex items-center gap-1.5 text-[12px] font-medium text-brown-600 px-4 py-2 rounded-xl border border-brown-200 hover:bg-brown-50 transition-all">
-              <RefreshCw className="w-3.5 h-3.5" /> Try Again
-            </button>
-            <Link href="/contributor/credentials" className="text-[12px] font-medium text-gray-500 hover:text-gray-700">
-              ← Back to credentials
-            </Link>
-          </div>
-        </motion.div>
-      </motion.div>
-    );
-  }
-
-  if (!credential) return null;
-
-  const lvlVariant  = levelVariant[credential.level?.toLowerCase()]    ?? "beige";
-  const lvlColor    = levelColor[credential.level?.toLowerCase()]      ?? "text-gray-500";
-  const senVariant  = seniorityVariant[credential.seniority?.toLowerCase()] ?? "beige";
-  const acad        = credential.academic_mapping;
-  const isRevoked   = credential.revoked === true;
-  const isStudent   = !!acad;
-  const LEVELS      = ["beginner", "intermediate", "advanced", "expert"];
-  const levelIdx    = LEVELS.indexOf(credential.level?.toLowerCase());
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">

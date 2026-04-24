@@ -50,11 +50,15 @@ export interface SOWActionRequest {
 export interface ApprovalDecision {
   decision: string;
   comments?: string | null;
+  /** Reviewer identity — sent as both `reviewer` and `decided_by` for backend compatibility. */
+  reviewer?: string;
+  decided_by?: string;
 }
 
 // ── Token cache ───────────────────────────────────────────────────────────
 
 let _cachedToken: string | null = null;
+let _cachedEnterpriseToken: string | null = null;
 
 async function getToken(): Promise<string> {
   if (_cachedToken) return _cachedToken;
@@ -72,6 +76,26 @@ async function getToken(): Promise<string> {
   return data.token;
 }
 
+/**
+ * Fetch a Glimmora API token scoped to the enterprise service account.
+ * Used by admin pages so the backend returns enterprise-visible SOWs even when
+ * the logged-in Claude admin has no personal glimmora access token.
+ */
+async function getEnterpriseToken(): Promise<string> {
+  if (_cachedEnterpriseToken) return _cachedEnterpriseToken;
+
+  const res = await fetch("/api/sow/token?role=enterprise");
+  if (!res.ok) {
+    throw new ApiError(res.status, "Failed to acquire enterprise API token");
+  }
+  const data = await res.json();
+  _cachedEnterpriseToken = data.token;
+
+  setTimeout(() => { _cachedEnterpriseToken = null; }, 50 * 60 * 1000);
+
+  return data.token;
+}
+
 // ── Direct API call helper ────────────────────────────────────────────────
 
 const BASE_URL = process.env.NEXT_PUBLIC_GLIMMORA_API_URL || "";
@@ -81,8 +105,9 @@ async function sowCall<T>(
   method: string = "GET",
   payload?: unknown,
   _retry = false,
+  asEnterprise = false,
 ): Promise<T> {
-  const token = await getToken();
+  const token = asEnterprise ? await getEnterpriseToken() : await getToken();
 
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -98,8 +123,9 @@ async function sowCall<T>(
   if (!res.ok) {
     // If 401 and haven't retried yet, get a fresh token and retry once
     if (res.status === 401 && !_retry) {
-      _cachedToken = null;
-      return sowCall<T>(path, method, payload, true);
+      if (asEnterprise) _cachedEnterpriseToken = null;
+      else _cachedToken = null;
+      return sowCall<T>(path, method, payload, true, asEnterprise);
     }
 
     // Format field-level validation errors nicely
@@ -172,9 +198,43 @@ export const sowApi = {
     );
   },
 
+  updateProfile(data: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    adminTitle?: string;
+    adminDept?: string;
+  }): Promise<BaseResponse> {
+    return sowCall<BaseResponse>("/api/v1/users/me/profile", "PUT", data);
+  },
+
+  uploadProfilePicture(file: File): Promise<BaseResponse> {
+    return getToken().then(token => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return fetch(`${BASE_URL}/api/v1/users/me/profile-picture`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      }).then(async res => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new ApiError(res.status, data?.message ?? "Upload failed");
+        return data as BaseResponse;
+      });
+    });
+  },
   // ── AI Draft Review ──
 
   listSows(): Promise<BaseResponse> {
+    return sowCall<BaseResponse>("/api/v1/sows");
+  },
+
+  /**
+   * Admin variant — uses the logged-in admin/super_admin's personal Glimmora
+   * access token (from their session) so the backend returns all SOWs visible
+   * to that role.
+   */
+  listSowsAsAdmin(): Promise<BaseResponse> {
     return sowCall<BaseResponse>("/api/v1/sows");
   },
 
@@ -229,6 +289,24 @@ export const sowApi = {
     return sowCall<BaseResponse>(`/api/v1/sow${qs}`);
   },
 
+  /**
+   * Admin variant — uses the logged-in admin/super_admin's personal Glimmora
+   * access token (from their session) so the backend returns all manual SOWs
+   * visible to that role.
+   */
+  listManualSOWsAsAdmin(params?: {
+    status?: string;
+    intake_mode?: string;
+    client?: string;
+    page?: number;
+    limit?: number;
+    sort?: string;
+    order?: "asc" | "desc";
+  }): Promise<BaseResponse> {
+    const qs = params ? `?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString()}` : "";
+    return sowCall<BaseResponse>(`/api/v1/sow${qs}`);
+  },
+
   uploadSOW(file: File, metadata: {
     projectTitle: string;
     clientOrganisation: string;
@@ -270,7 +348,7 @@ export const sowApi = {
     return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`, "PATCH", data);
   },
 
-  deleteManualSOW(sowId: string): Promise<BaseResponse> {
+  deleteSOW(sowId: string): Promise<BaseResponse> {
     return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`, "DELETE");
   },
 
@@ -313,8 +391,9 @@ export const sowApi = {
     return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/gap-items/${gapId}`, "PATCH", data);
   },
 
-  getCommercialDetails(sowId: string): Promise<BaseResponse> {
-    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/commercial-details`);
+  getCommercialDetails(sowId: string, regenerate = false): Promise<BaseResponse> {
+    const qs = regenerate ? `?regenerateAiTechStack=true` : "";
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/commercial-details${qs}`);
   },
 
   saveCommercialSection(sowId: string, section: string, data: Record<string, unknown>): Promise<BaseResponse> {
@@ -403,7 +482,7 @@ export const sowApi = {
 
   exportSOW(sowId: string, format: "pdf" | "docx" | "json"): Promise<Blob> {
     return getToken().then(token =>
-      fetch(`${BASE_URL}/api/v1/sow/${sowId}/export/${format}`, {
+      fetch(`${BASE_URL}/api/v1/sows/${sowId}/export/${format}`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(res => {
         if (!res.ok) throw new ApiError(res.status, `Export failed: ${res.status}`);

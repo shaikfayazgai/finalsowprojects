@@ -143,6 +143,46 @@ export const authApi = {
     });
   },
 
+  /** Register a new contributor account. */
+  async registerContributor(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+    contributorType: string;
+    countryOfResidence: string;
+    dateOfBirth: string;
+    timeZone: string;
+    weeklyAvailabilityHours: string;
+    departmentCategory: string;
+    primarySkills: string[];
+    secondarySkills?: string[];
+    otherSkills?: string[];
+    phone: string;
+    degree?: string;
+    branch?: string;
+    linkedin?: string;
+    careerStage?: string;
+    yearsExperience?: string;
+    workStart?: string;
+    workEnd?: string;
+    ndaSignatoryLegalName?: string;
+    mentorGuideAcknowledged?: boolean;
+    acceptTermsOfUse?: boolean;
+    acceptCodeOfConduct?: boolean;
+    acceptPrivacyPolicy?: boolean;
+    acceptHarassmentPolicy?: boolean;
+    acknowledgmentsAccepted?: boolean;
+    notifyNewTasksOptIn?: boolean;
+    marketingOptIn?: boolean;
+  }): Promise<{ user: GlimmoraUser }> {
+    return apiCall<{ user: GlimmoraUser }>("/api/v1/auth/register/contributor", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
   /** Credential-only check — validates email/password without issuing tokens. */
   async validateCredentials(email: string, password: string): Promise<unknown> {
     return apiCall("/api/v1/auth/validate", {
@@ -507,7 +547,10 @@ export const authApi = {
       body: JSON.stringify({ email }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new ApiError(res.status, data?.message ?? "Failed to send reset email");
+    if (!res.ok) {
+      const base = data?.message ?? "Failed to send reset email";
+      throw new ApiError(res.status, data?.detail ? `${base} — ${data.detail}` : base);
+    }
     return data;
   },
 
@@ -542,48 +585,6 @@ export const authApi = {
         token: accessToken,
       },
     );
-  },
-
-  /** Register a new contributor account. */
-  async registerContributor(data: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    password: string;
-    confirmPassword: string;
-    contributorType: string;
-    countryOfResidence: string;
-    dateOfBirth: string;
-    timeZone: string;
-    weeklyAvailabilityHours: string;
-    departmentCategory: string;
-    primarySkills: string[];
-    // Optional extended fields
-    secondarySkills?: string[];
-    otherSkills?: string[];
-    phone: string;  // required by API
-    degree?: string;
-    branch?: string;
-    linkedin?: string;
-    careerStage?: string;
-    yearsExperience?: string;
-    workStart?: string;
-    workEnd?: string;
-    // Acknowledgement fields (actual API field names)
-    ndaSignatoryLegalName?: string;
-    mentorGuideAcknowledged?: boolean;
-    acceptTermsOfUse?: boolean;
-    acceptCodeOfConduct?: boolean;
-    acceptPrivacyPolicy?: boolean;
-    acceptHarassmentPolicy?: boolean;
-    acknowledgmentsAccepted?: boolean;
-    notifyNewTasksOptIn?: boolean;
-    marketingOptIn?: boolean;
-  }): Promise<{ user: GlimmoraUser }> {
-    return apiCall<{ user: GlimmoraUser }>("/api/v1/auth/register/contributor", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
   },
 
   /**

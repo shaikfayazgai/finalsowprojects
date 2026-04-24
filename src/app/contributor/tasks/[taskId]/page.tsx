@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Clock, DollarSign, CheckCircle2, Zap, Target, Calendar,
@@ -10,12 +11,15 @@ import {
   Bot, User, ShieldCheck, AlertTriangle,
   Circle, Sparkles, Award, Send, Paperclip, Link2, Star,
   ArrowRight, RotateCcw, Timer, Check, X,
-  GraduationCap, TrendingUp, Eye, Ban, Lightbulb, Package,
+  GraduationCap, TrendingUp, Eye, Ban, Lightbulb, Package, RefreshCw, Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
-import { mockContributorTasks, mockWorkroomData, mockSubmissions } from "@/mocks/data/contributor";
+import { mockSubmissions } from "@/mocks/data/contributor";
 import type { ContributorTaskStatus } from "@/types/contributor";
+import { useTaskStore } from "@/lib/stores/task-store";
+import { fetchTask, fetchAcceptImpact, acceptTask, declineTask, startTask, requestExtension, fetchTaskTimeline, fetchWorkroom, fetchWorkroomTemplates, fetchWorkroomLinks, postWorkroomMessage, fetchWorkroomMessages, uploadWorkroomFile, deleteWorkroomUpload, patchChecklistItem, type TaskDetail, type AcceptImpact, type TaskTimelineEvent, type Workroom, type WorkroomChecklistItem, type WorkroomTemplate, type WorkroomLink } from "@/lib/api/contributor";
+import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 
 /* ═══ Helpers ═══ */
 
@@ -76,26 +80,130 @@ function Section({ title, badge, action, children, className }: {
 
 /* ═══ PAGE ═══ */
 
+/* Normalise TaskDetail (snake_case) → camelCase shape the UI expects */
+function normalise(d: TaskDetail): Record<string, any> {
+  return {
+    id:                      d.id,
+    title:                   d.title,
+    projectTitle:            d.project_title,
+    milestoneTitle:          d.milestone_title,
+    status:                  d.status,
+    priority:                d.priority,
+    skillsRequired:          d.skills_required,
+    estimatedHours:          d.estimated_hours,
+    pricing:                 d.pricing,
+    matchScore:              d.match_score,
+    matchReason:             d.match_reason,
+    dueDate:                 d.due_date,
+    slaDeadline:             d.sla_deadline,
+    description:             d.description,
+    assignedAt:              d.assigned_at,
+    startedAt:               d.started_at,
+    submittedAt:             d.submitted_at,
+    acceptedAt:              d.accepted_at,
+    reviewScore:             d.review_score,
+    reviewComment:           d.review_comment,
+    reworkReason:            d.rework_reason,
+    reworkDeadline:          d.rework_deadline,
+    acceptanceCriteria:      d.acceptance_criteria,
+    evidenceTypesRequired:   d.evidence_types_required,
+    milestoneNumber:         d.milestone_number,
+    referenceMaterials:      d.reference_materials,
+    reviewerGuidancePreview: d.reviewer_guidance_preview,
+    domainTag:               d.domain_tag,
+    skillsMatched:           d.skills_matched,
+    offerExpiresAt:          d.offer_expires_at,
+    ndaRequired:             d.nda_required,
+    effortDisplay:           d.effort_display,
+    progressPercent:         0,
+    hoursLogged:             0,
+  };
+}
+
 export default function ContributorTaskDetailPage() {
   const params = useParams();
   const taskId = params.taskId as string;
-  const task = (mockContributorTasks.find((t) => t.id === taskId) ?? mockContributorTasks[0]) as any;
-  const workroom = mockWorkroomData.taskId === task.id ? mockWorkroomData : null;
-  const submissions = mockSubmissions.filter((s) => s.taskId === task.id);
-  const latestSubmission = submissions.length > 0 ? submissions.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0] : null;
+  const task = mockContributorTasks.find((t) => t.id === taskId) as any;
 
-  const [taskStatus, setTaskStatus] = React.useState<ContributorTaskStatus>(task.status as ContributorTaskStatus);
+  /* Hooks must run unconditionally before any early return */
+  const [taskStatus, setTaskStatus] = React.useState<ContributorTaskStatus>(
+    (task?.status ?? "available") as ContributorTaskStatus
+  );
   const [showAcceptDialog, setShowAcceptDialog] = React.useState(false);
+  const [acceptImpact, setAcceptImpact] = React.useState<AcceptImpact | null>(null);
+  const [acceptImpactLoading, setAcceptImpactLoading] = React.useState(false);
+  const [acceptNote, setAcceptNote] = React.useState("");
+  const [acceptSubmitting, setAcceptSubmitting] = React.useState(false);
+  const [acceptError, setAcceptError] = React.useState<string | null>(null);
   const [showDeclineDialog, setShowDeclineDialog] = React.useState(false);
   const [declineReason, setDeclineReason] = React.useState("");
   const [declineNotes, setDeclineNotes] = React.useState("");
+  const [declineSubmitting, setDeclineSubmitting] = React.useState(false);
+  const [declineError, setDeclineError] = React.useState<string | null>(null);
+  const [startSubmitting, setStartSubmitting] = React.useState(false);
+  const [startError, setStartError] = React.useState<string | null>(null);
+  // Task timeline
+  const [timeline, setTimeline] = React.useState<TaskTimelineEvent[]>([]);
+  const [timelineLoading, setTimelineLoading] = React.useState(false);
+  const [timelineError, setTimelineError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!token || !taskId) return;
+    setTimelineLoading(true);
+    setTimelineError(null);
+    const sk = sessionKeyFragment(token);
+    let live = true;
+    void dedupeAsync(`contrib:task-timeline:${taskId}:${sk}`, () => fetchTaskTimeline(token, taskId))
+      .then((data) => {
+        if (!live) return;
+        setTimeline(data);
+        setTimelineLoading(false);
+      })
+      .catch((err) => {
+        if (!live) return;
+        setTimelineError(err?.message ?? "Failed to load timeline");
+        setTimelineLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [token, taskId]);
+
+  // Extension request dialog
+  const [showExtensionDialog, setShowExtensionDialog] = React.useState(false);
+  const [extDate, setExtDate] = React.useState("");
+  const [extReason, setExtReason] = React.useState("");
+  const [extNotes, setExtNotes] = React.useState("");
+  const [extSubmitting, setExtSubmitting] = React.useState(false);
+  const [extError, setExtError] = React.useState<string | null>(null);
+  const [extSuccess, setExtSuccess] = React.useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = React.useState(false);
   const [showUploadDialog, setShowUploadDialog] = React.useState(false);
   const [qaInput, setQaInput] = React.useState("");
-  const [qaMessages, setQaMessages] = React.useState(workroom?.qaMessages || []);
-  const [checklist, setChecklist] = React.useState(workroom?.evidenceChecklist || []);
-  const [uploads, setUploads] = React.useState(workroom?.uploads || []);
+  const initialWorkroom = task && mockWorkroomData.taskId === task.id ? mockWorkroomData : null;
+  const [qaMessages, setQaMessages] = React.useState<any[]>(initialWorkroom?.qaMessages || []);
+  const [checklist, setChecklist] = React.useState<any[]>(initialWorkroom?.evidenceChecklist || []);
+  const [uploads, setUploads] = React.useState<any[]>(initialWorkroom?.uploads || []);
   const [uploadFileName, setUploadFileName] = React.useState("");
+
+  if (!task) {
+    return (
+      <motion.div variants={stagger} initial="hidden" animate="show">
+        <motion.div variants={fadeUp} className="card-parchment px-6 py-16 text-center">
+          <Package className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+          <p className="text-[14px] font-medium text-gray-600 mb-1">Task not found</p>
+          <p className="text-[12px] text-gray-400 mb-4">This task may have been reassigned or removed.</p>
+          <Link href="/contributor/tasks" className="text-[12px] font-medium text-brown-600 hover:text-brown-700">
+            ← Back to tasks
+          </Link>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  const workroom = initialWorkroom;
+  const submissions = mockSubmissions.filter((s) => s.taskId === task.id);
+  const latestSubmission = submissions.length > 0 ? submissions.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0] : null;
 
   const sc = statusCfg[taskStatus] || statusCfg.available;
   const pc = prioCfg[task.priority] || prioCfg.medium;
@@ -105,13 +213,44 @@ export default function ContributorTaskDetailPage() {
   const completedChecklist = checklist.filter((e: any) => e.completed).length;
   const totalChecklist = checklist.length;
 
-  function sendQA() {
-    if (!qaInput.trim()) return;
-    setQaMessages((prev: any[]) => [...prev, { id: `qa-user-${Date.now()}`, sender: "contributor", senderName: "You", message: qaInput.trim(), sentAt: new Date().toISOString() }]);
+  /* Fetch accept-impact then open the dialog */
+  function openAcceptDialog() {
+    setAcceptImpact(null);
+    setShowAcceptDialog(true);
+    if (!token) return;
+    setAcceptImpactLoading(true);
+    fetchAcceptImpact(token, taskId)
+      .then((data) => setAcceptImpact(data))
+      .catch(() => setAcceptImpact(null))
+      .finally(() => setAcceptImpactLoading(false));
+  }
+
+  async function sendQA() {
+    const text = qaInput.trim();
+    if (!text || qaSending || !token) return;
+    // Optimistically add the message to the list
+    const tempId = `qa-optimistic-${Date.now()}`;
+    setQaMessages((prev: any[]) => [
+      ...prev,
+      { id: tempId, sender: "contributor", senderName: "You", message: text, sentAt: new Date().toISOString(), sending: true },
+    ]);
     setQaInput("");
-    setTimeout(() => {
-      setQaMessages((prev: any[]) => [...prev, { id: `qa-ai-${Date.now()}`, sender: "ai", senderName: "Contributor Support Assistant", message: "Thanks for your question! Based on the acceptance criteria, I'd recommend focusing on the evidence checklist items first — they map directly to the rubric reviewers will use.", sentAt: new Date().toISOString() }]);
-    }, 500);
+    setQaError(null);
+    setQaSending(true);
+    try {
+      const msgId = await postWorkroomMessage(token, taskId, { message: text });
+      // Replace the optimistic message with the confirmed one
+      setQaMessages((prev: any[]) =>
+        prev.map((m) => m.id === tempId ? { ...m, id: msgId ?? tempId, sending: false } : m),
+      );
+    } catch (err: any) {
+      // Mark the optimistic message as failed and surface the error
+      setQaMessages((prev: any[]) => prev.filter((m) => m.id !== tempId));
+      setQaInput(text); // restore input so user can retry
+      setQaError(err?.message ?? "Failed to send message. Please try again.");
+    } finally {
+      setQaSending(false);
+    }
   }
 
   return (
@@ -160,12 +299,14 @@ export default function ContributorTaskDetailPage() {
           <motion.div variants={fadeUp}>
             <Section title="Task Description">
               <div className="px-5 py-4">
-                <p className="text-[13px] text-gray-600 leading-relaxed">{task.description}</p>
+                <p className="text-[13px] text-gray-600 leading-relaxed">
+                  {task.description ?? "No description provided."}
+                </p>
               </div>
             </Section>
           </motion.div>
 
-          {/* Two columns: Skills + Match | Acceptance Criteria / Deliverables */}
+          {/* Two columns: Skills + Match | Task Details */}
           <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
             {/* Match + Skills */}
             <Section title="Why This Matches You">
@@ -187,15 +328,16 @@ export default function ContributorTaskDetailPage() {
               </div>
             </Section>
 
-            {/* Acceptance Criteria / Deliverables or Task Details */}
+            {/* Task Details */}
             <Section title="Task Details">
               <div className="py-1">
                 {[
-                  { label: "Pricing Model", value: task.pricing.model.charAt(0).toUpperCase() + task.pricing.model.slice(1) },
-                  { label: "Complexity", value: pc.label },
-                  { label: "SLA Deadline", value: fmtDate(task.slaDeadline) },
-                  { label: "Estimated Effort", value: `${task.estimatedHours} hours` },
-                  { label: "Earnings on Acceptance", value: fmt$(task.pricing.amount) },
+                  { label: "Pricing Model", value: task.pricing?.model ? task.pricing.model.charAt(0).toUpperCase() + task.pricing.model.slice(1) : "—" },
+                  { label: "Complexity",    value: pc.label },
+                  { label: "SLA Deadline",  value: task.slaDeadline ? fmtDate(task.slaDeadline) : "—" },
+                  { label: "Effort",        value: `${task.estimatedHours} hours` },
+                  { label: "Earnings",      value: fmt$(task.pricing?.amount ?? 0) },
+                  ...(task.ndaRequired ? [{ label: "NDA", value: "Required" }] : []),
                 ].map((item, i, arr) => (
                   <div key={item.label} className="flex items-center justify-between px-5 py-2.5"
                     style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
@@ -207,14 +349,70 @@ export default function ContributorTaskDetailPage() {
             </Section>
           </motion.div>
 
-          {/* Accept CTA — full width, prominent */}
+          {/* Acceptance Criteria */}
+          {task.acceptanceCriteria?.length > 0 && (
+            <motion.div variants={fadeUp} className="mt-5">
+              <Section title="Acceptance Criteria" badge={
+                <span className="text-[10px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">{task.acceptanceCriteria.length}</span>
+              }>
+                <div className="py-1">
+                  {task.acceptanceCriteria.map((criterion: string, i: number) => (
+                    <div key={i} className="flex items-start gap-3 px-5 py-2.5"
+                      style={{ borderBottom: i < task.acceptanceCriteria.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 shrink-0 mt-0.5" />
+                      <span className="text-[12px] text-gray-600">{criterion}</span>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            </motion.div>
+          )}
+
+          {/* Reference Materials */}
+          {task.referenceMaterials?.length > 0 && (
+            <motion.div variants={fadeUp} className="mt-5">
+              <Section title="Reference Materials">
+                <div>
+                  {task.referenceMaterials.map((ref: any, i: number) => (
+                    <a key={ref.id} href={ref.url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-3 px-5 py-2.5 hover:bg-black/[0.02] transition-colors"
+                      style={{ borderBottom: i < task.referenceMaterials.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
+                      <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center shrink-0">
+                        <ExternalLink className="w-3 h-3 text-teal-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[12px] font-medium text-gray-700 block truncate">{ref.name}</span>
+                        {ref.description && <span className="text-[10px] text-gray-400">{ref.description}</span>}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </Section>
+            </motion.div>
+          )}
+
+          {/* Reviewer Guidance Preview */}
+          {task.reviewerGuidancePreview && (
+            <motion.div variants={fadeUp} className="mt-5">
+              <Section title="Reviewer Guidance">
+                <div className="px-5 py-4">
+                  <div className="flex items-start gap-3">
+                    <Eye className="w-4 h-4 text-gray-300 shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-gray-500 leading-relaxed">{task.reviewerGuidancePreview}</p>
+                  </div>
+                </div>
+              </Section>
+            </motion.div>
+          )}
+
+          {/* Accept CTA */}
           <motion.div variants={fadeUp} className="card-parchment px-5 py-5 mt-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[14px] font-semibold text-gray-800">Ready to take on this task?</p>
-                <p className="text-[12px] text-gray-400 mt-0.5">Once accepted, you commit to delivering by {fmtDate(task.slaDeadline)}.</p>
+                <p className="text-[12px] text-gray-400 mt-0.5">Once accepted, you commit to delivering by {task.slaDeadline ? fmtDate(task.slaDeadline) : "the deadline"}.</p>
               </div>
-              <button onClick={() => setShowAcceptDialog(true)}
+              <button onClick={openAcceptDialog}
                 className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all shrink-0"
                 style={{ boxShadow: "0 2px 8px color-mix(in srgb, var(--color-brown-500) 25%, transparent)" }}>
                 <CheckCircle2 className="w-4 h-4" /> Accept Task
@@ -241,15 +439,56 @@ export default function ContributorTaskDetailPage() {
                 <p className="text-[11px] text-gray-500">Start working to open your workroom with instructions, resources, and Q&A.</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button onClick={() => setShowDeclineDialog(true)} className="text-[12px] font-medium text-gray-400 px-4 py-2 rounded-xl border border-gray-200 hover:bg-white transition-all">Decline</button>
-                <button onClick={() => setTaskStatus("in_progress")}
-                  className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2.5 rounded-xl transition-all"
+                <button
+                  disabled={startSubmitting}
+                  onClick={() => setShowDeclineDialog(true)}
+                  className="text-[12px] font-medium text-gray-400 px-4 py-2 rounded-xl border border-gray-200 hover:bg-white transition-all disabled:opacity-50">
+                  Decline
+                </button>
+                <button
+                  disabled={startSubmitting}
+                  onClick={async () => {
+                    if (!token) return;
+                    setStartSubmitting(true);
+                    setStartError(null);
+                    try {
+                      await startTask(token, taskId, {
+                        started_at: new Date().toISOString(),
+                      });
+                      setTaskStatus("in_progress");
+                    } catch (err: any) {
+                      setStartError(err?.message ?? "Failed to start task. Please try again.");
+                    } finally {
+                      setStartSubmitting(false);
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 text-[12px] font-semibold text-white px-5 py-2.5 rounded-xl transition-all",
+                    startSubmitting
+                      ? "bg-brown-400 cursor-wait opacity-80"
+                      : "bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700"
+                  )}
                   style={{ boxShadow: "0 2px 8px color-mix(in srgb, var(--color-brown-500) 25%, transparent)" }}>
-                  <ArrowRight className="w-4 h-4" /> Start Working
+                  {startSubmitting
+                    ? <><RefreshCw className="w-4 h-4 animate-spin" /> Starting…</>
+                    : <><ArrowRight className="w-4 h-4" /> Start Working</>
+                  }
                 </button>
               </div>
             </div>
           </motion.div>
+
+          {/* Start error banner */}
+          {startError && (
+            <motion.div variants={fadeUp} className="flex items-center gap-3 rounded-xl border border-red-200 px-4 py-3 mb-5"
+              style={{ background: "var(--danger-light)" }}>
+              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+              <p className="text-[12px] text-red-700 flex-1">{startError}</p>
+              <button onClick={() => setStartError(null)} className="text-red-400 hover:text-red-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </motion.div>
+          )}
 
           <motion.div variants={fadeUp}>
             <Section title="Task Description">
@@ -316,59 +555,126 @@ export default function ContributorTaskDetailPage() {
             {/* LEFT (3/5): Instructions + Q&A */}
             <div className="lg:col-span-3 space-y-5">
               {/* Instructions */}
-              <Section title="Instructions">
+              <Section title="Instructions" badge={workroomLoading ? <span className="text-[10px] text-gray-400 animate-pulse">Loading…</span> : undefined}>
                 <div className="px-5 py-4">
-                  {workroom ? (
+                  {workroomLoading ? (
+                    <div className="space-y-2 animate-pulse">
+                      <div className="h-3 bg-gray-100 rounded w-full" />
+                      <div className="h-3 bg-gray-100 rounded w-5/6" />
+                      <div className="h-3 bg-gray-100 rounded w-4/6" />
+                    </div>
+                  ) : workroomError ? (
+                    <div className="flex items-center gap-2 text-[12px] text-red-500">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      {workroomError}
+                    </div>
+                  ) : workroom ? (
                     <div className="text-[13px] text-gray-600 leading-relaxed whitespace-pre-wrap">{workroom.instructions}</div>
                   ) : (
                     <p className="text-[13px] text-gray-600 leading-relaxed">{task.description}</p>
                   )}
                 </div>
-                {/* Resources inline */}
-                {workroom && (workroom.templates.length > 0 || workroom.links.length > 0) && (
-                  <div style={{ borderTop: "1px solid var(--border-soft)" }}>
-                    <div className="px-5 py-2.5"><span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Resources</span></div>
-                    {workroom.templates.map((tmpl: any) => (
-                      <div key={tmpl.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-black/[0.02] transition-colors"
-                        style={{ borderTop: "1px solid var(--border-hair)" }}>
-                        <div className="w-7 h-7 rounded-lg bg-brown-50 flex items-center justify-center shrink-0"><Download className="w-3 h-3 text-brown-400" /></div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[12px] font-medium text-gray-700 block truncate">{tmpl.name}</span>
-                          <span className="text-[10px] text-gray-400">{tmpl.description}</span>
-                        </div>
+                {/* Resources inline — use dedicated templates endpoint, fall back to workroom templates */}
+                {(() => {
+                  const templates = dedicatedTemplates.length > 0 ? dedicatedTemplates : (workroom?.templates ?? []);
+                  const links = dedicatedLinks.length > 0 ? dedicatedLinks : (workroom?.links ?? []);
+                  const hasResources = templates.length > 0 || links.length > 0 || templatesLoading || linksLoading;
+                  if (!hasResources) return null;
+                  return (
+                    <div style={{ borderTop: "1px solid var(--border-soft)" }}>
+                      <div className="px-5 py-2.5 flex items-center gap-2">
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Resources</span>
+                        {(templatesLoading || linksLoading) && <RefreshCw className="w-3 h-3 text-gray-300 animate-spin" />}
                       </div>
-                    ))}
-                    {workroom.links.map((link: any) => (
-                      <div key={link.url} className="flex items-center gap-3 px-5 py-2.5 hover:bg-black/[0.02] transition-colors"
-                        style={{ borderTop: "1px solid var(--border-hair)" }}>
-                        <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center shrink-0"><ExternalLink className="w-3 h-3 text-teal-400" /></div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[12px] font-medium text-gray-700 block truncate">{link.label}</span>
-                          <span className="text-[10px] text-gray-400 truncate block">{link.url}</span>
+                      {/* Skeleton while loading */}
+                      {(templatesLoading || linksLoading) && templates.length === 0 && links.length === 0 && (
+                        <div className="flex items-center gap-3 px-5 py-2.5 animate-pulse"
+                          style={{ borderTop: "1px solid var(--border-hair)" }}>
+                          <div className="w-7 h-7 rounded-lg bg-gray-100 shrink-0" />
+                          <div className="flex-1 space-y-1.5">
+                            <div className="h-3 bg-gray-100 rounded w-1/2" />
+                            <div className="h-2.5 bg-gray-50 rounded w-1/3" />
+                          </div>
+                        </div>
+                      )}
+                      {templates.map((tmpl) => (
+                        <a key={tmpl.id} href={tmpl.url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-3 px-5 py-2.5 hover:bg-black/[0.02] transition-colors"
+                          style={{ borderTop: "1px solid var(--border-hair)" }}>
+                          <div className="w-7 h-7 rounded-lg bg-brown-50 flex items-center justify-center shrink-0"><Download className="w-3 h-3 text-brown-400" /></div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[12px] font-medium text-gray-700 block truncate">{tmpl.name}</span>
+                            <span className="text-[10px] text-gray-400">{tmpl.description}</span>
+                          </div>
+                          <ExternalLink className="w-3 h-3 text-gray-300 shrink-0" />
+                        </a>
+                      ))}
+                      {links.map((link) => (
+                        <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-3 px-5 py-2.5 hover:bg-black/[0.02] transition-colors"
+                          style={{ borderTop: "1px solid var(--border-hair)" }}>
+                          <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center shrink-0"><ExternalLink className="w-3 h-3 text-teal-400" /></div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[12px] font-medium text-gray-700 block truncate">{link.title}</span>
+                            <span className="text-[10px] text-gray-400 truncate block">{link.url}</span>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </Section>
+
+              {/* Q&A */}
+              <Section title="Q&A" badge={
+                qaLoading && qaMessages.length === 0
+                  ? <span className="text-[10px] text-gray-400 animate-pulse">Loading…</span>
+                  : qaTotal > 0
+                    ? <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full font-medium">{qaTotal}</span>
+                    : undefined
+              }>
+                {/* Fetch-error banner */}
+                {qaFetchError && (
+                  <div className="px-5 py-2.5 flex items-center gap-2 bg-red-50" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <p className="text-[11.5px] text-red-700 flex-1">{qaFetchError}</p>
+                    <button onClick={() => loadQAMessages(1)} className="text-[10px] font-medium text-red-600 hover:text-red-800 underline mr-2">Retry</button>
+                    <button onClick={() => setQaFetchError(null)} className="text-red-400 hover:text-red-600"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                )}
+
+                {qaLoading && qaMessages.length === 0 ? (
+                  /* Initial load skeleton */
+                  <div className="py-1">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="flex items-start gap-3 px-5 py-3 animate-pulse"
+                        style={{ borderBottom: i < 2 ? "1px solid var(--border-hair)" : undefined }}>
+                        <div className="w-7 h-7 rounded-lg bg-gray-100 shrink-0" />
+                        <div className="flex-1 space-y-1.5 pt-0.5">
+                          <div className="h-2.5 bg-gray-100 rounded w-24" />
+                          <div className="h-3 bg-gray-100 rounded w-full" />
+                          <div className="h-3 bg-gray-50 rounded w-3/4" />
                         </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </Section>
-
-              {/* Q&A */}
-              <Section title="Q&A" badge={qaMessages.length > 0 ? <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full font-medium">{qaMessages.length}</span> : undefined}>
-                {qaMessages.length > 0 ? (
-                  <div className="max-h-[360px] overflow-y-auto py-1">
+                ) : qaMessages.length > 0 ? (
+                  <div className="max-h-[400px] overflow-y-auto py-1">
                     {qaMessages.map((msg: any, i: number) => {
                       const isAI = msg.sender === "ai";
                       const isReviewer = msg.sender === "reviewer";
+                      const isContributor = msg.sender === "contributor";
                       return (
-                        <div key={msg.id} className="px-5 py-3" style={{ borderBottom: i < qaMessages.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
+                        <div key={msg.id} className={cn("px-5 py-3 transition-opacity", msg.sending && "opacity-60")} style={{ borderBottom: i < qaMessages.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
                           <div className="flex items-start gap-3">
                             <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
-                              isAI ? "bg-teal-50" : isReviewer ? "bg-gold-50" : "bg-brown-50")}>
-                              {isAI ? <Bot className="w-3.5 h-3.5 text-teal-500" /> : isReviewer ? <ShieldCheck className="w-3.5 h-3.5 text-gold-500" /> : <User className="w-3.5 h-3.5 text-brown-500" />}
+                              isAI ? "bg-teal-50" : isReviewer ? "bg-gold-50" : isContributor ? "bg-brown-50" : "bg-gray-50")}>
+                              {isAI ? <Bot className="w-3.5 h-3.5 text-teal-500" /> : isReviewer ? <ShieldCheck className="w-3.5 h-3.5 text-gold-500" /> : isContributor ? <User className="w-3.5 h-3.5 text-brown-500" /> : <User className="w-3.5 h-3.5 text-gray-400" />}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[11px] font-semibold text-gray-700">{msg.sender === "contributor" ? "You" : msg.senderName || msg.sender}</span>
+                                <span className="text-[11px] font-semibold text-gray-700">{isContributor ? "You" : msg.senderName || msg.sender}</span>
+                                {msg.sending && <span className="text-[9px] text-gray-400 animate-pulse">Sending…</span>}
                                 {isAI && <span className="text-[9px] font-semibold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded">AI</span>}
                                 <span className="text-[10px] text-gray-400 ml-auto">{fmtDateTime(msg.sentAt)}</span>
                               </div>
@@ -378,6 +684,18 @@ export default function ContributorTaskDetailPage() {
                         </div>
                       );
                     })}
+                    {/* Load more */}
+                    {qaMessages.filter((m) => m._fromApi).length < qaTotal && (
+                      <div className="px-5 py-3 text-center" style={{ borderTop: "1px solid var(--border-hair)" }}>
+                        <button
+                          onClick={() => loadQAMessages(qaPage + 1)}
+                          disabled={qaLoading}
+                          className="text-[11px] font-medium text-brown-600 hover:text-brown-800 disabled:opacity-50 flex items-center gap-1.5 mx-auto">
+                          {qaLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : null}
+                          {qaLoading ? "Loading…" : `Load older messages (${qaTotal - qaMessages.filter((m) => m._fromApi).length} more)`}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="px-5 py-8 text-center">
@@ -385,13 +703,32 @@ export default function ContributorTaskDetailPage() {
                     <p className="text-[12px] text-gray-400">Ask a question to get help from the AI assistant or project team.</p>
                   </div>
                 )}
+                {qaError && (
+                  <div className="px-5 py-2.5 flex items-center gap-2 bg-red-50" style={{ borderTop: "1px solid var(--border-soft)" }}>
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <p className="text-[11.5px] text-red-700 flex-1">{qaError}</p>
+                    <button onClick={() => setQaError(null)} className="text-red-400 hover:text-red-600"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                )}
                 <div className="px-5 py-3" style={{ borderTop: "1px solid var(--border-soft)" }}>
                   <div className="flex items-center gap-2">
-                    <input type="text" placeholder="Ask a question..." value={qaInput} onChange={(e) => setQaInput(e.target.value)}
+                    <input
+                      type="text"
+                      placeholder="Ask a question..."
+                      value={qaInput}
+                      disabled={qaSending}
+                      onChange={(e) => setQaInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") sendQA(); }}
-                      className="flex-1 text-[12px] text-gray-700 placeholder:text-gray-400 bg-white border border-gray-200 hover:border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" />
+                      className="flex-1 text-[12px] text-gray-700 placeholder:text-gray-400 bg-white border border-gray-200 hover:border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed" />
                     <button onClick={() => setShowUploadDialog(true)} className="p-2.5 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all"><Paperclip className="w-3.5 h-3.5" /></button>
-                    <button onClick={sendQA} className="p-2.5 rounded-xl bg-gradient-to-r from-brown-400 to-brown-600 text-white transition-all"><Send className="w-3.5 h-3.5" /></button>
+                    <button
+                      onClick={sendQA}
+                      disabled={!qaInput.trim() || qaSending}
+                      className="p-2.5 rounded-xl bg-gradient-to-r from-brown-400 to-brown-600 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                      {qaSending
+                        ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        : <Send className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                 </div>
               </Section>
@@ -402,18 +739,54 @@ export default function ContributorTaskDetailPage() {
               {/* Files */}
               <Section title="Files" badge={uploads.length > 0 ? <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full font-medium">{uploads.length}</span> : undefined}
                 action={<button onClick={() => setShowUploadDialog(true)} className="flex items-center gap-1 text-[11px] font-medium text-brown-500 hover:text-brown-600 transition-colors"><Upload className="w-3 h-3" /> Upload</button>}>
+                {/* Delete error banner */}
+                {deleteUploadError && (
+                  <div className="px-5 py-2.5 flex items-center gap-2 bg-red-50" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <p className="text-[11.5px] text-red-700 flex-1">{deleteUploadError}</p>
+                    <button onClick={() => setDeleteUploadError(null)} className="text-red-400 hover:text-red-600"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                )}
                 {uploads.length > 0 ? (
                   <div>
-                    {uploads.map((file: any, i: number) => (
-                      <div key={file.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-black/[0.02] transition-colors"
-                        style={{ borderBottom: i < uploads.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
-                        <div className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center shrink-0"><FileText className="w-3 h-3 text-gray-400" /></div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[12px] font-medium text-gray-700 block truncate">{file.fileName}</span>
-                          <span className="text-[10px] text-gray-400">{fmtSize(file.fileSize ?? file.size ?? 0)}</span>
+                    {uploads.map((file: any, i: number) => {
+                      const isDeleting = deletingUploadId === file.id;
+                      return (
+                        <div key={file.id}
+                          className={cn("flex items-center gap-3 px-5 py-2.5 group transition-colors", isDeleting ? "opacity-50" : "hover:bg-black/[0.02]")}
+                          style={{ borderBottom: i < uploads.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
+                          <div className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center shrink-0">
+                            {isDeleting
+                              ? <RefreshCw className="w-3 h-3 text-gray-400 animate-spin" />
+                              : <FileText className="w-3 h-3 text-gray-400" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[12px] font-medium text-gray-700 block truncate">{file.title || file.fileName || file.filename}</span>
+                            <span className="text-[10px] text-gray-400">{fmtSize(file.size_bytes ?? file.fileSize ?? file.size ?? 0)}</span>
+                          </div>
+                          {/* Delete button — visible on hover */}
+                          <button
+                            disabled={!!deletingUploadId}
+                            title="Delete file"
+                            onClick={async () => {
+                              if (!token || isDeleting) return;
+                              setDeletingUploadId(file.id);
+                              setDeleteUploadError(null);
+                              try {
+                                await deleteWorkroomUpload(token, taskId as string, file.id);
+                                setUploads((prev: any[]) => prev.filter((u) => u.id !== file.id));
+                              } catch (err: any) {
+                                setDeleteUploadError(err?.message ?? "Failed to delete file. Please try again.");
+                              } finally {
+                                setDeletingUploadId(null);
+                              }
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:cursor-not-allowed shrink-0">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="px-5 py-6 text-center">
@@ -430,17 +803,53 @@ export default function ContributorTaskDetailPage() {
                 <Section title="Evidence Checklist" badge={
                   <span className="text-[10px] font-medium text-gray-400">{completedChecklist}/{totalChecklist}</span>
                 }>
+                  {/* Patch error banner */}
+                  {checklistPatchError && (
+                    <div className="px-5 py-2.5 flex items-center gap-2 bg-red-50" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                      <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                      <p className="text-[11.5px] text-red-700 flex-1">{checklistPatchError}</p>
+                      <button onClick={() => setChecklistPatchError(null)} className="text-red-400 hover:text-red-600"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                  )}
                   <div className="py-1">
-                    {checklist.map((item: any, i: number) => (
-                      <div key={item.id} className="flex items-center gap-3 px-5 py-2.5 cursor-pointer hover:bg-black/[0.02] transition-colors"
-                        style={{ borderBottom: i < checklist.length - 1 ? "1px solid var(--border-hair)" : undefined }}
-                        onClick={() => setChecklist((prev: any[]) => prev.map((c: any) =>
-                          c.id === item.id ? { ...c, completed: !c.completed, completedAt: !c.completed ? new Date().toISOString() : undefined } : c
-                        ))}>
-                        {item.completed ? <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" /> : <Circle className="w-4 h-4 text-gray-300 shrink-0" />}
-                        <span className={cn("text-[12px] flex-1", item.completed ? "text-gray-400 line-through" : "text-gray-700")}>{item.label}</span>
-                      </div>
-                    ))}
+                    {checklist.map((item: any, i: number) => {
+                      const isPatching = patchingChecklistId === item.id;
+                      return (
+                        <div key={item.id}
+                          className={cn("flex items-center gap-3 px-5 py-2.5 transition-colors", isPatching ? "opacity-60 cursor-wait" : "cursor-pointer hover:bg-black/[0.02]")}
+                          style={{ borderBottom: i < checklist.length - 1 ? "1px solid var(--border-hair)" : undefined }}
+                          onClick={async () => {
+                            if (isPatching || !!patchingChecklistId) return;
+                            const nextCompleted = !item.completed;
+                            // Optimistic toggle — update UI immediately
+                            setChecklist((prev: any[]) => prev.map((c: any) =>
+                              c.id === item.id ? { ...c, completed: nextCompleted, completedAt: nextCompleted ? new Date().toISOString() : undefined } : c
+                            ));
+                            // Skip API for synthetic items — they have no server ID
+                            if (!token || item._synthetic) return;
+                            setPatchingChecklistId(item.id);
+                            setChecklistPatchError(null);
+                            try {
+                              await patchChecklistItem(token, taskId as string, item.id, { completed: nextCompleted });
+                            } catch (err: any) {
+                              // Revert optimistic toggle on any real error
+                              setChecklist((prev: any[]) => prev.map((c: any) =>
+                                c.id === item.id ? { ...c, completed: !nextCompleted, completedAt: !nextCompleted ? new Date().toISOString() : undefined } : c
+                              ));
+                              setChecklistPatchError(err?.message ?? "Failed to update checklist item. Please try again.");
+                            } finally {
+                              setPatchingChecklistId(null);
+                            }
+                          }}>
+                          {isPatching
+                            ? <RefreshCw className="w-4 h-4 text-gray-400 shrink-0 animate-spin" />
+                            : item.completed
+                              ? <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" />
+                              : <Circle className="w-4 h-4 text-gray-300 shrink-0" />}
+                          <span className={cn("text-[12px] flex-1", item.completed ? "text-gray-400 line-through" : "text-gray-700")}>{item.label}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </Section>
               )}
@@ -450,9 +859,21 @@ export default function ContributorTaskDetailPage() {
                 <p className="text-[13px] font-semibold text-gray-800 mb-1">Ready to submit?</p>
                 <p className="text-[11px] text-gray-400 mb-4">{totalChecklist > 0 ? `${completedChecklist}/${totalChecklist} evidence items complete` : "Ensure all deliverables are uploaded."}</p>
                 <button onClick={() => setShowSubmitDialog(true)}
-                  className="w-full flex items-center justify-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all"
+                  className="w-full flex items-center justify-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-6 py-2.5 rounded-xl transition-all mb-3"
                   style={{ boxShadow: "0 2px 8px color-mix(in srgb, var(--color-brown-500) 25%, transparent)" }}>
                   <Send className="w-4 h-4" /> Submit for Review
+                </button>
+                <button
+                  onClick={() => {
+                    setExtDate("");
+                    setExtReason("");
+                    setExtNotes("");
+                    setExtError(null);
+                    setExtSuccess(false);
+                    setShowExtensionDialog(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 text-[12px] font-semibold text-gray-600 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 px-6 py-2.5 rounded-xl transition-all">
+                  <Calendar className="w-4 h-4" /> Request Extension
                 </button>
               </div>
             </div>
@@ -749,40 +1170,302 @@ export default function ContributorTaskDetailPage() {
       )}
 
 
+      {/* ═══ ACTIVITY TIMELINE ═══ */}
+      {taskStatus !== "available" && (
+        <motion.div variants={fadeUp} className="mt-6">
+          <Section
+            title="Activity Timeline"
+            badge={
+              timeline.length > 0 ? (
+                <span className="text-[10px] font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">
+                  {timeline.length} event{timeline.length !== 1 ? "s" : ""}
+                </span>
+              ) : undefined
+            }>
+            <div className="px-5 py-4">
+              {timelineLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex gap-3 animate-pulse">
+                      <div className="w-7 h-7 rounded-lg bg-gray-100 shrink-0" />
+                      <div className="flex-1 space-y-1.5 pt-1">
+                        <div className="h-3 bg-gray-100 rounded w-2/5" />
+                        <div className="h-2.5 bg-gray-50 rounded w-1/3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : timelineError ? (
+                <div className="flex items-center gap-2 text-[12px] text-red-500">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  {timelineError}
+                </div>
+              ) : timeline.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <Activity className="w-6 h-6 text-gray-300 mb-2" />
+                  <p className="text-[12px] text-gray-400">No timeline events yet.</p>
+                </div>
+              ) : (
+                <div className="relative">
+                  {/* Vertical connector line */}
+                  <div className="absolute left-3.5 top-4 bottom-4 w-px bg-gray-100" />
+                  <div className="space-y-0">
+                    {timeline.map((evt, idx) => {
+                      /* map common event_type values to colours */
+                      const typeMap: Record<string, { dot: string; icon: React.ReactNode }> = {
+                        task_accepted:   { dot: "bg-forest-500", icon: <Check className="w-3 h-3 text-white" /> },
+                        task_started:    { dot: "bg-teal-500",   icon: <ArrowRight className="w-3 h-3 text-white" /> },
+                        task_submitted:  { dot: "bg-brown-500",  icon: <Send className="w-3 h-3 text-white" /> },
+                        task_reviewed:   { dot: "bg-blue-500",   icon: <Eye className="w-3 h-3 text-white" /> },
+                        task_rework:     { dot: "bg-red-500",    icon: <RotateCcw className="w-3 h-3 text-white" /> },
+                        task_completed:  { dot: "bg-forest-600", icon: <CheckCircle2 className="w-3 h-3 text-white" /> },
+                        extension_requested: { dot: "bg-blue-400", icon: <Calendar className="w-3 h-3 text-white" /> },
+                        task_declined:   { dot: "bg-gray-500",   icon: <Ban className="w-3 h-3 text-white" /> },
+                      };
+                      const style = typeMap[evt.event_type] ?? {
+                        dot: "bg-gray-400",
+                        icon: <Activity className="w-3 h-3 text-white" />,
+                      };
+
+                      return (
+                        <div key={evt.id} className={cn("flex gap-4 relative", idx < timeline.length - 1 && "pb-5")}>
+                          <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 z-10", style.dot)}>
+                            {style.icon}
+                          </div>
+                          <div className="flex-1 pt-0.5">
+                            <p className="text-[12px] font-semibold text-gray-800 leading-snug">{evt.label}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5 font-mono">
+                              {new Date(evt.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                            </p>
+                            {evt.metadata && Object.keys(evt.metadata).length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                {Object.entries(evt.metadata).map(([k, v]) => (
+                                  <span key={k} className="text-[10px] text-gray-500 bg-gray-50 border border-gray-100 rounded-md px-2 py-0.5 font-mono">
+                                    {k}: {String(v)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Section>
+        </motion.div>
+      )}
+
+
       {/* ═══ DIALOGS ═══ */}
 
       {showAcceptDialog && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowAcceptDialog(false)}>
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
             className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+
+            {/* Header */}
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center"><CheckCircle2 className="w-5 h-5 text-white" /></div>
-              <h3 className="text-[16px] font-heading font-semibold text-gray-900">Accept this task?</h3>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-[16px] font-heading font-semibold text-gray-900">Accept this task?</h3>
+                <p className="text-[11px] text-gray-400">Review your capacity before confirming</p>
+              </div>
             </div>
-            <p className="text-[13px] font-medium text-gray-800 mb-1">{task.title}</p>
-            <p className="text-[12px] text-gray-400 mb-4">{task.estimatedHours}h · {fmt$(task.pricing.amount)} · Due {fmtDate(task.slaDeadline)}</p>
-            <div className="bg-gold-50 rounded-xl px-4 py-3 mb-5">
-              <p className="text-[12px] text-gold-700">By accepting, you commit to delivering by <span className="font-semibold">{fmtDate(task.slaDeadline)}</span>.</p>
+
+            {/* Task summary line */}
+            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 mb-4">
+              <p className="text-[13px] font-semibold text-gray-800 mb-0.5 truncate">{task.title}</p>
+              <p className="text-[11px] text-gray-400">
+                {task.estimatedHours}h &nbsp;·&nbsp; {fmt$(task.pricing?.amount ?? 0)} &nbsp;·&nbsp; Due {task.slaDeadline ? fmtDate(task.slaDeadline) : "—"}
+              </p>
             </div>
+
+            {/* Capacity section */}
+            {acceptImpactLoading ? (
+              <div className="space-y-2 mb-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-4 rounded-md bg-gray-100 animate-pulse" style={{ width: i === 1 ? "100%" : i === 2 ? "75%" : "55%" }} />
+                ))}
+              </div>
+            ) : acceptImpact ? (
+              <div className="mb-4 space-y-3">
+                {/* Capacity bar */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-medium text-gray-500">Capacity after accepting</span>
+                    <span className={cn("text-[12px] font-bold font-mono",
+                      acceptImpact.would_exceed_capacity ? "text-red-500" :
+                      acceptImpact.advisory_near_capacity ? "text-gold-600" : "text-forest-600")}>
+                      {acceptImpact.capacity_percent_after}%
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                    <div className={cn("h-full rounded-full transition-all duration-500",
+                      acceptImpact.would_exceed_capacity ? "bg-red-400" :
+                      acceptImpact.advisory_near_capacity ? "bg-gold-400" : "bg-forest-400")}
+                      style={{ width: `${Math.min(acceptImpact.capacity_percent_after, 100)}%` }} />
+                  </div>
+                </div>
+
+                {/* Stats grid */}
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "Active tasks",        value: String(acceptImpact.current_active_tasks) },
+                    { label: "Hours this week",      value: `${acceptImpact.hours_committed_this_week}h` },
+                    { label: "After accept",         value: `${acceptImpact.after_accept_weekly_hours}h / wk` },
+                    { label: "Declared capacity",    value: `${acceptImpact.declared_hours_per_week}h / wk` },
+                  ].map((s) => (
+                    <div key={s.label} className="bg-gray-50 rounded-xl px-3 py-2.5">
+                      <div className="text-[10px] text-gray-400 mb-0.5">{s.label}</div>
+                      <div className="text-[13px] font-semibold text-gray-800 font-mono">{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Warning banners */}
+                {acceptImpact.would_exceed_capacity && (
+                  <div className="flex items-start gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--danger-light)" }}>
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-[11.5px] text-red-700 leading-relaxed">
+                      <span className="font-semibold">Capacity exceeded.</span> This task would push you beyond your declared weekly hours.
+                    </p>
+                  </div>
+                )}
+                {!acceptImpact.would_exceed_capacity && acceptImpact.advisory_near_capacity && (
+                  <div className="flex items-start gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--color-gold-50)" }}>
+                    <AlertTriangle className="w-3.5 h-3.5 text-gold-500 shrink-0 mt-0.5" />
+                    <p className="text-[11.5px] text-gold-700 leading-relaxed">
+                      <span className="font-semibold">Near capacity.</span> You&apos;re approaching your weekly limit — plan accordingly.
+                    </p>
+                  </div>
+                )}
+                {acceptImpact.concurrent_deadlines_notice && (
+                  <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 bg-gray-50">
+                    <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                    <p className="text-[11.5px] text-gray-600 leading-relaxed">{acceptImpact.concurrent_deadlines_notice}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Commit notice when impact API unavailable */
+              <div className="bg-gold-50 rounded-xl px-4 py-3 mb-4">
+                <p className="text-[12px] text-gold-700">
+                  By accepting, you commit to delivering by <span className="font-semibold">{task.slaDeadline ? fmtDate(task.slaDeadline) : "the deadline"}</span>.
+                </p>
+              </div>
+            )}
+
+            {/* Optional note */}
+            {acceptImpact?.accept_allowed !== false && (
+              <div className="mb-4">
+                <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">
+                  Note <span className="text-gray-300">(optional)</span>
+                </label>
+                <textarea
+                  value={acceptNote}
+                  onChange={(e) => setAcceptNote(e.target.value)}
+                  placeholder="Any message for the project team..."
+                  rows={2}
+                  className="w-full text-[12px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all resize-none"
+                />
+              </div>
+            )}
+
+            {/* API error */}
+            {acceptError && (
+              <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-3" style={{ background: "var(--danger-light)" }}>
+                <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                <p className="text-[11.5px] text-red-700">{acceptError}</p>
+              </div>
+            )}
+
+            {/* Actions */}
             <div className="flex items-center justify-end gap-2">
-              <button onClick={() => setShowAcceptDialog(false)} className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Cancel</button>
-              <button onClick={() => { setTaskStatus("assigned"); setShowAcceptDialog(false); }}
-                className="text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">Confirm</button>
+              <button
+                onClick={() => { setShowAcceptDialog(false); setAcceptNote(""); setAcceptError(null); }}
+                disabled={acceptSubmitting}
+                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50">
+                Cancel
+              </button>
+              <button
+                disabled={acceptImpactLoading || acceptSubmitting || acceptImpact?.accept_allowed === false}
+                onClick={async () => {
+                  if (!token) return;
+                  setAcceptSubmitting(true);
+                  setAcceptError(null);
+                  try {
+                    await acceptTask(token, taskId, {
+                      accepted_at: new Date().toISOString(),
+                      ...(acceptNote.trim() ? { note: acceptNote.trim() } : {}),
+                    });
+                    setTaskStatus("assigned");
+                    setShowAcceptDialog(false);
+                    setAcceptNote("");
+                  } catch (err: any) {
+                    setAcceptError(err?.message ?? "Failed to accept task. Please try again.");
+                  } finally {
+                    setAcceptSubmitting(false);
+                  }
+                }}
+                className={cn(
+                  "flex items-center gap-1.5 text-[12px] font-semibold text-white px-5 py-2 rounded-xl transition-all",
+                  acceptImpact?.accept_allowed === false
+                    ? "bg-gray-300 cursor-not-allowed"
+                    : acceptSubmitting
+                      ? "bg-brown-400 cursor-wait opacity-80"
+                      : "bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700"
+                )}>
+                {acceptSubmitting ? (
+                  <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Accepting…</>
+                ) : acceptImpact?.accept_allowed === false ? (
+                  "Not Allowed"
+                ) : (
+                  <><CheckCircle2 className="w-3.5 h-3.5" /> Confirm Accept</>
+                )}
+              </button>
             </div>
           </motion.div>
         </div>
       )}
 
       {showDeclineDialog && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowDeclineDialog(false)}>
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center"
+          onClick={() => !declineSubmitting && setShowDeclineDialog(false)}>
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
             className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-[16px] font-heading font-semibold text-gray-900 mb-4">Decline Assignment</h3>
-            <div className="space-y-3 mb-5">
+
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center shrink-0">
+                <X className="w-5 h-5 text-white" />
+              </div>
               <div>
-                <label className="text-[11px] font-medium text-gray-500 mb-1 block">Reason</label>
-                <select value={declineReason} onChange={(e) => setDeclineReason(e.target.value)}
-                  className="w-full text-[12px] text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brown-200 focus:border-brown-300 transition-all">
+                <h3 className="text-[16px] font-heading font-semibold text-gray-900">Decline Assignment</h3>
+                <p className="text-[11px] text-gray-400">This task will be returned to the pool</p>
+              </div>
+            </div>
+
+            {/* Task name */}
+            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-2.5 mb-4">
+              <p className="text-[12px] font-medium text-gray-700 truncate">{task.title}</p>
+            </div>
+
+            <div className="space-y-3 mb-4">
+              {/* Reason */}
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">
+                  Reason <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  className="w-full text-[12px] text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 transition-all"
+                >
                   <option value="">Select a reason...</option>
                   <option value="schedule_conflict">Schedule conflict</option>
                   <option value="skills_mismatch">Skills mismatch</option>
@@ -791,17 +1474,70 @@ export default function ContributorTaskDetailPage() {
                   <option value="other">Other</option>
                 </select>
               </div>
+
+              {/* Notes */}
               <div>
-                <label className="text-[11px] font-medium text-gray-500 mb-1 block">Notes (optional)</label>
-                <textarea value={declineNotes} onChange={(e) => setDeclineNotes(e.target.value)} placeholder="Any additional context..." rows={3}
-                  className="w-full text-[12px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brown-200 focus:border-brown-300 transition-all resize-none" />
+                <label className="text-[11px] font-medium text-gray-500 mb-1.5 block">
+                  Notes <span className="text-gray-300">(optional)</span>
+                </label>
+                <textarea
+                  value={declineNotes}
+                  onChange={(e) => setDeclineNotes(e.target.value)}
+                  placeholder="Any additional context for the project team..."
+                  rows={3}
+                  className="w-full text-[12px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 transition-all resize-none"
+                />
               </div>
             </div>
+
+            {/* API error */}
+            {declineError && (
+              <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 mb-3" style={{ background: "var(--danger-light)" }}>
+                <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+                <p className="text-[11.5px] text-red-700">{declineError}</p>
+              </div>
+            )}
+
+            {/* Actions */}
             <div className="flex items-center justify-end gap-2">
-              <button onClick={() => { setShowDeclineDialog(false); setDeclineReason(""); setDeclineNotes(""); }}
-                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Cancel</button>
-              <button onClick={() => { setTaskStatus("available"); setShowDeclineDialog(false); setDeclineReason(""); setDeclineNotes(""); }}
-                className="text-[12px] font-semibold text-white bg-red-500 hover:bg-red-600 px-5 py-2 rounded-xl transition-all">Decline</button>
+              <button
+                disabled={declineSubmitting}
+                onClick={() => { setShowDeclineDialog(false); setDeclineReason(""); setDeclineNotes(""); setDeclineError(null); }}
+                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50">
+                Cancel
+              </button>
+              <button
+                disabled={!declineReason || declineSubmitting}
+                onClick={async () => {
+                  if (!token || !declineReason) return;
+                  setDeclineSubmitting(true);
+                  setDeclineError(null);
+                  try {
+                    await declineTask(token, taskId, {
+                      reason: declineReason,
+                      ...(declineNotes.trim() ? { notes: declineNotes.trim() } : {}),
+                    });
+                    setTaskStatus("available");
+                    setShowDeclineDialog(false);
+                    setDeclineReason("");
+                    setDeclineNotes("");
+                  } catch (err: any) {
+                    setDeclineError(err?.message ?? "Failed to decline task. Please try again.");
+                  } finally {
+                    setDeclineSubmitting(false);
+                  }
+                }}
+                className={cn(
+                  "flex items-center gap-1.5 text-[12px] font-semibold text-white px-5 py-2 rounded-xl transition-all",
+                  !declineReason || declineSubmitting
+                    ? "bg-red-300 cursor-not-allowed"
+                    : "bg-red-500 hover:bg-red-600"
+                )}>
+                {declineSubmitting
+                  ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Declining…</>
+                  : <><X className="w-3.5 h-3.5" /> Confirm Decline</>
+                }
+              </button>
             </div>
           </motion.div>
         </div>
@@ -834,29 +1570,291 @@ export default function ContributorTaskDetailPage() {
       )}
 
       {showUploadDialog && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowUploadDialog(false)}>
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center"
+          onClick={() => !uploadSubmitting && (setShowUploadDialog(false), setUploadFile(null), setUploadTitle(""), setUploadDescription(""), setUploadCategory("deliverable"), setUploadError(null), setUploadSuccess(false))}>
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
             className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-[16px] font-heading font-semibold text-gray-900 mb-4">Upload File</h3>
-            <div className="space-y-3 mb-5">
-              <div>
-                <label className="text-[11px] font-medium text-gray-500 mb-1 block">File Name</label>
-                <input type="text" placeholder="e.g. deliverable-v2.zip" value={uploadFileName} onChange={(e) => setUploadFileName(e.target.value)}
-                  className="w-full text-[12px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brown-200 focus:border-brown-300 transition-all" />
+
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center">
+                <Upload className="w-5 h-5 text-white" />
+              </div>
+              <h3 className="text-[16px] font-heading font-semibold text-gray-900">Upload Deliverable</h3>
+            </div>
+
+            {uploadSuccess ? (
+              <div className="bg-green-50 rounded-xl px-4 py-4 mb-5 flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[13px] font-semibold text-green-800">File Uploaded</p>
+                  <p className="text-[12px] text-green-700 mt-0.5">Your file has been added to the workroom.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 mb-5">
+                {/* Drop-zone / file picker */}
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
+                    File <span className="text-red-400">*</span>
+                  </label>
+                  <div
+                    className={cn(
+                      "relative border-2 border-dashed rounded-xl px-4 py-5 text-center transition-all cursor-pointer",
+                      uploadFile ? "border-brown-300 bg-brown-50/30" : "border-gray-200 hover:border-brown-300 hover:bg-brown-50/20",
+                    )}>
+                    <input
+                      ref={uploadFileRef}
+                      type="file"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] ?? null;
+                        setUploadFile(f);
+                        if (f && !uploadTitle) setUploadTitle(f.name.replace(/\.[^.]+$/, ""));
+                      }}
+                    />
+                    {uploadFile ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <FileText className="w-4 h-4 text-brown-400 shrink-0" />
+                        <span className="text-[12px] font-medium text-gray-700 truncate max-w-[240px]">{uploadFile.name}</span>
+                        <span className="text-[10px] text-gray-400 shrink-0">{fmtSize(uploadFile.size)}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5 text-gray-300 mx-auto mb-1.5" />
+                        <p className="text-[12px] text-gray-500">Click to browse or drag a file here</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Any format, max 50 MB</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
+                    Category <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={uploadCategory}
+                    onChange={(e) => setUploadCategory(e.target.value)}
+                    className="w-full text-[12px] text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brown-200 focus:border-brown-300 transition-all">
+                    <option value="deliverable">Deliverable</option>
+                    <option value="evidence">Evidence</option>
+                    <option value="reference">Reference</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                </div>
+
+                {/* Title */}
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
+                    Title <span className="text-gray-300">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Final Report v2"
+                    value={uploadTitle}
+                    onChange={(e) => setUploadTitle(e.target.value)}
+                    className="w-full text-[12px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brown-200 focus:border-brown-300 transition-all"
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
+                    Description <span className="text-gray-300">(optional)</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Brief note about this file…"
+                    value={uploadDescription}
+                    onChange={(e) => setUploadDescription(e.target.value)}
+                    className="w-full text-[12px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brown-200 focus:border-brown-300 transition-all resize-none"
+                  />
+                </div>
+
+                {uploadError && (
+                  <div className="bg-red-50 rounded-xl px-4 py-3 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-red-700">{uploadError}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                disabled={uploadSubmitting}
+                onClick={() => { setShowUploadDialog(false); setUploadFile(null); setUploadTitle(""); setUploadDescription(""); setUploadCategory("deliverable"); setUploadError(null); setUploadSuccess(false); }}
+                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50">
+                {uploadSuccess ? "Close" : "Cancel"}
+              </button>
+              {!uploadSuccess && (
+                <button
+                  disabled={!uploadFile || !uploadCategory || uploadSubmitting}
+                  onClick={async () => {
+                    if (!uploadFile || !uploadCategory || !token) return;
+                    setUploadSubmitting(true);
+                    setUploadError(null);
+                    try {
+                      const result = await uploadWorkroomFile(token, taskId as string, {
+                        file: uploadFile,
+                        category: uploadCategory,
+                        title: uploadTitle.trim() || undefined,
+                        description: uploadDescription.trim() || undefined,
+                      });
+                      setUploads((prev: any[]) => [...prev, {
+                        id: result.id,
+                        fileName: result.filename,
+                        title: result.title || result.filename,
+                        fileSize: uploadFile.size,
+                        size_bytes: uploadFile.size,
+                        uploadedAt: result.uploaded_at,
+                        category: result.category,
+                        description: result.description,
+                      }]);
+                      setUploadSuccess(true);
+                    } catch (err: any) {
+                      setUploadError(err?.message ?? "Upload failed. Please try again.");
+                    } finally {
+                      setUploadSubmitting(false);
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 text-[12px] font-semibold text-white px-5 py-2 rounded-xl transition-all",
+                    !uploadFile || !uploadCategory || uploadSubmitting
+                      ? "bg-brown-300 cursor-not-allowed"
+                      : "bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700",
+                  )}>
+                  {uploadSubmitting
+                    ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Uploading…</>
+                    : <><Upload className="w-3.5 h-3.5" /> Upload</>}
+                </button>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ─── Request Extension Dialog ─── */}
+      {showExtensionDialog && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center"
+          onClick={() => !extSubmitting && setShowExtensionDialog(false)}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-white" />
               </div>
               <div>
-                <label className="text-[11px] font-medium text-gray-500 mb-1 block">File</label>
-                <input type="file" className="w-full text-[12px] text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 file:mr-3 file:text-[11px] file:font-medium file:bg-brown-50 file:text-brown-600 file:border-0 file:rounded-lg file:px-3 file:py-1 file:cursor-pointer" />
+                <h3 className="text-[16px] font-heading font-semibold text-gray-900">Request Deadline Extension</h3>
+                <p className="text-[11px] text-gray-400">{task?.title}</p>
               </div>
             </div>
+
+            {extSuccess ? (
+              <div className="bg-green-50 rounded-xl px-4 py-4 mb-5 flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[13px] font-semibold text-green-800">Extension Requested</p>
+                  <p className="text-[12px] text-green-700 mt-0.5">Your request has been submitted for review.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 mb-5">
+                {/* Requested due date */}
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
+                    Requested Due Date <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={extDate}
+                    min={new Date().toISOString().split("T")[0]}
+                    onChange={(e) => setExtDate(e.target.value)}
+                    className="w-full text-[13px] text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
+                  />
+                </div>
+
+                {/* Reason */}
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
+                    Reason <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Scope expanded unexpectedly"
+                    value={extReason}
+                    onChange={(e) => setExtReason(e.target.value)}
+                    className="w-full text-[13px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
+                  />
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
+                    Additional Notes <span className="text-gray-300">(optional)</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Any extra context for the reviewer…"
+                    value={extNotes}
+                    onChange={(e) => setExtNotes(e.target.value)}
+                    className="w-full text-[13px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all resize-none"
+                  />
+                </div>
+
+                {extError && (
+                  <div className="bg-red-50 rounded-xl px-4 py-3 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-red-700">{extError}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-2">
-              <button onClick={() => { setShowUploadDialog(false); setUploadFileName(""); }}
-                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Cancel</button>
-              <button onClick={() => {
-                const name = uploadFileName.trim() || `upload-${Date.now()}.zip`;
-                setUploads((prev: any[]) => [...prev, { id: `upload-${Date.now()}`, fileName: name, fileSize: Math.floor(Math.random() * 500000) + 50000, fileType: "application/zip", uploadedAt: new Date().toISOString(), uploadedBy: "contrib-001", url: `/uploads/${name}`, category: "deliverable" as const }]);
-                setShowUploadDialog(false); setUploadFileName("");
-              }} className="text-[12px] font-semibold text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 px-5 py-2 rounded-xl transition-all">Upload</button>
+              <button
+                onClick={() => setShowExtensionDialog(false)}
+                disabled={extSubmitting}
+                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50">
+                {extSuccess ? "Close" : "Cancel"}
+              </button>
+              {!extSuccess && (
+                <button
+                  disabled={!extDate || !extReason.trim() || extSubmitting}
+                  onClick={async () => {
+                    if (!token || !taskId || !extDate || !extReason.trim()) return;
+                    setExtSubmitting(true);
+                    setExtError(null);
+                    try {
+                      await requestExtension(token, taskId as string, {
+                        requested_due_date: extDate,
+                        reason: extReason.trim(),
+                        notes: extNotes.trim() || undefined,
+                      });
+                      setExtSuccess(true);
+                    } catch (err: any) {
+                      setExtError(err?.message ?? "Failed to submit extension request. Please try again.");
+                    } finally {
+                      setExtSubmitting(false);
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 text-[12px] font-semibold text-white px-5 py-2 rounded-xl transition-all",
+                    !extDate || !extReason.trim() || extSubmitting
+                      ? "bg-blue-300 cursor-not-allowed"
+                      : "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700",
+                  )}>
+                  {extSubmitting ? (
+                    <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Submitting…</>
+                  ) : (
+                    <><Calendar className="w-3.5 h-3.5" /> Request Extension</>
+                  )}
+                </button>
+              )}
             </div>
           </motion.div>
         </div>
