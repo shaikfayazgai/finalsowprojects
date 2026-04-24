@@ -133,18 +133,7 @@ interface Grievance {
   resolution?: string;
 }
 
-const mockGrievances: Grievance[] = [
-  {
-    id: "grv-001",
-    category: "review_dispute",
-    subject: "Submission rejected despite meeting all acceptance criteria",
-    description: "My submission for task ctask-004 was rejected, but I've verified that all acceptance criteria were met. The reviewer's feedback mentions missing keyboard navigation, which was not listed in the original acceptance criteria.",
-    status: "under_review",
-    anonymous: false,
-    createdAt: "2026-03-20T09:00:00Z",
-    updatedAt: "2026-03-22T14:00:00Z",
-  },
-];
+const mockGrievances: Grievance[] = [];
 
 const grievanceCategoryLabels: Record<string, string> = {
   review_dispute: "Review Decision Dispute",
@@ -673,7 +662,7 @@ function TicketsTab({ onOpenDrawer }: { onOpenDrawer: () => void }) {
                       <div className="px-5 pb-5 border-t border-gray-50">
                         <p className="text-[12px] text-gray-500 leading-relaxed py-4">{ticket.description}</p>
                         <div className="space-y-4">
-                          {ticket.messages.map((msg, i) => (
+                          {ticket.messages.map((msg: any, i: number) => (
                             <div key={i} className="flex gap-3 items-start">
                               <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold", msg.sender === "contributor" ? "bg-brown-50 text-brown-500" : "bg-teal-50 text-teal-500")}>
                                 {msg.sender === "contributor" ? "Y" : "S"}

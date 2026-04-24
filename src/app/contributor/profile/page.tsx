@@ -4,9 +4,10 @@ import * as React from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import {
-  Mail, Clock, Globe, Shield,
-  Calendar, Pencil, Briefcase,
-  ArrowRight, AlertCircle, RefreshCw,
+  Mail, Clock, Globe, Shield, CheckCircle2,
+  Calendar, Pencil, Award, ExternalLink, FileText, Github,
+  Link2, Briefcase, TrendingUp, Target, RotateCcw, Zap,
+  ShieldCheck, ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
@@ -83,72 +84,19 @@ function emptyProfileState(
 /* ═══ PAGE ═══ */
 
 export default function ProfilePage() {
-  const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
-  const contributorId = session?.user?.id ?? "";
-
+  const { data: session } = useSession();
   const sessionName = session?.user?.name ?? "";
   const sessionEmail = session?.user?.email ?? "";
-  const sessionInitials = sessionName
+  const initials = sessionName
     ? sessionName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()
-    : "—";
-
-  const [profile, setProfile] = React.useState<ProfileUiState>(() =>
-    emptyProfileState({
-      displayName: sessionName || "Contributor",
-      email: sessionEmail,
-      avatar: sessionInitials,
-    }),
-  );
-  const [loading, setLoading] = React.useState(true);
-  const [loadError, setLoadError] = React.useState<string | null>(null);
-  const [retryKey, setRetryKey] = React.useState(0);
-
-  React.useEffect(() => {
-    if (sessionStatus === "loading") return;
-    if (!token || !contributorId) {
-      setLoading(false);
-      setLoadError(!contributorId ? "Missing contributor ID in session." : "Please sign in.");
-      return;
-    }
-
-    setLoading(true);
-    setLoadError(null);
-
-    const fallbacks = {
-      displayName: sessionName || "Contributor",
-      email: sessionEmail,
-      avatar: sessionInitials,
-    };
-
-    const sk = sessionKeyFragment(token);
-    let live = true;
-    void dedupeAsync(`contrib:profile:${contributorId}:${sk}:${retryKey}`, () =>
-      fetchContributorProfile(token, contributorId),
-    )
-      .then((raw) => {
-        if (!live) return;
-        setProfile(mapContributorProfileToUi(raw, fallbacks));
-        setLoadError(null);
-      })
-      .catch((err: { message?: string }) => {
-        if (!live) return;
-        setLoadError(err?.message ?? "Failed to load profile");
-        setProfile(emptyProfileState(fallbacks));
-      })
-      .finally(() => {
-        if (live) setLoading(false);
-      });
-
-    return () => {
-      live = false;
-    };
-  }, [token, contributorId, sessionStatus, sessionName, sessionEmail, sessionInitials, retryKey]);
-
-  const displayInitials = profile.displayName
-    ? profile.displayName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()
-    : sessionInitials;
-
+    : "";
+  const profile = {
+    ...mockContributorProfile,
+    displayName: mockContributorProfile.displayName || sessionName || "Contributor",
+    email: mockContributorProfile.email || sessionEmail,
+    avatar: mockContributorProfile.avatar || initials,
+  };
+  const twin = mockDigitalTwin;
   const track = trackConfig[profile.track] || trackConfig.general;
   const avail = availabilityConfig[profile.availability] || availabilityConfig.available;
 
@@ -290,6 +238,93 @@ export default function ProfilePage() {
         </div>
       </motion.div>
 
+      {/* ═══ PERSONAL DETAILS ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-6">
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+          <span className="text-sm font-semibold text-gray-800">Personal Details</span>
+        </div>
+        <div className="px-5 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Date of Birth</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).dob ? formatDate((profile as any).dob) : "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Country</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).country || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Department</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).departmentCategory || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Career Stage</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).careerStage || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Years of Experience</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).yearsExperience || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Degree / Qualification</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).degree || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Field of Study</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).branch || "—"}</p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Availability</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).weeklyHours ? `${(profile as any).weeklyHours} hrs/week` : "—"}</p>
+          </div>
+
+          <div className="space-y-1 sm:col-span-2">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Primary Skills</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(profile as any).primarySkills?.length > 0
+                ? (profile as any).primarySkills.map((s: string) => (
+                    <span key={s} className="text-[11px] font-medium text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg">{s}</span>
+                  ))
+                : <p className="text-[13px] text-gray-800">—</p>}
+            </div>
+          </div>
+
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Secondary Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(profile as any).secondarySkills?.length > 0
+                  ? (profile as any).secondarySkills.map((s: string) => (
+                      <span key={s} className="text-[11px] font-medium text-brown-700 bg-brown-50 px-2.5 py-1 rounded-lg">{s}</span>
+                    ))
+                  : <p className="text-[13px] text-gray-800">—</p>}
+              </div>
+            </div>
+
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Other / Niche Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(profile as any).otherSkills?.length > 0
+                  ? (profile as any).otherSkills.map((s: string) => (
+                    <span key={s} className="text-[11px] font-medium text-gray-600 bg-gray-100 px-2.5 py-1 rounded-lg">{s}</span>
+                  ))
+                : <p className="text-[13px] text-gray-800">—</p>}
+              </div>
+            </div>
+
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">LinkedIn</p>
+            {(profile as any).linkedin ? (
+              <a href={(profile as any).linkedin} target="_blank" rel="noreferrer"
+                className="text-[13px] text-teal-600 hover:underline flex items-center gap-1">
+                View Profile <ExternalLink className="w-3 h-3" />
+              </a>
+            ) : (
+              <p className="text-[13px] text-gray-800">—</p>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
       {/* ═══ SKILLS SECTION ═══ */}
       <motion.div variants={fadeUp} className="card-parchment mb-6">
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-soft)" }}>
@@ -335,17 +370,50 @@ export default function ProfilePage() {
         )}
       </motion.div>
 
-      {/* ═══ Settings (other profile APIs — loaded on their routes only) ═══ */}
-      <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <Link
-          href="/contributor/profile/digital-twin"
-          className="card-parchment px-5 py-4 flex items-start justify-between gap-3 group hover:border-gray-200 transition-colors"
-        >
-          <div>
-            <span className="text-sm font-semibold text-gray-800">Digital Twin</span>
-            <p className="text-[12px] text-gray-500 mt-1 leading-relaxed">
-              Performance profile and history (loaded on the next page only).
-            </p>
+      {/* ═══ DIGITAL TWIN METRICS ═══ */}
+      <motion.div variants={fadeUp} className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold text-gray-800">Digital Twin</h2>
+            <Link href="/contributor/profile/digital-twin" className="text-[12px] text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors">
+              View Full Profile <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <span className="text-[11px] text-gray-400">Last updated {twin.updatedAt ? formatDate(twin.updatedAt) : "—"}</span>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          {[
+            { label: "Tasks Completed", value: twin.tasksCompleted, icon: CheckCircle2, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
+            { label: "Acceptance Rate", value: `${twin.acceptanceRate}%`, icon: Target, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
+            { label: "On-time Delivery", value: `${twin.onTimeDelivery}%`, icon: Clock, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
+            { label: "SLA Compliance", value: `${twin.slaCompliance}%`, icon: ShieldCheck, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
+            { label: "Rework Rate", value: `${twin.reworkRate}%`, icon: RotateCcw, iconBg: "bg-gradient-to-br from-brown-300 to-brown-500" },
+            { label: "Skill Growth", value: `${twin.streakDays}/qtr`, icon: Zap, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
+          ].map((kpi) => {
+            const KpiIcon = kpi.icon;
+            return (
+              <motion.div key={kpi.label} variants={scaleIn} className="card-parchment flex items-center gap-5 px-5 py-5">
+                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0", kpi.iconBg)}>
+                  <KpiIcon className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-medium text-gray-400">{kpi.label}</div>
+                  <div className="num-display text-[28px] text-gray-900 leading-none mt-1">{kpi.value}</div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      {/* ═══ AI INSIGHTS ═══ */}
+      {twin.aiInsights && twin.aiInsights.length > 0 && (
+        <motion.div variants={fadeUp} className="card-parchment mb-6">
+          <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-800">AI Insights</span>
+              <Badge variant="teal">{twin.aiInsights.length}</Badge>
+            </div>
           </div>
           <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 shrink-0 mt-0.5" />
         </Link>
@@ -359,8 +427,67 @@ export default function ProfilePage() {
               Portfolio links, files, and related skills.
             </p>
           </div>
-          <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 shrink-0 mt-0.5" />
-        </Link>
+        </motion.div>
+      )}
+
+      {/* ═══ VERIFIED SKILLS & GROWTH AREAS ═══ */}
+      <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
+        {/* Verified Skills */}
+        <div className="card-parchment">
+          <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+            <span className="text-sm font-semibold text-gray-800">Verified Skills</span>
+          </div>
+          {twin.topSkills.length === 0 ? (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No verified skills yet</p></div>
+          ) : (
+          <div className="py-2">
+            {twin.topSkills.map((s, i) => (
+              <div key={s.skill} className="flex items-center justify-between px-5 py-3"
+                style={{ borderBottom: i < twin.topSkills.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-4 h-4 text-forest-500 shrink-0" />
+                  <div>
+                    <span className="text-[13px] font-medium text-gray-800">{s.skill}</span>
+                    <span className="text-[10px] text-gray-400 block">{s.tasksCompleted} validated deliveries</span>
+                  </div>
+                </div>
+                <Badge variant="forest">{s.avgScore}</Badge>
+              </div>
+            ))}
+          </div>
+          )}
+        </div>
+
+        {/* Strengths & Growth */}
+        <div className="card-parchment">
+          <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+            <span className="text-sm font-semibold text-gray-800">Strengths & Growth Areas</span>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <div>
+              <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-2">Strengths</div>
+              <div className="flex flex-wrap gap-1.5">
+                {twin.aiInsights.map((area) => (
+                  <span key={area} className="text-[10px] font-medium text-forest-700 bg-forest-50 px-2.5 py-1 rounded-lg">{area}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-2">Growth Areas</div>
+              <div className="flex flex-wrap gap-1.5">
+                {twin.topSkills.map((s: any) => s.skill).map((area) => (
+                  <span key={area} className="text-[10px] font-medium text-gold-700 bg-gold-50 px-2.5 py-1 rounded-lg">{area}</span>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+              <span className="text-[11px] text-gray-400">Trend:</span>
+              <Badge variant={"forest"} dot>
+                {"improving"}
+              </Badge>
+            </div>
+          </div>
+        </div>
       </motion.div>
 
     </motion.div>

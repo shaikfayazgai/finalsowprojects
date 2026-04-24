@@ -27,64 +27,36 @@ import {
 } from "@/components/ui";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
 
-/* ── Inline mock diff data ── */
-const mockDiffs = [
-  {
-    id: "diff-001",
-    section: "Project Scope",
-    type: "modified" as const,
-    oldText:
-      "The platform will cover 4 core modules: Financial Management, Human Resources, Inventory, and Reporting.",
-    newText:
-      "The platform will cover 5 core modules: Financial Management, Human Resources, Inventory, CRM, and Reporting. Each module will integrate via event-driven microservice architecture.",
-    additions: 2,
-    removals: 1,
-  },
-  {
-    id: "diff-002",
-    section: "Timeline & Milestones",
-    type: "modified" as const,
-    oldText:
-      "Phase 1 (Month 1-2): Core infrastructure. Phase 2 (Month 3-4): Finance + HR modules. Phase 3 (Month 5): Reporting.",
-    newText:
-      "Phase 1 (Month 1-2): Core infrastructure + Auth. Phase 2 (Month 3-4): Finance + HR modules. Phase 3 (Month 5-6): Reporting + Integration testing.",
-    additions: 3,
-    removals: 2,
-  },
-  {
-    id: "diff-003",
-    section: "Budget Breakdown",
-    type: "modified" as const,
-    oldText:
-      "Total budget: $245,000. Development: $185,000. Infrastructure: $30,000. QA: $20,000. PM: $10,000.",
-    newText:
-      "Total budget: $285,000. Development: $210,000. Infrastructure: $35,000. QA: $25,000. Project management: $15,000.",
-    additions: 5,
-    removals: 5,
-  },
-  {
-    id: "diff-004",
-    section: "Risk Assessment",
-    type: "added" as const,
-    oldText: "",
-    newText:
-      "Key risks: Legacy data migration complexity, third-party API dependencies, regulatory compliance for financial data. Mitigation: parallel running period for data migration, API abstraction layer, early compliance audit.",
-    additions: 4,
-    removals: 0,
-  },
-];
+type Diff = {
+  id: string;
+  section: string;
+  type: "modified" | "added" | "removed";
+  oldText: string;
+  newText: string;
+  additions: number;
+  removals: number;
+};
+const mockDiffs: Diff[] = [];
 
 const summaryStats = {
-  sectionsChanged: 4,
-  linesAdded: 14,
-  linesRemoved: 8,
-  aiSuggestionsAccepted: 3,
+  sectionsChanged: 0,
+  linesAdded: 0,
+  linesRemoved: 0,
+  aiSuggestionsAccepted: 0,
 };
 
 export default function SOWComparePage() {
   const params = useParams();
   const sowId = params.sowId as string;
-  const sow = mockSOWs.find((s) => s.id === sowId) || mockSOWs[0];
+  const sow = mockSOWs.find((s) => s.id === sowId);
+  if (!sow) {
+    return (
+      <div className="card-parchment px-6 py-16 text-center">
+        <p className="text-[14px] font-medium text-gray-600 mb-1">SOW not found</p>
+        <p className="text-[12px] text-gray-400">This SOW may have been removed.</p>
+      </div>
+    );
+  }
 
   const [leftVersion, setLeftVersion] = React.useState("v2");
   const [rightVersion, setRightVersion] = React.useState("v3");

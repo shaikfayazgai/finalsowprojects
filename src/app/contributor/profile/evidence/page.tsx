@@ -110,7 +110,11 @@ const allSkills = [
   "MongoDB", "Redis", "Kubernetes", "CI/CD", "Flutter",
 ];
 
-const emptyEvidenceForm = {
+const initialEvidence: EvidenceItem[] = [];
+
+/* ═══ Empty form state ═══ */
+
+const emptyForm = {
   title: "",
   type: "link" as "link" | "file" | "github",
   url: "",

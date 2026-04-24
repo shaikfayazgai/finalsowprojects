@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { AppShell } from "@/components/layout";
 import { enterpriseNav, reviewerNav } from "@/lib/config/navigation";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { useRoleGuard } from "@/lib/hooks/use-role-guard";
 import OnboardingModal from "./onboarding/components/OnboardingModal";
 
 export default function EnterpriseLayout({
@@ -19,6 +20,10 @@ export default function EnterpriseLayout({
   const setPendingOnboarding = useAuthStore((s) => s.setPendingOnboarding);
   const isOnboarding = pathname.startsWith("/enterprise/onboarding");
   const isReviewer = pathname.startsWith("/enterprise/reviewer");
+
+  // Strict role enforcement: /enterprise/reviewer/* → reviewers only,
+  // all other /enterprise/* routes → enterprise only.
+  useRoleGuard(isReviewer ? ["reviewer"] : ["enterprise"]);
 
   const provider = (session?.user as { provider?: string })?.provider;
   const isSSO = provider === "google" || provider === "microsoft-entra-id";
