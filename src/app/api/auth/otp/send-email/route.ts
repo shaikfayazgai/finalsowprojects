@@ -45,6 +45,24 @@ export async function POST(req: NextRequest) {
     });
 
     if (!success) {
+      // Local/dev fallback: still allow verification flow to proceed when SMTP
+      // is unavailable on the machine.
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(`[send-email OTP] SMTP unavailable. Using local fallback code for ${email}: ${code}`);
+        const devRes = NextResponse.json({
+          ok: true,
+          message: "Email service unavailable locally. Use OTP from server logs.",
+          devFallback: true,
+        });
+        devRes.cookies.set("email_otp_token", token, {
+          httpOnly: true,
+          sameSite: "strict",
+          path: "/",
+          maxAge: 5 * 60,
+        });
+        return devRes;
+      }
+
       return NextResponse.json(
         { error: "SEND_FAILED", message: "Could not send verification email. Please try again." },
         { status: 500 },
