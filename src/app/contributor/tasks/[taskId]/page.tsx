@@ -123,83 +123,12 @@ function normalise(d: TaskDetail): Record<string, any> {
 export default function ContributorTaskDetailPage() {
   const params = useParams();
   const taskId = params.taskId as string;
-  const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
-
-  /* Store task used as instant preview while API loads */
-  const storeTask = useTaskStore((s) => s.selectedTask);
-
-  /* ── API fetch ── */
-  const [taskDetail, setTaskDetail] = React.useState<TaskDetail | null>(null);
-  const [taskLoading, setTaskLoading] = React.useState(true);
-  const [taskError, setTaskError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (sessionStatus === "loading") return;
-    if (!token) { setTaskLoading(false); return; }
-    setTaskLoading(true);
-    setTaskError(null);
-    const sk = sessionKeyFragment(token);
-    let live = true;
-    void dedupeAsync(`contrib:task-detail:${taskId}:${sk}`, () => fetchTask(token, taskId))
-      .then((data) => {
-        if (!live) return;
-        setTaskDetail(data);
-        setTaskLoading(false);
-      })
-      .catch((err) => {
-        if (!live) return;
-        setTaskError(err?.message ?? "Failed to load task");
-        setTaskLoading(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [token, sessionStatus, taskId]);
-
-  /* Use API data when ready; fall back to store for instant display */
-  const task: Record<string, any> | null = React.useMemo(() => {
-    if (taskDetail) return normalise(taskDetail);
-    if (storeTask && storeTask.id === taskId) {
-      return {
-        id: storeTask.id, title: storeTask.title,
-        projectTitle: storeTask.project_title, milestoneTitle: storeTask.milestone_title,
-        status: storeTask.status, priority: storeTask.priority,
-        skillsRequired: storeTask.skills_required, estimatedHours: storeTask.estimated_hours,
-        pricing: storeTask.pricing, matchScore: storeTask.match_score,
-        matchReason: storeTask.match_reason, dueDate: storeTask.due_date,
-        slaDeadline: storeTask.sla_deadline, progressPercent: 0, hoursLogged: 0,
-      };
-    }
-    return null;
-  }, [taskDetail, storeTask, taskId]);
+  const task = mockContributorTasks.find((t) => t.id === taskId) as any;
 
   /* Hooks must run unconditionally before any early return */
-  const [taskStatus, setTaskStatus] = React.useState<ContributorTaskStatus>("available");
-
-  /* Sync status whenever task data resolves */
-  React.useEffect(() => {
-    if (task?.status) setTaskStatus(task.status as ContributorTaskStatus);
-  }, [task?.status]);
-
-  /* Fallback: seed checklist from task.evidenceTypesRequired ONLY if workroom
-     didn't return real checklist items (no real IDs available from server yet) */
-  React.useEffect(() => {
-    if (!task?.evidenceTypesRequired?.length) return;
-    setChecklist((prev) => {
-      // Skip if already populated with real server items (no synthetic IDs)
-      if (prev.length > 0 && !prev[0].id.includes("-chk-")) return prev;
-      // Only seed synthetic items if nothing was seeded by workroom fetch yet
-      if (prev.length > 0) return prev;
-      return (task.evidenceTypesRequired as string[]).map((label: string, i: number) => ({
-        id: `${task.id}-chk-${i}`,   // synthetic — server won't know these
-        label,
-        completed: false,
-        _synthetic: true,
-      }));
-    });
-  }, [task?.id, task?.evidenceTypesRequired]);
-
+  const [taskStatus, setTaskStatus] = React.useState<ContributorTaskStatus>(
+    (task?.status ?? "available") as ContributorTaskStatus
+  );
   const [showAcceptDialog, setShowAcceptDialog] = React.useState(false);
   const [acceptImpact, setAcceptImpact] = React.useState<AcceptImpact | null>(null);
   const [acceptImpactLoading, setAcceptImpactLoading] = React.useState(false);
@@ -251,224 +180,19 @@ export default function ContributorTaskDetailPage() {
   const [showSubmitDialog, setShowSubmitDialog] = React.useState(false);
   const [showUploadDialog, setShowUploadDialog] = React.useState(false);
   const [qaInput, setQaInput] = React.useState("");
-  const [qaSending, setQaSending] = React.useState(false);
-  const [qaError, setQaError] = React.useState<string | null>(null);
-  // These must be declared BEFORE the workroom effect that seeds them
-  const [qaMessages, setQaMessages] = React.useState<any[]>([]);
-  const [qaLoading, setQaLoading] = React.useState(false);
-  const [qaFetchError, setQaFetchError] = React.useState<string | null>(null);
-  const [qaPage, setQaPage] = React.useState(1);
-  const [qaTotal, setQaTotal] = React.useState(0);
-  const qaPageSize = 20;
+  const initialWorkroom = task && mockWorkroomData.taskId === task.id ? mockWorkroomData : null;
+  const [qaMessages, setQaMessages] = React.useState<any[]>(initialWorkroom?.qaMessages || []);
+  const [checklist, setChecklist] = React.useState<any[]>(initialWorkroom?.evidenceChecklist || []);
+  const [uploads, setUploads] = React.useState<any[]>(initialWorkroom?.uploads || []);
+  const [uploadFileName, setUploadFileName] = React.useState("");
 
-  /* Helper: map API author string → UI sender role */
-  const resolveQASender = React.useCallback((author: string) => {
-    const lower = author.toLowerCase();
-    if (/\b(ai|bot|assistant|glimmora_ai|system|support)\b/.test(lower)) return "ai";
-    if (/\b(reviewer|mentor|evaluator|manager)\b/.test(lower)) return "reviewer";
-    const myName = session?.user?.name?.toLowerCase() ?? "";
-    const myEmail = session?.user?.email?.toLowerCase() ?? "";
-    if (myName && lower === myName) return "contributor";
-    if (myEmail && lower === myEmail) return "contributor";
-    return "other"; // unknown external author
-  }, [session?.user?.name, session?.user?.email]);
-
-  const loadQAMessages = React.useCallback((page: number) => {
-    if (!token || !taskId) return;
-    setQaLoading(true);
-    setQaFetchError(null);
-    const sk = sessionKeyFragment(token);
-    void dedupeAsync(`contrib:workroom-msg:${taskId}:${sk}:${page}`, () =>
-      fetchWorkroomMessages(token, taskId, { page, page_size: qaPageSize }),
-    )
-      .then((res) => {
-        const normalised = res.items.map((m) => ({
-          id: m.id,
-          sender: resolveQASender(m.author),
-          senderName: m.author,
-          message: m.message,
-          sentAt: m.created_at,
-          attachmentIds: m.attachment_ids,
-        }));
-        setQaMessages((prev) => {
-          // On page 1 replace fully; on subsequent pages append (deduplicated)
-          const base = page === 1 ? [] : prev.filter((p) => !p._fromApi);
-          const existing = new Set(base.map((p: any) => p.id));
-          return [...base, ...normalised.filter((m) => !existing.has(m.id)).map((m) => ({ ...m, _fromApi: true }))];
-        });
-        setQaTotal(res.total);
-        setQaPage(page);
-        setQaLoading(false);
-      })
-      .catch((err) => { setQaFetchError(err?.message ?? "Failed to load messages"); setQaLoading(false); });
-  }, [token, taskId, resolveQASender]);
-
-  React.useEffect(() => {
-    if (sessionStatus === "loading" || !token || !taskId) return;
-    loadQAMessages(1);
-  }, [token, taskId, sessionStatus, loadQAMessages]);
-
-  const [checklist, setChecklist] = React.useState<any[]>([]);
-  const [patchingChecklistId, setPatchingChecklistId] = React.useState<string | null>(null);
-  const [checklistPatchError, setChecklistPatchError] = React.useState<string | null>(null);
-  const [uploads, setUploads] = React.useState<any[]>([]);
-  const [uploadFileName, setUploadFileName] = React.useState(""); // kept for legacy reference
-  const uploadFileRef = React.useRef<HTMLInputElement>(null);
-  const [uploadFile, setUploadFile] = React.useState<File | null>(null);
-  const [uploadCategory, setUploadCategory] = React.useState("deliverable");
-  const [uploadTitle, setUploadTitle] = React.useState("");
-  const [uploadDescription, setUploadDescription] = React.useState("");
-  const [uploadSubmitting, setUploadSubmitting] = React.useState(false);
-  const [uploadError, setUploadError] = React.useState<string | null>(null);
-  const [uploadSuccess, setUploadSuccess] = React.useState(false);
-  const [deletingUploadId, setDeletingUploadId] = React.useState<string | null>(null);
-  const [deleteUploadError, setDeleteUploadError] = React.useState<string | null>(null);
-  // Workroom API state
-  const [workroomData, setWorkroomData] = React.useState<Workroom | null>(null);
-  const [workroomLoading, setWorkroomLoading] = React.useState(false);
-  const [workroomError, setWorkroomError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (sessionStatus === "loading") return;
-    if (!token || !taskId) return;
-    setWorkroomLoading(true);
-    setWorkroomError(null);
-    const sk = sessionKeyFragment(token);
-    let live = true;
-    void dedupeAsync(`contrib:workroom:${taskId}:${sk}`, () => fetchWorkroom(token, taskId))
-      .then((data) => {
-        if (!live) return;
-        setWorkroomData(data);
-        // Seed uploads from workroom API (only if none locally added yet)
-        setUploads((prev) => prev.length === 0 ? data.uploads.map((u) => ({
-          id: u.id,
-          fileName: u.filename,
-          fileSize: u.size_bytes,
-          fileType: "application/octet-stream",
-          uploadedAt: u.uploaded_at,
-          category: u.category,
-          title: u.title,
-          description: u.description,
-        })) : prev);
-        // Seed checklist from workroom API if server returns real items (with real IDs)
-        if (data.checklist && data.checklist.length > 0) {
-          setChecklist(data.checklist.map((item: WorkroomChecklistItem) => ({
-            id: item.id,
-            label: item.label,
-            completed: item.completed,
-            completedAt: item.completed_at,
-            notes: item.notes,
-          })));
-        }
-        setWorkroomLoading(false);
-      })
-      .catch((err) => {
-        if (!live) return;
-        setWorkroomError(err?.message ?? "Failed to load workroom");
-        setWorkroomLoading(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [token, taskId, sessionStatus]);
-
-  // Dedicated templates endpoint — overlays / refreshes what the workroom fetch returned
-  const [dedicatedTemplates, setDedicatedTemplates] = React.useState<WorkroomTemplate[]>([]);
-  const [templatesLoading, setTemplatesLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    if (sessionStatus === "loading" || !token || !taskId) return;
-    setTemplatesLoading(true);
-    const sk = sessionKeyFragment(token);
-    let live = true;
-    void dedupeAsync(`contrib:workroom-templates:${taskId}:${sk}`, () => fetchWorkroomTemplates(token, taskId))
-      .then((data) => {
-        if (!live) return;
-        setDedicatedTemplates(data);
-        setTemplatesLoading(false);
-      })
-      .catch(() => {
-        if (live) setTemplatesLoading(false);
-      }); // silent fallback to workroom templates
-    return () => {
-      live = false;
-    };
-  }, [token, taskId, sessionStatus]);
-
-  // Dedicated links endpoint — overlays / refreshes what the workroom fetch returned
-  const [dedicatedLinks, setDedicatedLinks] = React.useState<WorkroomLink[]>([]);
-  const [linksLoading, setLinksLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    if (sessionStatus === "loading" || !token || !taskId) return;
-    setLinksLoading(true);
-    const sk = sessionKeyFragment(token);
-    let live = true;
-    void dedupeAsync(`contrib:workroom-links:${taskId}:${sk}`, () => fetchWorkroomLinks(token, taskId))
-      .then((data) => {
-        if (!live) return;
-        setDedicatedLinks(data);
-        setLinksLoading(false);
-      })
-      .catch(() => {
-        if (live) setLinksLoading(false);
-      }); // silent fallback to workroom links
-    return () => {
-      live = false;
-    };
-  }, [token, taskId, sessionStatus]);
-
-  /* ── Loading state ── */
-  if (taskLoading && !task) {
-    return (
-      <motion.div variants={stagger} initial="hidden" animate="show">
-        <motion.div variants={fadeUp} className="space-y-4">
-          <div className="h-6 w-48 rounded-lg bg-gray-100 animate-pulse" />
-          <div className="h-9 w-80 rounded-xl bg-gray-100 animate-pulse" />
-          <div className="card-parchment flex items-center divide-x divide-gray-100">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="flex-1 px-5 py-4 space-y-2">
-                <div className="h-3 w-12 rounded bg-gray-100 animate-pulse" />
-                <div className="h-5 w-16 rounded bg-gray-100 animate-pulse" />
-              </div>
-            ))}
-          </div>
-          <div className="card-parchment h-48 animate-pulse bg-gray-50" />
-        </motion.div>
-      </motion.div>
-    );
-  }
-
-  /* ── Error state ── */
-  if (taskError && !task) {
-    return (
-      <motion.div variants={stagger} initial="hidden" animate="show">
-        <motion.div variants={fadeUp} className="card-parchment px-6 py-16 text-center">
-          <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-red-300" />
-          <p className="text-[14px] font-medium text-gray-700 mb-1">Failed to load task</p>
-          <p className="text-[12px] text-gray-400 mb-4 max-w-xs mx-auto">{taskError}</p>
-          <div className="flex items-center justify-center gap-3">
-            <button onClick={() => { setTaskError(null); setTaskLoading(true); if (token) fetchTask(token, taskId).then(setTaskDetail).catch((e) => setTaskError(e?.message ?? "Error")).finally(() => setTaskLoading(false)); }}
-              className="flex items-center gap-1.5 text-[12px] font-medium text-brown-500 px-4 py-2 rounded-xl border border-brown-200 hover:bg-brown-50 transition-all">
-              <RefreshCw className="w-3.5 h-3.5" /> Retry
-            </button>
-            <Link href="/contributor/tasks" className="text-[12px] font-medium text-gray-400 hover:text-gray-600">
-              ← Back to tasks
-            </Link>
-          </div>
-        </motion.div>
-      </motion.div>
-    );
-  }
-
-  /* ── Not found ── */
   if (!task) {
     return (
       <motion.div variants={stagger} initial="hidden" animate="show">
         <motion.div variants={fadeUp} className="card-parchment px-6 py-16 text-center">
           <Package className="w-10 h-10 mx-auto mb-3 text-gray-300" />
           <p className="text-[14px] font-medium text-gray-600 mb-1">Task not found</p>
-          <p className="text-[12px] text-gray-400 mb-4">This task may have been removed or you don&apos;t have access.</p>
+          <p className="text-[12px] text-gray-400 mb-4">This task may have been reassigned or removed.</p>
           <Link href="/contributor/tasks" className="text-[12px] font-medium text-brown-600 hover:text-brown-700">
             ← Back to tasks
           </Link>
@@ -477,7 +201,7 @@ export default function ContributorTaskDetailPage() {
     );
   }
 
-  const workroom = workroomData;
+  const workroom = initialWorkroom;
   const submissions = mockSubmissions.filter((s) => s.taskId === task.id);
   const latestSubmission = submissions.length > 0 ? submissions.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0] : null;
 

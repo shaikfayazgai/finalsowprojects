@@ -201,58 +201,83 @@ export default function ContributorTasksPage() {
     else { setSortField(field); setSortDir("desc"); }
   }
 
-  /* ── Tasks list ── */
-  const [tasksData, setTasksData] = React.useState<{ items: TaskItem[]; total: number } | null>(null);
-  const [tasksLoading, setTasksLoading] = React.useState(true);
-  const [tasksError, setTasksError] = React.useState<string | null>(null);
+  /* KPI counts */
+  const availableCount = tasks.filter((t) => t.status === "available").length;
+  const inProgressCount = tasks.filter((t) => t.status === "in_progress" || t.status === "assigned").length;
+  const submittedCount = tasks.filter((t) => t.status === "submitted" || t.status === "in_review").length;
+  const completedCount = tasks.filter((t) => t.status === "accepted").length;
 
-  React.useEffect(() => {
-    if (sessionStatus === "loading") return;
-    if (!token) { setTasksLoading(false); return; }
+  /* Filtered + sorted tasks */
+  const filteredTasks = React.useMemo(() => {
+    let list = [...tasks];
 
-    setTasksLoading(true);
-    setTasksError(null);
+    /* Status filter */
+    if (statusFilter !== "all") {
+      switch (statusFilter) {
+        case "available": list = list.filter((t) => t.status === "available"); break;
+        case "in_progress": list = list.filter((t) => t.status === "in_progress" || t.status === "assigned"); break;
+        case "submitted": list = list.filter((t) => t.status === "submitted" || t.status === "in_review"); break;
+        case "completed": list = list.filter((t) => t.status === "accepted"); break;
+        case "rework": list = list.filter((t) => t.status === "rework"); break;
+      }
+    }
 
-    const params: Record<string, string> = {
-      sort_by:   toApiSortBy(sortField),
-      sort_dir:  sortDir,
-      page:      String(currentPage),
-      page_size: String(pageSize),
-    };
-    if (statusFilter   !== "all") params.status      = statusFilter;
-    if (priorityFilter !== "all") params.priority     = toApiPriority(priorityFilter);
-    if (timeFilter     !== "all") params.time_filter  = timeFilter;
-    if (debouncedSearch.trim())   params.q            = debouncedSearch.trim();
+    /* Priority filter */
+    if (priorityFilter !== "all") {
+      list = list.filter((t) => t.priority === priorityFilter);
+    }
 
-    const sk = sessionKeyFragment(token);
-    const qk = JSON.stringify(params);
-    let live = true;
-    void dedupeAsync(`contrib:tasks-list:${sk}:${qk}`, () => fetchTasks(token, params))
-      .then((res) => {
-        if (!live) return;
-        setTasksData({ items: res.items, total: res.total });
-      })
-      .catch((err) => {
-        if (!live) return;
-        setTasksError(err?.message ?? "Failed to load tasks");
-      })
-      .finally(() => {
-        if (live) setTasksLoading(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [token, sessionStatus, statusFilter, priorityFilter, timeFilter, debouncedSearch, sortField, sortDir, currentPage, pageSize]);
+    /* Time filter */
+    if (timeFilter !== "all") {
+      const now = new Date();
+      if (timeFilter === "week") {
+        const weekEnd = new Date(now);
+        weekEnd.setDate(now.getDate() + 7);
+        list = list.filter((t) => new Date(t.dueDate) <= weekEnd);
+      } else if (timeFilter === "month") {
+        const monthEnd = new Date(now);
+        monthEnd.setMonth(now.getMonth() + 1);
+        list = list.filter((t) => new Date(t.dueDate) <= monthEnd);
+      }
+    }
 
-  /* ── Derived values ── */
-  const availableCount  = summary?.available   ?? 0;
-  const inProgressCount = summary?.in_progress  ?? 0;
-  const submittedCount  = summary?.submitted    ?? 0;
-  const completedCount  = summary?.completed    ?? 0;
+    /* Search */
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((t) =>
+        t.title.toLowerCase().includes(q) ||
+        t.projectTitle.toLowerCase().includes(q) ||
+        t.skillsRequired.some((s: string) => s.toLowerCase().includes(q))
+      );
+    }
 
-  const tasks      = tasksData?.items ?? [];
-  const totalTasks = tasksData?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalTasks / pageSize));
+    /* Sort */
+    list.sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "task": cmp = a.title.localeCompare(b.title); break;
+        case "project": cmp = a.projectTitle.localeCompare(b.projectTitle); break;
+        case "status": cmp = a.status.localeCompare(b.status); break;
+        case "priority": {
+          const order: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
+          cmp = (order[a.priority] ?? 0) - (order[b.priority] ?? 0);
+          break;
+        }
+        case "match": cmp = a.matchScore - b.matchScore; break;
+        case "dueDate": cmp = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(); break;
+        case "pricing": cmp = a.pricing.amount - b.pricing.amount; break;
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+
+    return list;
+  }, [tasks, statusFilter, priorityFilter, timeFilter, searchQuery, sortField, sortDir]);
+
+  /* Reset page on filter/search change */
+  React.useEffect(() => { setCurrentPage(1); }, [statusFilter, priorityFilter, timeFilter, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
+  const paginatedTasks = filteredTasks.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const activeFilterCount = [statusFilter, priorityFilter, timeFilter].filter((v) => v !== "all").length;
 
@@ -576,7 +601,7 @@ export default function ContributorTasksPage() {
                         <div className="min-w-0">
                           <div className="text-[13px] font-semibold text-gray-800 truncate max-w-[280px]">{task.title}</div>
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            {task.skills_required.slice(0, 3).map((skill) => (
+                            {task.skillsRequired.slice(0, 3).map((skill: string) => (
                               <span key={skill} className="font-mono text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">{skill}</span>
                             ))}
                             {task.skills_required.length > 3 && (

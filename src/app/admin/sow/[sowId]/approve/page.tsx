@@ -7,16 +7,152 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, ChevronLeft, ChevronDown, ChevronUp,
   DollarSign, Target, Scale, Shield, ShieldCheck, Clock, XCircle,
-  Send, Sparkles, Building2, FileText, Users, Tag, Calendar,
+  Send, Sparkles, Building2, FileText, Users, Calendar,
   BookOpen, Layers, Bot, Lock, Gauge, LayoutGrid, GitBranch,
   MessageSquare, CornerDownRight, CircleDot, Paperclip, File, ImageIcon,
-  ClipboardList, Info, HardDrive, Cpu, ChevronRight,
+  ClipboardList, Info, HardDrive, Cpu, ChevronRight, Upload,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Checkbox, Textarea } from "@/components/ui";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { getSOWWizardRecord } from "@/mocks/data/sow-wizard-data";
+import { useSOWDetail, useApprovalStages, useRecordApprovalDecision } from "@/lib/hooks/use-manual-sow";
+import type { SOW, SOWApprovalStage, ApprovalStage, ApprovalStageStatus } from "@/types/enterprise";
+
+/* ─── Approval pipeline stage mapping (5-stage per FSD §7.7) ─── */
+
+const STAGE_KEYS: ApprovalStage[] = ["business", "glimmora_commercial", "legal", "security", "final"];
+const STAGE_NUM_TO_KEY: Record<number, ApprovalStage> = {
+  1: "business", 2: "glimmora_commercial", 3: "legal", 4: "security", 5: "final",
+};
+
+function normalisePipelineStages(stagesRes: unknown): SOWApprovalStage[] | null {
+  const pipelineRaw = (stagesRes as Record<string, unknown> | null)?.data as Record<string, unknown> | unknown[] | undefined;
+  if (!pipelineRaw) return null;
+
+  const rawStagesArr: Record<string, unknown>[] = (() => {
+    if (Array.isArray(pipelineRaw)) return pipelineRaw as Record<string, unknown>[];
+    const obj = pipelineRaw as Record<string, unknown>;
+    if (Array.isArray(obj.stages)) return obj.stages as Record<string, unknown>[];
+    if (Array.isArray(obj.approval_stages)) return obj.approval_stages as Record<string, unknown>[];
+    return [];
+  })();
+
+  const currentActiveStage: number | null = (() => {
+    if (Array.isArray(pipelineRaw)) return null;
+    const obj = pipelineRaw as Record<string, unknown>;
+    return (obj.current_active_stage ?? obj.currentStage ?? null) as number | null;
+  })();
+
+  if (rawStagesArr.length === 0) return null;
+
+  const apiStages: SOWApprovalStage[] = rawStagesArr.map((s) => {
+    const stageNum = Number(s.stage_number ?? s.stage);
+    const stageKey: ApprovalStage = STAGE_NUM_TO_KEY[stageNum] ?? STAGE_KEYS[stageNum - 1] ?? "business";
+    const rawStatus = String(s.status ?? "pending").toLowerCase();
+    const status: ApprovalStageStatus =
+      rawStatus === "approved" ? "approved" :
+      rawStatus === "rejected" || rawStatus === "changes_requested" ? "rejected" :
+      rawStatus === "in_review" || rawStatus === "active" ? "in_review" :
+      "pending";
+    return {
+      stage:      stageKey,
+      status,
+      reviewer:   (s.reviewer_name ?? s.reviewer) as string | undefined,
+      reviewedAt: (s.decided_at ?? s.updated_at ?? s.reviewed_at) as string | undefined,
+      comments:   s.comments as string | undefined,
+    };
+  });
+
+  /* Fill missing stage keys with pending placeholders */
+  const fullStages: SOWApprovalStage[] = STAGE_KEYS.map(
+    (key) => apiStages.find((s) => s.stage === key) ?? { stage: key, status: "pending" },
+  );
+
+  /* Promote the current-active stage to in_review if still pending */
+  const firstPendingKey = currentActiveStage
+    ? STAGE_NUM_TO_KEY[currentActiveStage]
+    : fullStages.find((s) => s.status === "pending")?.stage;
+
+  return fullStages.map((s) =>
+    s.stage === firstPendingKey && s.status === "pending" ? { ...s, status: "in_review" } : s,
+  );
+}
+
+/* ─── API normalisation (matches enterprise SOW repository) ─── */
+
+function normaliseDetailToSOW(item: Record<string, unknown>, mode: "ai_generated" | "manual_upload"): SOW {
+  const updatedAt = String(item.updated_at ?? item.updatedAt ?? item.created_at ?? item.createdAt ?? new Date().toISOString());
+  const gc = mode === "ai_generated" ? ((item.generated_content ?? {}) as Record<string, unknown>) : {};
+
+  const title = String(gc.document_title ?? item.title ?? item.project_title ?? item.document_title ?? "Untitled SOW");
+
+  let client = String(item.client ?? item.client_organisation ?? item.clientOrganisation ?? gc.client_name ?? gc.client ?? "");
+  if (!client && mode === "ai_generated") {
+    const bizOwner = String(item.business_owner_approver_id ?? "");
+    if (bizOwner.includes(", ")) client = bizOwner.split(", ").pop()?.trim() ?? "";
+  }
+
+  const qm = (item.quality_metrics ?? item.qualityMetrics ?? {}) as Record<string, unknown>;
+  const riskRaw = item.risk_score ?? item.riskScore ?? qm.risk_score ?? qm.riskScore;
+  let riskOverall = 0;
+  if (typeof riskRaw === "number") {
+    riskOverall = riskRaw;
+  } else if (riskRaw && typeof riskRaw === "object") {
+    riskOverall = Number((riskRaw as Record<string, unknown>).overall ?? 0);
+  } else if (mode === "ai_generated") {
+    const conf = Number(qm.overall_confidence ?? item.confidence_score ?? item.confidenceScore ?? 0);
+    riskOverall = conf > 0 ? Math.round(100 - conf) : 0;
+  }
+  riskOverall = Math.round(riskOverall);
+
+  const aiConfidence = Number(qm.overall_confidence ?? item.confidence_score ?? item.confidenceScore ?? item.ai_confidence ?? 0);
+
+  /* Quality-metrics → risk breakdown (API: overall_confidence, risk_score, completeness_pct, hallucination_flags) */
+  const qmCompleteness = Math.round(Number(qm.completeness_pct ?? qm.completeness ?? 0));
+  const qmConfidence   = Math.round(Number(qm.overall_confidence ?? 0));
+  const qmHallucinationFlags = Math.max(0, Math.round(Number(qm.hallucination_flags ?? 0)));
+
+  /* Build stakeholders from approver fields + any explicit list */
+  const rawStakeholders = Array.isArray(item.stakeholders) ? (item.stakeholders as string[]) : [];
+  const approverFields = [
+    item.business_owner_approver_id,
+    item.final_approver_id,
+    item.legal_compliance_reviewer_id,
+    item.security_reviewer_id,
+  ]
+    .map(v => (typeof v === "string" ? v.trim() : ""))
+    .filter(Boolean);
+  const stakeholders = Array.from(new Set([...approverFields, ...rawStakeholders]));
+
+  return {
+    id:               String(item.id ?? item._id ?? item.sow_id ?? item.wizard_id ?? ""),
+    title,
+    client,
+    status:           (String(item.status ?? "draft") as SOW["status"]),
+    intakeMode:       mode,
+    confidentiality:  (String(item.confidentiality ?? item.data_sensitivity ?? item.dataSensitivity ?? "internal") as SOW["confidentiality"]),
+    dataSensitivity:  (String(item.data_sensitivity ?? item.dataSensitivity ?? "internal") as SOW["dataSensitivity"]),
+    riskScore:        { overall: riskOverall, completeness: qmCompleteness, confidence: qmConfidence, compliance: 0, patternMatch: qmHallucinationFlags },
+    version:          Number(item.version ?? 1),
+    updatedAt,
+    createdAt:        String(item.created_at ?? item.createdAt ?? updatedAt),
+    estimatedBudget:  Number(item.estimated_budget ?? item.estimatedBudget ?? 0),
+    estimatedDuration:String(item.estimated_duration ?? item.estimatedDuration ?? ""),
+    createdBy:        String(item.created_by ?? item.createdBy ?? ""),
+    approvedBy:       String(item.approved_by ?? item.approvedBy ?? ""),
+    approvalStages:   ((item.approval_stages ?? item.approvalStages ?? []) as SOWApprovalStage[]),
+    parsedSections:   Number(item.parsed_sections ?? item.parsedSections ?? 0),
+    totalSections:    Number(item.total_sections ?? item.totalSections ?? 0),
+    pages:            Number(item.pages ?? 0),
+    fileSize:         String(item.file_size ?? item.fileSize ?? ""),
+    aiConfidence,
+    tags:             ((item.tags ?? []) as string[]),
+    stakeholders,
+    industry:         String(item.industry ?? gc.industry ?? ""),
+  };
+}
 
 /* ─── Config ─────────────────────────────────────────────────── */
 
@@ -102,44 +238,149 @@ function ReadOnlyField({ label, value, wide = false, mono = false }: {
 
 /* ─── Section Row ────────────────────────────────────────────── */
 
-function SectionRow({ title, content, confidence, aiSuggestion }: {
-  title: string; content: string; confidence: number; aiSuggestion?: string;
+/* Parse "**Heading**\nbody" blocks + "- item" list lines into structured chunks. */
+type SectionBlock = { heading?: string; body: string[] };
+function parseSectionContent(content: string): SectionBlock[] {
+  const lines = content.split(/\r?\n/);
+  const blocks: SectionBlock[] = [];
+  let current: SectionBlock = { body: [] };
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    const head = line.match(/^\s*\*\*(.+?)\*\*:?\s*(.*)$/);
+    if (head) {
+      if (current.heading || current.body.length) blocks.push(current);
+      current = { heading: head[1].trim(), body: head[2] ? [head[2].trim()] : [] };
+      continue;
+    }
+    if (!line) {
+      if (current.body.length && current.body[current.body.length - 1] !== "") current.body.push("");
+      continue;
+    }
+    current.body.push(line);
+  }
+  if (current.heading || current.body.length) blocks.push(current);
+  return blocks;
+}
+
+function SectionContent({ content }: { content: string }) {
+  const blocks = React.useMemo(() => parseSectionContent(content), [content]);
+  if (blocks.length === 0) {
+    return <p className="text-[12.5px] text-beige-500 leading-relaxed whitespace-pre-line">{content}</p>;
+  }
+  return (
+    <div className="space-y-3.5">
+      {blocks.map((block, i) => {
+        const bullets: string[] = [];
+        const prose: string[] = [];
+        block.body.forEach((l) => {
+          const m = l.match(/^\s*-\s+(.*)$/);
+          if (m) bullets.push(m[1]);
+          else if (l.trim()) prose.push(l);
+        });
+        return (
+          <div key={i} className="space-y-1.5">
+            {block.heading && (
+              <h4 className="text-[11px] font-bold uppercase tracking-widest text-brown-700">
+                {block.heading}
+              </h4>
+            )}
+            {prose.length > 0 && (
+              <p className="text-[12.5px] text-beige-600 leading-relaxed whitespace-pre-line">
+                {prose.join("\n")}
+              </p>
+            )}
+            {bullets.length > 0 && (
+              <ul className="space-y-1 pl-0">
+                {bullets.map((b, j) => (
+                  <li key={j} className="flex items-start gap-2 text-[12.5px] text-beige-600 leading-relaxed">
+                    <span className="mt-[7px] w-1 h-1 rounded-full bg-brown-400 shrink-0" />
+                    <span className="flex-1">
+                      {b.split(/(\*\*[^*]+\*\*)/g).map((part, k) =>
+                        part.startsWith("**") && part.endsWith("**") ? (
+                          <span key={k} className="font-semibold text-brown-800">{part.slice(2, -2)}</span>
+                        ) : (
+                          <React.Fragment key={k}>{part}</React.Fragment>
+                        ),
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SectionRow({ index, title, content, confidence, aiSuggestion }: {
+  index: number; title: string; content: string; confidence: number; aiSuggestion?: string;
 }) {
   const [open, setOpen] = React.useState(false);
-  const confColor = confidence >= 90
-    ? "text-forest-600 bg-forest-50 border-forest-100"
-    : confidence >= 75
-    ? "text-teal-600 bg-teal-50 border-teal-100"
-    : "text-gold-600 bg-gold-50 border-gold-100";
+
+  const conf = Math.round(confidence);
+  const confStyle = conf >= 90
+    ? { pill: "text-forest-700 bg-forest-50 border-forest-100", dot: "bg-forest-500", label: "High" }
+    : conf >= 75
+    ? { pill: "text-teal-700 bg-teal-50 border-teal-100",       dot: "bg-teal-500",   label: "Good" }
+    : conf >= 50
+    ? { pill: "text-gold-700 bg-gold-50 border-gold-100",       dot: "bg-gold-500",   label: "Fair" }
+    : { pill: "text-red-700 bg-red-50 border-red-100",          dot: "bg-red-500",    label: "Low"  };
+
+  /* Strip leading "1. " from titles so the number chip owns the count */
+  const displayTitle = title.replace(/^\s*\d+\.\s*/, "");
 
   return (
-    <div className="border-b border-gray-100 last:border-0">
+    <div className="border-b border-beige-100 last:border-0">
       <button
-        onClick={() => setOpen(p => !p)}
-        className="flex items-center gap-3 w-full px-5 py-3.5 text-left hover:bg-gray-50 transition-colors group"
+        onClick={() => setOpen((p) => !p)}
+        className={cn(
+          "flex items-center gap-3 w-full px-5 py-3.5 text-left group transition-colors",
+          open ? "bg-beige-50/50" : "hover:bg-beige-50/40",
+        )}
       >
-        <FileText className="w-3.5 h-3.5 text-gray-300 shrink-0 group-hover:text-gray-400 transition-colors" />
-        <span className="flex-1 text-[13px] font-medium text-gray-700 leading-snug">{title}</span>
-        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-md border shrink-0 mr-1", confColor)}>
-          {confidence}%
+        {/* Index chip */}
+        <span
+          className={cn(
+            "w-6 h-6 rounded-md flex items-center justify-center text-[10.5px] font-bold tabular-nums shrink-0 transition-all",
+            open
+              ? "bg-brown-700 text-white"
+              : "bg-beige-100 text-brown-700 group-hover:bg-white group-hover:border group-hover:border-beige-200",
+          )}
+        >
+          {String(index + 1).padStart(2, "0")}
         </span>
+
+        <span className="flex-1 min-w-0 text-[13px] font-semibold text-brown-950 leading-snug truncate">
+          {displayTitle}
+        </span>
+
+        <span className={cn("inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 tabular-nums", confStyle.pill)}>
+          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", confStyle.dot)} />
+          {conf}% <span className="font-semibold opacity-70">{confStyle.label}</span>
+        </span>
+
         {open
-          ? <ChevronUp className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-          : <ChevronDown className="w-3.5 h-3.5 text-gray-300 shrink-0" />}
+          ? <ChevronUp className="w-3.5 h-3.5 text-brown-500 shrink-0" />
+          : <ChevronDown className="w-3.5 h-3.5 text-beige-400 shrink-0 group-hover:text-brown-500 transition-colors" />}
       </button>
+
       <AnimatePresence>
         {open && (
           <motion.div
             initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }}
+            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-4 pt-1 ml-6 space-y-3">
-              <p className="text-[12.5px] text-gray-500 leading-relaxed whitespace-pre-line">{content}</p>
+            <div className="px-5 pb-5 pt-0 space-y-3">
+              <div className="rounded-xl bg-beige-50/50 border border-beige-100 px-5 py-4">
+                <SectionContent content={content} />
+              </div>
               {aiSuggestion && (
-                <div className="flex items-start gap-2 rounded-lg bg-teal-50 border border-teal-100 px-3 py-2.5">
-                  <Bot className="w-3.5 h-3.5 text-teal-500 mt-0.5 shrink-0" />
-                  <p className="text-[11.5px] text-teal-700 leading-snug">{aiSuggestion}</p>
+                <div className="flex items-start gap-2 rounded-xl bg-teal-50/80 border border-teal-100 px-3.5 py-2.5">
+                  <Bot className="w-3.5 h-3.5 text-teal-600 mt-0.5 shrink-0" />
+                  <p className="text-[11.5px] text-teal-800 leading-snug">{aiSuggestion}</p>
                 </div>
               )}
             </div>
@@ -250,14 +491,59 @@ export default function AdminSOWApprovePage() {
   const router = useRouter();
   const sowId  = params.sowId as string;
 
-  const sow        = mockSOWs.find(s => s.id === sowId) ?? null;
-  const sections   = mockSOWSections.filter(s => s.sowId === sowId).sort((a, b) => a.order - b.order);
+  /* ── API: SOW detail (tries manual + AI endpoints in parallel) ── */
+  const { data: detailData, isLoading: detailLoading, flow } = useSOWDetail(sowId);
+  const apiSow = React.useMemo(
+    () => (detailData ? normaliseDetailToSOW(detailData, flow === "ai" ? "ai_generated" : "manual_upload") : null),
+    [detailData, flow],
+  );
+
+  /* ── API: Approval pipeline (polled every 15 s so new decisions appear automatically) ── */
+  const { data: stagesRes } = useApprovalStages(sowId, 15000);
+  const apiApprovalStages = React.useMemo(() => normalisePipelineStages(stagesRes), [stagesRes]);
+
+  /* Record approval decision — admin approves/rejects glimmora_commercial (stage 2) */
+  const recordDecision = useRecordApprovalDecision(sowId);
+
+  /* Prefer API data; fall back to mockSOWs */
+  const baseSow    = apiSow ?? mockSOWs.find(s => s.id === sowId) ?? null;
+  const sow        = baseSow && apiApprovalStages
+    ? { ...baseSow, approvalStages: apiApprovalStages }
+    : baseSow;
+
+  /* Sections from API — check generated_content.sections (AI) and top-level sections (manual) */
+  const sections = React.useMemo(() => {
+    const d  = (detailData ?? {}) as Record<string, unknown>;
+    const gc = (d.generated_content ?? {}) as Record<string, unknown>;
+    const raw = (
+      (Array.isArray(gc.sections) && gc.sections) ||
+      (Array.isArray(d.sections) && d.sections) ||
+      (Array.isArray(d.parsed_sections) && d.parsed_sections) ||
+      []
+    ) as Array<Record<string, unknown>>;
+
+    if (raw.length > 0) {
+      return raw.map((sec, i) => ({
+        id:         String(sec.section_id ?? sec.id ?? `S${i + 1}`),
+        sowId:      sowId,
+        title:      String(sec.title ?? ""),
+        content:    String(sec.content ?? ""),
+        confidence: Number(sec.confidence ?? 0),
+        order:      i,
+        aiSuggestion: typeof sec.ai_suggestion === "string" ? sec.ai_suggestion : undefined,
+      }));
+    }
+    return mockSOWSections.filter(s => s.sowId === sowId).sort((a, b) => a.order - b.order);
+  }, [detailData, sowId]);
+
   const wizardRec  = sow ? getSOWWizardRecord(sow.id, sow.intakeMode) : null;
 
   const [tab, setTab]                               = React.useState<TabId>("overview");
   const [checked, setChecked]                       = React.useState<Record<string, boolean>>({});
   const [notes, setNotes]                           = React.useState("");
+  const [reviewerName, setReviewerName]             = React.useState("");
   const [panelMode, setPanelMode]                   = React.useState<"checklist" | "reject">("checklist");
+  const [checklistOpen, setChecklistOpen]           = React.useState(false);
   const [rejectionReason, setRejectionReason]       = React.useState("");
   const [approvalSubmitted, setApprovalSubmitted]   = React.useState(false);
   const [rejectionSubmitted, setRejectionSubmitted] = React.useState(false);
@@ -268,6 +554,36 @@ export default function AdminSOWApprovePage() {
 
   const checkedCount = COMMERCIAL_CHECKLIST.filter(item => checked[item.id]).length;
   const allChecked   = checkedCount === COMMERCIAL_CHECKLIST.length;
+
+  if (detailLoading && !sow) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="flex items-center gap-3">
+          <div className="h-6 w-6 rounded bg-beige-100" />
+          <div className="h-4 w-40 rounded bg-beige-100" />
+        </div>
+        <div className="space-y-2">
+          <div className="h-7 w-80 rounded bg-beige-100" />
+          <div className="h-3.5 w-96 rounded bg-beige-50" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="rounded-2xl bg-white border border-beige-100 p-5 space-y-2.5">
+              <div className="h-4 w-20 rounded bg-beige-100" />
+              <div className="h-7 w-24 rounded bg-beige-100" />
+              <div className="h-3 w-28 rounded bg-beige-50" />
+            </div>
+          ))}
+        </div>
+        <div className="rounded-2xl bg-white border border-beige-100 p-6 space-y-3">
+          <div className="h-4 w-52 rounded bg-beige-100" />
+          <div className="h-3 w-full rounded bg-beige-50" />
+          <div className="h-3 w-4/5 rounded bg-beige-50" />
+          <div className="h-3 w-3/5 rounded bg-beige-50" />
+        </div>
+      </div>
+    );
+  }
 
   if (!sow) {
     return (
@@ -290,9 +606,22 @@ export default function AdminSOWApprovePage() {
   const risk               = riskMeta(sow.riskScore.overall);
 
   function handleApprove() {
-    setApprovalSubmitted(true);
-    setPanelMode("checklist");
-    setTimeout(() => router.push("/admin/sow"), 2200);
+    /* Stage 2 = glimmora_commercial. Server advances pipeline to stage 3 on success. */
+    recordDecision.mutate(
+      {
+        stage: 2,
+        decision: "approve",
+        comments: notes.trim() || undefined,
+        reviewer: reviewerName.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          setApprovalSubmitted(true);
+          setPanelMode("checklist");
+          setTimeout(() => router.push("/admin/sow"), 2200);
+        },
+      },
+    );
   }
 
   function handleReject() {
@@ -302,11 +631,23 @@ export default function AdminSOWApprovePage() {
       setFollowUpSent(true);
       setRejectionReason("");
       setPanelMode("checklist");
-    } else {
-      setRejectionSubmitted(true);
-      setPanelMode("checklist");
-      setTimeout(() => router.push("/admin/sow"), 2500);
+      return;
     }
+    recordDecision.mutate(
+      {
+        stage: 2,
+        decision: "request_changes",
+        comments: rejectionReason.trim() || undefined,
+        reviewer: reviewerName.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          setRejectionSubmitted(true);
+          setPanelMode("checklist");
+          setTimeout(() => router.push("/admin/sow"), 2500);
+        },
+      },
+    );
   }
 
   /* ── Success screens ── */
@@ -341,13 +682,26 @@ export default function AdminSOWApprovePage() {
     <div className="-mx-6 -mt-2 flex flex-col" style={{ minHeight: "calc(100vh - 60px)" }}>
 
       {/* ══ HEADER ══════════════════════════════════════════════ */}
-      <div className="bg-white border-b border-gray-100 shrink-0">
+      <div
+        className="relative border-b border-beige-100 shrink-0 overflow-hidden"
+        style={{
+          background: "linear-gradient(135deg, #ffffff 0%, rgba(249,247,245,0.9) 55%, rgba(244,240,234,0.85) 100%)",
+        }}
+      >
+        {/* Subtle decorative wash */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.04]"
+          style={{
+            background: "radial-gradient(circle at 15% 10%, var(--color-brown-700, #5a3a1b) 0%, transparent 45%), radial-gradient(circle at 85% 90%, var(--color-gold-500, #c88d3a) 0%, transparent 50%)",
+          }}
+        />
 
         {/* Top bar: back + meta */}
-        <div className="px-6 pt-5 pb-4">
+        <div className="relative px-6 pt-5 pb-5">
           <Link
             href="/admin/sow"
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-400 hover:text-gray-700 transition-colors mb-4"
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-beige-500 hover:text-brown-700 transition-colors mb-4"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
             SOW Oversight
@@ -355,63 +709,130 @@ export default function AdminSOWApprovePage() {
 
           <div className="flex items-start justify-between gap-6">
             {/* Left: title + meta */}
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
-                <span className={cn(
-                  "inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md border",
-                  isChangesRequested ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-gold-50 text-gold-700 border-gold-200",
-                )}>
-                  <Clock className="w-2.5 h-2.5" />
-                  {isChangesRequested ? "Changes Requested" : "Awaiting Commercial Review"}
-                </span>
-                {sow.riskScore.overall > 0 && (
-                  <span className={cn(
-                    "inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md border",
-                    risk.bg, risk.text,
-                    sow.riskScore.overall <= 25 ? "border-forest-100" : sow.riskScore.overall <= 50 ? "border-gold-100" : "border-red-100",
-                  )}>
-                    <Shield className="w-2.5 h-2.5" />
-                    {risk.label}
-                  </span>
-                )}
-                <span className={cn(
-                  "inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md border",
-                  sensitivityStyle[sow.dataSensitivity] ?? "bg-gray-100 text-gray-600 border-gray-200",
-                )}>
-                  <Lock className="w-2.5 h-2.5" />
-                  {sow.dataSensitivity}
-                </span>
+            <div className="flex-1 min-w-0 flex items-start gap-4">
+              {/* Brand icon */}
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-white shadow-lg"
+                style={{
+                  background: "linear-gradient(135deg, var(--color-brown-500, #8b5a2b) 0%, var(--color-brown-700, #5a3a1b) 100%)",
+                  boxShadow: "0 8px 20px -8px color-mix(in srgb, var(--color-brown-700, #5a3a1b) 45%, transparent)",
+                }}
+              >
+                <FileText className="w-5 h-5" />
               </div>
 
-              <h1 className="font-heading text-[22px] font-bold text-gray-900 tracking-tight leading-tight mb-1.5">
-                {sow.title}
-              </h1>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border",
+                      isChangesRequested
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-gold-50 text-gold-700 border-gold-200",
+                    )}
+                  >
+                    <Clock className="w-2.5 h-2.5" />
+                    {isChangesRequested ? "Changes Requested" : "Awaiting Commercial Review"}
+                  </span>
+                  {sow.riskScore.overall > 0 && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border",
+                        risk.bg,
+                        risk.text,
+                        sow.riskScore.overall <= 25
+                          ? "border-forest-100"
+                          : sow.riskScore.overall <= 50
+                          ? "border-gold-100"
+                          : "border-red-100",
+                      )}
+                    >
+                      <Shield className="w-2.5 h-2.5" />
+                      {risk.label}
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border",
+                      sensitivityStyle[sow.dataSensitivity] ?? "bg-gray-100 text-gray-600 border-gray-200",
+                    )}
+                  >
+                    <Lock className="w-2.5 h-2.5" />
+                    {sow.dataSensitivity}
+                  </span>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border",
+                      sow.intakeMode === "ai_generated"
+                        ? "bg-teal-50 text-teal-700 border-teal-100"
+                        : "bg-brown-50 text-brown-700 border-brown-100",
+                    )}
+                    title={sow.intakeMode === "ai_generated" ? "AI-generated SOW" : "Manually uploaded SOW"}
+                  >
+                    {sow.intakeMode === "ai_generated"
+                      ? <><Sparkles className="w-2.5 h-2.5" /> AI-Generated</>
+                      : <><Upload className="w-2.5 h-2.5" /> Manual Upload</>}
+                  </span>
+                </div>
 
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-gray-400">
-                <span className="flex items-center gap-1.5">
-                  <Building2 className="w-3 h-3" />
-                  <span className="font-medium text-gray-600">{sow.client}</span>
-                </span>
-                {sow.industry && <><span className="text-gray-200">|</span><span>{sow.industry}</span></>}
-                <span className="text-gray-200">|</span>
-                <span>Submitted by <span className="font-medium text-gray-600">{sow.createdBy}</span></span>
-                <span className="text-gray-200">|</span>
-                <span>{formatDate(sow.updatedAt)}</span>
+                <h1 className="font-heading text-[24px] font-bold text-brown-950 tracking-[-0.015em] leading-tight mb-1.5">
+                  {sow.title}
+                </h1>
+
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-beige-500">
+                  <span className="flex items-center gap-1.5">
+                    <Building2 className="w-3 h-3 text-beige-400" />
+                    <span className="font-semibold text-brown-800">{sow.client}</span>
+                  </span>
+                  {sow.industry && (
+                    <>
+                      <span className="text-beige-200">·</span>
+                      <span>{sow.industry}</span>
+                    </>
+                  )}
+                  <span className="text-beige-200">·</span>
+                  <span>
+                    Submitted by <span className="font-semibold text-brown-700">{sow.createdBy}</span>
+                  </span>
+                  <span className="text-beige-200">·</span>
+                  <span>{formatDate(sow.updatedAt)}</span>
+                </div>
               </div>
             </div>
 
             {/* Right: stat tiles */}
             <div className="flex items-center gap-2 shrink-0">
               {[
-                { icon: DollarSign, label: "Contract Value", value: formatBudget(sow.estimatedBudget) },
-                { icon: Calendar,   label: "Duration",       value: sow.estimatedDuration },
-                { icon: BookOpen,   label: "Pages",          value: String(sow.pages) },
-                { icon: Gauge,      label: "AI Confidence",  value: `${sow.aiConfidence}%` },
-              ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="flex flex-col items-center px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 min-w-[76px]">
-                  <Icon className="w-3.5 h-3.5 text-gray-300 mb-1.5" />
-                  <p className="text-[14px] font-bold text-gray-900 leading-none">{value}</p>
-                  <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mt-1 text-center leading-tight">{label}</p>
+                {
+                  icon: DollarSign,
+                  label: "Contract Value",
+                  value: formatBudget(sow.estimatedBudget),
+                  iconBg: "bg-gradient-to-br from-gold-400 to-gold-600",
+                },
+                {
+                  icon: Calendar,
+                  label: "Duration",
+                  value: sow.estimatedDuration,
+                  iconBg: "bg-gradient-to-br from-brown-400 to-brown-600",
+                },
+                {
+                  icon: Gauge,
+                  label: "AI Confidence",
+                  value: `${sow.aiConfidence}%`,
+                  iconBg: "bg-gradient-to-br from-forest-400 to-forest-600",
+                },
+              ].map(({ icon: Icon, label, value, iconBg }) => (
+                <div
+                  key={label}
+                  className="flex flex-col items-center px-4 py-3 rounded-xl bg-white/90 backdrop-blur-sm border border-beige-100 shadow-sm min-w-[96px] transition-all hover:shadow-md hover:-translate-y-0.5"
+                >
+                  <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center mb-1.5 shadow-sm", iconBg)}>
+                    <Icon className="w-3 h-3 text-white" />
+                  </div>
+                  <p className="text-[14px] font-bold text-brown-950 leading-none tabular-nums">{value || "—"}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-wide text-beige-400 mt-1 text-center leading-tight">
+                    {label}
+                  </p>
                 </div>
               ))}
             </div>
@@ -466,32 +887,54 @@ export default function AdminSOWApprovePage() {
         )}
 
         {/* Tab bar */}
-        <div className="flex px-6 gap-1">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => { setTab(id); if (id === "details") setDetailsPage(0); }}
-              className={cn(
-                "flex items-center gap-1.5 px-4 py-3 text-[12px] font-semibold border-b-2 transition-all",
-                tab === id
-                  ? "border-brown-600 text-brown-950"
-                  : "border-transparent text-gray-400 hover:text-gray-700",
-              )}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-              {id === "sections" && sections.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-[9px] font-bold rounded-md bg-gray-100 text-gray-500">
-                  {sections.length}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="relative flex px-6 gap-1">
+          {TABS.map(({ id, label, icon: Icon }) => {
+            const isActive = tab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => { setTab(id); if (id === "details") setDetailsPage(0); }}
+                className={cn(
+                  "relative flex items-center gap-1.5 px-4 py-3 text-[12px] font-semibold transition-all",
+                  isActive
+                    ? "text-brown-950"
+                    : "text-beige-500 hover:text-brown-700",
+                )}
+              >
+                <Icon className={cn("w-3.5 h-3.5 shrink-0 transition-colors", isActive ? "text-brown-600" : "text-beige-400")} />
+                {label}
+                {id === "sections" && sections.length > 0 && (
+                  <span
+                    className={cn(
+                      "ml-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded-md tabular-nums",
+                      isActive ? "bg-brown-100 text-brown-700" : "bg-beige-100 text-beige-500",
+                    )}
+                  >
+                    {sections.length}
+                  </span>
+                )}
+                {isActive && (
+                  <span
+                    aria-hidden
+                    className="absolute left-3 right-3 -bottom-px h-[2px] rounded-full"
+                    style={{
+                      background: "linear-gradient(90deg, var(--color-brown-400, #a87142) 0%, var(--color-brown-700, #5a3a1b) 100%)",
+                    }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* ══ BODY ════════════════════════════════════════════════ */}
-      <div className="flex flex-col flex-1 min-h-0 bg-gray-50">
+      <div
+        className="flex flex-col flex-1 min-h-0"
+        style={{
+          background: "linear-gradient(180deg, rgba(249,247,245,0.75) 0%, rgba(244,240,234,0.55) 100%)",
+        }}
+      >
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto min-h-0">
@@ -500,37 +943,22 @@ export default function AdminSOWApprovePage() {
             {/* ── OVERVIEW TAB ── */}
             {tab === "overview" && (
               <>
-                {/* Stakeholders + Tags */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm px-5 py-4">
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <Users className="w-3.5 h-3.5 text-gray-300" />
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Stakeholders</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(sow.stakeholders ?? []).map(s => (
-                        <span key={s} className="inline-flex items-center text-[11px] font-medium text-gray-700 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-md">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
+                {/* Stakeholders */}
+                <div className="rounded-xl bg-white border border-gray-100 shadow-sm px-5 py-4">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <Users className="w-3.5 h-3.5 text-gray-300" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Stakeholders</span>
                   </div>
-                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm px-5 py-4">
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <Tag className="w-3.5 h-3.5 text-gray-300" />
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tags</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(sow.tags ?? []).map(t => (
-                        <span key={t} className="text-[11px] font-medium text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-1 rounded-md">
-                          {t}
-                        </span>
-                      ))}
-                    </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(sow.stakeholders ?? []).map(s => (
+                      <span key={s} className="inline-flex items-center text-[11px] font-medium text-gray-700 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-md">
+                        {s}
+                      </span>
+                    ))}
                   </div>
                 </div>
 
-                {/* Risk Breakdown */}
+                {/* Risk Breakdown — backed by quality_metrics from API */}
                 {sow.riskScore.overall > 0 && (
                   <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
                     <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
@@ -541,24 +969,27 @@ export default function AdminSOWApprovePage() {
                     </div>
                     <div className="px-5 py-4 space-y-3.5">
                       {[
-                        { label: "Completeness",  value: sow.riskScore.completeness },
-                        { label: "Confidence",    value: sow.riskScore.confidence },
-                        { label: "Compliance",    value: sow.riskScore.compliance },
-                        { label: "Pattern Match", value: sow.riskScore.patternMatch },
-                      ].map(({ label, value }) => {
-                        const c = riskMeta(value);
-                        return (
-                          <div key={label} className="flex items-center gap-4">
-                            <span className="text-[11px] text-gray-500 w-28 shrink-0">{label}</span>
-                            <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${value}%`, background: c.bar }} />
+                        { label: "Overall Confidence", value: sow.riskScore.confidence,    suffix: "%" as const },
+                        { label: "Risk Score",         value: sow.riskScore.overall,       suffix: "%" as const },
+                        { label: "Completeness",       value: sow.riskScore.completeness,  suffix: "%" as const },
+                        { label: "Hallucination Flags", value: sow.riskScore.patternMatch, suffix: ""  as const, isCount: true },
+                      ]
+                        .filter(({ value, isCount }) => (isCount ? true : value > 0))
+                        .map(({ label, value, suffix, isCount }) => {
+                          const barPct = isCount ? Math.min(100, value * 20) : value;
+                          const c = riskMeta(isCount ? Math.min(100, value * 20) : value);
+                          return (
+                            <div key={label} className="flex items-center gap-4">
+                              <span className="text-[11px] text-gray-500 w-36 shrink-0">{label}</span>
+                              <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: c.bar }} />
+                              </div>
+                              <span className="font-mono text-[11px] font-semibold w-10 text-right" style={{ color: c.bar }}>
+                                {value}{suffix}
+                              </span>
                             </div>
-                            <span className="font-mono text-[11px] font-semibold w-7 text-right" style={{ color: c.bar }}>
-                              {value}
-                            </span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   </div>
                 )}
@@ -1222,22 +1653,41 @@ export default function AdminSOWApprovePage() {
 
             {/* ── SECTIONS TAB ── */}
             {tab === "sections" && (
-              <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Parsed Sections</p>
-                  <span className="text-[11px] text-gray-400">
-                    {sections.length > 0 ? `${sections.length} sections · v${sow.version}` : "No sections extracted"}
-                  </span>
+              <div className="rounded-2xl bg-white border border-beige-100 shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-beige-100 bg-gradient-to-r from-beige-50/80 via-white to-beige-50/60">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brown-500 to-brown-700 flex items-center justify-center shadow-sm">
+                      <BookOpen className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-semibold text-brown-950 leading-tight">Parsed Sections</p>
+                      <p className="text-[10.5px] text-beige-500 leading-tight mt-0.5">
+                        AI-extracted structure from the SOW document
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {sections.length > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-brown-50 text-brown-700 border border-brown-100">
+                        v{sow.version}
+                      </span>
+                    )}
+                    <span className="text-[11px] font-semibold text-beige-500 tabular-nums">
+                      {sections.length > 0 ? `${sections.length} sections` : "No sections"}
+                    </span>
+                  </div>
                 </div>
                 {sections.length > 0 ? (
-                  sections.map(s => (
-                    <SectionRow key={s.id} title={s.title} content={s.content} confidence={s.confidence} aiSuggestion={s.aiSuggestion} />
+                  sections.map((s, i) => (
+                    <SectionRow key={s.id} index={i} title={s.title} content={s.content} confidence={s.confidence} aiSuggestion={s.aiSuggestion} />
                   ))
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-14 text-center px-8">
-                    <Layers className="w-8 h-8 text-gray-200 mb-3" />
-                    <p className="text-[13px] font-medium text-gray-600 mb-1">No sections extracted</p>
-                    <p className="text-[11px] text-gray-400">This SOW has not yet been processed by the AI extraction engine.</p>
+                  <div className="flex flex-col items-center justify-center py-16 text-center px-8">
+                    <div className="w-12 h-12 rounded-2xl bg-beige-50 border border-beige-100 flex items-center justify-center mb-3">
+                      <Layers className="w-5 h-5 text-beige-400" />
+                    </div>
+                    <p className="text-[13px] font-semibold text-brown-950 mb-1">No sections extracted</p>
+                    <p className="text-[11.5px] text-beige-500 max-w-[280px]">This SOW has not yet been processed by the AI extraction engine.</p>
                   </div>
                 )}
               </div>
@@ -1245,10 +1695,17 @@ export default function AdminSOWApprovePage() {
 
             {/* ── PIPELINE TAB ── */}
             {tab === "pipeline" && (
-              <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-gray-50">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Approval Pipeline</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">5-stage review — currently at GlimmoraTeam Commercial</p>
+              <div className="rounded-2xl bg-white border border-beige-100 shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-beige-100 bg-gradient-to-r from-beige-50/80 via-white to-beige-50/60">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brown-500 to-brown-700 flex items-center justify-center shadow-sm">
+                      <GitBranch className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-semibold text-brown-950 leading-tight">Approval Pipeline</p>
+                      <p className="text-[10.5px] text-beige-500 leading-tight mt-0.5">5-stage review — currently at GlimmoraTeam Commercial</p>
+                    </div>
+                  </div>
                 </div>
                 {sow.approvalStages.map((stage, i) => (
                   <PipelineStage key={stage.stage} stage={stage} index={i} total={sow.approvalStages.length} />
@@ -1259,8 +1716,8 @@ export default function AdminSOWApprovePage() {
           </div>
         </div>
 
-        {/* ══ STICKY BOTTOM ACTION BAR — only on SOW Details tab ══ */}
-        {tab === "details" && <div className="shrink-0 bg-white border-t border-gray-100 shadow-[0_-1px_12px_rgba(0,0,0,0.05)]">
+        {/* ══ STICKY BOTTOM ACTION BAR — Sections tab only ══ */}
+        {tab === "sections" && <div className="shrink-0 bg-white border-t border-gray-100 shadow-[0_-1px_12px_rgba(0,0,0,0.05)]">
 
           {/* ── Request Changes composer — slides up above the bar ── */}
           <AnimatePresence>
@@ -1377,17 +1834,22 @@ export default function AdminSOWApprovePage() {
                           Cancel
                         </button>
                         <button
-                          disabled={!isFollowUp && !rejectionReason.trim() && composerFiles.length === 0}
+                          disabled={
+                            recordDecision.isPending ||
+                            !reviewerName.trim() ||
+                            (!isFollowUp && !rejectionReason.trim() && composerFiles.length === 0)
+                          }
                           onClick={handleReject}
+                          title={!reviewerName.trim() ? "Enter reviewer name to send" : undefined}
                           className={cn(
                             "inline-flex items-center gap-1.5 text-[11.5px] font-semibold px-3 py-1.5 rounded-lg transition-all",
-                            (isFollowUp || rejectionReason.trim() || composerFiles.length > 0)
+                            !recordDecision.isPending && reviewerName.trim() && (isFollowUp || rejectionReason.trim() || composerFiles.length > 0)
                               ? "text-white bg-brown-500 hover:bg-brown-600 shadow-sm"
-                              : "text-gray-300 bg-gray-100 cursor-not-allowed",
+                              : "text-beige-400 bg-beige-100 cursor-not-allowed",
                           )}
                         >
                           <Send className="w-3 h-3" />
-                          Send
+                          {recordDecision.isPending ? "Sending…" : !reviewerName.trim() ? "Add name" : "Send"}
                         </button>
                       </div>
                     </div>
@@ -1411,87 +1873,174 @@ export default function AdminSOWApprovePage() {
             )}
           </AnimatePresence>
 
-          {/* ── Main bar: checklist + action buttons ── */}
-          <div className="px-6 py-3 flex items-center gap-4">
+          {/* ── Professional single-row action bar ── */}
+          <div
+            className="px-6 py-3 flex items-center gap-3"
+            style={{
+              background: "linear-gradient(180deg, #ffffff 0%, rgba(249,247,245,0.7) 100%)",
+            }}
+          >
+            {/* Intake pill */}
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border shrink-0",
+                sow.intakeMode === "ai_generated"
+                  ? "bg-teal-50 text-teal-700 border-teal-100"
+                  : "bg-brown-50 text-brown-700 border-brown-100",
+              )}
+              title={sow.intakeMode === "ai_generated" ? "AI-generated SOW" : "Manually uploaded SOW"}
+            >
+              {sow.intakeMode === "ai_generated"
+                ? <><Sparkles className="w-2.5 h-2.5" /> AI</>
+                : <><Bot className="w-2.5 h-2.5" /> Manual</>}
+            </span>
 
-            {/* Left: checklist items */}
-            <div className="flex items-center gap-4 flex-1 min-w-0 overflow-x-auto">
-
-              {/* Progress pill + bar grouped */}
-              <div className="flex items-center gap-2 shrink-0">
-                <motion.span
-                  animate={{
-                    backgroundColor: allChecked ? "var(--color-forest-50)" : "var(--color-gray-100)",
-                    color: allChecked ? "var(--color-forest-700)" : "var(--color-gray-500)",
-                  }}
-                  transition={{ duration: 0.4 }}
-                  className="text-[10px] font-bold px-2 py-1 rounded-md whitespace-nowrap leading-none border border-gray-200"
-                >
+            {/* Commercial Checks dropdown trigger (popover opens upward) */}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setChecklistOpen(v => !v)}
+                className={cn(
+                  "inline-flex items-center gap-2 h-9 pl-2.5 pr-3 rounded-xl border transition-all",
+                  allChecked
+                    ? "bg-forest-50/70 border-forest-100 text-forest-700 hover:bg-forest-50"
+                    : "bg-white border-beige-200 text-brown-800 hover:bg-beige-50",
+                )}
+              >
+                {allChecked
+                  ? <CheckCircle2 className="w-4 h-4 text-forest-500" />
+                  : <ClipboardList className="w-4 h-4 text-brown-500" />}
+                <span className="text-[11.5px] font-bold tabular-nums">
                   {checkedCount}/{COMMERCIAL_CHECKLIST.length}
-                </motion.span>
-                <div className="w-20 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                </span>
+                <div className="w-16 h-1.5 rounded-full bg-beige-100 overflow-hidden">
                   <motion.div
                     className="h-full rounded-full"
                     animate={{
                       width: `${(checkedCount / COMMERCIAL_CHECKLIST.length) * 100}%`,
-                      backgroundColor: allChecked ? "var(--color-forest-500)" : "var(--color-brown-400)",
+                      backgroundImage: allChecked
+                        ? "linear-gradient(90deg, var(--color-forest-400), var(--color-forest-600))"
+                        : "linear-gradient(90deg, var(--color-brown-400), var(--color-brown-600))",
                     }}
-                    transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                   />
                 </div>
-              </div>
+                <span className="text-[11.5px] font-semibold whitespace-nowrap">
+                  Commercial Checks
+                </span>
+                {checklistOpen
+                  ? <ChevronDown className="w-3.5 h-3.5 text-beige-400" />
+                  : <ChevronUp   className="w-3.5 h-3.5 text-beige-400" />}
+              </button>
 
-              {/* Inline checkbox items */}
-              <div className="flex items-center gap-3 flex-wrap">
-                {COMMERCIAL_CHECKLIST.map((item, idx) => {
-                  const isChecked = !!checked[item.id];
-                  return (
-                    <motion.label
-                      key={item.id}
-                      initial={{ opacity: 0, x: -6 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.05, duration: 0.22, ease: "easeOut" }}
-                      className="flex items-center gap-1.5 cursor-pointer group whitespace-nowrap"
-                    >
-                      <Checkbox
-                        checked={isChecked}
-                        onCheckedChange={val => setChecked(prev => ({ ...prev, [item.id]: !!val }))}
-                      />
-                      <motion.span
-                        animate={{ color: isChecked ? "var(--color-forest-700)" : "var(--color-gray-600)" }}
-                        transition={{ duration: 0.25 }}
-                        className="text-[11.5px] font-medium"
+              <AnimatePresence>
+                {checklistOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute bottom-[calc(100%+8px)] left-0 z-50 w-[380px] rounded-2xl bg-white border border-beige-100 overflow-hidden"
+                    style={{ boxShadow: "0 12px 40px rgba(0,0,0,0.10)" }}
+                  >
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-beige-100 bg-gradient-to-r from-beige-50/80 via-white to-beige-50/60">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brown-500 to-brown-700 flex items-center justify-center">
+                          <ClipboardList className="w-3.5 h-3.5 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-[12px] font-semibold text-brown-950 leading-tight">Commercial Checks</p>
+                          <p className="text-[10px] text-beige-500 leading-tight mt-0.5">Verify each item before approving</p>
+                        </div>
+                      </div>
+                      <span className={cn(
+                        "text-[10px] font-bold px-2 py-0.5 rounded-md border tabular-nums",
+                        allChecked
+                          ? "bg-forest-50 text-forest-700 border-forest-100"
+                          : "bg-beige-50 text-brown-700 border-beige-100",
+                      )}>
+                        {checkedCount}/{COMMERCIAL_CHECKLIST.length}
+                      </span>
+                    </div>
+                    <div className="py-1.5">
+                      {COMMERCIAL_CHECKLIST.map((item) => {
+                        const isChecked = !!checked[item.id];
+                        return (
+                          <label
+                            key={item.id}
+                            className="flex items-start gap-3 px-4 py-2.5 cursor-pointer hover:bg-beige-50/70 transition-colors"
+                          >
+                            <Checkbox
+                              checked={isChecked}
+                              onCheckedChange={val => setChecked(prev => ({ ...prev, [item.id]: !!val }))}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className={cn("text-[12px] font-semibold leading-snug transition-colors",
+                                isChecked ? "text-forest-700" : "text-brown-900",
+                              )}>
+                                {item.label}
+                              </p>
+                              <p className="text-[10.5px] text-beige-500 mt-0.5 leading-snug">{item.description}</p>
+                            </div>
+                            {isChecked && <CheckCircle2 className="w-3.5 h-3.5 text-forest-500 shrink-0 mt-0.5" />}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="px-4 py-2.5 border-t border-beige-100 bg-beige-50/40 flex items-center justify-end">
+                      <button
+                        onClick={() => setChecklistOpen(false)}
+                        className="text-[11px] font-semibold text-brown-700 px-3 py-1 rounded-lg hover:bg-white transition-colors"
                       >
-                        {item.label}
-                      </motion.span>
-                    </motion.label>
-                  );
-                })}
-              </div>
+                        Done
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            {/* Right: internal notes toggle + action buttons */}
+            {/* Vertical divider */}
+            <span className="h-7 w-px bg-beige-200 shrink-0" />
+
+            {/* Reviewer name — inline, flex-1 */}
+            <div className="relative flex-1 min-w-[200px]">
+              <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400 pointer-events-none" />
+              <input
+                value={reviewerName}
+                onChange={(e) => setReviewerName(e.target.value)}
+                placeholder="Approved by — your full name *"
+                aria-label="Reviewer name"
+                className={cn(
+                  "h-9 pl-9 pr-9 w-full text-[12px] rounded-xl border bg-white transition-all focus:outline-none",
+                  reviewerName.trim()
+                    ? "border-brown-200 text-brown-900 focus:border-brown-400 focus:ring-2 focus:ring-brown-100"
+                    : "border-beige-200 text-brown-800 placeholder:text-beige-400 focus:border-brown-300 focus:ring-2 focus:ring-brown-100",
+                )}
+              />
+              {reviewerName.trim() && (
+                <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-forest-500 pointer-events-none" />
+              )}
+            </div>
+
+            {/* Actions */}
             <div className="flex items-center gap-2 shrink-0">
-              {/* Notes inline popover trigger */}
-              <div className="relative">
-                <button
-                  onClick={() => setPanelMode(panelMode === "notes" as never ? "checklist" : "notes" as never)}
-                  className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-gray-500 px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  Notes
-                  {notes.trim() && <span className="w-1.5 h-1.5 rounded-full bg-brown-500 shrink-0" />}
-                </button>
-              </div>
+              <button
+                onClick={() => setPanelMode(panelMode === "notes" as never ? "checklist" : "notes" as never)}
+                className="inline-flex items-center gap-1.5 h-9 px-3 text-[11.5px] font-semibold text-brown-700 rounded-xl border border-beige-200 bg-white hover:bg-beige-50 transition-all"
+              >
+                <FileText className="w-3.5 h-3.5 text-beige-400" />
+                Notes
+                {notes.trim() && <span className="w-1.5 h-1.5 rounded-full bg-brown-500 shrink-0" />}
+              </button>
 
               <button
                 disabled={panelMode === "reject"}
                 onClick={() => setPanelMode(prev => prev === "reject" ? "checklist" : "reject")}
                 className={cn(
-                  "inline-flex items-center gap-1.5 text-[12px] font-semibold px-4 py-2 rounded-xl border transition-all",
+                  "inline-flex items-center gap-1.5 h-9 px-3.5 text-[11.5px] font-semibold rounded-xl border transition-all",
                   panelMode === "reject"
-                    ? "text-gold-700 bg-gold-50 border-gold-200"
-                    : "text-gold-700 bg-gold-50 border-gold-200 hover:bg-gold-100",
+                    ? "text-gold-800 bg-gold-100 border-gold-300"
+                    : "text-gold-700 bg-gold-50 border-gold-200 hover:bg-gold-100 hover:border-gold-300",
                 )}
               >
                 <AlertTriangle className="w-3.5 h-3.5" />
@@ -1499,17 +2048,28 @@ export default function AdminSOWApprovePage() {
               </button>
 
               <button
-                disabled={!allChecked}
+                disabled={!allChecked || !reviewerName.trim() || recordDecision.isPending}
                 onClick={handleApprove}
+                title={
+                  !allChecked ? "Complete all checklist items"
+                  : !reviewerName.trim() ? "Enter your name to approve"
+                  : undefined
+                }
                 className={cn(
-                  "inline-flex items-center gap-1.5 text-[12px] font-semibold px-4 py-2 rounded-xl transition-all",
-                  allChecked
-                    ? "text-white bg-forest-500 hover:bg-forest-600 shadow-sm"
-                    : "text-gray-400 bg-gray-100 cursor-not-allowed",
+                  "inline-flex items-center gap-1.5 h-9 px-4 text-[12px] font-semibold rounded-xl transition-all",
+                  allChecked && reviewerName.trim() && !recordDecision.isPending
+                    ? "text-white bg-gradient-to-r from-forest-500 to-forest-600 hover:from-forest-600 hover:to-forest-700 shadow-sm shadow-forest-200/40"
+                    : "text-beige-400 bg-beige-100 cursor-not-allowed",
                 )}
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                {allChecked ? "Approve Stage" : `${checkedCount}/${COMMERCIAL_CHECKLIST.length} checked`}
+                {recordDecision.isPending
+                  ? "Approving…"
+                  : !allChecked
+                  ? `${checkedCount}/${COMMERCIAL_CHECKLIST.length} verified`
+                  : !reviewerName.trim()
+                  ? "Enter name"
+                  : "Approve Stage"}
               </button>
             </div>
           </div>

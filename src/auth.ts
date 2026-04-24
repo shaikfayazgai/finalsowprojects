@@ -2,10 +2,11 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
+import { cookies } from "next/headers";
 import { authApi, isMfaPending } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
-export type UserRole = "contributor" | "enterprise" | "admin" | "reviewer" | "mentor";
+export type UserRole = "contributor" | "enterprise" | "admin" | "super_admin" | "reviewer" | "mentor";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Make the secret explicit to avoid env-resolution issues across runtimes/bundlers.
@@ -68,6 +69,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientId: process.env.MICROSOFT_CLIENT_ID,
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
       issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID ?? "common"}/v2.0`,
+      authorization: {
+        // response_mode=query makes the IdP redirect back via a top-level GET
+        // instead of a cross-site POST. SameSite=Lax cookies (PKCE/state/nonce)
+        // survive top-level GETs in all browsers; cross-site POSTs drop them in
+        // Safari and Firefox, which is why SSO worked only in Chrome.
+        params: { prompt: "select_account", response_mode: "query" },
+      },
     }),
     Credentials({
       name: "credentials",
@@ -82,16 +90,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const password = typeof credentials?.password === "string" ? credentials.password : "";
 
           if (!email || !password) return null;
-
-          // Dev-only hardcoded admin bypass
-          if (email === "admin@glimmora.dev" && password === "Admin@1234") {
-            return {
-              id: "dev-admin-001",
-              name: "Glimmora Admin",
-              email: "admin@glimmora.dev",
-              role: "admin" as UserRole,
-            };
-          }
 
           const response = await authApi.login(email, password);
 
@@ -139,6 +137,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
+  // Cross-browser OAuth cookie hardening.
+  // In production (HTTPS), force SameSite=None on the short-lived OAuth cookies
+  // so they're sent back when the IdP redirects (including cross-site POSTs).
+  // Without this, Safari and Firefox drop these cookies and NextAuth rejects
+  // the callback with "State cookie was missing" / "PKCE code_verifier missing".
+  // Locally (http), we fall back to SameSite=Lax since Secure cookies require HTTPS.
+  cookies: (() => {
+    const isProd = process.env.NODE_ENV === "production";
+    const crossSite = {
+      httpOnly: true,
+      sameSite: (isProd ? "none" : "lax") as "none" | "lax",
+      secure: isProd,
+      path: "/",
+    };
+    return {
+      pkceCodeVerifier: { name: "next-auth.pkce.code_verifier", options: crossSite },
+      state:            { name: "next-auth.state",              options: crossSite },
+      nonce:            { name: "next-auth.nonce",              options: crossSite },
+    };
+  })(),
   callbacks: {
     async jwt({ token, user, account }) {
       // Initial sign-in — user object only present on first call
@@ -159,6 +177,49 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       if (account) {
         token.provider = account.provider;
+
+        /**
+         * Notion-style SSO verification:
+         * Exchange the provider id_token with the Glimmora backend.
+         *
+         *  ✅ User found in DB  → store real tokens + real role, isNewSsoUser = false
+         *  🆕 User not in DB   → isNewSsoUser = true, role = "contributor" (default)
+         *                         /auth/redirect will send them to onboarding
+         */
+        if (
+          (account.provider === "google" || account.provider === "microsoft-entra-id") &&
+          account.id_token
+        ) {
+          const providerName = account.provider === "microsoft-entra-id" ? "microsoft" : "google";
+          try {
+            const response = await authApi.exchangeOAuthCode(providerName, account.id_token);
+            if (!isMfaPending(response)) {
+              token.role                 = (response.user.role ?? "contributor") as UserRole;
+              token.glimmoraAccessToken  = response.access_token;
+              token.glimmoraRefreshToken = response.refresh_token;
+              token.glimmoraExpiresAt    = Math.floor(Date.now() / 1000) + response.expires_in;
+              if (response.user.id) token.id = response.user.id;
+              const fullName = `${response.user.firstName} ${response.user.lastName}`.trim();
+              if (fullName) token.name = fullName;
+              token.isNewSsoUser = false;
+            }
+          } catch {
+            // User not found in Glimmora DB — treat as new user.
+            // If this came from a registration page, use the intended role from the cookie.
+            let registrationRole: UserRole = "contributor";
+            try {
+              const cookieStore = await cookies();
+              const ssoRegisterRole = cookieStore.get("sso_register_role")?.value;
+              if (ssoRegisterRole === "enterprise" || ssoRegisterRole === "contributor") {
+                registrationRole = ssoRegisterRole;
+              }
+            } catch {
+              // cookies() unavailable — default to contributor
+            }
+            token.isNewSsoUser = true;
+            token.role = registrationRole;
+          }
+        }
       }
 
       // Proactive token refresh — refresh if within 60 seconds of expiry
@@ -186,42 +247,77 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as UserRole;
-        session.user.provider = token.provider;
-        session.user.accessToken = token.glimmoraAccessToken;
+        session.user.id           = token.id as string;
+        session.user.role         = token.role as UserRole;
+        session.user.provider     = token.provider;
+        session.user.accessToken  = token.glimmoraAccessToken;
+        session.user.isNewSsoUser = token.isNewSsoUser;
       }
       return session;
     },
     async signIn({ user, account }) {
-      // For Google/Microsoft SSO, verify the email is already registered in Glimmora.
-      // We probe the login endpoint with a dummy password — the error message tells us
-      // whether the account exists ("wrong password") or not ("not found / no account").
+      // For Google and Microsoft, verify the email exists in the Glimmora DB.
+      // Probe with a dummy password — the backend response tells us whether the
+      // account exists (401 "wrong password") or not (404 "not found").
+      // FAIL-CLOSED: only allow on an explicit "wrong password" / 401 response.
       if (account?.provider === "google" || account?.provider === "microsoft-entra-id") {
-        if (!user.email) return "/auth/login?error=SsoNotRegistered";
+        // Registration flow: if the sso_register_role cookie is set, the user
+        // clicked "Continue with Microsoft/Google" on a *registration* page.
+        // Allow new emails through — account creation happens after OAuth.
         try {
-          await authApi.login(user.email, "__sso_registration_check__");
-          // Unexpected success (shouldn't happen with dummy password) — allow through
+          const cookieStore = await cookies();
+          const ssoRegisterRole = cookieStore.get("sso_register_role")?.value;
+          if (ssoRegisterRole) {
+            return true;
+          }
+        } catch {
+          // cookies() unavailable — fall through to the normal login check
+        }
+
+        try {
+          if (!user.email) return "/auth/login?error=SsoNotRegistered";
+
+          const email = user.email.toLowerCase();
+          await authApi.login(email, "__sso_registration_check__");
+          // Unexpected success with dummy password — account exists, allow.
+          return true;
         } catch (err) {
           if (err instanceof ApiError) {
             const msg = err.message.toLowerCase();
-            const notRegistered =
+
+            // Explicitly "not found" → account does not exist → block
+            const notFound =
               err.status === 404 ||
               msg.includes("not found") ||
               msg.includes("no account") ||
-              msg.includes("does not exist");
-            if (notRegistered) {
-              return "/auth/login?error=SsoNotRegistered";
+              msg.includes("no user") ||
+              msg.includes("does not exist") ||
+              msg.includes("not registered") ||
+              msg.includes("user not exist");
+
+            if (notFound) {
+              const encodedEmail = encodeURIComponent((user.email ?? "").toLowerCase());
+              return `/auth/login?error=SsoNotRegistered&email=${encodedEmail}`;
             }
-            // "Wrong password" or similar → account exists → allow through
+
+            // Specifically "wrong password" → account EXISTS, just wrong dummy password → allow
+            const wrongPassword =
+              msg.includes("wrong password") ||
+              msg.includes("incorrect password") ||
+              msg.includes("password incorrect") ||
+              msg.includes("password does not match") ||
+              msg.includes("invalid password");
+
+            if (wrongPassword) return true;
+
+            // Everything else (including ambiguous 401) → block.
+            // The Glimmora backend returns 401 for BOTH "wrong password" and "user not found"
+            // so we cannot safely allow on 401 alone — fall through to block.
           }
-          // Network / unknown error → fail open so legitimate users aren't blocked
+          // Network error, unexpected response, or unrecognised error → block
+          const encodedEmail = encodeURIComponent((user.email ?? "").toLowerCase());
+          return `/auth/login?error=SsoNotRegistered&email=${encodedEmail}`;
         }
-        return true;
-      }
-      // Credentials (email/password) and Glimmora OAuth callback
-      if (account?.provider === "credentials" || account?.provider === "glimmora-oauth") {
-        return true;
       }
       return true;
     },

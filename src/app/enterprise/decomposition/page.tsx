@@ -14,7 +14,10 @@ import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue, Skeleton } from "@/components/ui";
 import type { DecompositionPlan, PlanStatus } from "@/types/enterprise";
-import { useDecompositionPlans, useKickoff, useWithdraw } from "@/lib/hooks/use-decomposition";
+import { useKickoff, useWithdraw } from "@/lib/hooks/use-decomposition";
+import { ApiError } from "@/lib/api/client";
+import { useQuery } from "@tanstack/react-query";
+import { listEnterpriseDecompositionPlans } from "@/lib/api/decomposition-plans";
 import {
   useRazorpayScript,
 } from "@/components/enterprise/decomposition/PaymentReleaseTab";
@@ -184,7 +187,11 @@ export default function DecompositionPlansPage() {
   const [justPaidIds, setJustPaidIds] = React.useState<Set<string>>(new Set());
 
   // ── API data & mutations ──
-  const { data: apiPlansRes, isLoading: plansLoading, isError: plansError, error: plansErrorObj } = useDecompositionPlans();
+  const { data: apiPlansRes, isLoading: plansLoading, isError: plansError, error: plansErrorObj } = useQuery({
+    queryKey: ["enterprise", "decomposition", "plans"],
+    queryFn: listEnterpriseDecompositionPlans,
+    staleTime: 30_000,
+  });
   const kickoffMutation = useKickoff();
   const withdrawMutation = useWithdraw();
 
@@ -368,26 +375,8 @@ export default function DecompositionPlansPage() {
     );
   }
 
-  /* ── Error state ── */
-  if (plansError) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center px-6">
-        <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center mb-4">
-          <AlertTriangle className="w-6 h-6 text-red-500" />
-        </div>
-        <p className="text-sm font-semibold text-gray-800 mb-1">Failed to load decomposition plans</p>
-        <p className="text-xs text-gray-500 max-w-md mb-3">
-          {plansErrorObj instanceof Error ? plansErrorObj.message : "Unknown error"}
-        </p>
-        <details className="text-left w-full max-w-lg">
-          <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600">Debug info</summary>
-          <pre className="mt-2 p-3 bg-gray-50 rounded-lg text-[10px] text-gray-600 overflow-auto max-h-40">
-            {JSON.stringify({ error: plansErrorObj, response: apiPlansRes }, null, 2)}
-          </pre>
-        </details>
-      </div>
-    );
-  }
+  /* ── Service-unavailable banner (shown above empty state, not a hard block) ── */
+  const isServiceDown = plansError && plansErrorObj instanceof ApiError && plansErrorObj.status >= 500;
 
   return (
     <>
@@ -419,6 +408,16 @@ export default function DecompositionPlansPage() {
           </Link>
         </div>
       </motion.div>
+
+      {/* ── Service-unavailable banner ── */}
+      {isServiceDown && (
+        <motion.div variants={fadeUp} className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-2">
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-[12px] text-amber-700">
+            The decomposition service is temporarily unavailable. Showing cached or empty data — plans will appear once the service recovers.
+          </p>
+        </motion.div>
+      )}
 
       {/* ═══ KPI ROW ═══ */}
       <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-7">

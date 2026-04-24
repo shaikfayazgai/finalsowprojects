@@ -6,16 +6,21 @@ import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, FileText, Shield, ShieldCheck, DollarSign,
-  Clock, Users, Sparkles, Lock, ScrollText, GitBranch, Target, Scale,
-  XCircle, Send, ChevronRight, MessageSquare, Paperclip, File, ImageIcon,
-  Building2, CornerDownRight, Bell,
+  Clock, Sparkles, Scale, XCircle, Send, MessageSquare, Paperclip, File,
+  ImageIcon, Building2, GitBranch, Target,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Checkbox, Textarea, Skeleton } from "@/components/ui";
 import type { ApprovalStage } from "@/types/enterprise";
-import { useManualSOW, useApprovalStages, useApproveStage, useRejectStage } from "@/lib/hooks/use-manual-sow";
+import {
+  useSOWDetail,
+  useApprovalStages,
+  useApproveStage,
+  useRejectStage,
+  useRecordApprovalDecision,
+} from "@/lib/hooks/use-manual-sow";
 import { useEmailTemplateStore } from "@/lib/stores/email-template-store";
 import { fetchInternal } from "@/lib/api/client";
 
@@ -94,6 +99,11 @@ const stageChecklists: Record<ApprovalStage, CLI[]> = {
   ],
 };
 
+const stageNumToKey: Record<number, ApprovalStage> = {
+  1: "business", 2: "glimmora_commercial", 3: "legal", 4: "security", 5: "final",
+};
+const stageKeys: ApprovalStage[] = ["business", "glimmora_commercial", "legal", "security", "final"];
+
 function riskVariant(s: number) { return s <= 25 ? "forest" : s <= 50 ? "gold" : "danger"; }
 const statusVariant: Record<string, string> = {
   draft: "beige", parsing: "teal", review: "teal", approval: "gold",
@@ -106,6 +116,22 @@ function formatBytes(n: number) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function fmtTime(iso: string) {
+  try {
+    return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return iso;
+  }
+}
+
+type ChatMsg = {
+  from: "enterprise" | "glimmora";
+  text: string;
+  time: string;
+  stageLabel?: string;
+  files?: { name: string; size: number; type: string }[];
+};
+
 /* ═══ PAGE ═══ */
 
 export default function SOWApprovePage() {
@@ -114,10 +140,12 @@ export default function SOWApprovePage() {
   const sowId  = params.sowId as string;
 
   /* ── API data ── */
-  const { data: sowRes,    isLoading: sowLoading    } = useManualSOW(sowId);
-  const { data: stagesRes, isLoading: stagesLoading } = useApprovalStages(sowId);
+  const { data: apiSowData, isLoading: sowLoading } = useSOWDetail(sowId);
+  // Poll every 15 s so newly recorded decisions appear automatically
+  const { data: stagesRes, isLoading: stagesLoading } = useApprovalStages(sowId, 15000);
   const approveStageMutation = useApproveStage(sowId);
   const rejectStageMutation  = useRejectStage(sowId);
+  const recordDecision       = useRecordApprovalDecision(sowId);
   const getEmailTemplate     = useEmailTemplateStore((s) => s.getTemplate);
 
   function fireEmail(event: string, payload: Record<string, string>) {
@@ -130,43 +158,69 @@ export default function SOWApprovePage() {
     }).catch(() => {});
   }
 
-  /* ── Derive SOW ── */
-  const sowData    = (sowRes?.data ?? sowRes) as Record<string, unknown> | null;
-  const sowTitle   = (sowData?.title ?? sowData?.projectTitle ?? sowData?.project_title ?? "Untitled SOW") as string;
-  const sowClient  = (sowData?.client ?? sowData?.clientOrganisation ?? sowData?.client_organisation ?? "") as string;
-  const sowStatus  = (sowData?.status ?? "approval") as string;
-  const sowVersion = (sowData?.version ?? 1) as number;
-  const sowPages   = (sowData?.pages ?? sowData?.page_count ?? 0) as number;
-  const sowRiskScore  = (sowData?.riskScore ?? sowData?.risk_score ?? { overall: 0 }) as { overall: number };
-  const sowCreatedBy  = (sowData?.createdBy ?? sowData?.created_by ?? "Enterprise Admin") as string;
+  /* ── Derive SOW (supports both AI and manual SOWs) ── */
+  const raw = apiSowData as Record<string, unknown> | null;
+  const gc  = (raw?.generated_content ?? {}) as Record<string, unknown>;
+  const sowTitle   = String(gc.document_title ?? raw?.title ?? raw?.project_title ?? "Untitled SOW");
+  const sowClient  = String(raw?.client ?? raw?.client_organisation ?? raw?.clientOrganisation ?? gc.client_name ?? "");
+  const sowStatus  = String(raw?.status ?? "approval");
+  const sowVersion = Number(raw?.version ?? 1);
+  const sowPages   = Number(raw?.pages ?? raw?.page_count ?? 0);
+  const riskRaw    = raw?.risk_score ?? raw?.riskScore ?? { overall: 0 };
+  const sowRiskScore = { overall: typeof riskRaw === "number" ? riskRaw : Number((riskRaw as Record<string, unknown>)?.overall ?? 0) };
+  const sowCreatedBy = String(raw?.created_by ?? raw?.createdBy ?? "Enterprise Admin");
 
-  /* ── Derive stages ── */
-  const stageNumToKey: Record<number, ApprovalStage> = { 1: "business", 2: "glimmora_commercial", 3: "legal", 4: "security", 5: "final" };
-  const stageKeys: ApprovalStage[] = ["business", "glimmora_commercial", "legal", "security", "final"];
-  const pipelineData  = (stagesRes as unknown as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
-  const rawStagesArr  = (pipelineData?.stages ?? []) as Record<string, unknown>[];
+  /* ── Derive pipeline stages from GET /api/v1/approvals/{sow_id} ── */
+  const pipelineRaw = (stagesRes as unknown as Record<string, unknown>)?.data as Record<string, unknown> | unknown[] | undefined;
 
-  const apiStages: { stage: ApprovalStage; status: string; reviewer?: string; reviewedAt?: string; comments?: string }[] = (() => {
-    if (Array.isArray(rawStagesArr) && rawStagesArr.length > 0) {
-      return rawStagesArr.map((s) => ({
-        stage:      stageNumToKey[s.stage as number] ?? stageKeys[(s.stage as number) - 1] ?? "business",
-        status:     (s.status === "approved" ? "approved" : s.status === "rejected" ? "rejected" : s.status === "changes_requested" ? "rejected" : "pending") as string,
-        reviewer:   (s.reviewer_name ?? s.reviewer) as string | undefined,
-        reviewedAt: (s.decided_at ?? s.updated_at) as string | undefined,
-        comments:   s.comments as string | undefined,
-      }));
+  // The API may return data as an object with a `stages` array, or directly as an array
+  const rawStagesArr: Record<string, unknown>[] = (() => {
+    if (Array.isArray(pipelineRaw)) return pipelineRaw as Record<string, unknown>[];
+    if (pipelineRaw && typeof pipelineRaw === "object") {
+      const obj = pipelineRaw as Record<string, unknown>;
+      if (Array.isArray(obj.stages)) return obj.stages as Record<string, unknown>[];
+      if (Array.isArray(obj.approval_stages)) return obj.approval_stages as Record<string, unknown>[];
     }
-    return stageKeys.map((k) => ({ stage: k, status: "pending" }));
+    return [];
+  })();
+
+  const currentActiveStage: number | null = (() => {
+    if (!pipelineRaw || Array.isArray(pipelineRaw)) return null;
+    const obj = pipelineRaw as Record<string, unknown>;
+    return (obj.current_active_stage ?? obj.currentStage ?? null) as number | null;
+  })();
+
+  const apiStages: { stage: ApprovalStage; status: string; reviewer?: string; reviewedAt?: string; comments?: string; decisions: Record<string, unknown>[] }[] = (() => {
+    if (rawStagesArr.length > 0) {
+      return rawStagesArr.map((s) => {
+        const stageNum = (s.stage_number ?? s.stage) as number;
+        const stageKey = stageNumToKey[stageNum] ?? stageKeys[stageNum - 1] ?? "business";
+        const rawStatus = String(s.status ?? "pending").toLowerCase();
+        const status =
+          rawStatus === "approved" ? "approved" :
+          rawStatus === "rejected" || rawStatus === "changes_requested" ? "rejected" :
+          rawStatus === "in_review" || rawStatus === "active" ? "in_review" :
+          "pending";
+        return {
+          stage:      stageKey,
+          status,
+          reviewer:   (s.reviewer_name ?? s.reviewer) as string | undefined,
+          reviewedAt: (s.decided_at ?? s.updated_at ?? s.reviewed_at) as string | undefined,
+          comments:   s.comments as string | undefined,
+          decisions:  Array.isArray(s.decisions) ? s.decisions as Record<string, unknown>[] : [],
+        };
+      });
+    }
+    return stageKeys.map((k) => ({ stage: k, status: "pending", decisions: [] }));
   })();
 
   const fullStages = stageKeys.map((key) => {
     const existing = apiStages.find((s) => s.stage === key);
-    return existing ?? { stage: key, status: "pending" as string };
+    return existing ?? { stage: key, status: "pending", decisions: [] };
   });
 
-  const activeStageNum  = pipelineData?.current_active_stage as number | null;
-  const firstPendingKey = activeStageNum
-    ? stageNumToKey[activeStageNum]
+  const firstPendingKey = currentActiveStage
+    ? stageNumToKey[currentActiveStage]
     : fullStages.find((s) => s.status === "pending")?.stage;
 
   const finalStages = fullStages.map((s) =>
@@ -179,52 +233,69 @@ export default function SOWApprovePage() {
     createdBy: sowCreatedBy, approvalStages: finalStages,
   };
 
-  const activeStageIndex = sow.approvalStages.findIndex((s) => s.status === "in_review" || s.status === "pending");
+  const activeStageIndex = sow.approvalStages.findIndex((s) => s.status === "in_review");
   const activeStage      = activeStageIndex >= 0 ? sow.approvalStages[activeStageIndex] : null;
   const activeChecklist  = activeStage ? stageChecklists[activeStage.stage] : [];
 
-  const [checked, setChecked]             = React.useState<Record<string, boolean>>({});
-  const [comments, setComments]           = React.useState("");
-  const [showRejectForm, setShowRejectForm]       = React.useState(false);
-  const [rejectionReason, setRejectionReason]     = React.useState("");
+  const [checked, setChecked]                       = React.useState<Record<string, boolean>>({});
+  const [comments, setComments]                     = React.useState("");
+  const [showRejectForm, setShowRejectForm]         = React.useState(false);
+  const [rejectionReason, setRejectionReason]       = React.useState("");
   const [rejectionSubmitted, setRejectionSubmitted] = React.useState(false);
   const [approvalSubmitted, setApprovalSubmitted]   = React.useState(false);
 
-  const allChecked = activeChecklist.every((item) => checked[item.id]);
-  const checkedCount = activeChecklist.filter((item) => checked[item.id]).length;
+  const allChecked     = activeChecklist.every((item) => checked[item.id]);
+  const checkedCount   = activeChecklist.filter((item) => checked[item.id]).length;
   const allStagesApproved = sow.approvalStages.every((s) => s.status === "approved");
 
-  /* ── Chat / notification panel state ── */
-  type ChatMsg = { from: "enterprise" | "glimmora"; text: string; time: string; files?: { name: string; size: number; type: string }[] };
-  const [chatMessages, setChatMessages] = React.useState<ChatMsg[]>([
-    {
-      from: "glimmora",
-      text: "Your SOW has been received and is now under GlimmoraTeam Commercial review. We will notify you of any decisions or required changes.",
-      time: "Mar 11, 09:00 AM",
-    },
-    {
-      from: "glimmora",
-      text: "Initial review complete. We have flagged a concern: the declared budget of $180K appears insufficient for the scope outlined in Section 3 (Team Composition). Rate cards for Senior Full-Stack roles start at $95/hr, which puts the project over budget.",
-      time: "Mar 11, 02:15 PM",
-    },
-    {
-      from: "enterprise",
-      text: "Understood. We can revise the budget ceiling to $240,000 to accommodate the senior roles. I'm attaching the updated cost breakdown for your reference.",
-      time: "Mar 12, 09:45 AM",
-      files: [
-        { name: "Budget_Revision_v2.xlsx", size: 48200, type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
-      ],
-    },
-    {
-      from: "glimmora",
-      text: "Thank you for the revised breakdown. The updated budget of $240K is now aligned with the scope. We are proceeding with final commercial sign-off. You will receive confirmation shortly.",
-      time: "Mar 12, 11:30 AM",
-    },
-  ]);
-  const [chatInput, setChatInput]     = React.useState("");
-  const [chatFiles, setChatFiles]     = React.useState<{ name: string; size: number; type: string }[]>([]);
-  const chatFileRef                   = React.useRef<HTMLInputElement>(null);
-  const chatScrollRef                 = React.useRef<HTMLDivElement>(null);
+  /* ── Build chat messages from pipeline decisions ── */
+  const apiChatMessages: ChatMsg[] = React.useMemo(() => {
+    const msgs: ChatMsg[] = [];
+    fullStages.forEach((s) => {
+      const label = stageLabels[s.stage] ?? s.stage;
+      (s.decisions ?? []).forEach((d) => {
+        const decisionType = String(d.decision ?? d.type ?? "comment").toLowerCase();
+        const text         = String(d.comments ?? d.message ?? d.text ?? "");
+        const time         = String(d.decided_at ?? d.created_at ?? d.timestamp ?? "");
+        const authorName   = String((d.decided_by as Record<string, unknown>)?.name ?? d.decided_by ?? d.author ?? d.reviewer ?? "");
+        if (!text) return;
+
+        // Glimmora admin decisions surface as "glimmora"; enterprise comments as "enterprise"
+        const isGlimmora = decisionType === "approve" || authorName.toLowerCase().includes("glimmora") || authorName.toLowerCase().includes("admin");
+        msgs.push({
+          from: isGlimmora ? "glimmora" : "enterprise",
+          text,
+          time: time ? fmtTime(time) : "",
+          stageLabel: label,
+        });
+
+        // Inline reply
+        if (d.reply) {
+          msgs.push({
+            from: "glimmora",
+            text: String(d.reply),
+            time: time ? fmtTime(time) : "",
+            stageLabel: label,
+          });
+        }
+      });
+    });
+    return msgs;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stagesRes]);
+
+  const [chatMessages, setChatMessages] = React.useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput]       = React.useState("");
+  const [chatFiles, setChatFiles]       = React.useState<{ name: string; size: number; type: string }[]>([]);
+  const chatFileRef                     = React.useRef<HTMLInputElement>(null);
+  const chatScrollRef                   = React.useRef<HTMLDivElement>(null);
+
+  // Sync API decisions into chat messages once loaded
+  React.useEffect(() => {
+    if (apiChatMessages.length > 0) {
+      setChatMessages(apiChatMessages);
+    }
+  }, [apiChatMessages]);
 
   React.useEffect(() => {
     if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
@@ -232,27 +303,45 @@ export default function SOWApprovePage() {
 
   function handleChatSend() {
     if (!chatInput.trim() && chatFiles.length === 0) return;
+    const now = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
     const msg: ChatMsg = {
-      from:  "enterprise",
-      text:  chatInput.trim(),
-      time:  new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+      from: "enterprise",
+      text: chatInput.trim(),
+      time: now,
       files: chatFiles.length > 0 ? [...chatFiles] : undefined,
     };
     setChatMessages((prev) => [...prev, msg]);
+    const text = chatInput.trim();
     setChatInput("");
     setChatFiles([]);
 
-    // Simulated Glimmora acknowledgement
-    setTimeout(() => {
-      setChatMessages((prev) => [
-        ...prev,
+    // Send comment to API if there's an active stage
+    if (text && activeStage) {
+      recordDecision.mutate(
+        { stage: activeStageIndex + 1, decision: "comment" as any, comments: text },
         {
+          onError: () => {
+            // Show simulated acknowledgement if API fails
+            setTimeout(() => {
+              setChatMessages((prev) => [...prev, {
+                from: "glimmora",
+                text: "Message received. Our team will review and respond shortly.",
+                time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+              }]);
+            }, 1200);
+          },
+        }
+      );
+    } else if (!activeStage) {
+      // Simulate reply when no active stage (pipeline complete)
+      setTimeout(() => {
+        setChatMessages((prev) => [...prev, {
           from: "glimmora",
           text: "Message received. Our team will review and respond shortly.",
           time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
-    }, 1200);
+        }]);
+      }, 1200);
+    }
   }
 
   /* ── Approve / reject handlers ── */
@@ -356,11 +445,9 @@ export default function SOWApprovePage() {
           </div>
           <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight leading-tight">{sow.title}</h1>
           <div className="flex items-center gap-2 mt-2 text-[12px] text-gray-400">
-            <span>{sow.client}</span>
-            <span className="w-1 h-1 rounded-full bg-gray-300" />
+            {sow.client && <><span>{sow.client}</span><span className="w-1 h-1 rounded-full bg-gray-300" /></>}
             <span>v{sow.version}</span>
-            <span className="w-1 h-1 rounded-full bg-gray-300" />
-            <span>{sow.pages} pages</span>
+            {sow.pages > 0 && <><span className="w-1 h-1 rounded-full bg-gray-300" /><span>{sow.pages} pages</span></>}
           </div>
         </motion.div>
 
@@ -376,6 +463,7 @@ export default function SOWApprovePage() {
                   const rejected  = stage.status === "rejected";
                   const variant   = done ? "forest" : isActive ? "gold" : rejected ? "danger" : "beige";
                   const StageIcon = done ? CheckCircle2 : rejected ? XCircle : isActive ? Clock : stageIcons[stage.stage] || FileText;
+                  const apiStage  = apiStages.find((s) => s.stage === stage.stage);
                   return (
                     <div key={stage.stage}
                       className={cn("flex items-center gap-4 px-5 py-4", isActive && "bg-gold-50/50")}
@@ -386,7 +474,10 @@ export default function SOWApprovePage() {
                       )} />
                       <div className="flex-1 min-w-0">
                         <span className="text-[13px] font-medium text-gray-800">{stageLabels[stage.stage]}</span>
-                        {stage.reviewer && <span className="text-[11px] text-gray-400 ml-2">— {stage.reviewer}</span>}
+                        {apiStage?.reviewer && <span className="text-[11px] text-gray-400 ml-2">— {apiStage.reviewer}</span>}
+                        {apiStage?.reviewedAt && done && (
+                          <span className="text-[10px] text-gray-400 ml-2">{fmtTime(apiStage.reviewedAt)}</span>
+                        )}
                       </div>
                       <Badge variant={variant}>{done ? "Approved" : isActive ? "In Review" : rejected ? "Rejected" : "Pending"}</Badge>
                     </div>
@@ -395,6 +486,23 @@ export default function SOWApprovePage() {
               </div>
             </motion.div>
 
+            {/* ── GlimmoraTeam Commercial is admin-only — enterprise sees a waiting banner, no sign-off UI ── */}
+            {activeStage.stage === "glimmora_commercial" ? (
+              <motion.div variants={fadeUp} className="mb-6">
+                <div className="card-parchment px-5 py-5 flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-gold-50 border border-gold-100 flex items-center justify-center shrink-0">
+                    <Clock className="w-4 h-4 text-gold-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-[14px] font-semibold text-gray-800 mb-0.5">Awaiting GlimmoraTeam admin review</h3>
+                    <p className="text-[12px] text-gray-500 leading-relaxed">
+                      This stage is reviewed by a GlimmoraTeam admin. You&apos;ll be notified once the commercial review is complete and the SOW advances to Legal &amp; Compliance.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+            <>
             {/* Checklist */}
             <motion.div variants={fadeUp} className="mb-6">
               <div className="flex items-center justify-between mb-3">
@@ -441,14 +549,14 @@ export default function SOWApprovePage() {
                 className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
                 <AlertTriangle className="w-3.5 h-3.5" /> Request Changes
               </button>
-              <button disabled={!allChecked} onClick={handleApproveStage}
+              <button disabled={!allChecked || approveStageMutation.isPending} onClick={handleApproveStage}
                 className={cn("flex items-center gap-1.5 text-[13px] font-semibold px-6 py-2.5 rounded-xl transition-all",
-                  allChecked
+                  allChecked && !approveStageMutation.isPending
                     ? "text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700"
                     : "text-gray-400 bg-gray-100 cursor-not-allowed",
                 )}>
                 <CheckCircle2 className="w-4 h-4" />
-                {allChecked ? "Approve Stage" : `${checkedCount}/${activeChecklist.length} Verified`}
+                {approveStageMutation.isPending ? "Approving…" : allChecked ? "Approve Stage" : `${checkedCount}/${activeChecklist.length} Verified`}
               </button>
             </motion.div>
 
@@ -469,19 +577,21 @@ export default function SOWApprovePage() {
                         className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all">
                         Cancel
                       </button>
-                      <button disabled={!rejectionReason.trim()} onClick={handleRejectStage}
+                      <button disabled={!rejectionReason.trim() || rejectStageMutation.isPending} onClick={handleRejectStage}
                         className={cn("flex items-center gap-1.5 text-[12px] font-medium px-4 py-2 rounded-lg transition-all",
-                          rejectionReason.trim()
+                          rejectionReason.trim() && !rejectStageMutation.isPending
                             ? "text-white bg-gradient-to-r from-brown-400 to-brown-600"
                             : "text-gray-400 bg-gray-100 cursor-not-allowed",
                         )}>
-                        <Send className="w-3 h-3" /> Submit Changes
+                        <Send className="w-3 h-3" /> {rejectStageMutation.isPending ? "Sending…" : "Submit Changes"}
                       </button>
                     </div>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
+            </>
+            )}
           </>
         )}
 
@@ -543,7 +653,7 @@ export default function SOWApprovePage() {
         )}
       </div>
 
-      {/* ──────────────── RIGHT COLUMN — Chat / Notification Panel ──────────────── */}
+      {/* ──────────────── RIGHT COLUMN — Pipeline Notifications ──────────────── */}
       <motion.div variants={fadeUp} className="w-[320px] shrink-0 sticky top-[60px]">
         <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: "calc(100vh - 100px)" }}>
 
@@ -560,11 +670,10 @@ export default function SOWApprovePage() {
           </div>
 
           {/* Messages */}
-          <div
-            ref={chatScrollRef}
-            className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
-            style={{ minHeight: 0 }}
-          >
+          <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ minHeight: 0 }}>
+            {chatMessages.length === 0 && (
+              <p className="text-[11px] text-gray-400 text-center py-6">No messages yet. Send a message to GlimmoraTeam reviewers.</p>
+            )}
             {chatMessages.map((msg, i) => (
               <div key={i} className={cn("flex gap-2.5", msg.from === "enterprise" && "justify-end")}>
                 {msg.from === "glimmora" && (
@@ -573,25 +682,21 @@ export default function SOWApprovePage() {
                   </div>
                 )}
                 <div className={cn("max-w-[85%] space-y-1.5", msg.from === "enterprise" && "items-end flex flex-col")}>
-                  <div className="flex items-baseline gap-1.5">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
                     {msg.from === "glimmora" && <span className="text-[10px] font-semibold text-gray-700">GlimmoraTeam</span>}
                     {msg.from === "enterprise" && <span className="text-[10px] font-semibold text-gray-700">You</span>}
-                    <span className="text-[9px] text-gray-400">{msg.time}</span>
+                    {msg.stageLabel && <span className="text-[9px] text-gray-400 italic">{msg.stageLabel}</span>}
+                    {msg.time && <span className="text-[9px] text-gray-400">{msg.time}</span>}
                   </div>
 
                   {/* File chips */}
                   {msg.files && msg.files.length > 0 && (
                     <div className="flex flex-col gap-1">
                       {msg.files.map((f, fi) => (
-                        <div key={fi}
-                          className={cn(
-                            "flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[10px]",
-                            msg.from === "enterprise" ? "bg-brown-500 text-white" : "bg-gray-100 text-gray-700",
-                          )}
-                        >
+                        <div key={fi} className={cn("flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[10px]",
+                          msg.from === "enterprise" ? "bg-brown-500 text-white" : "bg-gray-100 text-gray-700")}>
                           <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center shrink-0",
-                            msg.from === "enterprise" ? "bg-white/20" : "bg-brown-50",
-                          )}>
+                            msg.from === "enterprise" ? "bg-white/20" : "bg-brown-50")}>
                             {f.type.startsWith("image/")
                               ? <ImageIcon className={cn("w-3 h-3", msg.from === "enterprise" ? "text-white" : "text-brown-500")} />
                               : <File className={cn("w-3 h-3", msg.from === "enterprise" ? "text-white" : "text-brown-500")} />}
@@ -607,15 +712,12 @@ export default function SOWApprovePage() {
 
                   {/* Text bubble */}
                   {msg.text && (
-                    <div className={cn(
-                      "rounded-2xl px-3 py-2.5",
+                    <div className={cn("rounded-2xl px-3 py-2.5",
                       msg.from === "glimmora"
                         ? "rounded-tl-none bg-gray-50 border border-gray-100"
-                        : "rounded-tr-none bg-brown-500",
-                    )}>
+                        : "rounded-tr-none bg-brown-500")}>
                       <p className={cn("text-[11.5px] leading-relaxed",
-                        msg.from === "glimmora" ? "text-gray-600" : "text-white",
-                      )}>
+                        msg.from === "glimmora" ? "text-gray-600" : "text-white")}>
                         {msg.text}
                       </p>
                     </div>
@@ -632,32 +734,21 @@ export default function SOWApprovePage() {
 
           {/* Composer */}
           <div className="px-4 py-3 border-t border-gray-100 bg-white shrink-0">
-
-            {/* File chips preview */}
             <AnimatePresence>
               {chatFiles.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden mb-2"
-                >
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-2">
                   <div className="flex flex-wrap gap-1.5 py-1">
                     {chatFiles.map((f, i) => (
                       <div key={i} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 max-w-full">
                         <div className="w-5 h-5 rounded-md bg-brown-50 flex items-center justify-center shrink-0">
-                          {f.type.startsWith("image/")
-                            ? <ImageIcon className="w-3 h-3 text-brown-500" />
-                            : <File className="w-3 h-3 text-brown-500" />}
+                          {f.type.startsWith("image/") ? <ImageIcon className="w-3 h-3 text-brown-500" /> : <File className="w-3 h-3 text-brown-500" />}
                         </div>
                         <div className="min-w-0">
                           <p className="text-[10px] font-medium text-gray-700 truncate max-w-[110px]">{f.name}</p>
                           <p className="text-[9px] text-gray-400">{formatBytes(f.size)}</p>
                         </div>
-                        <button
-                          onClick={() => setChatFiles((prev) => prev.filter((_, j) => j !== i))}
-                          className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-all shrink-0"
-                        >
+                        <button onClick={() => setChatFiles((prev) => prev.filter((_, j) => j !== i))}
+                          className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-all shrink-0">
                           <XCircle className="w-3 h-3" />
                         </button>
                       </div>
@@ -676,13 +767,7 @@ export default function SOWApprovePage() {
               className="w-full text-[12px] text-gray-700 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-200 outline-none focus:border-brown-300 focus:ring-2 focus:ring-brown-100 transition-all placeholder:text-gray-400 resize-none mb-2"
             />
 
-            {/* Hidden file input */}
-            <input
-              ref={chatFileRef}
-              type="file"
-              multiple
-              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
-              className="hidden"
+            <input ref={chatFileRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []);
                 setChatFiles((prev) => [...prev, ...files.map((f) => ({ name: f.name, size: f.size, type: f.type }))]);
@@ -691,23 +776,16 @@ export default function SOWApprovePage() {
             />
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => chatFileRef.current?.click()}
+              <button onClick={() => chatFileRef.current?.click()}
                 className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-brown-500 hover:bg-brown-50 border border-gray-200 hover:border-brown-200 transition-all shrink-0"
-                title="Attach file"
-              >
+                title="Attach file">
                 <Paperclip className="w-3.5 h-3.5" />
               </button>
-              <button
-                onClick={handleChatSend}
-                disabled={!chatInput.trim() && chatFiles.length === 0}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2 rounded-xl transition-all",
+              <button onClick={handleChatSend} disabled={!chatInput.trim() && chatFiles.length === 0}
+                className={cn("flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2 rounded-xl transition-all",
                   (chatInput.trim() || chatFiles.length > 0)
                     ? "text-white bg-brown-500 hover:bg-brown-600"
-                    : "text-gray-400 bg-gray-100 cursor-not-allowed",
-                )}
-              >
+                    : "text-gray-400 bg-gray-100 cursor-not-allowed")}>
                 <Send className="w-3.5 h-3.5" /> Send
               </button>
             </div>

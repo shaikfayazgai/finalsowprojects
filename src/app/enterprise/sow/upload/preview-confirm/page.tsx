@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Button, Badge, Textarea } from "@/components/ui";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { useConfirmAndSubmit, useSOWPreview, useHallucinationLayers, useManualSOW } from "@/lib/hooks/use-manual-sow";
+import { useSubmitSOW, useSOWPreview, useHallucinationLayers, useManualSOW } from "@/lib/hooks/use-manual-sow";
 
 /* ═══════════════════════════════════════════════════════════
    TYPES
@@ -287,7 +287,7 @@ export default function PreviewConfirmPage() {
   const router = useRouter();
   const uploadStore = useSOWUploadStore();
   const sowId = uploadStore.uploadedSowId;
-  const confirmMutation = useConfirmAndSubmit(sowId);
+  const confirmMutation = useSubmitSOW(sowId, "manual");
   const { data: previewRes } = useSOWPreview(sowId);
   const { data: hallucinationRes } = useHallucinationLayers(sowId);
   const { data: sowRes } = useManualSOW(sowId);
@@ -401,19 +401,16 @@ export default function PreviewConfirmPage() {
 
   const handleConfirm = () => {
     setIsSubmitting(true);
-    const navigateToApprove = (id: string) => router.push(`/enterprise/sow/${id}/approve`);
+    const navigateToApprove = (id: string) => router.push(`/enterprise/sow/${id}?tab=approval`);
 
     if (sowId) {
-      confirmMutation.mutate(
-        { confirms_accuracy: true },
-        {
-          onSuccess: () => navigateToApprove(sowId),
-          onError: () => {
-            /* Fall back to navigating with the stored ID even on API error */
-            navigateToApprove(sowId);
-          },
+      confirmMutation.mutate(undefined, {
+        onSuccess: () => navigateToApprove(sowId),
+        onError: () => {
+          /* Fall back to navigating with the stored ID even on API error */
+          navigateToApprove(sowId);
         },
-      );
+      });
     } else {
       setTimeout(() => navigateToApprove(sowMeta.id), 1500);
     }

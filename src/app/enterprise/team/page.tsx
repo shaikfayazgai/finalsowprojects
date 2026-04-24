@@ -17,7 +17,9 @@ import {
   Filter,
   Search,
   Activity,
+  WifiOff,
 } from "lucide-react";
+import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Badge, Progress } from "@/components/ui";
@@ -120,21 +122,35 @@ export default function TeamsPage() {
       </motion.div>
 
       {/* Error */}
-      {isError && (
-        <div className="rounded-2xl border border-danger/30 bg-danger/5 p-6 text-center space-y-3">
-          <AlertTriangle className="w-6 h-6 text-danger mx-auto" />
-          <p className="text-danger text-sm font-medium">Failed to load projects</p>
-          <p className="text-beige-500 text-xs">
-            {error instanceof Error ? error.message : "Unknown error"}
-          </p>
-          <button
-            onClick={() => refetch()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-brown-100 text-brown-700 hover:bg-brown-200"
-          >
-            <RefreshCw className="w-3 h-3" /> Retry
-          </button>
-        </div>
-      )}
+      {isError && (() => {
+        const is503 = error instanceof ApiError && error.status === 503;
+        return (
+          <div className={cn(
+            "rounded-2xl border p-6 text-center space-y-3",
+            is503 ? "border-gold-300/40 bg-gold-50/60" : "border-danger/30 bg-danger/5"
+          )}>
+            {is503
+              ? <WifiOff className="w-6 h-6 text-gold-500 mx-auto" />
+              : <AlertTriangle className="w-6 h-6 text-danger mx-auto" />
+            }
+            <p className={cn("text-sm font-medium", is503 ? "text-gold-700" : "text-danger")}>
+              {is503 ? "Service is starting up…" : "Failed to load projects"}
+            </p>
+            <p className="text-beige-500 text-xs">
+              {is503
+                ? "The backend is waking from sleep. This usually takes 15–30 seconds."
+                : error instanceof Error ? error.message : "Unknown error"
+              }
+            </p>
+            <button
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-brown-100 text-brown-700 hover:bg-brown-200"
+            >
+              <RefreshCw className="w-3 h-3" /> {is503 ? "Try Again" : "Retry"}
+            </button>
+          </div>
+        );
+      })()}
 
       {!isLoading && !isError && (
         <>
