@@ -4,9 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { decompositionApi } from "@/lib/api/decomposition";
 import { ApiError } from "@/lib/api/client";
 
-// Don't retry on 403/401 — these won't resolve on retry
+// Don't retry on auth errors or server-unavailable errors — these won't resolve on retry
 const shouldRetry = (failureCount: number, error: unknown) => {
-  if (error instanceof ApiError && (error.status === 403 || error.status === 401)) return false;
+  if (error instanceof ApiError) {
+    // 4xx auth / 5xx service unavailable — no point retrying
+    if (error.status === 401 || error.status === 403 || error.status >= 500) return false;
+  }
   return failureCount < 1;
 };
 

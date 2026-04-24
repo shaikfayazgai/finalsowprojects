@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ':*)",
+      "Bash(vercel --prod)",
+      "Bash(grep -v \"const \\\\|//\")",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" \"./node_modules/.bin/tsc\" --noEmit)",
+      "WebFetch(domain:glimmora-api.onrender.com)",
+      "Bash(ls node_modules/.bin/tsc*)",
+      "Bash(./node_modules/.bin/tsc --noEmit --skipLibCheck -p tsconfig.json)",
+      "Bash(git check-ignore:*)",
+      "Bash(git commit:*)",
+      "Bash(vercel inspect:*)",
+      "Bash(npx --yes tsc --noEmit -p tsconfig.json)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(vercel:*)",
+      "Bash(git pull:*)",
+      "Bash(npx next:*)",
+      "Bash(\"C:\\\\Program Files\\\\nodejs\\\\node.exe\" \"C:\\\\Program Files\\\\nodejs\\\\node_modules\\\\npm\\\\bin\\\\npm-cli.js\" run build)",
+      "Bash(grep -rn \"Cannot find name\\\\|TS2304\\\\|TS2339\" \"C:\\\\\\\\Users\\\\\\\\rahul\\\\\\\\OneDrive\\\\\\\\Desktop\\\\\\\\GT\\\\\\\\src\")",
+      "Bash(find \"C:\\\\\\\\Users\\\\\\\\rahul\\\\\\\\OneDrive\\\\\\\\Desktop\\\\\\\\GT\" -name \"*.log\" -o -name \".next\" -type d)",
+      "Bash(wc:*)",
+      "Bash(grep -rn \"\\\\.map.*=>.*handle\\\\|\\\\.map.*=>.*set\\\\|\\\\.map.*=>.*is[A-Z]\" \"C:\\\\\\\\Users\\\\\\\\rahul\\\\\\\\OneDrive\\\\\\\\Desktop\\\\\\\\GT\\\\\\\\src\" --include=\"*.tsx\")",
+      "Bash(grep:*)",
+      "Bash(python3:*)",
+      "Bash(node node_modules/next/dist/bin/next build)",
+      "Bash(node node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
+      "Bash(npm run *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Read(//tmp/**)"
+    ]
+  }
+}

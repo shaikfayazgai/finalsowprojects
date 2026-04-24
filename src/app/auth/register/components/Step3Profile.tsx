@@ -331,6 +331,22 @@ const CAREER_OPTIONS = [
   { value: "career-change", label: "Career transition / change" },
 ];
 
+const EXPERIENCE_OPTIONS = [
+  { value: "exp0to1",   label: "0-1 years"  },
+  { value: "exp1to3",   label: "1-3 years"  },
+  { value: "exp3to5",   label: "3-5 years"  },
+  { value: "exp5to10",  label: "5-10 years" },
+  { value: "exp10plus", label: "10+ years"  },
+];
+
+type ExperienceRateTable = {
+  exp0to1:   string;
+  exp1to3:   string;
+  exp3to5:   string;
+  exp5to10:  string;
+  exp10plus: string;
+};
+
 /* ── Reusable section header ── */
 function SectionHeader({
   icon: Icon,
@@ -563,8 +579,15 @@ interface Props {
   // Type-specific
   workStart: string;             setWorkStart: (v: string) => void;
   workEnd: string;               setWorkEnd: (v: string) => void;
+  jobTitle: string;              setJobTitle: (v: string) => void;
   careerStage: string;           setCareerStage: (v: string) => void;
   yearsExperience: string;       setYearsExperience: (v: string) => void;
+  studentCurrency?: string;
+  studentHourlyRate?: string;
+  womenRateCurrency?: string;
+  womenRateTable?: ExperienceRateTable;
+  generalRateCurrency?: string;
+  generalRateTable?: ExperienceRateTable;
   error: string;
   onContinue: () => void;
   onBack: () => void;
@@ -585,12 +608,28 @@ export function Step3Profile({
   otherSkills, otherSkillInput, setOtherSkillInput, addOtherSkill, removeOtherSkill,
   workStart, setWorkStart,
   workEnd, setWorkEnd,
+  jobTitle, setJobTitle,
   careerStage, setCareerStage,
   yearsExperience, setYearsExperience,
+  studentCurrency = "INR",
+  studentHourlyRate = "1000",
+  womenRateCurrency = "INR",
+  womenRateTable = { exp0to1: "1000", exp1to3: "1500", exp3to5: "2000", exp5to10: "2500", exp10plus: "3000" },
+  generalRateCurrency = "INR",
+  generalRateTable = { exp0to1: "1000", exp1to3: "1500", exp3to5: "2000", exp5to10: "2500", exp10plus: "3000" },
   error,
   onContinue, onBack,
 }: Props) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const needsExperienceRate =
+    contribType === "women_workforce" || contribType === "general_workforce";
+  const currentRateCurrency =
+    contribType === "women_workforce" ? womenRateCurrency : generalRateCurrency;
+  const currentRateTable =
+    contribType === "women_workforce" ? womenRateTable : generalRateTable;
+  const currentHourlyRate = yearsExperience
+    ? currentRateTable[yearsExperience as keyof ExperienceRateTable] ?? ""
+    : "";
 
   const validate = (field: string, val: string) => {
     const errs = { ...fieldErrors };
@@ -615,6 +654,10 @@ export function Step3Profile({
       case "departmentOther":
         if (!val.trim()) errs.departmentOther = "Please specify your department name";
         else delete errs.departmentOther;
+        break;
+      case "yearsExperience":
+        if (!val && needsExperienceRate) errs.yearsExperience = "Years of experience is required";
+        else delete errs.yearsExperience;
         break;
     }
     setFieldErrors(errs);
@@ -670,6 +713,30 @@ export function Step3Profile({
           <div>
             <SectionHeader icon={Clock} title="Work Preferences" />
             <div className="space-y-3">
+              {needsExperienceRate && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Job Title</Label>
+                    <Input
+                      placeholder="e.g. Frontend Developer"
+                      value={jobTitle}
+                      onChange={(e) => setJobTitle(e.target.value)}
+                      maxLength={80}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Years of Experience <span className="text-red-400">*</span></Label>
+                    <SearchCombobox
+                      value={yearsExperience}
+                      onChange={v => { setYearsExperience(v); validate("yearsExperience", v); }}
+                      options={EXPERIENCE_OPTIONS}
+                      placeholder="Select experience range"
+                      searchPlaceholder="Search range…"
+                    />
+                    {fieldErrors.yearsExperience && <p className="text-xs text-red-500">{fieldErrors.yearsExperience}</p>}
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="avail">Tentative Availability <span className="text-red-400">*</span></Label>
                 <div className="relative">
@@ -683,6 +750,38 @@ export function Step3Profile({
                 </div>
                 {fieldErrors.availability && <p className="text-xs text-red-500">{fieldErrors.availability}</p>}
               </div>
+
+              {needsExperienceRate && (
+                <div className="space-y-2">
+                  <Label>Configured Currency & Hourly Rate</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input value={currentRateCurrency} readOnly className="bg-beige-50 text-brown-800" />
+                    <div className="relative">
+                      <Input value={currentHourlyRate} readOnly className="bg-beige-50 text-brown-800 pr-12" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-beige-400">/hr</span>
+                    </div>
+                  </div>
+                  {!yearsExperience && (
+                    <p className="text-xs text-beige-400">Select years of experience to view hourly rate.</p>
+                  )}
+                </div>
+              )}
+
+              {contribType === "student" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Student Currency</Label>
+                    <Input value={studentCurrency} readOnly className="bg-beige-50 text-brown-800" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Student Hourly Rate</Label>
+                    <div className="relative">
+                      <Input value={studentHourlyRate} readOnly className="bg-beige-50 text-brown-800 pr-12" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-beige-400">/hr</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Department Category <span className="text-red-400">*</span></Label>
@@ -733,8 +832,8 @@ export function Step3Profile({
             <div className="space-y-4">
               <div>
                 <SkillAutocomplete
-                  label="Primary Skills"
-                  badge={`(${primarySkills.length}/20) — required`}
+                  label="Primary Skills *"
+                  badge={`(${primarySkills.length}/20)`}
                   skills={primarySkills}
                   onAdd={addPrimarySkill}
                   onRemove={removePrimarySkill}
@@ -835,6 +934,7 @@ export function Step3Profile({
             if (!departmentCategory) errs.departmentCategory = "Department category is required";
             if (departmentCategory === "other" && !departmentOther.trim()) errs.departmentOther = "Please specify your department name";
             if (primarySkills.length === 0) errs.primarySkills = "At least one primary skill is required";
+            if (needsExperienceRate && !yearsExperience) errs.yearsExperience = "Years of experience is required";
             setFieldErrors(errs);
             if (Object.keys(errs).length === 0) onContinue();
           }}>

@@ -38,63 +38,17 @@ const ringColorMap: Record<ProjectHealth, "forest" | "gold" | "brown" | "teal"> 
   completed: "teal",
 };
 
-/* ── Mock alerts ── */
-const mockAlerts = [
-  {
-    id: "alert-001",
-    severity: "warning" as const,
-    title: "Budget utilization approaching 90%",
-    description: "Project spending is at 87% of allocated budget with 55% work remaining. Review cost allocation.",
-    timestamp: "2026-03-06T10:15:00Z",
-    source: "APG Budget Monitor",
-  },
-  {
-    id: "alert-002",
-    severity: "critical" as const,
-    title: "Task #004 overdue by 2 days",
-    description: "General Ledger API task has exceeded its deadline. Contributor D-2M has been notified.",
-    timestamp: "2026-03-06T08:30:00Z",
-    source: "APG Timeline Engine",
-  },
-  {
-    id: "alert-003",
-    severity: "warning" as const,
-    title: "Quality score below threshold",
-    description: "Review pass rate dropped to 72% this week, below the 85% APG threshold. 3 rework requests issued.",
-    timestamp: "2026-03-05T16:45:00Z",
-    source: "APG Quality Gate",
-  },
-  {
-    id: "alert-004",
-    severity: "info" as const,
-    title: "Team velocity stabilizing",
-    description: "Sprint velocity has stabilized at 34 story points after two sprints of adjustment.",
-    timestamp: "2026-03-05T12:00:00Z",
-    source: "APG Performance",
-  },
-];
+type Alert = { id: string; severity: "warning" | "critical" | "info"; title: string; description: string; timestamp: string; source: string };
+const mockAlerts: Alert[] = [];
 
-/* ── Mock health metrics ── */
 const healthMetrics = [
-  { label: "Task Velocity", value: "34", unit: "pts/sprint", change: 8.2, positive: true, icon: Zap, accent: "teal" as const },
-  { label: "Bug Rate", value: "0.8", unit: "/KLOC", change: -12.5, positive: true, icon: Bug, accent: "forest" as const },
-  { label: "Response Time", value: "4.2", unit: "hours", change: -18.3, positive: true, icon: Clock, accent: "gold" as const },
-  { label: "Uptime", value: "99.7", unit: "%", change: 0.3, positive: true, icon: Server, accent: "brown" as const },
+  { label: "Task Velocity", value: "—", unit: "pts/sprint", change: 0, positive: true, icon: Zap, accent: "teal" as const },
+  { label: "Bug Rate", value: "—", unit: "/KLOC", change: 0, positive: true, icon: Bug, accent: "forest" as const },
+  { label: "Response Time", value: "—", unit: "hours", change: 0, positive: true, icon: Clock, accent: "gold" as const },
+  { label: "Uptime", value: "—", unit: "%", change: 0, positive: true, icon: Server, accent: "brown" as const },
 ];
 
-/* ── Mock performance data for SVG chart ── */
-const perfData = [
-  { week: "W1", score: 68 },
-  { week: "W2", score: 72 },
-  { week: "W3", score: 75 },
-  { week: "W4", score: 71 },
-  { week: "W5", score: 78 },
-  { week: "W6", score: 82 },
-  { week: "W7", score: 80 },
-  { week: "W8", score: 85 },
-  { week: "W9", score: 83 },
-  { week: "W10", score: 87 },
-];
+const perfData: { week: string; score: number }[] = [];
 
 /* ── Mock APG timeline events ── */
 const apgEvents = [

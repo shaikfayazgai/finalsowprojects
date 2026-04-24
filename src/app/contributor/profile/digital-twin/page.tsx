@@ -1,30 +1,43 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
+import { useSession } from "next-auth/react";
 import {
   CheckCircle2,
   Target,
   Clock,
   RotateCcw,
   TrendingUp,
-  Activity,
   ShieldCheck,
   Star,
   Flame,
   Zap,
-  BarChart3,
   FileText,
-  Sparkles,
+  AlertCircle,
+  RefreshCw,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
-import { mockDigitalTwin, mockContributorProfile } from "@/mocks/data/contributor";
+import {
+  fetchContributorDigitalTwin,
+  fetchContributorDigitalTwinHistory,
+  mapDigitalTwinToUi,
+  type DigitalTwinUi,
+  type DigitalTwinHistoryPeriod,
+  type DigitalTwinHistoryResponse,
+} from "@/lib/api/contributor";
+import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 
 /* ═══ Helpers ═══ */
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -107,9 +120,20 @@ function TrendBadge({ rate }: { rate: number }) {
 
 /* ═══ Monthly Activity Chart ═══ */
 
-function MonthlyActivityChart() {
-  const data = mockDigitalTwin.monthlyActivity;
+function MonthlyActivityChart({
+  data,
+}: {
+  data: DigitalTwinUi["monthlyActivity"];
+}) {
   const maxTasks = Math.max(...data.map((m) => m.tasksCompleted), 1);
+
+  if (data.length === 0) {
+    return (
+      <div className="px-5 py-8 text-center">
+        <p className="text-[12px] text-gray-400">No activity data yet</p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-5 py-5">
@@ -163,8 +187,109 @@ function MonthlyActivityChart() {
 /* ═══ PAGE ═══ */
 
 export default function DigitalTwinPage() {
-  const twin = mockDigitalTwin;
-  const profile = mockContributorProfile;
+  const { data: session, status: sessionStatus } = useSession();
+  const token = session?.user?.accessToken;
+  const contributorId = session?.user?.id ?? "";
+
+  const [twin, setTwin] = React.useState<DigitalTwinUi>(() => mapDigitalTwinToUi({}));
+  const [twinLoading, setTwinLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [historyPeriod, setHistoryPeriod] = React.useState<DigitalTwinHistoryPeriod>("3m");
+  const [history, setHistory] = React.useState<DigitalTwinHistoryResponse | null>(null);
+  const [historyLoading, setHistoryLoading] = React.useState(true);
+  const [historyError, setHistoryError] = React.useState<string | null>(null);
+  const [retryKey, setRetryKey] = React.useState(0);
+
+  React.useEffect(() => {
+    if (sessionStatus === "loading") return;
+    if (!token || !contributorId) {
+      setTwinLoading(false);
+      setLoadError(!contributorId ? "Missing contributor ID in session." : "Please sign in.");
+      return;
+    }
+    setTwinLoading(true);
+    setLoadError(null);
+    const sk = sessionKeyFragment(token);
+    let live = true;
+    void dedupeAsync(`contrib:digital-twin:${contributorId}:${sk}:${retryKey}`, () =>
+      fetchContributorDigitalTwin(token, contributorId),
+    )
+      .then((raw) => {
+        if (!live) return;
+        setTwin(mapDigitalTwinToUi(raw));
+      })
+      .catch((err: { message?: string }) => {
+        if (!live) return;
+        setLoadError(err?.message ?? "Failed to load digital twin");
+        setTwin(mapDigitalTwinToUi({}));
+      })
+      .finally(() => {
+        if (live) setTwinLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [token, contributorId, sessionStatus, retryKey]);
+
+  React.useEffect(() => {
+    if (sessionStatus === "loading") return;
+    if (!token || !contributorId) {
+      setHistoryLoading(false);
+      return;
+    }
+    setHistoryLoading(true);
+    setHistoryError(null);
+    const sk = sessionKeyFragment(token);
+    let live = true;
+    void dedupeAsync(`contrib:digital-twin-history:${contributorId}:${sk}:${historyPeriod}:${retryKey}`, () =>
+      fetchContributorDigitalTwinHistory(token, contributorId, historyPeriod),
+    )
+      .then((res) => {
+        if (!live) return;
+        setHistory(res);
+      })
+      .catch((err: { message?: string }) => {
+        if (!live) return;
+        setHistoryError(err?.message ?? "History unavailable");
+        setHistory(null);
+      })
+      .finally(() => {
+        if (live) setHistoryLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [token, contributorId, sessionStatus, historyPeriod, retryKey]);
+
+  const showSkeleton =
+    sessionStatus === "loading" || (Boolean(token) && Boolean(contributorId) && twinLoading);
+  if (showSkeleton) {
+    return (
+      <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
+        <div className="h-8 w-48 max-w-full bg-gray-200 rounded-lg animate-pulse" />
+        <div className="h-3 w-64 bg-gray-100 rounded animate-pulse" />
+        <div className="card-parchment h-40 bg-[#faf8f5] animate-pulse" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="card-parchment h-28 bg-[#faf8f5] animate-pulse" />
+          ))}
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (!token || !contributorId) {
+    return (
+      <motion.div variants={stagger} initial="hidden" animate="show">
+        <motion.div variants={fadeUp} className="card-parchment px-6 py-10">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 text-amber-800 text-[13px]">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {loadError || "Sign in to view your digital twin."}
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  }
 
   /* Health color */
   const healthColor =
@@ -174,19 +299,47 @@ export default function DigitalTwinPage() {
         ? "var(--color-gold-500)"
         : "var(--color-brown-500)";
 
+  const snapshots = Array.isArray(history?.snapshots) ? history.snapshots : [];
+  const periodLabel =
+    historyPeriod === "3m" ? "3 months" : historyPeriod === "6m" ? "6 months" : "1 year";
+
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
+      {loadError && (
+        <motion.div variants={fadeUp} className="mb-4 card-parchment px-4 py-3 flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 text-[13px] text-amber-800">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {loadError} — some sections may be empty.
+          </div>
+          <button
+            type="button"
+            onClick={() => setRetryKey((k) => k + 1)}
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-900 px-3 py-1.5 rounded-lg border border-amber-200 hover:bg-amber-50"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Retry
+          </button>
+        </motion.div>
+      )}
+
       {/* ═══ HEADER ═══ */}
-      <motion.div variants={fadeUp} className="mb-8">
-        <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight leading-tight">
-          Digital Twin
-        </h1>
-        <p className="text-[13px] text-gray-400 mt-1">
-          Your AI-computed performance profile based on delivery data
-        </p>
-        <p className="text-[11px] text-gray-400 mt-1">
-          Last updated {formatDate(twin.updatedAt)}
-        </p>
+      <motion.div variants={fadeUp} className="mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight leading-tight">
+            Digital Twin
+          </h1>
+          <p className="text-[13px] text-gray-400 mt-1">
+            Your AI-computed performance profile based on delivery data
+          </p>
+          <p className="text-[11px] text-gray-400 mt-1">
+            Last updated {formatDate(twin.updatedAt)}
+          </p>
+        </div>
+        <Link
+          href="/contributor/profile"
+          className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all self-start"
+        >
+          Back to profile
+        </Link>
       </motion.div>
 
       {/* ═══ TWIN HEALTH SCORE ═══ */}
@@ -289,6 +442,9 @@ export default function DigitalTwinPage() {
             <span>Avg Score</span>
             <span>Proficiency</span>
           </div>
+          {twin.topSkills.length === 0 ? (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No verified skills yet</p></div>
+          ) : (
           <div className="py-1">
             {twin.topSkills.map((s, i) => {
               /* Proficiency as percentage of 5.0 score */
@@ -334,6 +490,7 @@ export default function DigitalTwinPage() {
               );
             })}
           </div>
+          )}
         </div>
 
         {/* Reliability Trends — 2 cols */}
@@ -344,7 +501,74 @@ export default function DigitalTwinPage() {
           >
             <span className="text-sm font-semibold text-gray-800">Reliability Trends</span>
           </div>
-          <MonthlyActivityChart />
+          <MonthlyActivityChart data={twin.monthlyActivity} />
+        </div>
+      </motion.div>
+
+      {/* ═══ TWIN HISTORY (API: period 3m | 6m | 1y) ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-6">
+        <div
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-4"
+          style={{ borderBottom: "1px solid var(--border-soft)" }}
+        >
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-semibold text-gray-800">Twin history</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="twin-history-period" className="text-[12px] text-gray-500">
+              Period
+            </label>
+            <select
+              id="twin-history-period"
+              value={historyPeriod}
+              onChange={(e) => setHistoryPeriod(e.target.value as DigitalTwinHistoryPeriod)}
+              className="text-[12px] text-gray-700 bg-white rounded-xl border border-gray-200 px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-brown-100"
+            >
+              <option value="3m">3 months</option>
+              <option value="6m">6 months</option>
+              <option value="1y">1 year</option>
+            </select>
+          </div>
+        </div>
+        <div className="px-5 py-4">
+          {historyError && (
+            <p className="text-[12px] text-red-700 bg-red-50 rounded-xl px-3 py-2 border border-red-100 mb-3">
+              {historyError}
+            </p>
+          )}
+          {historyLoading && (
+            <p className="text-[12px] text-gray-400 mb-2">Loading history…</p>
+          )}
+          {!historyLoading && (
+            <>
+          <p className="text-[12px] text-gray-600 mb-2">
+            Window: <span className="font-medium text-gray-800">{history?.period ?? periodLabel}</span>
+            {snapshots.length > 0 && (
+              <span className="text-gray-500"> · {snapshots.length} snapshot{snapshots.length === 1 ? "" : "s"}</span>
+            )}
+          </p>
+          {snapshots.length === 0 && !historyError && (
+            <p className="text-[12px] text-gray-400">No historical snapshots for this period yet.</p>
+          )}
+          {snapshots.length > 0 && (
+            <ul className="space-y-2 max-h-64 overflow-y-auto">
+              {snapshots.map((snap, i) => (
+                <li key={i}>
+                  <details className="text-[11px] rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2">
+                    <summary className="cursor-pointer font-medium text-gray-700">
+                      Snapshot {i + 1}
+                    </summary>
+                    <pre className="mt-2 text-[10px] text-gray-500 overflow-x-auto whitespace-pre-wrap break-all">
+                      {JSON.stringify(snap, null, 2)}
+                    </pre>
+                  </details>
+                </li>
+              ))}
+            </ul>
+          )}
+            </>
+          )}
         </div>
       </motion.div>
 
@@ -397,6 +621,9 @@ export default function DigitalTwinPage() {
               {twin.aiInsights.length}
             </span>
           </div>
+          {twin.aiInsights.length === 0 ? (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No insights yet</p></div>
+          ) : (
           <div className="py-1">
             {twin.aiInsights.map((insight, i) => (
               <div
@@ -412,6 +639,7 @@ export default function DigitalTwinPage() {
               </div>
             ))}
           </div>
+          )}
         </div>
       </motion.div>
     </motion.div>

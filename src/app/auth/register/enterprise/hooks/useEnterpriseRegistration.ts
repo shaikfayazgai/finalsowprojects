@@ -146,7 +146,10 @@ export function useEnterpriseRegistration() {
         body: JSON.stringify({ email: adminEmail }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.message); return; }
+      if (!res.ok) {
+        setError(data.detail ? `${data.message} — ${data.detail}` : data.message);
+        return;
+      }
       setEmailOtpSent(true);
       startEmailCooldown();
     } catch {
@@ -310,6 +313,10 @@ export function useEnterpriseRegistration() {
         setError(result.error);
         setIsLoading(false);
         return;
+      }
+
+      if (result.emailWarning) {
+        console.warn("[enterprise-registration] welcome email failed:", result.emailWarning);
       }
 
       // Save registration data for onboarding wizard

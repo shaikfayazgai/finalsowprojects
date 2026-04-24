@@ -1742,6 +1742,12 @@ function SOWGenerateWizardPageInner() {
           setGenerationComplete(false);
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
+        onRejectRegenerate={() => {
+          // Discard the generated draft and restart the wizard from step 0.
+          setGenerationComplete(false);
+          setCurrentStep(0);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
       />
     );
   }

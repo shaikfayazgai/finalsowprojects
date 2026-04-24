@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { sowApi } from "@/lib/api/sow";
 import { stagger, fadeUp, slideInRight } from "@/lib/utils/motion-variants";
 import { Badge, Button, ScrollArea } from "@/components/ui";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
@@ -407,18 +408,50 @@ export default function CommercialDetailsPage() {
     if (Object.keys(mapped).length > 0) {
       setFormData((prev) => ({ ...prev, ...mapped }));
     }
+    // Handle AI generated tech stack
+    const aiText = payload.aiGeneratedText as string | null;
+    if (aiText) {
+      setFormData((prev) => ({
+        ...prev,
+        "technical-architecture": {
+          ...prev["technical-architecture"],
+          aiGeneratedTechStack: aiText,
+        },
+      }));
+    }
   }, [detailsRes]);
 
   const currentSection = SECTIONS[activeSection];
   const isPrePopulated = currentSection.aiConfidence >= 85;
 
-  const markComplete = (idx: number) => {
-    setCompletedSections((prev) => new Set([...prev, idx]));
-    /* Save section to API */
-    if (sowId) {
-      const sec = SECTIONS[idx];
-      const apiKey = SECTION_API_KEY[sec.id];
-      if (apiKey) saveMutation.mutate({ section: apiKey, data: formData[sec.id] ?? {} });
+  const markComplete = async (idx: number) => {
+    if (!sowId) return;
+    const sec = SECTIONS[idx];
+    const apiKey = SECTION_API_KEY[sec.id];
+    if (!apiKey) return;
+
+    try {
+      // Step 1 — Save section data
+      await sowApi.saveCommercialSection(sowId, apiKey, formData[sec.id] ?? {});
+
+      try {
+        // Step 2 — Validate section
+        await sowApi.validateCommercialSection(sowId, apiKey);
+      } catch {
+        console.warn("Validation warning — continuing");
+      }
+      // Step 3 — Mark complete
+      await sowApi.markSectionComplete(sowId, apiKey);
+      const handleRegenerate = async () => {
+        const fresh = await sowApi.getCommercialDetails(sowId!, true); 
+        // true = regenerateAiTechStack query param
+      };
+
+      // Step 4 — Mark complete in UI
+      setCompletedSections((prev) => new Set([...prev, idx]));
+
+    } catch (err) {
+      console.error("Failed to complete section:", err);
     }
   };
 
