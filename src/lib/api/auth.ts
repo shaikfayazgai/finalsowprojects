@@ -13,6 +13,8 @@ export interface GlimmoraUser {
   mfaEnabled: boolean;
   mfaEnrollmentRequired: boolean;
   authPending?: boolean;
+  requiresPasswordChange?: boolean;
+  isFirstLogin?: boolean;
   // Profile fields
   phone?: string;
   adminTitle?: string;
@@ -30,11 +32,12 @@ export interface LoginSuccessResponse extends AuthTokens {
 }
 
 export interface MfaPendingResponse {
-  status: "mfa_pending";
+  /** Backend returns mfa_setup_required | mfa_required */
+  status: "mfa_pending" | "mfa_setup_required" | "mfa_required";
   mfa_pending_token: string;
   expires_in: number;
-  user: Pick<GlimmoraUser, "id" | "email" | "firstName" | "lastName">;
-  methods: string[];
+  user: Pick<GlimmoraUser, "id" | "email" | "firstName" | "lastName" | "role">;
+  methods?: string[];
 }
 
 export type LoginResponse = LoginSuccessResponse | MfaPendingResponse;
@@ -63,73 +66,15 @@ export interface TokenPair {
   token_type: string;
 }
 
-export type OtpChannel = "email" | "phone";
-
-export interface SendOtpInput {
-  channel: OtpChannel;
-  purpose?: "registration" | "login";
-  email?: string;
-  phone?: string;
-  otpSessionToken?: string;
-  mfaPendingToken?: string;
-}
-
-export interface SendOtpResponse {
-  sessionToken?: string;
-  message?: string;
-  cooldownSeconds?: number;
-}
-
-export interface VerifyOtpInput {
-  channel: OtpChannel;
-  code: string;
-  purpose?: "registration" | "login";
-  email?: string;
-  phone?: string;
-  otpSessionToken?: string;
-  mfaPendingToken?: string;
-}
-
-export interface VerifyOtpResponse {
-  verified: boolean;
-  verificationToken?: string;
-  otpSessionToken?: string;
-  mfaPendingToken?: string;
-  message?: string;
-}
-
 // ── Type guard ─────────────────────────────────────────────────────────────
 
 export function isMfaPending(response: LoginResponse): response is MfaPendingResponse {
-  return (response as MfaPendingResponse).status === "mfa_pending";
+  const s = (response as MfaPendingResponse).status;
+  return s === "mfa_pending" || s === "mfa_setup_required" || s === "mfa_required";
 }
 
-function isLikelyNetworkError(err: unknown): err is ApiError {
-  if (!(err instanceof ApiError)) return false;
-  const msg = err.message.toLowerCase();
-  return (
-    err.status === 500 &&
-    (msg.includes("fetch failed") ||
-      msg.includes("network error") ||
-      msg.includes("failed to fetch") ||
-      msg.includes("load failed") ||
-      msg.includes("connect") ||
-      msg.includes("econnrefused"))
-  );
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-}
-
-function readString(obj: Record<string, unknown>, keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = obj[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value;
-    }
-  }
-  return undefined;
+export function isMfaVerifyPending(response: LoginResponse): boolean {
+  return isMfaPending(response) && (response as MfaPendingResponse).status === "mfa_required";
 }
 
 // ── Auth API ───────────────────────────────────────────────────────────────
@@ -199,304 +144,6 @@ export const authApi = {
       body: JSON.stringify({ recovery_code: recoveryCode }),
       token: mfaPendingToken,
     });
-  },
-
-  /** Send OTP for registration/login verification. */
-  async sendOtp(input: SendOtpInput): Promise<SendOtpResponse> {
-    // This backend's /auth/otp/send is mobile-number based.
-    // Email verification is handled by the local Next.js route.
-    if (input.purpose === "registration" && input.channel === "phone" && input.phone) {
-      const res = await fetch("/api/auth/otp/send-phone", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: input.phone }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new ApiError(res.status, (data as { message?: string }).message ?? "Failed to send phone OTP");
-      }
-      return {
-        sessionToken: input.otpSessionToken,
-        message: (data as { message?: string }).message ?? "OTP sent",
-        cooldownSeconds: 30,
-      };
-    }
-
-    if (input.purpose === "registration" && input.channel === "email" && input.email) {
-      const res = await fetch("/api/auth/otp/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: input.email }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new ApiError(res.status, (data as { message?: string }).message ?? "Failed to send email OTP");
-      }
-      return {
-        sessionToken: input.otpSessionToken,
-        message: (data as { message?: string }).message ?? "OTP sent",
-        cooldownSeconds: 30,
-      };
-    }
-
-    try {
-      const body =
-        input.channel === "phone"
-          ? { mobile_number: input.phone }
-          : {
-              channel: input.channel,
-              purpose: input.purpose,
-              email: input.email,
-              phone: input.phone,
-              otp_session_token: input.otpSessionToken,
-            };
-
-      const raw = await apiCall<Record<string, unknown>>("/api/v1/auth/otp/send", {
-        method: "POST",
-        body: JSON.stringify(body),
-        token: input.mfaPendingToken,
-      });
-      return {
-        sessionToken: readString(raw, [
-          "otp_session_token",
-          "otpSessionToken",
-          "session_token",
-          "sessionToken",
-          "verification_id",
-          "verificationId",
-          "request_id",
-          "requestId",
-        ]),
-        message: readString(raw, ["message", "detail"]),
-        cooldownSeconds:
-          typeof raw.cooldown_seconds === "number"
-            ? raw.cooldown_seconds
-            : typeof raw.cooldownSeconds === "number"
-              ? raw.cooldownSeconds
-              : undefined,
-      };
-    } catch (err) {
-      // Local-dev fallback: if backend is unavailable, keep registration flow usable.
-      if (input.purpose === "registration" && isLikelyNetworkError(err)) {
-        if (input.channel === "phone") {
-          return {
-            sessionToken: input.otpSessionToken || "local-dev-phone-otp",
-            message: "OTP sent (local fallback).",
-            cooldownSeconds: 30,
-          };
-        }
-        if (input.channel === "email" && input.email) {
-          const res = await fetch("/api/auth/otp/send-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: input.email }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            throw new ApiError(res.status, (data as { message?: string }).message ?? "Failed to send email OTP");
-          }
-          return {
-            sessionToken: input.otpSessionToken,
-            message: (data as { message?: string }).message ?? "OTP sent",
-            cooldownSeconds: 30,
-          };
-        }
-      }
-      throw err;
-    }
-  },
-
-  /** Verify OTP code for registration/login. */
-  async verifyOtp(input: VerifyOtpInput): Promise<VerifyOtpResponse> {
-    // Email verification uses local Next.js route in this app.
-    if (input.purpose === "registration" && input.channel === "phone" && input.phone) {
-      const res = await fetch("/api/auth/otp/verify-phone", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: input.phone, code: input.code }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        return {
-          verified: false,
-          otpSessionToken: input.otpSessionToken,
-          message: (data as { message?: string }).message ?? "Invalid or expired code.",
-        };
-      }
-      return {
-        verified: true,
-        otpSessionToken: input.otpSessionToken,
-        message: (data as { message?: string }).message ?? "Verified",
-      };
-    }
-
-    if (input.purpose === "registration" && input.channel === "email" && input.email) {
-      const res = await fetch("/api/auth/otp/verify-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: input.email, code: input.code }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        return {
-          verified: false,
-          otpSessionToken: input.otpSessionToken,
-          message: (data as { message?: string }).message ?? "Invalid or expired code.",
-        };
-      }
-      return {
-        verified: true,
-        otpSessionToken: input.otpSessionToken,
-        message: (data as { message?: string }).message ?? "Verified",
-      };
-    }
-
-    try {
-      const body =
-        input.channel === "phone"
-          ? { mobile_number: input.phone, otp_code: input.code }
-          : {
-              channel: input.channel,
-              purpose: input.purpose,
-              code: input.code,
-              email: input.email,
-              phone: input.phone,
-              otp_session_token: input.otpSessionToken,
-            };
-
-      const raw = await apiCall<Record<string, unknown>>("/api/v1/auth/otp/verify", {
-        method: "POST",
-        body: JSON.stringify(body),
-        token: input.mfaPendingToken,
-      });
-      const status = readString(raw, ["status", "result"]);
-      const explicitVerified =
-        typeof raw.verified === "boolean"
-          ? raw.verified
-          : typeof raw.success === "boolean"
-            ? raw.success
-            : undefined;
-      const verified = explicitVerified ?? (status === "verified" || status === "success" || status === "ok");
-      return {
-        verified,
-        verificationToken: readString(raw, [
-          "verification_token",
-          "verificationToken",
-          "otp_verification_token",
-          "otpVerificationToken",
-        ]),
-        otpSessionToken: readString(raw, [
-          "otp_session_token",
-          "otpSessionToken",
-          "session_token",
-          "sessionToken",
-        ]),
-        mfaPendingToken: readString(raw, ["mfa_pending_token", "mfaPendingToken"]),
-        message: readString(raw, ["message", "detail"]),
-      };
-    } catch (err) {
-      // Local-dev fallback: if backend is unavailable, keep registration flow usable.
-      if (input.purpose === "registration" && isLikelyNetworkError(err)) {
-        if (input.channel === "phone") {
-          const ok = /^\d{6}$/.test(input.code);
-          return {
-            verified: ok,
-            otpSessionToken: input.otpSessionToken,
-            message: ok ? "Verified (local fallback)." : "Please enter a valid 6-digit code.",
-          };
-        }
-        if (input.channel === "email" && input.email) {
-          const res = await fetch("/api/auth/otp/verify-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: input.email, code: input.code }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            return {
-              verified: false,
-              otpSessionToken: input.otpSessionToken,
-              message: (data as { message?: string }).message ?? "Invalid or expired code.",
-            };
-          }
-          return {
-            verified: true,
-            otpSessionToken: input.otpSessionToken,
-            message: (data as { message?: string }).message ?? "Verified",
-          };
-        }
-      }
-      throw err;
-    }
-  },
-
-  /** Finalize login after OTP verification and return auth tokens. */
-  async completeOtpLogin(input: {
-    code?: string;
-    purpose?: "login";
-    channel?: OtpChannel;
-    email?: string;
-    phone?: string;
-    verificationToken?: string;
-    otpSessionToken?: string;
-    mfaPendingToken?: string;
-  }): Promise<LoginSuccessResponse> {
-    const raw = await apiCall<Record<string, unknown>>("/api/v1/auth/otp/complete-login", {
-      method: "POST",
-      body: JSON.stringify({
-        code: input.code,
-        purpose: input.purpose ?? "login",
-        channel: input.channel,
-        email: input.email,
-        phone: input.phone,
-        verification_token: input.verificationToken,
-        otp_session_token: input.otpSessionToken,
-      }),
-      token: input.mfaPendingToken,
-    });
-    const userRaw = asRecord(raw.user);
-    return {
-      access_token: readString(raw, ["access_token", "accessToken"]) ?? "",
-      refresh_token: readString(raw, ["refresh_token", "refreshToken"]) ?? "",
-      token_type: readString(raw, ["token_type", "tokenType"]) ?? "bearer",
-      expires_in:
-        typeof raw.expires_in === "number"
-          ? raw.expires_in
-          : typeof raw.expiresIn === "number"
-            ? raw.expiresIn
-            : 3600,
-      user: {
-        id: readString(userRaw, ["id"]) ?? "",
-        firstName: readString(userRaw, ["firstName", "first_name"]) ?? "",
-        lastName: readString(userRaw, ["lastName", "last_name"]) ?? "",
-        email: readString(userRaw, ["email"]) ?? (input.email ?? ""),
-        role: readString(userRaw, ["role"]) ?? "enterprise",
-        emailVerified:
-          typeof userRaw.emailVerified === "boolean"
-            ? userRaw.emailVerified
-            : typeof userRaw.email_verified === "boolean"
-              ? userRaw.email_verified
-              : true,
-        phoneVerified:
-          typeof userRaw.phoneVerified === "boolean"
-            ? userRaw.phoneVerified
-            : typeof userRaw.phone_verified === "boolean"
-              ? userRaw.phone_verified
-              : false,
-        mfaEnabled:
-          typeof userRaw.mfaEnabled === "boolean"
-            ? userRaw.mfaEnabled
-            : typeof userRaw.mfa_enabled === "boolean"
-              ? userRaw.mfa_enabled
-              : true,
-        mfaEnrollmentRequired:
-          typeof userRaw.mfaEnrollmentRequired === "boolean"
-            ? userRaw.mfaEnrollmentRequired
-            : typeof userRaw.mfa_enrollment_required === "boolean"
-              ? userRaw.mfa_enrollment_required
-              : false,
-      },
-    };
   },
 
   /** Initiate the forgot-password flow — triggers email via Next.js route. */
@@ -634,29 +281,88 @@ export const authApi = {
     language: string;
     timeZone: string;
     invitedByName: string;
+    /** INVITED | ACTIVE | EXPIRED — defaults to INVITED when omitted */
+    status?: "INVITED" | "ACTIVE" | "EXPIRED";
     accessToken?: string;
   }): Promise<{ user_id: string; email: string; temp_password: string }> {
-    const res = await fetch("/api/reviewer/create", {
+    const res = await fetch("/api/reviewers/invitations", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(data.accessToken ? { Authorization: `Bearer ${data.accessToken}` } : {}),
+      },
       body: JSON.stringify({
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
-        role: "reviewer",
+        // job_title — backend aliases "role" but must be the human job title, not system role
+        jobTitle: data.designation,
         designation: data.designation,
         department: data.department,
         username: data.username,
         language: data.language,
         timeZone: data.timeZone,
-        invitedByName: data.invitedByName,
+        status: data.status ?? "INVITED",
+        ...(data.accessToken ? { accessToken: data.accessToken } : {}),
       }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(json?.detail || json?.message || json?.error || "Failed to create reviewer");
+      const detail = json?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.message ?? json?.message ?? json?.error ?? "Failed to create reviewer";
+      throw new Error(msg);
     }
-    return json;
+    const inner = json?.data ?? json;
+    const user_id = inner?.id ?? inner?.user_id ?? "";
+    const temp_password = inner?.temporaryPassword ?? inner?.temp_password ?? "";
+    const emailOut = inner?.email ?? data.email;
+    if (!user_id || !temp_password) {
+      throw new Error("Create reviewer succeeded but response did not include credentials.");
+    }
+    return { user_id, email: emailOut, temp_password };
+  },
+
+  async resendReviewerInvite(email: string, accessToken?: string): Promise<{ user_id: string; email: string; temp_password: string }> {
+    const res = await fetch("/api/reviewers/invitations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        resendExisting: true,
+        ...(accessToken ? { accessToken } : {}),
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detail = json?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.message ?? json?.message ?? json?.error ?? "Failed to resend reviewer invite";
+      throw new Error(msg);
+    }
+    const inner = json?.data ?? json;
+    const user_id = inner?.id ?? inner?.user_id ?? "";
+    const temp_password = inner?.temporaryPassword ?? inner?.temp_password ?? "";
+    if (!user_id) {
+      throw new Error("Resend invite succeeded but response was incomplete.");
+    }
+    return { user_id, email: inner?.email ?? email, temp_password };
+  },
+
+  /** Change password while authenticated (e.g. reviewer first login after temporary password). */
+  async changePassword(currentPassword: string, newPassword: string, accessToken: string): Promise<void> {
+    await apiCall<{ success?: boolean }>("/api/v1/auth/password/change", {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      token: accessToken,
+    });
   },
 
   /** Get the current active session details. */

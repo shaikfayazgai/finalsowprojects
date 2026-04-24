@@ -33,15 +33,24 @@ export async function POST(req: NextRequest) {
             email: u.email,
             firstName: u.firstName,
             lastName: u.lastName,
+            role: u.role,
           },
         });
       }
 
-      // MFA verify required (user has TOTP set up) — return pending token
+      // MFA verify required (user has TOTP set up) — return pending token + role for post-verify redirect
+      const u = response.user;
       return NextResponse.json({
         ok: true,
         mfaRequired: true,
         mfaPendingToken: response.mfa_pending_token,
+        user: {
+          id: u.id,
+          email: u.email,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          role: u.role,
+        },
       });
     }
 
@@ -52,6 +61,14 @@ export async function POST(req: NextRequest) {
       accessToken: response.access_token,
       refreshToken: response.refresh_token,
       expiresIn: response.expires_in,
+      user: {
+        id: response.user.id,
+        email: response.user.email,
+        firstName: response.user.firstName,
+        lastName: response.user.lastName,
+        role: response.user.role,
+        requiresPasswordChange: response.user.requiresPasswordChange ?? false,
+      },
     });
   } catch (err) {
     if (err instanceof ApiError) {

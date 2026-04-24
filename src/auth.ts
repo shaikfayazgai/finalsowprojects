@@ -2,10 +2,51 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
-import { authApi, isMfaPending } from "@/lib/api/auth";
+import fs from "node:fs";
+import path from "node:path";
+import dotenv from "dotenv";
+import { authApi, isMfaPending, isMfaVerifyPending } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
 export type UserRole = "contributor" | "enterprise" | "admin" | "reviewer" | "mentor";
+
+function loadBackendEnvFallback(): Record<string, string> {
+  const backendEnvPath = path.resolve(process.cwd(), "..", "backend", ".env");
+  if (!fs.existsSync(backendEnvPath)) return {};
+  try {
+    const parsed = dotenv.parse(fs.readFileSync(backendEnvPath));
+    return parsed as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+const backendEnv = loadBackendEnvFallback();
+const googleClientId =
+  process.env.GOOGLE_CLIENT_ID ??
+  process.env.AUTH_GOOGLE_ID ??
+  backendEnv.GOOGLE_CLIENT_ID ??
+  "";
+const googleClientSecret =
+  process.env.GOOGLE_CLIENT_SECRET ??
+  process.env.AUTH_GOOGLE_SECRET ??
+  backendEnv.GOOGLE_CLIENT_SECRET ??
+  "";
+const microsoftClientId =
+  process.env.MICROSOFT_CLIENT_ID ??
+  process.env.AUTH_MICROSOFT_ENTRA_ID_ID ??
+  backendEnv.MICROSOFT_CLIENT_ID ??
+  "";
+const microsoftClientSecret =
+  process.env.MICROSOFT_CLIENT_SECRET ??
+  process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET ??
+  backendEnv.MICROSOFT_CLIENT_SECRET ??
+  "";
+const microsoftTenantId =
+  process.env.MICROSOFT_TENANT_ID ??
+  process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID ??
+  backendEnv.MICROSOFT_TENANT_ID ??
+  "common";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Make the secret explicit to avoid env-resolution issues across runtimes/bundlers.
@@ -36,15 +77,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         provider:     {},
       },
       async authorize(credentials) {
-        if (!credentials?.accessToken) return null;
         const role = ((credentials.role as string) || "enterprise") as UserRole;
+        const userId = (credentials.userId as string) || "";
+        const email = (credentials.email as string) || "";
+        if (!userId || !email) return null;
         return {
-          id:           credentials.userId as string,
+          id:           userId,
           name:         `${credentials.firstName} ${credentials.lastName}`,
-          email:        credentials.email as string,
+          email,
           role,
-          accessToken:  credentials.accessToken as string,
-          refreshToken: credentials.refreshToken as string,
+          ...(credentials.accessToken ? { accessToken: credentials.accessToken as string } : {}),
+          ...(credentials.refreshToken ? { refreshToken: credentials.refreshToken as string } : {}),
           expiresIn:    Number(credentials.expiresIn) || 3600,
           provider:     (credentials.provider as string) || "google",
         };
@@ -58,16 +101,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
      * callback is locked to glimmora-api.onrender.com).
      */
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
       authorization: {
         params: { prompt: "consent", access_type: "offline", response_type: "code" },
       },
     }),
     MicrosoftEntraID({
-      clientId: process.env.MICROSOFT_CLIENT_ID,
-      clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-      issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID ?? "common"}/v2.0`,
+      clientId: microsoftClientId,
+      clientSecret: microsoftClientSecret,
+      issuer: `https://login.microsoftonline.com/${microsoftTenantId}/v2.0`,
     }),
     Credentials({
       name: "credentials",
@@ -95,25 +138,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           const response = await authApi.login(email, password);
 
-          // MFA pending (code required) — block login until verified
-          if (isMfaPending(response) && (response as any).mfa_flow !== "setup") {
+          // MFA verify (existing TOTP) — handled on login page before signIn; do not mint a session here.
+          if (isMfaVerifyPending(response)) {
             return null;
           }
 
-          // MFA setup required — allow login.
-          // The API may still include tokens alongside the MFA-pending payload;
-          // include them so enterprise endpoints work without re-login.
+          // MFA setup required — allow a session without full API tokens until setup completes.
           if (isMfaPending(response)) {
-            const u = (response as any).user ?? {};
-            const r = response as any;
+            const u = (response as { user?: Record<string, string> }).user ?? {};
+            const r = response as unknown as Record<string, unknown>;
             return {
               id: u.id ?? "",
               name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim(),
               email: u.email ?? email,
               role: (u.role ?? "enterprise") as UserRole,
-              ...(r.access_token ? { accessToken: r.access_token } : {}),
-              ...(r.refresh_token ? { refreshToken: r.refresh_token } : {}),
-              ...(r.expires_in ? { expiresIn: r.expires_in } : {}),
+              ...(typeof r.access_token === "string" ? { accessToken: r.access_token } : {}),
+              ...(typeof r.refresh_token === "string" ? { refreshToken: r.refresh_token } : {}),
+              ...(typeof r.expires_in === "number" ? { expiresIn: r.expires_in } : {}),
             };
           }
 
@@ -144,6 +185,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Initial sign-in — user object only present on first call
       if (user) {
         token.id = user.id;
+        // Ensure standard JWT `sub` so getToken / route guards recognize the session after partial sign-in (e.g. MFA setup).
+        if (user.id) {
+          token.sub = user.id;
+        }
         // For Google/Microsoft OAuth, default to contributor role
         // The role can be updated later during onboarding
         token.role = ((user as { role?: string }).role || "contributor") as UserRole;
