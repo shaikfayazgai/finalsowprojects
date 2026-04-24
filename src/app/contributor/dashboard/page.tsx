@@ -24,6 +24,7 @@ import {
   type SystemBanner,
   type ActionItem,
 } from "@/lib/api/contributor";
+import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 
 // ── KPI icon map ──────────────────────────────────────────────────────────────
 
@@ -240,19 +241,30 @@ export default function ContributorDashboardPage() {
     }
 
     setIsLoading(true);
-    Promise.all([
-      fetchContributorDashboard(token),
-      fetchContributorNotifications(token),
-    ] as const)
+    const sk = sessionKeyFragment(token);
+    let live = true;
+    void dedupeAsync(`contrib:dashboard-bundle:${sk}`, () =>
+      Promise.all([
+        fetchContributorDashboard(token),
+        fetchContributorNotifications(token),
+      ] as const),
+    )
       .then(([dashboardRes, notificationsRes]) => {
+        if (!live) return;
         setData(dashboardRes);
         setNotifications(notificationsRes.items);
         setError(null);
       })
       .catch((err: Error) => {
+        if (!live) return;
         setError(err.message ?? "Failed to load dashboard");
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (live) setIsLoading(false);
+      });
+    return () => {
+      live = false;
+    };
   }, [session, sessionStatus]);
 
   const dismissBanner = React.useCallback((id: string) => {

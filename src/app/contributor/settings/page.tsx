@@ -18,8 +18,11 @@ import {
   changeContributorPassword,
   setup2FA,
   verify2FA,
+  disable2FA,
+  deactivateAccount,
   type ContributorSettingsResponse,
 } from "@/lib/api/contributor";
+import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { toast } from "@/lib/stores/toast-store";
 
 // ── Badge ────────────────────────────────────────────────────────────────────
@@ -132,7 +135,14 @@ export default function SettingsPage() {
   const [isSettingUp2FA, setIsSettingUp2FA] = React.useState(false);
   const [isVerifying2FA, setIsVerifying2FA] = React.useState(false);
   const [twoFaSetupDone, setTwoFaSetupDone] = React.useState(false);
+  const [disablePassword, setDisablePassword] = React.useState("");
+  const [disableOtp, setDisableOtp] = React.useState("");
+  const [isDisabling2FA, setIsDisabling2FA] = React.useState(false);
   const [showDeactivateDialog, setShowDeactivateDialog] = React.useState(false);
+  const [deactivateConfirmText, setDeactivateConfirmText] = React.useState("");
+  const [deactivateReason, setDeactivateReason] = React.useState("");
+  const [deactivatePassword, setDeactivatePassword] = React.useState("");
+  const [isDeactivating, setIsDeactivating] = React.useState(false);
   const [showQuietHoursDialog, setShowQuietHoursDialog] = React.useState(false);
   const [quietStart, setQuietStart] = React.useState("");
   const [quietEnd, setQuietEnd] = React.useState("");
@@ -147,14 +157,25 @@ export default function SettingsPage() {
     if (!token) { setIsLoading(false); setError("no_token"); return; }
 
     setIsLoading(true);
-    fetchContributorSettings(token)
+    const sk = sessionKeyFragment(token);
+    let live = true;
+    void dedupeAsync(`contrib:settings:${sk}`, () => fetchContributorSettings(token))
       .then((res) => {
+        if (!live) return;
         setSettings(res);
         setNotifPrefs({ ...res.notification_preferences });
         setError(null);
       })
-      .catch((err: Error) => setError(err.message ?? "Failed to load settings"))
-      .finally(() => setIsLoading(false));
+      .catch((err: Error) => {
+        if (!live) return;
+        setError(err.message ?? "Failed to load settings");
+      })
+      .finally(() => {
+        if (live) setIsLoading(false);
+      });
+    return () => {
+      live = false;
+    };
   }, [session, sessionStatus]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -340,6 +361,8 @@ export default function SettingsPage() {
     setTwoFaSecret("");
     setTwoFaCode("");
     setTwoFaSetupDone(false);
+    setDisablePassword("");
+    setDisableOtp("");
   };
 
   if (isLoading) return <SettingsSkeleton />;
@@ -781,13 +804,35 @@ export default function SettingsPage() {
             </div>
 
             {twoFaEnabled ? (
-              /* ── already enabled ── */
+              /* ── disable flow ── */
               <div className="space-y-4 mb-5">
                 <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-forest-50">
                   <CheckCircle2 className="w-4 h-4 text-forest-500 mt-0.5 shrink-0" />
                   <p className="text-[12px] text-forest-700">
-                    Two-factor authentication is currently <strong>enabled</strong> on your account.
+                    Two-factor authentication is currently <strong>enabled</strong>. To disable it, enter your account password and the current code from your authenticator app.
                   </p>
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-gray-500 block mb-1.5">Account Password</label>
+                  <input
+                    type="password"
+                    placeholder="Enter your password"
+                    value={disablePassword}
+                    onChange={(e) => setDisablePassword(e.target.value)}
+                    className="w-full text-[13px] text-gray-700 bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-200 outline-none focus:border-red-300 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-gray-500 block mb-1.5">Authenticator Code</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Enter 6-digit code"
+                    maxLength={6}
+                    value={disableOtp}
+                    onChange={(e) => setDisableOtp(e.target.value.replace(/\D/g, ""))}
+                    className="w-full text-[13px] text-gray-700 bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-200 outline-none focus:border-red-300 transition-colors text-center tracking-[0.5em] font-mono"
+                  />
                 </div>
               </div>
             ) : twoFaSetupDone ? (
@@ -858,8 +903,41 @@ export default function SettingsPage() {
 
             <div className="flex items-center justify-end gap-3">
               <button onClick={close2FADialog} className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
-                {twoFaEnabled || twoFaSetupDone ? "Close" : "Cancel"}
+                {twoFaSetupDone ? "Close" : "Cancel"}
               </button>
+
+              {/* ── Disable button (shown when 2FA is currently ON) ── */}
+              {twoFaEnabled && !twoFaSetupDone && (
+                <button
+                  disabled={isDisabling2FA || !disablePassword || disableOtp.length < 6}
+                  onClick={async () => {
+                    const token = (session?.user as { accessToken?: string } | undefined)?.accessToken;
+                    if (!token) return;
+                    setIsDisabling2FA(true);
+                    try {
+                      const updated = await disable2FA(token, {
+                        password: disablePassword.trim(),
+                        verification_code: disableOtp,
+                      });
+                      setSettings(updated);
+                      toast.success("2FA disabled", "Two-factor authentication has been turned off.");
+                      close2FADialog();
+                    } catch (err: unknown) {
+                      toast.error(
+                        "Failed to disable 2FA",
+                        err instanceof Error ? err.message : "Incorrect password or code — please try again.",
+                      );
+                    } finally {
+                      setIsDisabling2FA(false);
+                    }
+                  }}
+                  className="text-[12px] font-semibold text-white bg-gradient-to-r from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 px-5 py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
+                >
+                  {isDisabling2FA ? "Disabling…" : "Disable 2FA"}
+                </button>
+              )}
+
+              {/* ── Enable button (shown when 2FA is currently OFF) ── */}
               {!twoFaEnabled && !twoFaSetupDone && (
                 <button
                   disabled={isSettingUp2FA || isVerifying2FA || twoFaCode.length < 6}
@@ -869,7 +947,6 @@ export default function SettingsPage() {
                     setIsVerifying2FA(true);
                     try {
                       const updated = await verify2FA(token, twoFaCode);
-                      // Persist updated settings so the button flips to "2FA Enabled"
                       setSettings(updated);
                       setTwoFaSetupDone(true);
                       toast.success("2FA enabled", "Two-factor authentication is now active on your account.");
@@ -894,28 +971,116 @@ export default function SettingsPage() {
 
       {/* ═══ DEACTIVATE DIALOG ═══ */}
       {showDeactivateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowDeactivateDialog(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+          onClick={() => { if (!isDeactivating) { setShowDeactivateDialog(false); setDeactivateConfirmText(""); setDeactivateReason(""); setDeactivatePassword(""); } }}
+        >
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-[16px] font-semibold text-red-600">Deactivate Account</h3>
-              <button onClick={() => setShowDeactivateDialog(false)} className="w-8 h-8 rounded-xl hover:bg-gray-100 flex items-center justify-center transition-colors">
+              <button
+                disabled={isDeactivating}
+                onClick={() => { setShowDeactivateDialog(false); setDeactivateConfirmText(""); setDeactivateReason(""); setDeactivatePassword(""); }}
+                className="w-8 h-8 rounded-xl hover:bg-gray-100 flex items-center justify-center transition-colors disabled:opacity-50"
+              >
                 <X className="w-4 h-4 text-gray-400" />
               </button>
             </div>
-            <div className="mb-5">
-              <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-50 mb-4">
+
+            <div className="space-y-4 mb-5">
+              {/* Warning banner */}
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-50">
                 <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-[12px] font-medium text-red-700 mb-1">This action cannot be easily undone</p>
-                  <p className="text-[11px] text-red-600 leading-relaxed">Deactivating your account will remove you from all active tasks and suspend your earnings. You will need to contact support to reactivate.</p>
+                  <p className="text-[11px] text-red-600 leading-relaxed">
+                    Deactivating your account will remove you from all active tasks and suspend your earnings. Contact support to reactivate.
+                  </p>
                 </div>
               </div>
-              <label className="text-[11px] font-medium text-gray-500 block mb-1.5">Type &quot;DEACTIVATE&quot; to confirm</label>
-              <input type="text" placeholder="DEACTIVATE" className="w-full text-[13px] text-gray-700 bg-gray-50 rounded-xl px-4 py-2.5 border border-red-200 outline-none focus:border-red-400 transition-colors" />
+
+              {/* Reason */}
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 block mb-1.5">Reason for deactivation</label>
+                <textarea
+                  rows={2}
+                  placeholder="Tell us why you're leaving…"
+                  value={deactivateReason}
+                  onChange={(e) => setDeactivateReason(e.target.value)}
+                  disabled={isDeactivating}
+                  className="w-full text-[13px] text-gray-700 bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-200 outline-none focus:border-red-300 transition-colors resize-none disabled:opacity-50"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 block mb-1.5">Account Password</label>
+                <input
+                  type="password"
+                  placeholder="Enter your password to confirm"
+                  value={deactivatePassword}
+                  onChange={(e) => setDeactivatePassword(e.target.value)}
+                  disabled={isDeactivating}
+                  className="w-full text-[13px] text-gray-700 bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-200 outline-none focus:border-red-300 transition-colors disabled:opacity-50"
+                />
+              </div>
+
+              {/* Confirmation text */}
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 block mb-1.5">
+                  Type <span className="font-mono font-bold text-red-500">DEACTIVATE</span> to confirm
+                </label>
+                <input
+                  type="text"
+                  placeholder="DEACTIVATE"
+                  value={deactivateConfirmText}
+                  onChange={(e) => setDeactivateConfirmText(e.target.value)}
+                  disabled={isDeactivating}
+                  className="w-full text-[13px] text-gray-700 bg-gray-50 rounded-xl px-4 py-2.5 border border-red-200 outline-none focus:border-red-400 transition-colors font-mono disabled:opacity-50"
+                />
+              </div>
             </div>
+
             <div className="flex items-center justify-end gap-3">
-              <button onClick={() => setShowDeactivateDialog(false)} className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Cancel</button>
-              <button onClick={() => setShowDeactivateDialog(false)} className="text-[12px] font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 px-5 py-2 rounded-xl transition-all">Deactivate</button>
+              <button
+                disabled={isDeactivating}
+                onClick={() => { setShowDeactivateDialog(false); setDeactivateConfirmText(""); setDeactivateReason(""); setDeactivatePassword(""); }}
+                className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={
+                  isDeactivating ||
+                  deactivateConfirmText !== "DEACTIVATE" ||
+                  !deactivatePassword ||
+                  !deactivateReason.trim()
+                }
+                onClick={async () => {
+                  const token = (session?.user as { accessToken?: string } | undefined)?.accessToken;
+                  if (!token) return;
+                  setIsDeactivating(true);
+                  try {
+                    await deactivateAccount(token, {
+                      confirmation_text: deactivateConfirmText,
+                      reason: deactivateReason.trim(),
+                      password: deactivatePassword,
+                    });
+                    toast.success("Account deactivated", "Your account has been deactivated. Contact support to reactivate.");
+                    setShowDeactivateDialog(false);
+                  } catch (err: unknown) {
+                    toast.error(
+                      "Deactivation failed",
+                      err instanceof Error ? err.message : "Could not deactivate account — please try again.",
+                    );
+                  } finally {
+                    setIsDeactivating(false);
+                  }
+                }}
+                className="text-[12px] font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 px-5 py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
+              >
+                {isDeactivating ? "Deactivating…" : "Deactivate"}
+              </button>
             </div>
           </div>
         </div>
