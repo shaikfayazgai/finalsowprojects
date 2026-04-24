@@ -606,7 +606,7 @@ export function Step2Profile({
           <SectionLabel icon={Sparkles} text="Skills" />
           <div className="space-y-4">
             <SkillAutocomplete
-              label="Primary Skills" badge={`${primarySkills.length}/20 · required`}
+              label="Primary Skills *" badge={`${primarySkills.length}/20 · required`}
               skills={primarySkills} onAdd={addPrimarySkill} onRemove={removePrimarySkill}
               inputValue={skillInput} onInputChange={setSkillInput}
               suggestions={primarySuggestions}

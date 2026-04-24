@@ -119,6 +119,17 @@ export function useSowList() {
   });
 }
 
+/**
+ * Admin variant — forces the enterprise service token so dev admins without
+ * a personal glimmora access token still see enterprise-owned SOWs.
+ */
+export function useAdminSowList() {
+  return useQuery({
+    queryKey: [...sowKeys.sows(), "admin"] as const,
+    queryFn: () => sowApi.listSowsAsAdmin(),
+  });
+}
+
 export function useSow(sowId: string | null) {
   return useQuery({
     queryKey: sowKeys.sow(sowId ?? ""),

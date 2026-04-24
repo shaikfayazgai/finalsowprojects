@@ -44,32 +44,34 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    const isDev = process.env.NODE_ENV !== "production";
     if (!success) {
-      if (!isDev) {
-        return NextResponse.json(
-          { error: "SEND_FAILED", message: "Could not send verification email. Please try again." },
-          { status: 500 },
-        );
+      // Local/dev fallback: still allow verification flow to proceed when SMTP
+      // is unavailable on the machine.
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(`[send-email OTP] SMTP unavailable. Using local fallback code for ${email}: ${code}`);
+        const devRes = NextResponse.json({
+          ok: true,
+          message: "Email service unavailable locally. Use OTP from server logs.",
+          devFallback: true,
+        });
+        devRes.cookies.set("email_otp_token", token, {
+          httpOnly: true,
+          sameSite: "strict",
+          path: "/",
+          maxAge: 5 * 60,
+        });
+        return devRes;
       }
 
-      console.warn(
-        `[send-email OTP] Email provider failed in development. Using local OTP fallback for: ${email}`,
+      return NextResponse.json(
+        { error: "SEND_FAILED", message: "Could not send verification email. Please try again." },
+        { status: 500 },
       );
-    } else {
-      console.log(`[send-email OTP] Sent successfully to: ${email}`);
     }
 
-    const res = NextResponse.json(
-      success
-        ? { ok: true }
-        : {
-            ok: true,
-            devFallback: true,
-            devOtp: code,
-            message: "Email provider failed in development. OTP generated locally.",
-          },
-    );
+    console.log(`[send-email OTP] Sent successfully to: ${email}`);
+
+    const res = NextResponse.json({ ok: true });
     res.cookies.set("email_otp_token", token, {
       httpOnly: true,
       sameSite: "strict",

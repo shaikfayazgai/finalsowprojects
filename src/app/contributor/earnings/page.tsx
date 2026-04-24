@@ -120,41 +120,13 @@ function parseChartString(raw: string): ChartPoint[] {
   }
 }
 
-function EarningsChart({ token }: { token: string | undefined }) {
+function EarningsChart() {
   const [period, setPeriod] = React.useState<"3m" | "6m" | "1y">("6m");
   const [retryCount, setRetryCount] = React.useState(0);
   const [hoveredIdx, setHoveredIdx] = React.useState<number | null>(null);
-  const [chartData, setChartData] = React.useState<ChartPoint[]>([]);
-  const [chartLoading, setChartLoading] = React.useState(true);
-  const [chartError, setChartError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (!token) { setChartLoading(false); return; }
-    const apiPeriod = PERIOD_API_MAP[period];
-    setChartLoading(true);
-    setChartError(null);
-    const sk = sessionKeyFragment(token);
-    let live = true;
-    void dedupeAsync(`contrib:earn-chart:${sk}:${apiPeriod}:${retryCount}`, () =>
-      fetchEarningsChart(token, apiPeriod),
-    )
-      .then((raw) => {
-        if (!live) return;
-        const points = parseChartString(raw);
-        setChartData(points);
-        setChartLoading(false);
-      })
-      .catch((err: Error) => {
-        if (!live) return;
-        setChartError(err.message ?? "Failed to load chart data");
-        setChartLoading(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [token, period, retryCount]);
-
-  const months = chartData;
+  const sliceCount = period === "3m" ? 3 : period === "6m" ? 6 : 12;
+  const months = allChartData.slice(-sliceCount);
   const hasData = months.length > 0;
   const max = Math.max(...months.map((m) => m.value), 100);
   const current = hasData ? months[months.length - 1] : { label: "", value: 0 };

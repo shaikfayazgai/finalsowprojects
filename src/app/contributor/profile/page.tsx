@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import {
   Mail, Clock, Globe, Shield,
   Calendar, Pencil, Briefcase,
-  ArrowRight, AlertCircle, RefreshCw,
+  ArrowRight, AlertCircle, RefreshCw, ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
@@ -285,6 +285,93 @@ export default function ProfilePage() {
               <p className="text-[11px] text-gray-400 mt-2">
                 Complete your profile to unlock more task matches
               </p>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ═══ PERSONAL DETAILS ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-6">
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+          <span className="text-sm font-semibold text-gray-800">Personal Details</span>
+        </div>
+        <div className="px-5 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Date of Birth</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).dob ? formatDate((profile as any).dob) : "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Country</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).country || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Department</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).departmentCategory || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Career Stage</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).careerStage || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Years of Experience</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).yearsExperience || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Degree / Qualification</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).degree || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Field of Study</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).branch || "—"}</p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Availability</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).weeklyHours ? `${(profile as any).weeklyHours} hrs/week` : "—"}</p>
+          </div>
+
+          <div className="space-y-1 sm:col-span-2">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Primary Skills</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(profile as any).primarySkills?.length > 0
+                ? (profile as any).primarySkills.map((s: string) => (
+                    <span key={s} className="text-[11px] font-medium text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg">{s}</span>
+                  ))
+                : <p className="text-[13px] text-gray-800">—</p>}
+            </div>
+          </div>
+
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Secondary Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(profile as any).secondarySkills?.length > 0
+                  ? (profile as any).secondarySkills.map((s: string) => (
+                      <span key={s} className="text-[11px] font-medium text-brown-700 bg-brown-50 px-2.5 py-1 rounded-lg">{s}</span>
+                    ))
+                  : <p className="text-[13px] text-gray-800">—</p>}
+              </div>
+            </div>
+
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Other / Niche Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(profile as any).otherSkills?.length > 0
+                  ? (profile as any).otherSkills.map((s: string) => (
+                    <span key={s} className="text-[11px] font-medium text-gray-600 bg-gray-100 px-2.5 py-1 rounded-lg">{s}</span>
+                  ))
+                : <p className="text-[13px] text-gray-800">—</p>}
+              </div>
+            </div>
+
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">LinkedIn</p>
+            {(profile as any).linkedin ? (
+              <a href={(profile as any).linkedin} target="_blank" rel="noreferrer"
+                className="text-[13px] text-teal-600 hover:underline flex items-center gap-1">
+                View Profile <ExternalLink className="w-3 h-3" />
+              </a>
+            ) : (
+              <p className="text-[13px] text-gray-800">—</p>
             )}
           </div>
         </div>

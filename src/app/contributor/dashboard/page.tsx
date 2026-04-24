@@ -228,6 +228,8 @@ export default function ContributorDashboardPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [dismissedBanners, setDismissedBanners] = React.useState<Set<string>>(new Set());
 
+  const accessToken = (session?.user as { accessToken?: string } | undefined)?.accessToken;
+
   React.useEffect(() => {
     // Wait until NextAuth has resolved the session
     if (sessionStatus === "loading") return;

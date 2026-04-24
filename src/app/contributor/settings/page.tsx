@@ -624,6 +624,11 @@ export default function SettingsPage() {
                 </p>
               )}
             </div>
+            {localeError && (
+              <p className="text-[11px] text-red-500 mb-4 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0" /> {localeError}
+              </p>
+            )}
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => { setEditField(null); setSaveError(null); }}

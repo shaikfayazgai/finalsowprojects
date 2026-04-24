@@ -18,6 +18,7 @@ import {
   type ContributorProfileResponse,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { useContributorPhonePrefill } from "@/lib/stores/contributor-phone-store";
 
 /* ═══ Badge ═══ */
 
@@ -177,6 +178,12 @@ export default function ProfileEditPage() {
   const displayInitials = displayName
     ? displayName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()
     : "—";
+
+  React.useEffect(() => {
+    const { phone: stored } = useContributorPhonePrefill.getState();
+    if (!stored || stored.replace(/\D/g, "").length < 7) return;
+    setPhone((prev) => (prev.replace(/\D/g, "").length >= 7 ? prev : stored));
+  }, []);
 
   const applyProfileFromApi = React.useCallback((data: ContributorProfileResponse) => {
     setDisplayName(String(data.display_name ?? ""));

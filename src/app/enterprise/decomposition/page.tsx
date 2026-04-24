@@ -14,8 +14,10 @@ import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue, Skeleton } from "@/components/ui";
 import type { DecompositionPlan, PlanStatus } from "@/types/enterprise";
-import { useDecompositionPlans, useKickoff, useWithdraw } from "@/lib/hooks/use-decomposition";
+import { useKickoff, useWithdraw } from "@/lib/hooks/use-decomposition";
 import { ApiError } from "@/lib/api/client";
+import { useQuery } from "@tanstack/react-query";
+import { listEnterpriseDecompositionPlans } from "@/lib/api/decomposition-plans";
 import {
   useRazorpayScript,
 } from "@/components/enterprise/decomposition/PaymentReleaseTab";
@@ -185,7 +187,11 @@ export default function DecompositionPlansPage() {
   const [justPaidIds, setJustPaidIds] = React.useState<Set<string>>(new Set());
 
   // ── API data & mutations ──
-  const { data: apiPlansRes, isLoading: plansLoading, isError: plansError, error: plansErrorObj } = useDecompositionPlans();
+  const { data: apiPlansRes, isLoading: plansLoading, isError: plansError, error: plansErrorObj } = useQuery({
+    queryKey: ["enterprise", "decomposition", "plans"],
+    queryFn: listEnterpriseDecompositionPlans,
+    staleTime: 30_000,
+  });
   const kickoffMutation = useKickoff();
   const withdrawMutation = useWithdraw();
 

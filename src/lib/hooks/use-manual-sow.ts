@@ -40,6 +40,25 @@ export function useManualSOWList(params?: {
   });
 }
 
+/**
+ * Admin variant — forces the enterprise service token so dev admins without
+ * a personal glimmora access token still see enterprise-owned manual SOWs.
+ */
+export function useAdminManualSOWList(params?: {
+  status?: string;
+  intake_mode?: string;
+  client?: string;
+  page?: number;
+  limit?: number;
+  sort?: string;
+  order?: "asc" | "desc";
+}) {
+  return useQuery({
+    queryKey: [...manualSowKeys.list(params), "admin"] as const,
+    queryFn: () => sowApi.listManualSOWsAsAdmin(params),
+  });
+}
+
 // ── Single SOW ────────────────────────────────────────────────────────────
 
 export function useManualSOW(sowId: string | null) {

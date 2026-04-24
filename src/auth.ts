@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { authApi, isMfaPending } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
-export type UserRole = "contributor" | "enterprise" | "admin" | "reviewer" | "mentor";
+export type UserRole = "contributor" | "enterprise" | "admin" | "super_admin" | "reviewer" | "mentor";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Make the secret explicit to avoid env-resolution issues across runtimes/bundlers.
@@ -70,7 +70,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
       issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID ?? "common"}/v2.0`,
       authorization: {
-        params: { prompt: "select_account" },
+        // response_mode=query makes the IdP redirect back via a top-level GET
+        // instead of a cross-site POST. SameSite=Lax cookies (PKCE/state/nonce)
+        // survive top-level GETs in all browsers; cross-site POSTs drop them in
+        // Safari and Firefox, which is why SSO worked only in Chrome.
+        params: { prompt: "select_account", response_mode: "query" },
       },
     }),
     Credentials({
@@ -86,16 +90,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const password = typeof credentials?.password === "string" ? credentials.password : "";
 
           if (!email || !password) return null;
-
-          // Dev-only hardcoded admin bypass
-          if (email === "admin@glimmora.dev" && password === "Admin@1234") {
-            return {
-              id: "dev-admin-001",
-              name: "Glimmora Admin",
-              email: "admin@glimmora.dev",
-              role: "admin" as UserRole,
-            };
-          }
 
           const response = await authApi.login(email, password);
 
@@ -143,6 +137,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
+  // Cross-browser OAuth cookie hardening.
+  // In production (HTTPS), force SameSite=None on the short-lived OAuth cookies
+  // so they're sent back when the IdP redirects (including cross-site POSTs).
+  // Without this, Safari and Firefox drop these cookies and NextAuth rejects
+  // the callback with "State cookie was missing" / "PKCE code_verifier missing".
+  // Locally (http), we fall back to SameSite=Lax since Secure cookies require HTTPS.
+  cookies: (() => {
+    const isProd = process.env.NODE_ENV === "production";
+    const crossSite = {
+      httpOnly: true,
+      sameSite: (isProd ? "none" : "lax") as "none" | "lax",
+      secure: isProd,
+      path: "/",
+    };
+    return {
+      pkceCodeVerifier: { name: "next-auth.pkce.code_verifier", options: crossSite },
+      state:            { name: "next-auth.state",              options: crossSite },
+      nonce:            { name: "next-auth.nonce",              options: crossSite },
+    };
+  })(),
   callbacks: {
     async jwt({ token, user, account }) {
       // Initial sign-in — user object only present on first call
