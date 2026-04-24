@@ -873,8 +873,8 @@ export default function ContributorTaskDetailPage() {
                           </div>
                         </div>
                       )}
-                      {templates.map((tmpl) => (
-                        <a key={tmpl.id} href={tmpl.url} target="_blank" rel="noopener noreferrer"
+                      {templates.map((tmpl, i) => (
+                        <a key={`tmpl-${tmpl.id ?? tmpl.url ?? tmpl.name ?? i}-${i}`} href={tmpl.url} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-3 px-5 py-2.5 hover:bg-black/[0.02] transition-colors"
                           style={{ borderTop: "1px solid var(--border-hair)" }}>
                           <div className="w-7 h-7 rounded-lg bg-brown-50 flex items-center justify-center shrink-0"><Download className="w-3 h-3 text-brown-400" /></div>
@@ -885,8 +885,8 @@ export default function ContributorTaskDetailPage() {
                           <ExternalLink className="w-3 h-3 text-gray-300 shrink-0" />
                         </a>
                       ))}
-                      {links.map((link) => (
-                        <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer"
+                      {links.map((link, i) => (
+                        <a key={`link-${link.id ?? link.url ?? link.title ?? i}-${i}`} href={link.url} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-3 px-5 py-2.5 hover:bg-black/[0.02] transition-colors"
                           style={{ borderTop: "1px solid var(--border-hair)" }}>
                           <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center shrink-0"><ExternalLink className="w-3 h-3 text-teal-400" /></div>

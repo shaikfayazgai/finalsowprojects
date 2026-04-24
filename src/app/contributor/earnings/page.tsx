@@ -120,10 +120,50 @@ function parseChartString(raw: string): ChartPoint[] {
   }
 }
 
+function buildFallbackChartData(): ChartPoint[] {
+  // Fallback from local earnings records when chart API returns empty/unexpected payload.
+  const monthly = new Map<string, number>();
+  for (const row of mockEarnings) {
+    const d = new Date(String(row.earnedAt ?? row.earned_at ?? ""));
+    if (Number.isNaN(d.getTime())) continue;
+    const label = d.toLocaleDateString("en-US", { month: "short" });
+    const amount = Number(row.amount ?? 0);
+    monthly.set(label, (monthly.get(label) ?? 0) + amount);
+  }
+  return Array.from(monthly.entries()).map(([label, value]) => ({ label, value }));
+}
+
 function EarningsChart() {
+  const { data: session, status: sessionStatus } = useSession();
+  const token = session?.user?.accessToken;
   const [period, setPeriod] = React.useState<"3m" | "6m" | "1y">("6m");
   const [retryCount, setRetryCount] = React.useState(0);
   const [hoveredIdx, setHoveredIdx] = React.useState<number | null>(null);
+  const [allChartData, setAllChartData] = React.useState<ChartPoint[]>([]);
+  const [chartLoading, setChartLoading] = React.useState(false);
+  const [chartError, setChartError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (sessionStatus === "loading") return;
+    if (!token) {
+      setAllChartData(buildFallbackChartData());
+      setChartLoading(false);
+      return;
+    }
+    setChartLoading(true);
+    setChartError(null);
+    fetchEarningsChart(token, PERIOD_API_MAP[period])
+      .then((raw) => {
+        const parsed = parseChartString(raw);
+        setAllChartData(parsed.length > 0 ? parsed : buildFallbackChartData());
+        setChartLoading(false);
+      })
+      .catch((err: unknown) => {
+        setAllChartData(buildFallbackChartData());
+        setChartError(err instanceof Error ? err.message : "Failed to load chart");
+        setChartLoading(false);
+      });
+  }, [token, sessionStatus, period, retryCount]);
 
   const sliceCount = period === "3m" ? 3 : period === "6m" ? 6 : 12;
   const months = allChartData.slice(-sliceCount);
@@ -894,9 +934,13 @@ export default function EarningsPage() {
           not_started:     { icon: <AlertCircle className="w-4.5 h-4.5 text-amber-500" />,   wrapper: "bg-amber-50 border border-amber-200",   badge: "bg-amber-100 text-amber-700",   badgeText: "Not Started",      title: "KYC Not Started",       body: "Complete identity verification to unlock payouts. It only takes a few minutes." },
           not_submitted:   { icon: <AlertCircle className="w-4.5 h-4.5 text-amber-500" />,   wrapper: "bg-amber-50 border border-amber-200",   badge: "bg-amber-100 text-amber-700",   badgeText: "Not Submitted",    title: "KYC Not Submitted",     body: "Complete identity verification to unlock payouts. It only takes a few minutes." },
         };
-        const fallback = { icon: <AlertCircle className="w-4.5 h-4.5 text-gray-400" />, wrapper: "bg-gray-50 border border-gray-200", badge: "bg-gray-100 text-gray-500", badgeText: kycStatus, title: "KYC Status", body: "Verify your identity to unlock payouts." };
-        const c = KYC_CFG[kycStatus] ?? fallback;
-        const needsCta = !kycLoading && !kycError && ["not_started","not_submitted","rejected","failed","requires_action"].includes(kycStatus);
+        const normalizedKycStatus = String(kycStatus || "unknown")
+          .toLowerCase()
+          .trim()
+          .replace(/[\s-]+/g, "_");
+        const fallback = { icon: <AlertCircle className="w-4.5 h-4.5 text-gray-400" />, wrapper: "bg-gray-50 border border-gray-200", badge: "bg-gray-100 text-gray-500", badgeText: normalizedKycStatus, title: "KYC Status", body: "Verify your identity to unlock payouts." };
+        const c = KYC_CFG[normalizedKycStatus] ?? fallback;
+        const needsCta = !kycLoading && !kycError && !["verified", "approved", "pending", "under_review", "in_review"].includes(normalizedKycStatus);
         return (
           <motion.div variants={fadeUp} className={`flex items-center gap-4 px-5 py-3.5 rounded-xl mb-5 ${c.wrapper}`}>
             <div className="shrink-0">{c.icon}</div>
@@ -973,7 +1017,7 @@ export default function EarningsPage() {
             </div>
 
             {/* Chart */}
-            <EarningsChart token={token} />
+            <EarningsChart />
 
             {/* Earnings Table */}
             <div className="card-parchment">

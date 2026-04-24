@@ -319,47 +319,11 @@ export async function changeContributorPassword(
   token: string,
   payload: ChangePasswordPayload,
 ): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? "";
-  const res = await fetch(
-    `${baseUrl}/api/contributor/settings/security/change-password`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  // Both 200 and 204 mean success
-  if (res.ok) return;
-
-  // Parse every possible FastAPI error shape
-  const body = await res.json().catch(() => ({}));
-  const detail = body?.detail;
-  let message: string;
-
-  if (typeof detail === "string") {
-    message = detail;
-  } else if (Array.isArray(detail)) {
-    // 422 validation errors: [{ loc, msg, type }]
-    message = detail
-      .map((e: { loc?: string[]; msg?: string }) => {
-        const field = e.loc?.slice(1).join(".") ?? "field";
-        return `${field}: ${e.msg ?? "invalid"}`;
-      })
-      .join("; ");
-  } else if (typeof body?.message === "string") {
-    message = body.message;
-  } else if (typeof body?.error === "string") {
-    message = body.error;
-  } else {
-    // Last resort — show raw body so nothing is hidden
-    message = JSON.stringify(body) || `Request failed (${res.status})`;
-  }
-
-  throw new ApiError(res.status, message);
+  await apiCall<unknown>("/api/contributor/settings/security/change-password", {
+    method: "POST",
+    token,
+    body: JSON.stringify(payload),
+  });
 }
 
 // ── Task detail ───────────────────────────────────────────────────────────────
@@ -523,21 +487,19 @@ export async function uploadWorkroomFile(
   taskId: string,
   payload: UploadWorkroomFilePayload,
 ): Promise<UploadWorkroomFileResponse> {
-  const baseUrl = process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? process.env.GLIMMORA_API_URL ?? "";
   const form = new FormData();
   form.append("file", payload.file);
   form.append("category", payload.category);
   if (payload.title)       form.append("title", payload.title);
   if (payload.description) form.append("description", payload.description);
 
-  const res = await fetch(
-    `${baseUrl}/api/contributor/tasks/${encodeURIComponent(taskId)}/workroom/uploads`,
+  const res = await fetchInternal(
+    `/api/contributor/tasks/${encodeURIComponent(taskId)}/workroom/uploads`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
-      // Do NOT set Content-Type — browser sets multipart/form-data + boundary
       body: form,
-      signal: AbortSignal.timeout(60_000), // 60 s for file uploads
+      signal: AbortSignal.timeout(60_000),
     },
   );
 
@@ -586,9 +548,8 @@ export async function deleteWorkroomUpload(
   taskId: string,
   uploadId: string,
 ): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? process.env.GLIMMORA_API_URL ?? "";
-  const res = await fetch(
-    `${baseUrl}/api/contributor/tasks/${encodeURIComponent(taskId)}/workroom/uploads/${encodeURIComponent(uploadId)}`,
+  const res = await fetchInternal(
+    `/api/contributor/tasks/${encodeURIComponent(taskId)}/workroom/uploads/${encodeURIComponent(uploadId)}`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
@@ -1510,40 +1471,11 @@ export async function deactivateAccount(
   token: string,
   payload: DeactivateAccountPayload,
 ): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? "";
-  const res = await fetch(`${baseUrl}/api/contributor/account/deactivate`, {
+  await apiCall<unknown>("/api/contributor/account/deactivate", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    token,
     body: JSON.stringify(payload),
   });
-
-  if (res.ok) return; // 200 or 204 — success
-
-  const body = await res.json().catch(() => ({}));
-  const detail = body?.detail;
-  let message: string;
-
-  if (typeof detail === "string") {
-    message = detail;
-  } else if (Array.isArray(detail)) {
-    message = detail
-      .map((e: { loc?: string[]; msg?: string }) => {
-        const field = e.loc?.slice(1).join(".") ?? "field";
-        return `${field}: ${e.msg ?? "invalid"}`;
-      })
-      .join("; ");
-  } else if (typeof body?.message === "string") {
-    message = body.message;
-  } else if (typeof body?.error === "string") {
-    message = body.error;
-  } else {
-    message = JSON.stringify(body) || `Request failed (${res.status})`;
-  }
-
-  throw new ApiError(res.status, message);
 }
 
 // ── Message Threads ───────────────────────────────────────────────────────────
@@ -1633,40 +1565,24 @@ export async function postMessageToThread(
   content: string,
   attachment_ids?: string[],
 ): Promise<MessageItem> {
-  const baseUrl = process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? "";
-  const res = await fetch(
-    `${baseUrl}/api/contributor/messages/threads/${encodeURIComponent(threadId)}/messages`,
+  return apiCall<MessageItem>(
+    `/api/contributor/messages/threads/${encodeURIComponent(threadId)}/messages`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      token,
       body: JSON.stringify({ content, ...(attachment_ids ? { attachment_ids } : {}) }),
     },
   );
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const detail = body?.detail ?? body?.message ?? `Error ${res.status}`;
-    throw new ApiError(res.status, typeof detail === "string" ? detail : JSON.stringify(detail));
-  }
-  return body as MessageItem;
 }
 
 export async function markThreadRead(
   token: string,
   threadId: string,
 ): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? "";
-  const res = await fetch(
-    `${baseUrl}/api/contributor/messages/threads/${encodeURIComponent(threadId)}/read`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    },
+  await apiCall<unknown>(
+    `/api/contributor/messages/threads/${encodeURIComponent(threadId)}/read`,
+    { method: "POST", token },
   );
-  /* 204 No Content — success, nothing to parse */
-  if (res.ok) return;
-  const body = await res.json().catch(() => ({}));
-  const detail = body?.detail ?? `Error ${res.status}`;
-  throw new ApiError(res.status, typeof detail === "string" ? detail : JSON.stringify(detail));
 }
 
 export async function rateThreadMessage(
@@ -1674,20 +1590,14 @@ export async function rateThreadMessage(
   messageId: string,
   rating: "up" | "down",
 ): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? "";
-  const res = await fetch(
-    `${baseUrl}/api/contributor/messages/${encodeURIComponent(messageId)}/rating`,
+  await apiCall<unknown>(
+    `/api/contributor/messages/${encodeURIComponent(messageId)}/rating`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      token,
       body: JSON.stringify({ rating }),
     },
   );
-  /* 204 No Content — success, nothing to parse */
-  if (res.ok) return;
-  const body = await res.json().catch(() => ({}));
-  const detail = body?.detail ?? `Error ${res.status}`;
-  throw new ApiError(res.status, typeof detail === "string" ? detail : JSON.stringify(detail));
 }
 
 // ── Learning Recommendations ──────────────────────────────────────────────────
