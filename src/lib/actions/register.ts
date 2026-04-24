@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/db";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
-import { enterpriseRegistrationSchema } from "@/lib/validations/registration";
+import { contributorRegistrationSchema, enterpriseRegistrationSchema } from "@/lib/validations/registration";
 import { sendEmail, buildEmailHtml } from "@/lib/email";
 import { DEFAULT_TEMPLATES } from "@/lib/stores/email-template-store";
 import { getBaseUrl } from "@/lib/utils/base-url";

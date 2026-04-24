@@ -1199,7 +1199,7 @@ export default function ContributorTaskDetailPage() {
 
             {/* Right: Submission details */}
             <div className="lg:col-span-2 space-y-5">
-              {latestSubmission && latestSubmission.files.length > 0 && (
+              {latestSubmission && latestSubmission.files?.length > 0 && (
                 <Section title="Submitted Files">
                   <div>
                     {latestSubmission.files.map((f: any, i: number) => (
@@ -1213,7 +1213,7 @@ export default function ContributorTaskDetailPage() {
                   </div>
                 </Section>
               )}
-              {latestSubmission && latestSubmission.evidence.length > 0 && (
+              {latestSubmission && (latestSubmission.evidence?.length ?? 0) > 0 && (
                 <Section title="Evidence" badge={<span className="text-[10px] text-gray-400">{latestSubmission.evidence.filter((e: any) => e.verified).length}/{latestSubmission.evidence.length}</span>}>
                   <div className="py-1">
                     {latestSubmission.evidence.map((ev: any, i: number) => (

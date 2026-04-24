@@ -71,7 +71,7 @@ export default function ReviewerDashboard() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-  const unreadMessages = mockQAMessages.reduce((s, t) => s + t.messages.filter(m => !m.read).length, 0);
+  const unreadMessages = mockQAMessages.reduce((s, t) => s + t.messages.filter((m: { read: boolean }) => !m.read).length, 0);
   const unreadNotifications = mockReviewerNotifications.filter(n => !n.read).length;
 
   const pendingReviews = dash?.pendingEvidenceReviews ?? assignments.filter((a) => a.status === "pending").length;
@@ -105,11 +105,11 @@ export default function ReviewerDashboard() {
       color: "gold" as const,
       href: "/enterprise/reviewer/review-queue",
     })),
-    ...mockQAMessages.filter(q => q.messages.some(m => !m.read)).map(q => ({
+    ...mockQAMessages.filter(q => q.messages.some((m: { read: boolean }) => !m.read)).map(q => ({
       id: q.id,
       type: "unread_qa" as const,
       label: q.taskTitle,
-      sub: `${q.messages.filter(m => !m.read).length} unread message(s)`,
+      sub: `${q.messages.filter((m: { read: boolean }) => !m.read).length} unread message(s)`,
       color: "teal" as const,
       href: "/enterprise/reviewer/qa-inbox",
     })),

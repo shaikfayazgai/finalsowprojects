@@ -1287,6 +1287,7 @@ export interface SubmissionEvidence {
   description: string;
   file_id: string;
   checklist_item_id: string;
+  label?: string;
 }
 
 export interface ChecklistAcknowledgement {

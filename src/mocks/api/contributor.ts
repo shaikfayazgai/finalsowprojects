@@ -365,7 +365,7 @@ export function resolveContributorMock(path: string, method: string): MockResult
         participants: [{ id: "u-reviewer", name: t.participantName, role: "reviewer", avatar: "https://i.pravatar.cc/100?img=22" }],
         project_name: "Contributor Program",
         task_id: "task-504",
-        messages: t.messages.map((m1) => ({
+        messages: t.messages.map((m1: Record<string, unknown>) => ({
           id: m1.id,
           sender_id: m1.sender === "contributor" ? "contrib-1001" : "u-reviewer",
           sender_name: m1.sender === "contributor" ? mockContributorProfile.displayName : t.participantName,

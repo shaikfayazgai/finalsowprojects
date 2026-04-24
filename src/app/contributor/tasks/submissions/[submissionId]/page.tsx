@@ -154,7 +154,7 @@ export default function SubmissionDetailPage() {
     setEditNotes(detail.notes ?? "");
     setEditAcks(
       (detail.checklist_acknowledgements ?? []).map((a) => ({
-        criterion_id: a.criteria_id ?? a.criterion_id ?? "",
+        criterion_id: a.criteria_id ?? "",
         acknowledged: a.acknowledged,
         notes: "",
       })),
@@ -579,7 +579,7 @@ export default function SubmissionDetailPage() {
             ) : (
               <div className="space-y-2">
                 {detail.checklist_acknowledgements.map((ack: ChecklistAcknowledgement, idx: number) => {
-                  const id = ack.criteria_id ?? ack.criterion_id ?? `item-${idx}`;
+                  const id = ack.criteria_id ?? `item-${idx}`;
                   return (
                     <div
                       key={id}
