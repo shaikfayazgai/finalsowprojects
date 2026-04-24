@@ -1,24 +1,22 @@
 import nodemailer from "nodemailer";
 import type { ReactElement } from "react";
 
-const SMTP_HOST = process.env.SMTP_HOST ?? "smtp.gmail.com";
-const SMTP_PORT = Number(process.env.SMTP_PORT ?? 587);
-const SMTP_USER = process.env.SMTP_USERNAME ?? process.env.GMAIL_USER ?? "";
-const SMTP_PASS = process.env.SMTP_PASSWORD ?? process.env.GMAIL_APP_PASSWORD ?? "";
-const SMTP_SECURE = SMTP_PORT === 465;
-const SMTP_USE_TLS =
-  (process.env.SMTP_USE_TLS ?? "").toLowerCase() === "true" ||
-  (process.env.SMTP_USE_TLS ?? "").toLowerCase() === "1";
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASSWORD;
 
 const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: SMTP_PORT,
-  secure: SMTP_SECURE,
-  requireTLS: SMTP_USE_TLS,
-  auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+  host: process.env.SMTP_HOST ?? "smtp.office365.com",
+  port: Number(process.env.SMTP_PORT ?? 587),
+  secure: false,
+  requireTLS: true,
+  auth: { user: SMTP_USER, pass: SMTP_PASS },
+  connectionTimeout: 60_000,
+  greetingTimeout: 30_000,
+  socketTimeout: 90_000,
+  tls: { ciphers: "TLSv1.2" },
 });
 
-const FROM = process.env.SMTP_FROM_EMAIL ?? process.env.EMAIL_FROM ?? (SMTP_USER ? `GlimmoraTeam <${SMTP_USER}>` : "GlimmoraTeam <no-reply@localhost>");
+const FROM = process.env.EMAIL_FROM ?? `GlimmoraTeam <${SMTP_USER}>`;
 
 export interface SendEmailOptions {
   to: string | string[];
@@ -30,6 +28,7 @@ export interface SendEmailOptions {
 export interface SendEmailResult {
   success: boolean;
   messageId?: string;
+  error?: string;
 }
 
 /** Build a professional branded HTML email from a body snippet and template settings. */
@@ -97,10 +96,6 @@ export function buildEmailHtml({
 
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
   try {
-    if (!SMTP_USER || !SMTP_PASS) {
-      console.error("[sendEmail] missing SMTP credentials. Set SMTP_USERNAME/SMTP_PASSWORD (or GMAIL_USER/GMAIL_APP_PASSWORD).");
-      return { success: false };
-    }
     const html = options.html ?? (options.react
       ? (await import("react-dom/server")).renderToStaticMarkup(options.react)
       : "");
@@ -114,7 +109,14 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
 
     return { success: true, messageId: info.messageId };
   } catch (err) {
-    console.error("[sendEmail] error:", err);
-    return { success: false };
+    const e = err as { message?: string; responseCode?: number; response?: string; code?: string };
+    const error = [
+      e.message,
+      e.code ? `code=${e.code}` : null,
+      e.responseCode ? `responseCode=${e.responseCode}` : null,
+      e.response ? `response=${e.response}` : null,
+    ].filter(Boolean).join(" | ");
+    console.error("[sendEmail] error:", error);
+    return { success: false, error };
   }
 }

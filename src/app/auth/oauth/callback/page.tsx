@@ -130,28 +130,12 @@ function OAuthCallbackContent() {
       // ── Parse state ──────────────────────────────────────────────────────
       let redirectAfter = "/enterprise/dashboard";
       let roleFromState: string = "enterprise";
-      let providerFromState: "google" | "microsoft" | null = null;
-      try {
-        const cachedRedirect = sessionStorage.getItem("_oauth_redirect_after");
-        const cachedRole = sessionStorage.getItem("_oauth_role");
-        const cachedProvider = sessionStorage.getItem("_oauth_provider");
-        if (cachedRedirect) redirectAfter = cachedRedirect;
-        if (cachedRole) roleFromState = cachedRole;
-        if (cachedProvider === "google" || cachedProvider === "microsoft") {
-          providerFromState = cachedProvider;
-        }
-      } catch {
-        // ignore storage access issues
-      }
       const rawState = searchParams.get("state");
       if (rawState) {
         try {
           const parsed = JSON.parse(atob(rawState));
           if (parsed.redirectAfter) redirectAfter = parsed.redirectAfter;
           if (parsed.role) roleFromState = parsed.role;
-          if (parsed.provider === "google" || parsed.provider === "microsoft") {
-            providerFromState = parsed.provider;
-          }
         } catch {
           // state not our encoded blob — ignore (could be Glimmora's internal state)
         }
@@ -203,12 +187,7 @@ function OAuthCallbackContent() {
       // ── Case B: code exchange (server-side) ───────────────────────────
       const code = searchParams.get("code");
       const providerParam = searchParams.get("provider");
-      const provider: "google" | "microsoft" =
-        providerParam === "microsoft"
-          ? "microsoft"
-          : providerParam === "google"
-            ? "google"
-            : providerFromState ?? "google";
+      const provider: "google" | "microsoft" = providerParam === "microsoft" ? "microsoft" : "google";
       if (code) {
         try {
           const res = await fetchInternal("/api/auth/oauth/exchange", {

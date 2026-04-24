@@ -164,7 +164,7 @@ function ResetPasswordContent() {
         return;
       }
       setSuccess(true);
-      setTimeout(() => router.push("/auth/login?relogin=1"), 2500);
+      setTimeout(() => router.push("/auth/login"), 2500);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -413,7 +413,7 @@ function ResetPasswordContent() {
                 </p>
               </div>
               <Link
-                href="/auth/login?relogin=1"
+                href="/auth/login"
                 className="flex items-center justify-center gap-2 w-full h-11 rounded-xl text-sm font-semibold text-white transition-all"
                 style={{
                   background: "linear-gradient(135deg, #A67763, #886151)",

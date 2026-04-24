@@ -6,15 +6,17 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   FileText, Search, Plus, DollarSign, Shield, Upload, Sparkles, AlertTriangle,
-  ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Clock,
+  ArrowUp, ArrowDown, Clock,
   MoreVertical, Eye, Download, Archive, CheckCircle2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
+import { TablePagination } from "@/components/ui/table-pagination";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { useSowStore } from "@/lib/stores/sow-store";
 import { useManualSOWList, useDeleteManualSOW } from "@/lib/hooks/use-manual-sow";
+import { useSowList, useDeleteAiSOW } from "@/lib/hooks/use-sow-wizard";
 
 /* ══════════════════════════════════════════ Status config (per FSD §7.1.4) ══════════════════════════════════════════ */
 
@@ -91,7 +93,7 @@ const riskFilterOptions = [
 
 function Pill({ bg, color, children, bold, className }: { bg: string; color: string; children: React.ReactNode; bold?: boolean; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 text-[9px] tracking-wide uppercase px-2.5 py-0.5 rounded-full", bold ? "font-bold" : "font-medium", className)}
+    <span className={cn("inline-flex items-center gap-1 text-[9px] tracking-wide uppercase px-2.5 py-0.5 rounded-full whitespace-nowrap", bold ? "font-bold" : "font-medium", className)}
       style={{ background: bg, color }}>
       {children}
     </span>
@@ -116,7 +118,7 @@ function RiskBar({ score }: { score: number }) {
 
 /* ══════════════════════════════════════════ Row Kebab Menu (FSD §7.1.5) ══════════════════════════════════════════ */
 
-function RowKebab({ sow, onAction }: { sow: typeof mockSOWs[0]; onAction: (action: string, sowId: string) => void }) {
+function RowKebab({ sow, onAction }: { sow: typeof mockSOWs[0]; onAction: (action: string, sowId: string, sow: typeof mockSOWs[0]) => void }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
 
@@ -126,31 +128,33 @@ function RowKebab({ sow, onAction }: { sow: typeof mockSOWs[0]; onAction: (actio
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const items: { label: string; action: string; show: boolean }[] = [
+  const items: { label: string; action: string; show: boolean; danger?: boolean }[] = [
     { label: "View Detail",            action: "view",     show: true },
     { label: "Edit",                   action: "edit",     show: sow.status === "draft" },
     { label: "Download PDF",           action: "download", show: true },
     { label: "View Approval Progress", action: "approval", show: ["approval", "review", "pending_commercial_review"].includes(sow.status) },
-    { label: "Archive",                action: "archive",  show: ["approved", "rejected"].includes(sow.status) },
+    { label: "Delete",                 action: "delete",   show: true, danger: true },
   ];
 
   return (
     <div ref={ref} className="relative">
       <button onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
-        className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all">
-        <MoreVertical className="w-3.5 h-3.5" />
+        className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-gray-100"
+        style={{ color: "var(--ink)" }}>
+        <MoreVertical className="w-4 h-4" />
       </button>
       {open && (
-        <div className="absolute right-0 top-8 z-50 w-52 rounded-xl bg-white shadow-lg border border-gray-100 py-1.5"
+        <div className="absolute right-0 top-8 z-50 w-52 rounded-xl bg-white py-1.5 border border-beige-200/60"
           style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
           {items.filter((i) => i.show).map((item) => (
-            <button key={item.action} onClick={(e) => { e.stopPropagation(); onAction(item.action, sow.id); setOpen(false); }}
-              className="flex items-center gap-2.5 w-full px-4 py-2 text-[12px] text-gray-600 hover:bg-gray-50 transition-colors text-left">
+            <button key={item.action} onClick={(e) => { e.stopPropagation(); onAction(item.action, sow.id, sow); setOpen(false); }}
+              className="flex items-center gap-2.5 w-full px-4 py-2 text-[12px] hover:bg-beige-50 transition-colors text-left"
+              style={{ color: item.danger ? "var(--danger)" : undefined }}>
               {item.action === "view" && <Eye className="w-3.5 h-3.5" />}
               {item.action === "edit" && <FileText className="w-3.5 h-3.5" />}
               {item.action === "download" && <Download className="w-3.5 h-3.5" />}
               {item.action === "approval" && <CheckCircle2 className="w-3.5 h-3.5" />}
-              {item.action === "archive" && <Archive className="w-3.5 h-3.5" />}
+              {item.action === "delete" && <Archive className="w-3.5 h-3.5" />}
               {item.label}
             </button>
           ))}
@@ -178,23 +182,23 @@ function RecentlyViewedPanel({ open, onClose }: { open: boolean; onClose: () => 
 
   if (!open) return null;
   return (
-    <div ref={ref} className="absolute right-0 top-10 z-50 w-80 rounded-xl bg-white shadow-lg border border-gray-100"
+    <div ref={ref} className="absolute right-0 top-10 z-50 w-80 rounded-xl bg-white border border-beige-200/60"
       style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.10)" }}>
       <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-hair)" }}>
-        <span className="text-[12px] font-semibold text-gray-700">Recently Viewed</span>
+        <span className="text-[12px] font-semibold text-brown-800">Recently Viewed</span>
       </div>
       <div className="max-h-[320px] overflow-y-auto">
         {recentItems.map((item) => {
           const sc = statusConfig[item.status] || statusConfig.draft;
           return (
             <Link key={item.id} href={`/enterprise/sow/${item.id}`}>
-              <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer">
+              <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-beige-50/60 transition-colors cursor-pointer">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-medium text-gray-800 truncate">{item.title}</div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">{item.client}</div>
+                  <div className="text-[12px] font-medium text-brown-900 truncate">{item.title}</div>
+                  <div className="text-[10px] text-beige-400 mt-0.5">{item.client}</div>
                 </div>
                 <Pill bg={sc.bg} color={sc.color}>{sc.label}</Pill>
-                <span className="text-[10px] text-gray-400 shrink-0">{item.timeAgo}</span>
+                <span className="text-[10px] text-beige-400 shrink-0">{item.timeAgo}</span>
               </div>
             </Link>
           );
@@ -217,18 +221,108 @@ export default function SOWListPage() {
   const [searchFocused, setSearchFocused] = React.useState(false);
   const [recentViewedOpen, setRecentViewedOpen] = React.useState(false);
 
+  const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; title: string; intakeMode: "ai_generated" | "manual_upload" } | null>(null);
+
   const storeSows = useSowStore((s) => s.sows);
-  const hasApiUrl = !!process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
-  const { data: apiSowListRes, isLoading: apiSowListLoading, error: apiSowListError } = useManualSOWList();
-  const apiSowList = { isLoading: hasApiUrl && apiSowListLoading, error: hasApiUrl ? apiSowListError : null };
-  const deleteSow = useDeleteManualSOW();
-  const apiSows = (apiSowListRes?.data as { sows?: typeof storeSows; items?: typeof storeSows } | typeof storeSows | null);
-  /* Prefer API data; fall back to Zustand store (mock) */
-  const allSows: typeof storeSows = Array.isArray(apiSows) ? apiSows
-    : (apiSows as { sows?: typeof storeSows } | null)?.sows
-    ?? (apiSows as { items?: typeof storeSows } | null)?.items
-    ?? storeSows;
-  const uniqueClients = React.useMemo(() => [...new Set(allSows.map((s) => s.client))].sort(), [allSows]);
+  const { data: manualSowListRes, isFetching: manualFetching, isLoading: manualLoading } = useManualSOWList();
+  const { data: aiSowListRes, isFetching: aiFetching, isLoading: aiLoading } = useSowList();
+  const isFetchingAny = manualFetching || aiFetching;
+  const isLoading = manualLoading || aiLoading;
+  const deleteManualSow = useDeleteManualSOW();
+  const deleteAiSow = useDeleteAiSOW();
+  const isDeleting = deleteManualSow.isPending || deleteAiSow.isPending;
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    if (deleteTarget.intakeMode === "ai_generated") {
+      deleteAiSow.mutate({ sowId: deleteTarget.id }, { onSuccess: () => setDeleteTarget(null) });
+    } else {
+      deleteManualSow.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
+    }
+  }
+
+  /* Normalise raw API responses into the shape the table expects */
+  function extractList(res: unknown): Record<string, unknown>[] {
+    if (!res) return [];
+    const r = res as Record<string, unknown>;
+    if (Array.isArray(r)) return r as Record<string, unknown>[];
+    if (Array.isArray(r.data)) return r.data as Record<string, unknown>[];
+    const d = (r.data ?? r) as Record<string, unknown>;
+    for (const k of ["sows", "items", "results", "documents", "list"]) {
+      if (Array.isArray(d[k])) return d[k] as Record<string, unknown>[];
+    }
+    return [];
+  }
+
+  /* Derive SOW-level status from the approval pipeline (source of truth). */
+  function deriveStatusFromStages(stages: import("@/types/enterprise").SOWApprovalStage[], fallback: string): string {
+    if (!stages || stages.length === 0) return fallback;
+    if (stages.every((s) => s.status === "approved")) return "approved";
+    if (stages.some((s) => s.status === "rejected")) return "changes_requested";
+    if (stages.some((s) => s.status === "in_review")) return "approval";
+    if (stages.some((s) => s.status === "approved")) return "approval";
+    return fallback;
+  }
+
+  function normaliseToSOW(item: Record<string, unknown>, mode: "ai_generated" | "manual_upload") {
+    const updatedAt = String(item.updated_at ?? item.updatedAt ?? item.created_at ?? item.createdAt ?? new Date().toISOString());
+    const gc = mode === "ai_generated" ? ((item.generated_content ?? {}) as Record<string, unknown>) : {};
+
+    /* Title */
+    const title = String(gc.document_title ?? item.title ?? item.project_title ?? item.document_title ?? "Untitled SOW");
+
+    /* Client — AI SOWs store client in business_owner_approver_id as "Name, Company" */
+    let client = String(item.client ?? item.client_organisation ?? item.clientOrganisation ?? gc.client_name ?? gc.client ?? "");
+    if (!client && mode === "ai_generated") {
+      const bizOwner = String(item.business_owner_approver_id ?? "");
+      if (bizOwner.includes(", ")) client = bizOwner.split(", ").pop()?.trim() ?? "";
+    }
+
+    /* Risk score — check quality_metrics first (AI SOWs), then risk_score/riskScore */
+    const qm = (item.quality_metrics ?? item.qualityMetrics ?? {}) as Record<string, unknown>;
+    const riskRaw = item.risk_score ?? item.riskScore ?? qm.risk_score ?? qm.riskScore;
+    let riskOverall = 0;
+    if (typeof riskRaw === "number") {
+      riskOverall = riskRaw;
+    } else if (riskRaw && typeof riskRaw === "object") {
+      riskOverall = Number((riskRaw as Record<string, unknown>).overall ?? 0);
+    } else if (mode === "ai_generated") {
+      const conf = Number(qm.overall_confidence ?? item.confidence_score ?? item.confidenceScore ?? 0);
+      riskOverall = conf > 0 ? Math.round(100 - conf) : 0;
+    }
+
+    const rawApprovalStages = ((item.approval_stages ?? item.approvalStages ?? []) as import("@/types/enterprise").SOWApprovalStage[]);
+    const rawStatus = String(item.status ?? "draft");
+    const derivedStatus = deriveStatusFromStages(rawApprovalStages, rawStatus);
+
+    return {
+      id:               String(item.id ?? item._id ?? item.sow_id ?? item.wizard_id ?? ""),
+      title,
+      client,
+      status:           derivedStatus,
+      intakeMode:       mode,
+      dataSensitivity:  String(item.data_sensitivity ?? item.dataSensitivity ?? "internal"),
+      riskScore:        { overall: riskOverall, completeness: 0, confidence: 0, compliance: 0, patternMatch: 0 },
+      version:          Number(item.version ?? 1),
+      updatedAt,
+      createdAt:        String(item.created_at ?? item.createdAt ?? updatedAt),
+      estimatedBudget:  Number(item.estimated_budget ?? item.estimatedBudget ?? 0),
+      createdBy:        String(item.created_by ?? item.createdBy ?? ""),
+      approvedBy:       String(item.approved_by ?? item.approvedBy ?? ""),
+      approvalStages:   rawApprovalStages,
+      parsedSections:   Number(item.parsed_sections ?? item.parsedSections ?? 0),
+      totalSections:    Number(item.total_sections ?? item.totalSections ?? 0),
+      pages:            Number(item.pages ?? 0),
+    } as import("@/types/enterprise").SOW;
+  }
+
+  const manualSows = extractList(manualSowListRes).map((item) => normaliseToSOW(item, "manual_upload"));
+  const aiSows = extractList(aiSowListRes).map((item) => normaliseToSOW(item, "ai_generated"));
+
+  /* Merge AI + manual SOWs from API; fall back to Zustand store if no API */
+  const apiCombined = [...aiSows, ...manualSows];
+  const allSows = apiCombined.length > 0 ? apiCombined : storeSows;
+
 
   const [sortField, setSortField] = React.useState<SortField>("modified");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
@@ -270,10 +364,10 @@ export default function SOWListPage() {
     /* RISK filter */
     if (riskFilter !== "all") {
       switch (riskFilter) {
-        case "low":      list = list.filter((s) => s.riskScore.overall >= 0 && s.riskScore.overall <= 25); break;
-        case "medium":   list = list.filter((s) => s.riskScore.overall >= 26 && s.riskScore.overall <= 50); break;
-        case "high":     list = list.filter((s) => s.riskScore.overall >= 51 && s.riskScore.overall <= 75); break;
-        case "critical": list = list.filter((s) => s.riskScore.overall >= 76 && s.riskScore.overall <= 100); break;
+        case "low":      list = list.filter((s) => (s.riskScore?.overall ?? 0) >= 0 && (s.riskScore?.overall ?? 0) <= 25); break;
+        case "medium":   list = list.filter((s) => (s.riskScore?.overall ?? 0) >= 26 && (s.riskScore?.overall ?? 0) <= 50); break;
+        case "high":     list = list.filter((s) => (s.riskScore?.overall ?? 0) >= 51 && (s.riskScore?.overall ?? 0) <= 75); break;
+        case "critical": list = list.filter((s) => (s.riskScore?.overall ?? 0) >= 76 && (s.riskScore?.overall ?? 0) <= 100); break;
       }
     }
 
@@ -294,14 +388,14 @@ export default function SOWListPage() {
         case "intake": cmp = a.intakeMode.localeCompare(b.intakeMode); break;
         case "status": cmp = a.status.localeCompare(b.status); break;
         case "sensitivity": cmp = (a.dataSensitivity || "").localeCompare(b.dataSensitivity || ""); break;
-        case "risk": cmp = a.riskScore.overall - b.riskScore.overall; break;
+        case "risk": cmp = (a.riskScore?.overall ?? 0) - (b.riskScore?.overall ?? 0); break;
         case "version": cmp = a.version - b.version; break;
         case "modified": cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime(); break;
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [statusFilter, intakeFilter, riskFilter, search, sortField, sortDir]);
+  }, [allSows, statusFilter, intakeFilter, riskFilter, search, sortField, sortDir]);
 
   React.useEffect(() => { setCurrentPage(1); }, [statusFilter, intakeFilter, riskFilter, search]);
 
@@ -314,9 +408,9 @@ export default function SOWListPage() {
   const totalSOWs = allSows.length;
   const pendingCount = allSows.filter((s) => ["approval", "review", "changes_requested"].includes(s.status)).length;
   const approvedCount = allSows.filter((s) => s.status === "approved").length;
-  const scoredSOWs = allSows.filter((s) => s.riskScore.overall > 0);
-  const avgRisk = scoredSOWs.length > 0 ? Math.round(scoredSOWs.reduce((sum, s) => sum + s.riskScore.overall, 0) / scoredSOWs.length) : 0;
-  const totalBudget = allSows.filter((s) => s.status === "approved").reduce((sum, s) => sum + s.estimatedBudget, 0);
+  const scoredSOWs = allSows.filter((s) => (s.riskScore?.overall ?? 0) > 0);
+  const avgRisk = scoredSOWs.length > 0 ? Math.round(scoredSOWs.reduce((sum, s) => sum + (s.riskScore?.overall ?? 0), 0) / scoredSOWs.length) : 0;
+  const totalBudget = allSows.filter((s) => s.status === "approved").reduce((sum, s) => sum + (s.estimatedBudget ?? 0), 0);
 
   /* Tile click handlers — FSD §7.1.2 */
   function handleTileClick(tile: string) {
@@ -330,45 +424,117 @@ export default function SOWListPage() {
   }
 
   /* Row action handler — FSD §7.1.5 */
-  function handleRowAction(action: string, sowId: string) {
+  function handleRowAction(action: string, sowId: string, sow?: import("@/types/enterprise").SOW) {
     switch (action) {
       case "view": router.push(`/enterprise/sow/${sowId}`); break;
       case "edit": router.push(`/enterprise/sow/${sowId}`); break;
-      case "download": break; /* PDF download */
-      case "approval": router.push(`/enterprise/sow/${sowId}`); break;
-      case "archive":
-        deleteSow.mutate(sowId);
+      case "download": break;
+      case "approval": router.push(`/enterprise/sow/approval`); break;
+      case "delete":
+        if (sow) setDeleteTarget({ id: sow.id, title: sow.title, intakeMode: sow.intakeMode });
         break;
     }
   }
 
   const columns = [
-    { field: "title" as SortField, label: "Title + ID", align: "left", minW: 240 },
+    { field: "title" as SortField, label: "Project Title", align: "left", minW: 240 },
     { field: "client" as SortField, label: "Client", align: "left", minW: 120 },
-    { field: "intake" as SortField, label: "Intake", align: "left", minW: 130 },
     { field: "status" as SortField, label: "Status", align: "left", minW: 130 },
     { field: "sensitivity" as SortField, label: "Sensitivity", align: "left", minW: 100 },
     { field: "risk" as SortField, label: "Risk", align: "center", minW: 110 },
     { field: "version" as SortField, label: "Version", align: "center", minW: 70 },
-    { field: "modified" as SortField, label: "Modified ↓", align: "left", minW: 100 },
+    { field: "modified" as SortField, label: "Modified", align: "left", minW: 100 },
   ];
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        {/* Hero skeleton */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-beige-100 animate-pulse shrink-0" />
+            <div className="space-y-2 mt-1">
+              <div className="h-5 w-44 rounded-lg bg-beige-100 animate-pulse" />
+              <div className="h-3.5 w-72 rounded bg-beige-100 animate-pulse" />
+            </div>
+          </div>
+          <div className="h-9 w-28 rounded-xl bg-beige-100 animate-pulse" />
+        </div>
+
+        {/* KPI tiles skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-beige-200/50 bg-white/70 p-4 flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-beige-100 animate-pulse shrink-0" />
+              <div className="space-y-2 flex-1">
+                <div className="h-6 w-10 rounded bg-beige-100 animate-pulse" />
+                <div className="h-2.5 w-20 rounded bg-beige-100 animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Table card skeleton */}
+        <div className="rounded-2xl border border-beige-200/50 bg-white/70 overflow-hidden">
+          {/* Card header */}
+          <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+            <div className="h-4 w-48 rounded bg-beige-100 animate-pulse" />
+          </div>
+          {/* Filter bar */}
+          <div className="flex items-center justify-between gap-3 px-6 py-3" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+            <div className="h-8 w-60 rounded-xl bg-beige-100 animate-pulse" />
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-32 rounded-xl bg-beige-100 animate-pulse" />
+              <div className="h-8 w-28 rounded-xl bg-beige-100 animate-pulse" />
+              <div className="h-8 w-24 rounded-xl bg-beige-100 animate-pulse" />
+              <div className="h-8 w-8 rounded-xl bg-beige-100 animate-pulse" />
+            </div>
+          </div>
+          {/* Table header */}
+          <div className="h-9 bg-beige-50/60 animate-pulse" style={{ borderBottom: "1px solid var(--border-hair)" }} />
+          {/* Table rows */}
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 px-6 py-3.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3.5 w-2/3 rounded bg-beige-100 animate-pulse" />
+              </div>
+              <div className="h-3 w-24 rounded bg-beige-100 animate-pulse" />
+              <div className="h-5 w-20 rounded-full bg-beige-100 animate-pulse" />
+              <div className="h-5 w-16 rounded-full bg-beige-100 animate-pulse" />
+              <div className="h-3 w-16 rounded bg-beige-100 animate-pulse" />
+              <div className="flex items-center gap-1.5 justify-center">
+                <div className="h-1.5 w-14 rounded-full bg-beige-100 animate-pulse" />
+                <div className="h-3 w-6 rounded bg-beige-100 animate-pulse" />
+              </div>
+              <div className="h-3 w-8 rounded bg-beige-100 animate-pulse" />
+              <div className="h-3 w-16 rounded bg-beige-100 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
+    <>
     <motion.div variants={stagger} initial="hidden" animate="show">
 
-      {/* ═══ HERO — FSD §7.1.1 ═══ */}
+      {/* ═══ HERO ═══ */}
       <motion.div variants={fadeUp} className="mb-7">
-        <div className="flex items-end justify-between gap-6">
-          <div>
-            <h1 className="font-heading leading-tight text-gray-900" style={{ fontSize: "1.75rem", fontWeight: 600, letterSpacing: "-0.02em" }}>
-              SOW Repository
-            </h1>
-            <p className="mt-1.5 text-[13px] text-gray-500">
-              Manage all Statements of Work — upload, track, and approve across projects.
-            </p>
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brown-500 to-brown-700 flex items-center justify-center text-white shrink-0 shadow-lg shadow-brown-200/40">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-[22px] font-bold text-brown-900 tracking-[-0.02em]">SOW Repository</h1>
+              <p className="text-[13px] text-beige-500 mt-0.5">
+                Manage all Statements of Work — upload, track, and approve across projects.
+              </p>
+            </div>
           </div>
           <Link href="/enterprise/sow/intake">
-            <button className="flex items-center gap-1.5 rounded-xl text-white text-xs font-medium px-4 py-2.5 shrink-0 transition-all hover:-translate-y-0.5 bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700"
+            <button className="flex items-center gap-1.5 rounded-xl text-white text-xs font-semibold px-4 py-2.5 shrink-0 transition-all hover:-translate-y-0.5 bg-gradient-to-r from-brown-500 to-brown-700 hover:from-brown-600 hover:to-brown-800"
               style={{ boxShadow: "0 2px 8px color-mix(in srgb, var(--color-brown-500) 30%, transparent)" }}>
               <Plus className="w-3 h-3" /> New SOW
             </button>
@@ -391,258 +557,322 @@ export default function SOWListPage() {
             ? (avgRisk <= 25 ? "var(--color-forest-700)" : avgRisk <= 50 ? "var(--color-gold-700)" : "var(--danger)")
             : undefined;
           return (
-            <motion.div key={kpi.key} variants={scaleIn}
-              className="card-parchment flex items-center gap-5 px-5 py-5 cursor-pointer hover:shadow-md transition-shadow"
+            <motion.button key={kpi.key} variants={scaleIn}
+              className="rounded-2xl border bg-white/70 backdrop-blur-sm p-4 flex items-center gap-4 text-left transition-all cursor-pointer hover:border-beige-300/60 hover:shadow-sm border-beige-200/50"
               onClick={() => handleTileClick(kpi.key)}>
-              <div className={`w-12 h-12 rounded-2xl ${kpi.iconBg} flex items-center justify-center shrink-0`}>
+              <div className={`w-11 h-11 rounded-xl ${kpi.iconBg} flex items-center justify-center shrink-0`}>
                 <KpiIcon className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">{kpi.label}</div>
-                <div className="num-display text-[28px] leading-none mt-1" style={{ color: riskTextColor || "var(--ink-dark)" }}>
+                <p className="text-[22px] font-bold text-brown-900 tracking-tight leading-none" style={{ color: riskTextColor || undefined }}>
                   {kpi.value}
-                </div>
+                </p>
+                <p className="text-[10px] text-beige-500 mt-0.5 font-medium uppercase tracking-wide">{kpi.label}</p>
               </div>
-            </motion.div>
+            </motion.button>
           );
         })}
       </motion.div>
 
       {/* ═══ TABLE CARD ═══ */}
-      {allSows.length === 0 ? (
-        <motion.div variants={fadeUp} className="card-parchment">
-          <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center mb-4">
-              <FileText className="w-5 h-5 text-white" />
-            </div>
-            <h2 className="text-[15px] font-semibold text-gray-800 mb-1.5">Upload your first SOW or use our AI Generator.</h2>
-            <p className="text-xs text-gray-500 max-w-[380px] mb-5">Create a Statement of Work to kick off your first project on GlimmoraTeam.</p>
-            <div className="flex items-center gap-3">
-              <Link href="/enterprise/sow/upload">
-                <button className="flex items-center gap-1.5 rounded-xl text-xs font-medium px-4 py-2.5 border border-brown-200 text-brown-600 hover:bg-brown-50 transition-all">
-                  <Upload className="w-3 h-3" /> Upload Document
-                </button>
-              </Link>
-              <Link href="/enterprise/sow/generate">
-                <button className="flex items-center gap-1.5 rounded-xl text-white text-xs font-medium px-4 py-2.5 bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 transition-all"
-                  style={{ boxShadow: "0 2px 8px color-mix(in srgb, var(--color-brown-500) 30%, transparent)" }}>
-                  <Sparkles className="w-3 h-3" /> Use AI Generator
-                </button>
-              </Link>
-            </div>
-          </div>
-        </motion.div>
-      ) : (
-        <motion.div variants={fadeUp} className="card-parchment mb-5">
+        <motion.div variants={fadeUp} className="rounded-2xl mb-5"
+          style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "visible" }}>
 
           {/* Card header */}
-          <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
-            <span className="text-sm font-semibold text-gray-800">All Statements of Work</span>
+          <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg" style={{ background: "var(--color-brown-50)", border: "1px solid var(--color-brown-100)" }}>
+                <FileText className="w-4 h-4" style={{ color: "var(--color-brown-600)" }} />
+              </div>
+              <div>
+                <span className="text-[13.5px] font-semibold" style={{ color: "var(--ink)" }}>All Statements of Work</span>
+                {filtered.length !== allSows.length && (
+                  <span className="ml-2 text-[11px] font-medium px-1.5 py-0.5 rounded-md" style={{ background: "var(--color-brown-50)", color: "var(--color-brown-600)" }}>
+                    {filtered.length} of {allSows.length}
+                  </span>
+                )}
+                {filtered.length === allSows.length && allSows.length > 0 && (
+                  <span className="ml-2 text-[11px] font-medium px-1.5 py-0.5 rounded-md" style={{ background: "var(--color-gray-100)", color: "var(--ink-faint)" }}>
+                    {allSows.length} total
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* Recently Viewed */}
+            <div className="relative">
+              <button onClick={() => setRecentViewedOpen(!recentViewedOpen)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium transition-all hover:bg-gray-50"
+                style={{ border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}>
+                <Clock className="w-3.5 h-3.5" />
+                Recent
+              </button>
+              <RecentlyViewedPanel open={recentViewedOpen} onClose={() => setRecentViewedOpen(false)} />
+            </div>
           </div>
 
-          {/* ═══ FILTER BAR — FSD §7.1.3 ═══ */}
-          <div className="flex items-center justify-between gap-3 px-6 py-3" style={{ borderBottom: "1px solid var(--border-hair)" }}>
-            {/* Search — FSD §7.1.3: "Search SOWs by title, client, or ID..." + ⌘K */}
-            <div className={cn("flex items-center gap-2 rounded-lg transition-all duration-200 shrink-0", searchFocused ? "w-64" : "w-[240px]")}
+          {/* ═══ FILTER BAR ═══ */}
+          <div className="flex items-center gap-3 px-6 py-3" style={{ borderBottom: "1px solid var(--border-hair)", background: "rgba(249,247,245,0.4)" }}>
+            {/* Search */}
+            <div className={cn("flex items-center gap-2 rounded-lg transition-all duration-200 shrink-0 bg-white", searchFocused ? "w-72" : "w-60")}
               style={{
-                background: searchFocused ? "white" : "var(--color-gray-50)",
-                border: searchFocused ? "1px solid var(--color-brown-300)" : "1px solid var(--border-soft)",
-                padding: "7px 12px",
-                boxShadow: searchFocused ? "0 0 0 3px color-mix(in srgb, var(--color-brown-500) 8%, transparent)" : undefined,
+                border: searchFocused ? "1px solid var(--color-brown-400)" : "1px solid var(--border-soft)",
+                padding: "6px 11px",
+                boxShadow: searchFocused ? "0 0 0 3px color-mix(in srgb, var(--color-brown-500) 8%, transparent)" : "none",
               }}
             >
-              <Search className="w-3.5 h-3.5 shrink-0 text-gray-400" />
-              <input ref={searchRef} type="text" placeholder="Search SOWs by title, client, or ID..." value={search}
+              <Search className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--ink-faint)" }} />
+              <input ref={searchRef} type="text" placeholder="Search by title, client, or ID…" value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)}
-                className="border-none outline-none bg-transparent w-full text-[12.5px] text-gray-700 placeholder:text-gray-400" />
+                className="border-none outline-none bg-transparent w-full text-[12px]"
+                style={{ color: "var(--ink)" }} />
               {search ? (
-                <button onClick={() => setSearch("")} className="shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600"><X className="w-3 h-3" /></button>
+                <button onClick={() => setSearch("")} className="shrink-0"><X className="w-3 h-3" style={{ color: "var(--ink-faint)" }} /></button>
               ) : !searchFocused ? (
-                <kbd className="font-mono whitespace-nowrap shrink-0 text-[9px] text-gray-400 bg-gray-100 border border-gray-200 px-1.5 py-px rounded">⌘K</kbd>
+                <kbd className="font-mono whitespace-nowrap shrink-0 text-[9px] px-1.5 py-px rounded" style={{ color: "var(--ink-faint)", background: "var(--color-gray-100)", border: "1px solid var(--border-soft)" }}>⌘K</kbd>
               ) : null}
             </div>
 
-            {/* Filters + Recently Viewed — FSD §7.1.3 */}
-            <div className="flex items-center gap-2">
-              {/* STATUS filter */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-8 rounded-lg bg-white border border-gray-200 px-3 text-[12px] text-gray-600 hover:border-gray-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 130 }}><SelectValue placeholder="STATUS: ALL" /></SelectTrigger>
-                <SelectContent>{statusFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-              </Select>
-              {/* INTAKE filter */}
-              <Select value={intakeFilter} onValueChange={setIntakeFilter}>
-                <SelectTrigger className="h-8 rounded-lg bg-white border border-gray-200 px-3 text-[12px] text-gray-600 hover:border-gray-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 120 }}><SelectValue placeholder="INTAKE: ALL" /></SelectTrigger>
-                <SelectContent>{intakeFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-              </Select>
-              {/* RISK filter */}
-              <Select value={riskFilter} onValueChange={setRiskFilter}>
-                <SelectTrigger className="h-8 rounded-lg bg-white border border-gray-200 px-3 text-[12px] text-gray-600 hover:border-gray-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 110 }}><SelectValue placeholder="RISK: ALL" /></SelectTrigger>
-                <SelectContent>{riskFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-              </Select>
+            <div className="w-px h-5" style={{ background: "var(--border-soft)" }} />
 
-              {activeFilterCount > 0 && (
-                <button onClick={clearAllFilters} className="flex items-center gap-1.5 text-[11px] font-medium text-brown-500 px-2.5 py-1 rounded-lg hover:bg-brown-50 transition-all">
-                  <X className="w-3 h-3" /> Clear
-                </button>
-              )}
+            {/* STATUS filter */}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 rounded-lg bg-white px-3 text-[12px] transition-all" style={{ minWidth: 130, border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}><SelectValue placeholder="Status: All" /></SelectTrigger>
+              <SelectContent>{statusFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={intakeFilter} onValueChange={setIntakeFilter}>
+              <SelectTrigger className="h-8 rounded-lg bg-white px-3 text-[12px] transition-all" style={{ minWidth: 120, border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}><SelectValue placeholder="Intake: All" /></SelectTrigger>
+              <SelectContent>{intakeFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={riskFilter} onValueChange={setRiskFilter}>
+              <SelectTrigger className="h-8 rounded-lg bg-white px-3 text-[12px] transition-all" style={{ minWidth: 110, border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}><SelectValue placeholder="Risk: All" /></SelectTrigger>
+              <SelectContent>{riskFilterOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+            </Select>
 
-              {/* Clock icon — Recently Viewed (FSD §7.1.3) */}
-              <div className="relative">
-                <button onClick={() => setRecentViewedOpen(!recentViewedOpen)}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 border border-gray-200 transition-all">
-                  <Clock className="w-3.5 h-3.5" />
-                </button>
-                <RecentlyViewedPanel open={recentViewedOpen} onClose={() => setRecentViewedOpen(false)} />
-              </div>
-            </div>
-          </div>
-
-          {/* ═══ TABLE — FSD §7.1.4 ═══ */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-hair)" }}>
-                  {columns.map((col) => {
-                    const active = sortField === col.field;
-                    return (
-                      <th key={col.field} onClick={() => handleSort(col.field)}
-                        className="cursor-pointer select-none transition-colors"
-                        style={{
-                          padding: "11px 16px", textAlign: col.align as "left" | "center",
-                          fontSize: 10, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase",
-                          color: active ? "var(--ink-mid)" : "var(--color-gray-400)",
-                          background: "color-mix(in srgb, var(--color-gray-100) 40%, white)",
-                          minWidth: col.minW,
-                        }}>
-                        <div className="flex items-center gap-1" style={{ justifyContent: col.align === "center" ? "center" : "flex-start" }}>
-                          <span>{col.label}</span>
-                          <span style={{ opacity: active ? 1 : 0, transition: "opacity 0.15s" }}>
-                            {active && sortDir === "asc" ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
-                          </span>
-                        </div>
-                      </th>
-                    );
-                  })}
-                  {/* Actions column */}
-                  <th style={{ padding: "11px 12px", width: 48, background: "color-mix(in srgb, var(--color-gray-100) 40%, white)" }} />
-                </tr>
-              </thead>
-              <tbody>
-                {paginated.map((sow) => {
-                  const sc = statusConfig[sow.status] || statusConfig.draft;
-                  const sens = sensitivityConfig[sow.dataSensitivity] || sensitivityConfig.internal;
-                  /* FSD §7.1.4: Pending Commercial Review uses amber-orange, bold */
-                  const isPendingCommercial = sow.status === "pending_commercial_review";
-                  /* Format SOW ID as SOW-001 format */
-                  const sowIdFormatted = sow.id.replace("sow-", "SOW-").toUpperCase();
-                  return (
-                    <tr key={sow.id} onClick={() => router.push(`/enterprise/sow/${sow.id}`)}
-                      className="group cursor-pointer transition-colors hover:bg-black/[0.02]"
-                      style={{ borderBottom: "1px solid var(--border-hair)" }}>
-
-                      {/* Title + ID — FSD §7.1.4 */}
-                      <td style={{ padding: "13px 16px" }}>
-                        <div>
-                          <div className="text-[13px] font-semibold text-gray-800 truncate max-w-[260px]">{sow.title}</div>
-                          <div className="font-mono text-[10px] text-gray-400 mt-0.5">{sowIdFormatted}</div>
-                        </div>
-                      </td>
-
-                      {/* Client */}
-                      <td className="text-[12.5px] text-gray-600" style={{ padding: "13px 16px" }}>{sow.client}</td>
-
-                      {/* Intake — FSD §7.1.4: Sparkle + "AI-GENERATED" or Upload arrow + "MANUAL UPLOAD" */}
-                      <td style={{ padding: "13px 16px" }}>
-                        <Pill bg={sow.intakeMode === "ai_generated" ? "var(--color-teal-50)" : "var(--color-gray-100)"}
-                              color={sow.intakeMode === "ai_generated" ? "var(--color-teal-700)" : "var(--color-gray-600)"}>
-                          {sow.intakeMode === "ai_generated"
-                            ? <><Sparkles className="w-2.5 h-2.5" /> AI-Generated</>
-                            : <><Upload className="w-2.5 h-2.5" /> Manual Upload</>}
-                        </Pill>
-                      </td>
-
-                      {/* Status — FSD §7.1.4 */}
-                      <td style={{ padding: "13px 16px" }}>
-                        <Pill bg={sc.bg} color={sc.color} bold={isPendingCommercial}>{sc.label}</Pill>
-                      </td>
-
-                      {/* Sensitivity — FSD §7.1.4: plain text, no pill styling */}
-                      <td className="text-[12px] text-gray-600" style={{ padding: "13px 16px" }}>{sens.label}</td>
-
-                      {/* Risk — FSD §7.1.4: Coloured progress bar + numeric score */}
-                      <td style={{ padding: "13px 16px" }}>
-                        <RiskBar score={sow.riskScore.overall} />
-                      </td>
-
-                      {/* Version */}
-                      <td style={{ padding: "13px 16px", textAlign: "center" }}>
-                        <span className="font-mono text-[12px] font-medium text-gray-600">v{sow.version}</span>
-                      </td>
-
-                      {/* Modified — FSD §7.1.4: DD Mon YYYY */}
-                      <td style={{ padding: "13px 16px" }}>
-                        <span className="text-[11.5px] text-gray-500">{formatDate(sow.updatedAt)}</span>
-                      </td>
-
-                      {/* Kebab menu — FSD §7.1.5 */}
-                      <td style={{ padding: "8px 12px" }} onClick={(e) => e.stopPropagation()}>
-                        <RowKebab sow={sow} onAction={handleRowAction} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {/* No filter results */}
-            {filtered.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brown-300 to-brown-500 flex items-center justify-center mb-4">
-                  <Search className="w-5 h-5 text-white" />
-                </div>
-                <p className="text-sm font-semibold text-gray-800 mb-1">No SOWs match your filters</p>
-                <p className="text-xs text-gray-500 max-w-[280px] mb-4">Try different keywords or clear filters to see all SOWs.</p>
-                <button onClick={clearAllFilters}
-                  className="flex items-center gap-1.5 rounded-xl text-xs font-medium text-brown-500 px-3.5 py-1.5 border border-brown-200 hover:bg-brown-50 transition-all">
-                  <X className="w-3 h-3" /> Clear all filters
-                </button>
-              </div>
+            {activeFilterCount > 0 && (
+              <button onClick={clearAllFilters}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11.5px] font-medium transition-all hover:opacity-80"
+                style={{ background: "var(--color-brown-50)", color: "var(--color-brown-700)", border: "1px solid var(--color-brown-100)" }}>
+                <X className="w-3 h-3" /> Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
+              </button>
             )}
           </div>
 
+          {/* ═══ TABLE ═══ */}
+          <table className="w-full table-fixed">
+            <colgroup>
+              <col style={{ width: "27%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "5%" }} />
+            </colgroup>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border-hair)", background: "rgba(249,247,245,0.8)" }}>
+                {columns.map((col) => {
+                  const active = sortField === col.field;
+                  return (
+                    <th key={col.field} onClick={() => handleSort(col.field)}
+                      className="cursor-pointer select-none"
+                      style={{
+                        padding: "10px 14px", textAlign: col.align as "left" | "center",
+                        fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase",
+                        color: active ? "var(--color-brown-600)" : "var(--ink-faint)",
+                        whiteSpace: "nowrap",
+                      }}>
+                      <div className="flex items-center gap-1" style={{ justifyContent: col.align === "center" ? "center" : "flex-start" }}>
+                        <span>{col.label}</span>
+                        <span style={{ opacity: active ? 1 : 0, transition: "opacity 0.15s" }}>
+                          {sortDir === "asc" ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                        </span>
+                      </div>
+                    </th>
+                  );
+                })}
+                <th style={{ width: 40 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {/* Skeleton rows */}
+              {isFetchingAny && paginated.length === 0 && Array.from({ length: 7 }).map((_, i) => (
+                <tr key={`sk-${i}`} style={{ borderBottom: "1px solid var(--border-hair)" }}>
+                  <td style={{ padding: "13px 14px" }}>
+                    <div className="animate-pulse rounded" style={{ height: 13, width: "72%", background: "var(--color-beige-100)" }} />
+                  </td>
+                  <td style={{ padding: "13px 14px" }}>
+                    <div className="animate-pulse rounded" style={{ height: 12, width: "65%", background: "var(--color-beige-100)" }} />
+                  </td>
+                  {[80, 60, 60, 24, 50, 0].map((w, j) => (
+                    <td key={j} style={{ padding: "13px 14px", textAlign: j === 3 ? "center" : "left" }}>
+                      {w > 0 && <div className="animate-pulse rounded-full" style={{ height: 20, width: w, background: "var(--color-beige-100)" }} />}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+
+              {/* Empty state */}
+              {!isFetchingAny && paginated.length === 0 && (
+                <tr>
+                  <td colSpan={8} style={{ padding: "56px 16px", textAlign: "center" }}>
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex items-center justify-center w-12 h-12 rounded-2xl" style={{ background: "var(--color-brown-50)", border: "1px solid var(--color-brown-100)" }}>
+                        <FileText className="w-5 h-5" style={{ color: "var(--color-brown-400)" }} />
+                      </div>
+                      <div>
+                        <p className="text-[13.5px] font-semibold mb-1" style={{ color: "var(--ink)" }}>
+                          {activeFilterCount > 0 || search ? "No SOWs match your filters" : "No statements of work yet"}
+                        </p>
+                        <p className="text-[12px]" style={{ color: "var(--ink-faint)" }}>
+                          {activeFilterCount > 0 || search ? "Try adjusting your search or filter criteria." : "Create your first SOW to get started."}
+                        </p>
+                      </div>
+                      {(activeFilterCount > 0 || search) && (
+                        <button onClick={clearAllFilters}
+                          className="mt-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-80"
+                          style={{ background: "var(--color-brown-50)", color: "var(--color-brown-700)", border: "1px solid var(--color-brown-100)" }}>
+                          Clear filters
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
+
+              {/* Data rows */}
+              {paginated.map((sow, rowIdx) => {
+                const sc = statusConfig[sow.status] || statusConfig.draft;
+                const sens = sensitivityConfig[sow.dataSensitivity] || sensitivityConfig.internal;
+
+                return (
+                  <tr key={sow.id}
+                    className="group"
+                    style={{
+                      borderBottom: "1px solid var(--border-hair)",
+                      background: rowIdx % 2 === 0 ? "transparent" : "rgba(249,247,245,0.4)",
+                    }}
+                  >
+                    {/* Project Title + Intake */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle" }}>
+                      <span className="text-[12.5px] font-semibold leading-snug block mb-1.5" style={{ color: "var(--ink)" }}>{sow.title}</span>
+                      <Pill bg={sow.intakeMode === "ai_generated" ? "var(--color-teal-50)" : "var(--color-gray-100)"}
+                            color={sow.intakeMode === "ai_generated" ? "var(--color-teal-700)" : "var(--color-gray-600)"}>
+                        {sow.intakeMode === "ai_generated"
+                          ? <><Sparkles className="w-2.5 h-2.5" /> AI-Generated</>
+                          : <><Upload className="w-2.5 h-2.5" /> Manual Upload</>}
+                      </Pill>
+                    </td>
+
+                    {/* Client */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle" }}>
+                      <span className="text-[12px] block" style={{ color: sow.client ? "var(--ink-muted)" : "var(--ink-faint)" }}>
+                        {sow.client || "—"}
+                      </span>
+                    </td>
+
+                    {/* Status */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle" }}>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap"
+                        style={{ background: sc.bg, color: sc.color }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sc.color }} />
+                        {sc.label}
+                      </span>
+                    </td>
+
+                    {/* Sensitivity */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle" }}>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium whitespace-nowrap" style={{ color: sens.color }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sens.color }} />
+                        {sens.label}
+                      </span>
+                    </td>
+
+                    {/* Risk */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle", textAlign: "center" }}>
+                      <RiskBar score={sow.riskScore?.overall ?? 0} />
+                    </td>
+
+                    {/* Version */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle", textAlign: "center" }}>
+                      <span className="font-mono text-[11px] font-semibold px-2 py-0.5 rounded-md"
+                        style={{ background: "var(--color-gray-100)", color: "var(--ink-muted)" }}>
+                        v{sow.version}
+                      </span>
+                    </td>
+
+                    {/* Modified */}
+                    <td style={{ padding: "12px 14px", verticalAlign: "middle" }}>
+                      <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--ink-faint)" }}>{formatDate(sow.updatedAt)}</span>
+                    </td>
+
+                    {/* Kebab */}
+                    <td style={{ padding: "12px 12px", verticalAlign: "middle", textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
+                      <RowKebab sow={sow} onAction={handleRowAction} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
           {/* Pagination */}
-          {totalPages > 1 && <div className="flex items-center justify-between px-6 py-3" style={{ borderTop: "1px solid var(--border-hair)" }}>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-gray-400">Rows per page</span>
-              <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
-                <SelectTrigger className="h-7 w-auto rounded-lg bg-white border border-gray-200 px-2.5 text-[11px] text-gray-600 hover:border-gray-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 52 }}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
+          {totalPages > 1 && (
+            <div className="rounded-b-2xl overflow-hidden">
+              <TablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filtered.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(n) => { setPageSize(n); setCurrentPage(1); }}
+              />
             </div>
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[11px] text-gray-400">
-                {filtered.length > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filtered.length)} of ${filtered.length}` : "0 results"}
-              </span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage <= 1}
-                  className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}
-                  className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>}
+          )}
 
         </motion.div>
-      )}
     </motion.div>
+
+    {/* ── Delete confirmation dialog ── */}
+    {deleteTarget && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }}>
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6" style={{ boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0" style={{ background: "rgba(239,68,68,0.1)" }}>
+              <Archive className="w-5 h-5" style={{ color: "var(--danger)" }} />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold" style={{ color: "var(--ink)" }}>Delete SOW</p>
+              <p className="text-[11.5px] mt-0.5" style={{ color: "var(--ink-faint)" }}>
+                {deleteTarget.intakeMode === "ai_generated" ? "AI-generated" : "Manual"} SOW
+              </p>
+            </div>
+          </div>
+          <p className="text-[13px] mb-5" style={{ color: "var(--ink-muted)" }}>
+            Are you sure you want to delete <span className="font-semibold" style={{ color: "var(--ink)" }}>&ldquo;{deleteTarget.title}&rdquo;</span>? This action cannot be undone.
+          </p>
+          <div className="flex items-center gap-2.5 justify-end">
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+              className="px-4 py-2 rounded-xl text-[12.5px] font-semibold transition-colors hover:bg-gray-50 disabled:opacity-50"
+              style={{ border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="px-4 py-2 rounded-xl text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ background: "var(--danger)" }}
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

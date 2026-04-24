@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 const stepAnim = {
   initial: { opacity: 0, x: 24 },
@@ -519,28 +520,29 @@ function ContributorRegisterContent() {
 
   const setPendingOnboarding = useAuthStore((s) => s.setPendingOnboarding);
 
-  const handleSSO = (provider: SSOProvider) => {
+  const handleSSO = async (provider: SSOProvider) => {
     setSsoLoading(provider);
     const role = selectedRole === "enterprise" ? "enterprise" : "contributor";
     if (role === "enterprise") {
       setPendingOnboarding(true);
     }
-    const redirectAfter = role === "enterprise" 
-      ? "/enterprise/dashboard" 
-      : "/contributor/dashboard";
-    const qs = new URLSearchParams({
-      provider,
-      redirectAfter,
-      role,
-    });
+
+    // Signal to the NextAuth signIn callback that this is a *registration* flow
+    // so new emails (not yet in the Glimmora DB) are allowed through.
     try {
-      sessionStorage.setItem("_oauth_provider", provider);
-      sessionStorage.setItem("_oauth_redirect_after", redirectAfter);
-      sessionStorage.setItem("_oauth_role", role);
+      await fetch("/api/auth/sso-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
     } catch {
-      // ignore storage unavailability
+      // If the intent cookie can't be set, continue anyway — worst case the
+      // signIn callback blocks the unregistered email and shows an error.
     }
-    window.location.href = `/api/auth/oauth/authorize?${qs.toString()}`;
+
+    // Map provider names to NextAuth provider IDs
+    const authProvider = provider === "microsoft" ? "microsoft-entra-id" : "google";
+    signIn(authProvider, { callbackUrl: "/auth/redirect" });
   };
 
   const handleManual = () => {
@@ -662,6 +664,8 @@ function ContributorRegisterContent() {
                   <Step1Identity
                     firstName={reg.firstName} setFirstName={reg.setFirstName}
                     lastName={reg.lastName} setLastName={reg.setLastName}
+                    phoneCountry={reg.phoneCountry} setPhoneCountry={reg.setPhoneCountry}
+                    phone={reg.phone} setPhone={reg.setPhone}
                     email={reg.email} setEmail={reg.setEmail}
                     password={reg.password} setPassword={reg.setPassword}
                     confirm={reg.confirm} setConfirm={reg.setConfirm}
@@ -702,8 +706,15 @@ function ContributorRegisterContent() {
                     addOtherSkill={reg.addOtherSkill} removeOtherSkill={reg.removeOtherSkill}
                     workStart={reg.workStart} setWorkStart={reg.setWorkStart}
                     workEnd={reg.workEnd} setWorkEnd={reg.setWorkEnd}
+                    jobTitle={reg.jobTitle} setJobTitle={reg.setJobTitle}
                     careerStage={reg.careerStage} setCareerStage={reg.setCareerStage}
                     yearsExperience={reg.yearsExperience} setYearsExperience={reg.setYearsExperience}
+                    studentCurrency={reg.studentCurrency}
+                    studentHourlyRate={reg.studentHourlyRate}
+                    womenRateCurrency={reg.womenRateCurrency}
+                    womenRateTable={reg.womenRateTable}
+                    generalRateCurrency={reg.generalRateCurrency}
+                    generalRateTable={reg.generalRateTable}
                     error={reg.error}
                     onContinue={reg.goToStep3}
                     onBack={() => { reg.setStep(1); reg.setError(""); }}

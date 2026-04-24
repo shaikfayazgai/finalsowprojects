@@ -41,23 +41,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
-  }
-
-  const headerAuth = req.headers.get("authorization") || "";
-  const headerToken = headerAuth.toLowerCase().startsWith("bearer ")
-    ? headerAuth.slice(7).trim()
-    : undefined;
-
-  const bodyToken = typeof body.accessToken === "string" ? body.accessToken : undefined;
-  if ("accessToken" in body) delete body.accessToken;
-
-  // Prefer explicit caller token, then user's session token.
-  let token = bodyToken || headerToken || (jwt.glimmoraAccessToken as string | undefined);
+  // Prefer the user's own Glimmora token (real enterprise admin login)
+  let token = jwt.glimmoraAccessToken as string | undefined;
 
   // Fall back to dedicated admin credentials from env vars
   if (!token) {
@@ -66,9 +51,16 @@ export async function POST(req: NextRequest) {
 
   if (!token) {
     return NextResponse.json(
-      { error: "No admin token available. Please sign in again as enterprise admin." },
+      { error: "No admin token available. Set GLIMMORA_ADMIN_EMAIL and GLIMMORA_ADMIN_PASSWORD in .env." },
       { status: 503 },
     );
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
   const res = await fetch(`${GLIMMORA_API}/api/v1/users`, {

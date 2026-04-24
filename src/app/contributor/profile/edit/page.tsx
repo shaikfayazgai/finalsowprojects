@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { mockContributorProfile } from "@/mocks/data/contributor";
+import { useContributorPhonePrefill } from "@/lib/stores/contributor-phone-store";
 
 /* ═══ Badge ═══ */
 
@@ -142,6 +143,13 @@ export default function ProfileEditPage() {
   const [bio, setBio] = React.useState(profile.bio || "");
   const [phone, setPhone] = React.useState(profile.phone || "");
   const [country, setCountry] = React.useState(profile.country || "India");
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time hydrate from registration
+  React.useEffect(() => {
+    const { phone: stored } = useContributorPhonePrefill.getState();
+    if (!stored || stored.replace(/\D/g, "").length < 7) return;
+    setPhone((prev) => (prev.replace(/\D/g, "").length >= 7 ? prev : stored));
+  }, []);
   const [city, setCity] = React.useState(profile.city || "Bangalore");
   const [timezone, setTimezone] = React.useState(profile.timezone);
   const [weeklyHours, setWeeklyHours] = React.useState(profile.weeklyHours);

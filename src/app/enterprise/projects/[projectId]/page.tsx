@@ -114,8 +114,8 @@ export default function ProjectDetailPage() {
   const holdMutation = useHoldProject();
   const resumeMutation = useResumeProject();
 
-  /* Build project from API data merged with mock fallback */
-  const mockProject = mockProjects.find((p) => p.id === projectId) ?? mockProjects[0];
+  /* Build project from API data; mock fallback only used to satisfy types */
+  const mockProject = mockProjects.find((p) => p.id === projectId);
   const project = React.useMemo(() => {
     if (!overviewData) return mockProject;
     const healthMap: Record<string, ProjectHealth> = {
@@ -123,18 +123,18 @@ export default function ProjectDetailPage() {
       BEHIND: "behind", ON_HOLD: "on_hold", ESCALATED: "escalated", COMPLETED: "completed",
     };
     return {
-      ...mockProject,
+      ...(mockProject ?? ({} as any)),
       title: overviewData.name,
-      health: healthMap[overviewData.health?.toUpperCase()] ?? mockProject.health,
+      health: healthMap[overviewData.health?.toUpperCase()] ?? (mockProject?.health ?? "on_track"),
       progress: overviewData.completion_pct,
     };
   }, [overviewData, mockProject]);
 
-  const milestones = mockMilestones.filter((m) => m.projectId === project.id);
-  const team = mockTeams.find((t) => t.id === project.teamId);
-  const tasks = mockTasks.filter((t) => t.planId === project.planId);
-  const deliverables = mockDeliverables.filter((d) => d.projectId === project.id);
-  const hc = healthCfg[project.health];
+  const milestones = project ? mockMilestones.filter((m) => m.projectId === project.id) : [];
+  const team = project ? mockTeams.find((t) => t.id === project.teamId) : undefined;
+  const tasks = project ? mockTasks.filter((t) => t.planId === project.planId) : [];
+  const deliverables = project ? mockDeliverables.filter((d) => d.projectId === project.id) : [];
+  const hc = project ? healthCfg[project.health as ProjectHealth] : healthCfg.on_track;
   const [resolvedExceptions, setResolvedExceptions] = React.useState<Set<string>>(new Set());
   const [otpDialog, setOtpDialog] = React.useState<{
     isOpen: boolean;
@@ -146,6 +146,15 @@ export default function ProjectDetailPage() {
   const [tlTooltip, setTlTooltip] = React.useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
   const [todayClient, setTodayClient] = React.useState<Date | null>(null);
   React.useEffect(() => { setTodayClient(new Date()); }, []);
+
+  if (!project) {
+    return (
+      <div className="card-parchment px-6 py-16 text-center">
+        <p className="text-[14px] font-medium text-gray-600 mb-1">Project not found</p>
+        <p className="text-[12px] text-gray-400">This project may have been removed or is loading.</p>
+      </div>
+    );
+  }
 
   const daysLeft = Math.max(0, Math.ceil((new Date(project.endDate).getTime() - Date.now()) / 86400000));
   const completedTasks = tasks.filter((t) => t.status === "accepted").length;

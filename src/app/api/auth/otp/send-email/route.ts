@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const tpl = DEFAULT_TEMPLATES.otp_email;
 
     console.log(`[send-email OTP] Sending code to: ${email}`);
-    const { success } = await sendEmail({
+    const result = await sendEmail({
       to: email,
       subject: tpl.subject,
       html: buildEmailHtml({
@@ -44,30 +44,32 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    let demoCode: string | undefined;
+    const isDev = process.env.NODE_ENV !== "production";
     if (!success) {
-      const otpDryRun =
-        process.env.NODE_ENV !== "production" ||
-        ["1", "true", "yes", "on"].includes(
-        String(process.env.OTP_DRY_RUN ?? "").trim().toLowerCase(),
-      );
-      if (!otpDryRun) {
+      if (!isDev) {
         return NextResponse.json(
           { error: "SEND_FAILED", message: "Could not send verification email. Please try again." },
           { status: 500 },
         );
       }
-      // Local/dev fallback so onboarding is not blocked when SMTP is unavailable.
-      console.warn(`[send-email OTP] SMTP send failed, OTP_DRY_RUN enabled. Code for ${email}: ${code}`);
-      demoCode = code;
+
+      console.warn(
+        `[send-email OTP] Email provider failed in development. Using local OTP fallback for: ${email}`,
+      );
+    } else {
+      console.log(`[send-email OTP] Sent successfully to: ${email}`);
     }
 
-    console.log(`[send-email OTP] Sent successfully to: ${email}`);
-
-    const res = NextResponse.json({
-      ok: true,
-      ...(demoCode ? { demoCode, dryRun: true } : {}),
-    });
+    const res = NextResponse.json(
+      success
+        ? { ok: true }
+        : {
+            ok: true,
+            devFallback: true,
+            devOtp: code,
+            message: "Email provider failed in development. OTP generated locally.",
+          },
+    );
     res.cookies.set("email_otp_token", token, {
       httpOnly: true,
       sameSite: "strict",

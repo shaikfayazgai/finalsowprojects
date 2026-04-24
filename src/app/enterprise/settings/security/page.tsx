@@ -66,18 +66,6 @@ function normalizeSession(s: UserSessionRecord) {
   return { id: s.id, device, browser, os: osRaw, location, lastActive, current, icon };
 }
 
-function toSessionArray(raw: unknown): UserSessionRecord[] {
-  if (Array.isArray(raw)) return raw as UserSessionRecord[];
-  if (raw && typeof raw === "object") {
-    const candidate =
-      (raw as { sessions?: unknown }).sessions ??
-      (raw as { data?: unknown }).data ??
-      (raw as { items?: unknown }).items;
-    if (Array.isArray(candidate)) return candidate as UserSessionRecord[];
-  }
-  return [];
-}
-
 /* ── Format relative time ── */
 function formatRelativeTime(dateStr: string): string {
   if (!dateStr) return "Unknown";
@@ -132,7 +120,7 @@ export default function SecuritySettingsPage() {
   const revokeSession = useRevokeSession();
   const revokeAll = useRevokeAllSessions();
 
-  const sessions = toSessionArray(rawSessions).map(normalizeSession);
+  const sessions = (rawSessions ?? []).map(normalizeSession);
   const sessionsError = sessionsIsError ? "Failed to load sessions. Please try again." : "";
 
   const handleCopyCodes = () => {

@@ -165,6 +165,3 @@ src/app/.next/
 
 # prisma generated
 /src/generated/prisma
-
-# local databases (dev; do not commit)
-*.db

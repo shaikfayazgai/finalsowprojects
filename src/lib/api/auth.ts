@@ -13,8 +13,6 @@ export interface GlimmoraUser {
   mfaEnabled: boolean;
   mfaEnrollmentRequired: boolean;
   authPending?: boolean;
-  requiresPasswordChange?: boolean;
-  isFirstLogin?: boolean;
   // Profile fields
   phone?: string;
   adminTitle?: string;
@@ -32,12 +30,11 @@ export interface LoginSuccessResponse extends AuthTokens {
 }
 
 export interface MfaPendingResponse {
-  /** Backend returns mfa_setup_required | mfa_required */
-  status: "mfa_pending" | "mfa_setup_required" | "mfa_required";
+  status: "mfa_pending";
   mfa_pending_token: string;
   expires_in: number;
-  user: Pick<GlimmoraUser, "id" | "email" | "firstName" | "lastName" | "role">;
-  methods?: string[];
+  user: Pick<GlimmoraUser, "id" | "email" | "firstName" | "lastName">;
+  methods: string[];
 }
 
 export type LoginResponse = LoginSuccessResponse | MfaPendingResponse;
@@ -69,12 +66,7 @@ export interface TokenPair {
 // ── Type guard ─────────────────────────────────────────────────────────────
 
 export function isMfaPending(response: LoginResponse): response is MfaPendingResponse {
-  const s = (response as MfaPendingResponse).status;
-  return s === "mfa_pending" || s === "mfa_setup_required" || s === "mfa_required";
-}
-
-export function isMfaVerifyPending(response: LoginResponse): boolean {
-  return isMfaPending(response) && (response as MfaPendingResponse).status === "mfa_required";
+  return (response as MfaPendingResponse).status === "mfa_pending";
 }
 
 // ── Auth API ───────────────────────────────────────────────────────────────
@@ -154,7 +146,10 @@ export const authApi = {
       body: JSON.stringify({ email }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new ApiError(res.status, data?.message ?? "Failed to send reset email");
+    if (!res.ok) {
+      const base = data?.message ?? "Failed to send reset email";
+      throw new ApiError(res.status, data?.detail ? `${base} — ${data.detail}` : base);
+    }
     return data;
   },
 
@@ -189,48 +184,6 @@ export const authApi = {
         token: accessToken,
       },
     );
-  },
-
-  /** Register a new contributor account. */
-  async registerContributor(data: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    password: string;
-    confirmPassword: string;
-    contributorType: string;
-    countryOfResidence: string;
-    dateOfBirth: string;
-    timeZone: string;
-    weeklyAvailabilityHours: string;
-    departmentCategory: string;
-    primarySkills: string[];
-    // Optional extended fields
-    secondarySkills?: string[];
-    otherSkills?: string[];
-    phone: string;  // required by API
-    degree?: string;
-    branch?: string;
-    linkedin?: string;
-    careerStage?: string;
-    yearsExperience?: string;
-    workStart?: string;
-    workEnd?: string;
-    // Acknowledgement fields (actual API field names)
-    ndaSignatoryLegalName?: string;
-    mentorGuideAcknowledged?: boolean;
-    acceptTermsOfUse?: boolean;
-    acceptCodeOfConduct?: boolean;
-    acceptPrivacyPolicy?: boolean;
-    acceptHarassmentPolicy?: boolean;
-    acknowledgmentsAccepted?: boolean;
-    notifyNewTasksOptIn?: boolean;
-    marketingOptIn?: boolean;
-  }): Promise<{ user: GlimmoraUser }> {
-    return apiCall<{ user: GlimmoraUser }>("/api/v1/auth/register/contributor", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
   },
 
   /**
@@ -281,88 +234,29 @@ export const authApi = {
     language: string;
     timeZone: string;
     invitedByName: string;
-    /** INVITED | ACTIVE | EXPIRED — defaults to INVITED when omitted */
-    status?: "INVITED" | "ACTIVE" | "EXPIRED";
     accessToken?: string;
   }): Promise<{ user_id: string; email: string; temp_password: string }> {
-    const res = await fetch("/api/reviewers/invitations", {
+    const res = await fetch("/api/reviewer/create", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(data.accessToken ? { Authorization: `Bearer ${data.accessToken}` } : {}),
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
-        // job_title — backend aliases "role" but must be the human job title, not system role
-        jobTitle: data.designation,
+        role: "reviewer",
         designation: data.designation,
         department: data.department,
         username: data.username,
         language: data.language,
         timeZone: data.timeZone,
-        status: data.status ?? "INVITED",
-        ...(data.accessToken ? { accessToken: data.accessToken } : {}),
+        invitedByName: data.invitedByName,
       }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const detail = json?.detail;
-      const msg =
-        typeof detail === "string"
-          ? detail
-          : detail?.message ?? json?.message ?? json?.error ?? "Failed to create reviewer";
-      throw new Error(msg);
+      throw new Error(json?.detail || json?.message || json?.error || "Failed to create reviewer");
     }
-    const inner = json?.data ?? json;
-    const user_id = inner?.id ?? inner?.user_id ?? "";
-    const temp_password = inner?.temporaryPassword ?? inner?.temp_password ?? "";
-    const emailOut = inner?.email ?? data.email;
-    if (!user_id || !temp_password) {
-      throw new Error("Create reviewer succeeded but response did not include credentials.");
-    }
-    return { user_id, email: emailOut, temp_password };
-  },
-
-  async resendReviewerInvite(email: string, accessToken?: string): Promise<{ user_id: string; email: string; temp_password: string }> {
-    const res = await fetch("/api/reviewers/invitations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      body: JSON.stringify({
-        email: email.trim().toLowerCase(),
-        resendExisting: true,
-        ...(accessToken ? { accessToken } : {}),
-      }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const detail = json?.detail;
-      const msg =
-        typeof detail === "string"
-          ? detail
-          : detail?.message ?? json?.message ?? json?.error ?? "Failed to resend reviewer invite";
-      throw new Error(msg);
-    }
-    const inner = json?.data ?? json;
-    const user_id = inner?.id ?? inner?.user_id ?? "";
-    const temp_password = inner?.temporaryPassword ?? inner?.temp_password ?? "";
-    if (!user_id || !temp_password) {
-      throw new Error("Resend invite succeeded but credentials were missing.");
-    }
-    return { user_id, email: inner?.email ?? email, temp_password };
-  },
-
-  /** Change password while authenticated (e.g. reviewer first login after temporary password). */
-  async changePassword(currentPassword: string, newPassword: string, accessToken: string): Promise<void> {
-    await apiCall<{ success?: boolean }>("/api/v1/auth/password/change", {
-      method: "POST",
-      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
-      token: accessToken,
-    });
+    return json;
   },
 
   /** Get the current active session details. */

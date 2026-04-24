@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   Building2,
   Users,
@@ -35,9 +35,10 @@ import {
   Loader2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { sowApi } from "@/lib/api/sow";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { authApi } from "@/lib/api/auth";
-import { fetchInternal } from "@/lib/api/client";
+import { ApiError, fetchInternal } from "@/lib/api/client";
 import { toast } from "@/lib/stores/toast-store";
 import { cn } from "@/lib/utils/cn";
 import ProfilePage from "@/app/enterprise/profile/page";
@@ -102,39 +103,12 @@ interface NotificationSetting {
 
 const mockProjects = ["Project Alpha", "Project Beta", "Project Gamma", "Project Delta"];
 
-type ReviewerListItem = {
-  id: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  fullName?: string;
-  status?: string;
-  updatedAt?: string | null;
-  createdAt?: string | null;
-};
-
-function mapReviewerStatusToUi(status?: string): TeamMember["status"] {
-  const normalized = String(status || "").toUpperCase();
-  if (normalized === "ACTIVE") return "Active";
-  if (normalized === "EXPIRED") return "Expired";
-  if (normalized === "DEACTIVATED") return "Deactivated";
-  return "Invited";
-}
-
-function mapReviewerToTeamMember(reviewer: ReviewerListItem): TeamMember {
-  const fullName = reviewer.fullName?.trim() || `${reviewer.firstName || ""} ${reviewer.lastName || ""}`.trim();
-  const lastSeen = reviewer.updatedAt || reviewer.createdAt;
-  const lastActive = lastSeen ? new Date(lastSeen).toLocaleString() : "Never";
-  return {
-    id: reviewer.id,
-    name: fullName || "Reviewer",
-    email: reviewer.email,
-    role: "Reviewer",
-    status: mapReviewerStatusToUi(reviewer.status),
-    lastActive,
-    projectAccess: [],
-  };
-}
+const initialTeamMembers: TeamMember[] = [
+  { id: "1", name: "Rahul Sharma", email: "rahul@acmetech.in", role: "Reviewer", status: "Active", lastActive: "25 Mar 2026 09:15", projectAccess: ["Project Alpha", "Project Beta"] },
+  { id: "2", name: "Sneha Patel", email: "sneha@acmetech.in", role: "Reviewer", status: "Active", lastActive: "24 Mar 2026 16:42", projectAccess: ["Project Alpha", "Project Gamma"] },
+  { id: "3", name: "Amit Kumar", email: "amit@acmetech.in", role: "Reviewer", status: "Invited", lastActive: "Never", projectAccess: ["Project Beta"] },
+  { id: "4", name: "Deepa Menon", email: "deepa@acmetech.in", role: "Reviewer", status: "Expired", lastActive: "Never", projectAccess: [] },
+];
 
 const initialNotifications: NotificationSetting[] = [
   { id: "n1", label: "Blueprint ready for review", email: true, inApp: true, digest: "Real-time", digestOptions: ["Real-time", "Daily", "Weekly"], locked: false },
@@ -187,7 +161,8 @@ export default function SettingsPage() {
   /* ── Session + store data (backend API) ── */
   const { data: session } = useSession();
   const { registrationData, onboardingProgress } = useAuthStore();
-  const accessToken = (session as { user?: { accessToken?: string } } | null)?.user?.accessToken ?? "";
+  const accessToken = (session as any)?.user?.accessToken ?? "";
+  console.log("FULL SESSION:", session);
 
   /* ── Company Profile state — seeded from API / onboarding store ── */
   const [companyName, setCompanyName] = useState(registrationData?.companyName || "");
@@ -216,7 +191,7 @@ export default function SettingsPage() {
   }, [session?.user?.email]);
 
   /* ── Team Members state ── */
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialTeamMembers);
   const [addReviewerOpen, setAddReviewerOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newFirstName, setNewFirstName] = useState("");
@@ -264,28 +239,18 @@ export default function SettingsPage() {
     setAddError("");
   };
 
-  const loadTeamMembers = useCallback(async () => {
-    if (!accessToken) return;
-    try {
-      const res = await fetchInternal("/api/reviewers/invitations", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!res.ok) return;
-      const payload = await res.json().catch(() => ({}));
-      const rows = (payload?.data ?? []) as ReviewerListItem[];
-      setTeamMembers(rows.map(mapReviewerToTeamMember));
-    } catch {
-      // Keep current table state if list endpoint is temporarily unavailable.
-    }
-  }, [accessToken]);
-
-  useEffect(() => {
-    loadTeamMembers();
-  }, [loadTeamMembers]);
+  /** Generate a random temporary password: 12 chars, upper+lower+digit+symbol */
+  function generateTempPassword(): string {
+    const upper  = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower  = "abcdefghjkmnpqrstuvwxyz";
+    const digits = "23456789";
+    const syms   = "@#$!";
+    const all    = upper + lower + digits + syms;
+    const rand   = (s: string) => s[Math.floor(Math.random() * s.length)];
+    const core   = Array.from({ length: 8 }, () => rand(all)).join("");
+    // Guarantee at least one of each required type
+    return rand(upper) + rand(lower) + rand(digits) + rand(syms) + core;
+  }
 
   const handleAddReviewer = async () => {
     setAddError("");
@@ -305,10 +270,17 @@ export default function SettingsPage() {
     setAddSaving(true);
     try {
       const adminName = session?.user?.name ?? "Enterprise Admin";
-      const access = (session?.user as { accessToken?: string })?.accessToken;
 
+      // Generate a local temp password upfront — used as fallback if the
+      // Glimmora API is unavailable (e.g. missing admin credentials in .env)
+      const localTempPassword = generateTempPassword();
+
+      // Try to create the account via the Glimmora backend API.
+      // If this fails (e.g. no admin token configured), we still proceed
+      // with sending the welcome email using the locally generated password.
+      let apiTempPassword: string | undefined;
       try {
-        await authApi.createReviewer({
+        const result = await authApi.createReviewer({
           firstName: newFirstName,
           lastName: newLastName,
           email: newEmail,
@@ -318,24 +290,31 @@ export default function SettingsPage() {
           language: newLanguage,
           timeZone: newTimeZone,
           invitedByName: adminName,
-          status: newStatus === "active" ? "ACTIVE" : "INVITED",
-          accessToken: access,
         });
-      } catch (apiErr: unknown) {
-        const msg = apiErr instanceof Error ? apiErr.message : "Failed to create reviewer.";
-        const normalized = msg.toLowerCase();
-        if (normalized.includes("already registered as a reviewer")) {
-          await authApi.resendReviewerInvite(newEmail, access);
-          await loadTeamMembers();
-          resetAddForm();
-          setAddReviewerOpen(false);
-          toast.success(`Reviewer already existed, invitation email resent to ${newEmail}.`);
-          return;
-        }
-        setAddError(msg);
-        setAddSaving(false);
-        return;
+        apiTempPassword = result.temp_password;
+      } catch {
+        // API unavailable — continue with local password
       }
+
+      const tempPassword = apiTempPassword ?? localTempPassword;
+
+      // Send welcome email via Gmail SMTP (always runs regardless of API result)
+      await fetchInternal("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "welcome_reviewer",
+          to: newEmail,
+          payload: {
+            firstName: newFirstName,
+            loginEmail: newEmail,
+            tempPassword,
+            orgName: companyName || "Enterprise",
+            dashboardUrl: `${window.location.origin}/enterprise/reviewer`,
+            supportUrl: `${window.location.origin}/support`,
+          },
+        }),
+      });
 
       const member: TeamMember = {
         id: String(Date.now()),
@@ -347,10 +326,9 @@ export default function SettingsPage() {
         projectAccess: [],
       };
       setTeamMembers((prev) => [...prev, member]);
-      await loadTeamMembers();
       resetAddForm();
       setAddReviewerOpen(false);
-      toast.success(`Invitation sent to ${newEmail}.`);
+      toast.success(`Welcome email sent to ${newEmail} with login credentials.`);
     } catch (err: any) {
       if (err?.message?.toLowerCase().includes("already") || 
         err?.message?.toLowerCase().includes("exists")) {
@@ -372,21 +350,9 @@ export default function SettingsPage() {
   };
 
   const handleResendCredentials = (id: string) => {
-    const target = teamMembers.find((m) => m.id === id);
-    if (!target) return;
-    const access = (session?.user as { accessToken?: string })?.accessToken;
-    setAddSaving(true);
-    authApi
-      .resendReviewerInvite(target.email, access)
-      .then(async () => {
-        await loadTeamMembers();
-        toast.success(`Invitation resent to ${target.email}.`);
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Failed to resend invitation.";
-        toast.error(msg);
-      })
-      .finally(() => setAddSaving(false));
+    setTeamMembers((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, status: "Invited" as const } : m))
+    );
   };
 
   const handleEditAccessOpen = (member: TeamMember) => {
@@ -500,7 +466,29 @@ export default function SettingsPage() {
                       <Button variant="outline" size="sm" onClick={() => setIsEditingCompany(false)}>
                         Cancel
                       </Button>
-                      <Button variant="primary" size="sm" onClick={() => { setIsEditingCompany(false); toast.success("Company profile saved successfully."); }}>
+                      <Button variant="primary" size="sm" 
+                        onClick={async () => {
+                          try {
+                            await sowApi.updateProfile({
+                              company_name: companyName,
+                              industry: industryType,
+                              company_size: companySize,
+                              address_line1: addressLine1,
+                              address_line2: addressLine2,
+                              city,
+                              state: addrState,
+                              postal_code: postalCode,
+                              country,
+                              website,
+                              email: primaryEmail,
+                            } as any);
+                            setIsEditingCompany(false);
+                            toast.success("Company profile saved successfully.");
+                          } catch {
+                            toast.error("Failed to save. Please try again.");
+                          }
+                        }}
+                      >
                         Save
                       </Button>
                     </div>
@@ -738,7 +726,7 @@ export default function SettingsPage() {
                               >
                                 <Settings2 className="h-3.5 w-3.5" /> Access
                               </Button>
-                              {member.status !== "Deactivated" && (
+                              {member.status === "Expired" && (
                                 <Button
                                   variant="ghost"
                                   size="sm"

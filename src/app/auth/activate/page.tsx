@@ -59,7 +59,8 @@ export default function ActivatePage() {
     setIsLoading(true);
     await new Promise(r => setTimeout(r, 1000));
     setIsLoading(false);
-    router.push("/enterprise/dashboard");
+    // Redirect to MFA setup after setting password
+    router.push("/auth/mfa-setup?redirect=/enterprise/dashboard");
   };
 
   if (tokenExpired) {

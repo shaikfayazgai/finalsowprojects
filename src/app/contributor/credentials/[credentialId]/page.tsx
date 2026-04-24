@@ -60,8 +60,28 @@ function formatDate(iso: string) {
 export default function CredentialDetailPage() {
   const params = useParams();
   const credentialId = params.credentialId as string;
-  const credential = mockCredentials.find((c) => c.id === credentialId) ?? mockCredentials[0];
+  const credential = mockCredentials.find((c) => c.id === credentialId);
   const isStudent = mockContributorProfile.track === "student";
+
+  /* H3 Step 3 — Share with University state (must be declared before any early return) */
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [shareConsent, setShareConsent] = React.useState(false);
+  const [shareSubmitted, setShareSubmitted] = React.useState(false);
+
+  if (!credential) {
+    return (
+      <motion.div variants={stagger} initial="hidden" animate="show">
+        <motion.div variants={fadeUp} className="card-parchment px-6 py-16 text-center">
+          <Award className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+          <p className="text-[14px] font-medium text-gray-600 mb-1">Credential not found</p>
+          <p className="text-[12px] text-gray-400 mb-4">This credential may have been revoked or doesn&apos;t exist.</p>
+          <Link href="/contributor/credentials" className="text-[12px] font-medium text-brown-600 hover:text-brown-700">
+            ← Back to credentials
+          </Link>
+        </motion.div>
+      </motion.div>
+    );
+  }
 
   const level = levelConfig[credential.level] || levelConfig.beginner;
   const acad = credential.academicMapping;
@@ -69,11 +89,6 @@ export default function CredentialDetailPage() {
 
   /* Mock: credential is not revoked. In real app, check credential.revoked */
   const isRevoked = false;
-
-  /* H3 Step 3 — Share with University state */
-  const [shareOpen, setShareOpen] = React.useState(false);
-  const [shareConsent, setShareConsent] = React.useState(false);
-  const [shareSubmitted, setShareSubmitted] = React.useState(false);
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">

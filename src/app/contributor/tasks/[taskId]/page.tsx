@@ -79,12 +79,12 @@ function Section({ title, badge, action, children, className }: {
 export default function ContributorTaskDetailPage() {
   const params = useParams();
   const taskId = params.taskId as string;
-  const task = (mockContributorTasks.find((t) => t.id === taskId) ?? mockContributorTasks[0]) as any;
-  const workroom = mockWorkroomData.taskId === task.id ? mockWorkroomData : null;
-  const submissions = mockSubmissions.filter((s) => s.taskId === task.id);
-  const latestSubmission = submissions.length > 0 ? submissions.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0] : null;
+  const task = mockContributorTasks.find((t) => t.id === taskId) as any;
 
-  const [taskStatus, setTaskStatus] = React.useState<ContributorTaskStatus>(task.status as ContributorTaskStatus);
+  /* Hooks must run unconditionally before any early return */
+  const [taskStatus, setTaskStatus] = React.useState<ContributorTaskStatus>(
+    (task?.status ?? "available") as ContributorTaskStatus
+  );
   const [showAcceptDialog, setShowAcceptDialog] = React.useState(false);
   const [showDeclineDialog, setShowDeclineDialog] = React.useState(false);
   const [declineReason, setDeclineReason] = React.useState("");
@@ -92,10 +92,30 @@ export default function ContributorTaskDetailPage() {
   const [showSubmitDialog, setShowSubmitDialog] = React.useState(false);
   const [showUploadDialog, setShowUploadDialog] = React.useState(false);
   const [qaInput, setQaInput] = React.useState("");
-  const [qaMessages, setQaMessages] = React.useState(workroom?.qaMessages || []);
-  const [checklist, setChecklist] = React.useState(workroom?.evidenceChecklist || []);
-  const [uploads, setUploads] = React.useState(workroom?.uploads || []);
+  const initialWorkroom = task && mockWorkroomData.taskId === task.id ? mockWorkroomData : null;
+  const [qaMessages, setQaMessages] = React.useState<any[]>(initialWorkroom?.qaMessages || []);
+  const [checklist, setChecklist] = React.useState<any[]>(initialWorkroom?.evidenceChecklist || []);
+  const [uploads, setUploads] = React.useState<any[]>(initialWorkroom?.uploads || []);
   const [uploadFileName, setUploadFileName] = React.useState("");
+
+  if (!task) {
+    return (
+      <motion.div variants={stagger} initial="hidden" animate="show">
+        <motion.div variants={fadeUp} className="card-parchment px-6 py-16 text-center">
+          <Package className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+          <p className="text-[14px] font-medium text-gray-600 mb-1">Task not found</p>
+          <p className="text-[12px] text-gray-400 mb-4">This task may have been reassigned or removed.</p>
+          <Link href="/contributor/tasks" className="text-[12px] font-medium text-brown-600 hover:text-brown-700">
+            ← Back to tasks
+          </Link>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  const workroom = initialWorkroom;
+  const submissions = mockSubmissions.filter((s) => s.taskId === task.id);
+  const latestSubmission = submissions.length > 0 ? submissions.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0] : null;
 
   const sc = statusCfg[taskStatus] || statusCfg.available;
   const pc = prioCfg[task.priority] || prioCfg.medium;

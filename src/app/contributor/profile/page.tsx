@@ -2,11 +2,12 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
+import { useSession } from "next-auth/react";
 import {
-  User, Mail, Clock, Globe, MapPin, Shield, CheckCircle2,
+  Mail, Clock, Globe, Shield, CheckCircle2,
   Calendar, Pencil, Award, ExternalLink, FileText, Github,
   Link2, Briefcase, TrendingUp, Target, RotateCcw, Zap,
-  BarChart3, ShieldCheck, ArrowRight,
+  ShieldCheck, ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
@@ -37,7 +38,10 @@ function Badge({ variant, dot, children }: { variant: string; dot?: boolean; chi
 /* ═══ Helpers ═══ */
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 const proficiencyPercent: Record<string, number> = {
@@ -76,7 +80,18 @@ const evidenceIcons: Record<string, React.ElementType> = {
 /* ═══ PAGE ═══ */
 
 export default function ProfilePage() {
-  const profile = mockContributorProfile;
+  const { data: session } = useSession();
+  const sessionName = session?.user?.name ?? "";
+  const sessionEmail = session?.user?.email ?? "";
+  const initials = sessionName
+    ? sessionName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()
+    : "";
+  const profile = {
+    ...mockContributorProfile,
+    displayName: mockContributorProfile.displayName || sessionName || "Contributor",
+    email: mockContributorProfile.email || sessionEmail,
+    avatar: mockContributorProfile.avatar || initials,
+  };
   const twin = mockDigitalTwin;
   const track = trackConfig[profile.track] || trackConfig.general;
   const avail = availabilityConfig[profile.availability] || availabilityConfig.available;
@@ -166,6 +181,93 @@ export default function ProfilePage() {
         </div>
       </motion.div>
 
+      {/* ═══ PERSONAL DETAILS ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-6">
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+          <span className="text-sm font-semibold text-gray-800">Personal Details</span>
+        </div>
+        <div className="px-5 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Date of Birth</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).dob ? formatDate((profile as any).dob) : "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Country</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).country || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Department</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).departmentCategory || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Career Stage</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).careerStage || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Years of Experience</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).yearsExperience || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Degree / Qualification</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).degree || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Field of Study</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).branch || "—"}</p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Availability</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).weeklyHours ? `${(profile as any).weeklyHours} hrs/week` : "—"}</p>
+          </div>
+
+          <div className="space-y-1 sm:col-span-2">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Primary Skills</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(profile as any).primarySkills?.length > 0
+                ? (profile as any).primarySkills.map((s: string) => (
+                    <span key={s} className="text-[11px] font-medium text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg">{s}</span>
+                  ))
+                : <p className="text-[13px] text-gray-800">—</p>}
+            </div>
+          </div>
+
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Secondary Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(profile as any).secondarySkills?.length > 0
+                  ? (profile as any).secondarySkills.map((s: string) => (
+                      <span key={s} className="text-[11px] font-medium text-brown-700 bg-brown-50 px-2.5 py-1 rounded-lg">{s}</span>
+                    ))
+                  : <p className="text-[13px] text-gray-800">—</p>}
+              </div>
+            </div>
+
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Other / Niche Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(profile as any).otherSkills?.length > 0
+                  ? (profile as any).otherSkills.map((s: string) => (
+                    <span key={s} className="text-[11px] font-medium text-gray-600 bg-gray-100 px-2.5 py-1 rounded-lg">{s}</span>
+                  ))
+                : <p className="text-[13px] text-gray-800">—</p>}
+              </div>
+            </div>
+
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">LinkedIn</p>
+            {(profile as any).linkedin ? (
+              <a href={(profile as any).linkedin} target="_blank" rel="noreferrer"
+                className="text-[13px] text-teal-600 hover:underline flex items-center gap-1">
+                View Profile <ExternalLink className="w-3 h-3" />
+              </a>
+            ) : (
+              <p className="text-[13px] text-gray-800">—</p>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
       {/* ═══ SKILLS SECTION ═══ */}
       <motion.div variants={fadeUp} className="card-parchment mb-6">
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-soft)" }}>
@@ -174,6 +276,9 @@ export default function ProfilePage() {
             Manage Evidence <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
+        {profile.skills.length === 0 ? (
+          <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No skills added yet</p></div>
+        ) : (
         <div className="py-2">
           {profile.skills.map((skill, i) => {
             const pct = proficiencyPercent[skill.proficiency] || 50;
@@ -205,6 +310,7 @@ export default function ProfilePage() {
             );
           })}
         </div>
+        )}
       </motion.div>
 
       {/* ═══ DIGITAL TWIN METRICS ═══ */}
@@ -216,7 +322,7 @@ export default function ProfilePage() {
               View Full Profile <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          <span className="text-[11px] text-gray-400">Last updated {formatDate(twin.updatedAt)}</span>
+          <span className="text-[11px] text-gray-400">Last updated {twin.updatedAt ? formatDate(twin.updatedAt) : "—"}</span>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {[
@@ -274,6 +380,9 @@ export default function ProfilePage() {
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
             <span className="text-sm font-semibold text-gray-800">Verified Skills</span>
           </div>
+          {twin.topSkills.length === 0 ? (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No verified skills yet</p></div>
+          ) : (
           <div className="py-2">
             {twin.topSkills.map((s, i) => (
               <div key={s.skill} className="flex items-center justify-between px-5 py-3"
@@ -289,6 +398,7 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
+          )}
         </div>
 
         {/* Strengths & Growth */}

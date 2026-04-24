@@ -151,75 +151,58 @@ export function AddReviewerModal({ open, onClose }: AddReviewerModalProps) {
     try {
       const res = await fetch("/api/reviewers/invitations", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(((session?.user as { accessToken?: string } | undefined)?.accessToken)
-            ? { Authorization: `Bearer ${(session?.user as { accessToken?: string }).accessToken}` }
-            : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
           email: form.email.trim(),
-          jobTitle: form.designation.trim(),
           designation: form.designation.trim(),
           department: form.department.trim(),
           username: form.username.trim(),
-          status: form.status === "active" ? "ACTIVE" : "INVITED",
+          role: form.role,
+          status: form.status,
           language: form.language,
           timeZone: form.timeZone,
-          accessToken: (session?.user as { accessToken?: string } | undefined)?.accessToken,
+          tempPassword: localPwd,
         }),
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const detail = data?.detail;
-        const msg =
-          typeof detail === "string"
-            ? detail
-            : detail?.message ?? data?.error ?? data?.message ?? "Failed to send invitation. Please try again.";
-        if (String(msg).toLowerCase().includes("already registered as a reviewer")) {
-          const resend = await fetch("/api/reviewers/invitations", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(((session?.user as { accessToken?: string } | undefined)?.accessToken)
-                ? { Authorization: `Bearer ${(session?.user as { accessToken?: string }).accessToken}` }
-                : {}),
-            },
-            body: JSON.stringify({
-              email: form.email.trim(),
-              resendExisting: true,
-              accessToken: (session?.user as { accessToken?: string } | undefined)?.accessToken,
-            }),
-          });
-          const resendData = await resend.json().catch(() => ({}));
-          if (!resend.ok) {
-            const resendMsg = resendData?.detail?.message ?? resendData?.error ?? resendData?.message ?? "Failed to resend invitation.";
-            setErrors({ email: resendMsg });
-            setSaving(false);
-            return;
-          }
-          const resendInner = resendData?.data ?? resendData;
-          resolvedPassword = resendInner?.temporaryPassword ?? resendInner?.tempPassword ?? resolvedPassword;
-          setTempPassword(resolvedPassword);
-          setSaving(false);
-          setStep("success");
-          return;
-        }
-        setErrors({ email: msg });
+        setErrors({ email: data?.error ?? data?.message ?? "Failed to send invitation. Please try again." });
         setSaving(false);
         return;
       }
 
-      const inner = data?.data ?? data;
-      resolvedPassword = inner?.temporaryPassword ?? inner?.tempPassword ?? localPwd;
+      resolvedPassword = data?.tempPassword ?? localPwd;
     } catch {
       setErrors({ email: "Network error. Please try again." });
       setSaving(false);
       return;
+    }
+
+    // Send invitation email using the API-returned password
+    try {
+      await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "reviewer_invitation",
+          to: form.email.trim(),
+          payload: {
+            reviewerName: `${form.firstName.trim()} ${form.lastName.trim()}`,
+            designation: form.designation.trim(),
+            inviterName: session?.user?.name ?? "GlimmoraTeam Admin",
+            inviterOrg: "GlimmoraTeam",
+            loginEmail: form.email.trim(),
+            tempPassword: resolvedPassword,
+            loginUrl: `${window.location.origin}/auth/login`,
+          },
+        }),
+      });
+    } catch {
+      // Email failure is non-blocking — invitation was already created
     }
 
     setTempPassword(resolvedPassword);

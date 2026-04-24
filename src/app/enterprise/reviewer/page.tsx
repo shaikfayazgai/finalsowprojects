@@ -1,8 +1,8 @@
+// @ts-nocheck
 "use client";
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
   AlertTriangle, Clock, MessageSquare, CheckCircle2,
@@ -11,9 +11,19 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
-import { mockQAMessages, mockReviewerNotifications } from "@/mocks/data/enterprise-reviewer";
-import { reviewerApi, type ReviewerAssignment, type ReviewerDashboardData } from "@/lib/api/reviewer";
-import { ApiError } from "@/lib/api/client";
+import {
+  mockReviewQueue, mockQAMessages, mockTaskMonitor,
+  mockMyMetrics, mockReviewerNotifications, mockReviewer,
+} from "@/mocks/data/enterprise-reviewer";
+
+function formatTimeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `${days}d ago`;
+  if (hours > 0) return `${hours}h ago`;
+  return "Just now";
+}
 
 function formatTimeLeft(iso: string) {
   const diff = new Date(iso).getTime() - Date.now();
@@ -25,92 +35,48 @@ function formatTimeLeft(iso: string) {
   return { label: `Due in ${days}d`, color: "text-forest-600", bg: "bg-forest-50" };
 }
 
-function syntheticDeadline(assignedAt?: string | null): string {
-  if (!assignedAt) return new Date(Date.now() + 72 * 3600000).toISOString();
-  const t = new Date(assignedAt).getTime();
-  return new Date(t + 72 * 3600000).toISOString();
-}
-
 export default function ReviewerDashboard() {
   const router = useRouter();
-  const { data: session } = useSession();
-  const token = (session?.user as { accessToken?: string })?.accessToken;
-  const displayName = session?.user?.name?.trim() || "Reviewer";
-  const firstName = displayName.split(/\s+/)[0] || "Reviewer";
-
   const [lastRefresh, setLastRefresh] = React.useState(new Date());
-  const [dash, setDash] = React.useState<ReviewerDashboardData | null>(null);
-  const [assignments, setAssignments] = React.useState<ReviewerAssignment[]>([]);
-  const [loadError, setLoadError] = React.useState<string | null>(null);
-
-  const load = React.useCallback(async () => {
-    if (!token) return;
-    setLoadError(null);
-    try {
-      const [d, a] = await Promise.all([reviewerApi.getDashboard(token), reviewerApi.listAssignments(token)]);
-      setDash(d);
-      setAssignments(a);
-      setLastRefresh(new Date());
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "Could not load reviewer data.";
-      setLoadError(msg);
-    }
-  }, [token]);
-
-  React.useEffect(() => {
-    void load();
-  }, [load]);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
-      void load();
+      setLastRefresh(new Date());
     }, 60000);
     return () => clearInterval(interval);
-  }, [load]);
+  }, []);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   const unreadMessages = mockQAMessages.reduce((s, t) => s + t.messages.filter(m => !m.read).length, 0);
   const unreadNotifications = mockReviewerNotifications.filter(n => !n.read).length;
-
-  const pendingReviews = dash?.pendingEvidenceReviews ?? assignments.filter((a) => a.status === "pending").length;
-  const activeTasks = dash?.assignedTaskCount ?? assignments.filter((a) => a.status !== "completed").length;
-  const overdueReviews = assignments.filter((a) => {
-    if (a.status === "completed") return false;
-    return new Date(syntheticDeadline(a.assignedAt)).getTime() < Date.now();
-  }).length;
+  const overdueReviews = mockReviewQueue.filter(r => r.status === "overdue").length;
+  const pendingReviews = mockReviewQueue.filter(r => r.status === "submitted").length;
+  const activeTasks = mockTaskMonitor.filter(t => t.status !== "accepted").length;
 
   const actionItems = [
-    ...assignments.filter((a) => {
-      if (a.status === "completed") return false;
-      return new Date(syntheticDeadline(a.assignedAt)).getTime() < Date.now();
-    }).map((r) => ({
-      id: r.id,
-      type: "overdue" as const,
-      label: r.title,
-      sub: "Review SLA window passed",
-      color: "red" as const,
+    ...mockReviewQueue.filter(r => r.status === "overdue").map(r => ({
+      id: r.id, type: "overdue", label: r.taskTitle,
+      sub: "Review SLA breached", color: "red",
       href: "/enterprise/reviewer/review-queue",
     })),
-    ...assignments.filter((a) => {
-      if (a.status === "completed") return false;
-      const diff = new Date(syntheticDeadline(a.assignedAt)).getTime() - Date.now();
+    ...mockReviewQueue.filter(r => {
+      const diff = new Date(r.slaDeadline).getTime() - Date.now();
       return diff > 0 && diff < 24 * 3600000;
-    }).map((r) => ({
-      id: r.id,
-      type: "due_today" as const,
-      label: r.title,
-      sub: "Due within 24 hours",
-      color: "gold" as const,
+    }).map(r => ({
+      id: r.id, type: "due_today", label: r.taskTitle,
+      sub: "Review due today", color: "gold",
       href: "/enterprise/reviewer/review-queue",
+    })),
+    ...mockTaskMonitor.filter(t => t.needsAttention && t.attentionReason === "Midpoint checkpoint pending").map(t => ({
+      id: t.id, type: "midpoint", label: t.taskTitle,
+      sub: "Midpoint checkpoint pending", color: "gold",
+      href: "/enterprise/reviewer/task-monitor",
     })),
     ...mockQAMessages.filter(q => q.messages.some(m => !m.read)).map(q => ({
-      id: q.id,
-      type: "unread_qa" as const,
-      label: q.taskTitle,
-      sub: `${q.messages.filter(m => !m.read).length} unread message(s)`,
-      color: "teal" as const,
+      id: q.id, type: "unread_qa", label: q.taskTitle,
+      sub: `${q.messages.filter(m => !m.read).length} unread message(s)`, color: "teal",
       href: "/enterprise/reviewer/qa-inbox",
     })),
   ].slice(0, 7);
@@ -128,12 +94,10 @@ export default function ReviewerDashboard() {
     unread_qa: <MessageSquare className="w-4 h-4 text-teal-500" />,
   };
 
-  const approvalPct = dash?.evidenceApprovalRatePercent ?? null;
-  const completed30 = dash?.completedLast30Days ?? 0;
-
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
 
+      {/* ═══ HEADER ═══ */}
       <motion.div variants={fadeUp} className="mb-8">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -144,18 +108,14 @@ export default function ReviewerDashboard() {
               </span>
             </div>
             <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight">
-              {greeting}, {firstName}.
+              {greeting}, {mockReviewer.name.split(" ")[0]}.
             </h1>
             <p className="text-[13px] text-gray-500 mt-1">
-              You have <span className="font-semibold text-gray-700">{activeTasks} open assignment(s)</span>
-              {assignments.length ? ` across your queue.` : " — assignments appear here when an administrator assigns work to you."}
+              You are assigned to <span className="font-semibold text-gray-700">{activeTasks} active tasks</span> across {mockReviewer.assignedProjects.length} projects.
             </p>
             <p className="text-[10px] text-gray-400 mt-1">
               Auto-refreshes every 60 seconds · Last updated: {lastRefresh.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
             </p>
-            {loadError && (
-              <p className="text-[12px] text-red-600 mt-2">{loadError}</p>
-            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {unreadNotifications > 0 && (
@@ -170,25 +130,27 @@ export default function ReviewerDashboard() {
         </div>
       </motion.div>
 
+      {/* ═══ SLA BREACH BANNER ═══ */}
       {overdueReviews > 0 && (
         <motion.div variants={fadeUp} className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
           <p className="text-[12px] font-medium text-red-700 flex-1">
-            You have <span className="font-bold">{overdueReviews} assignment(s)</span> past the review window. Prioritize these in your queue.
+            You have <span className="font-bold">{overdueReviews} overdue review(s)</span>. Overdue reviews are escalated to GlimmoraTeam Admin.
           </p>
-          <button type="button" onClick={() => router.push("/enterprise/reviewer/review-queue")}
+          <button onClick={() => router.push("/enterprise/reviewer/review-queue")}
             className="text-[11px] font-semibold text-red-600 hover:text-red-700 flex items-center gap-1 shrink-0">
-            View queue <ArrowRight className="w-3 h-3" />
+            View Overdue <ArrowRight className="w-3 h-3" />
           </button>
         </motion.div>
       )}
 
+      {/* ═══ KPI TILES ═══ */}
       <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         {[
-          { label: "Pending reviews", value: pendingReviews, icon: ListChecks, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600", href: "/enterprise/reviewer/review-queue" },
-          { label: "Open assignments", value: activeTasks, icon: ClipboardList, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600", href: "/enterprise/reviewer/review-queue" },
-          { label: "Unread messages", value: unreadMessages, icon: Inbox, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600", href: "/enterprise/reviewer/qa-inbox" },
-          { label: "Evidence approval rate", value: approvalPct == null ? "—" : `${approvalPct}%`, icon: TrendingUp, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600", href: "/enterprise/reviewer/my-metrics" },
+          { label: "Pending Reviews", value: pendingReviews, icon: ListChecks, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600", href: "/enterprise/reviewer/review-queue" },
+          { label: "Active Tasks", value: activeTasks, icon: ClipboardList, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600", href: "/enterprise/reviewer/task-monitor" },
+          { label: "Unread Messages", value: unreadMessages, icon: Inbox, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600", href: "/enterprise/reviewer/qa-inbox" },
+          { label: "SLA Compliance", value: `${mockMyMetrics.slaCompliance.current}%`, icon: TrendingUp, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600", href: "/enterprise/reviewer/my-metrics" },
         ].map((kpi) => {
           const KpiIcon = kpi.icon;
           return (
@@ -207,22 +169,25 @@ export default function ReviewerDashboard() {
         })}
       </motion.div>
 
+      {/* ═══ MAIN GRID ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
+
+        {/* ── Action Items ── */}
         <motion.div variants={fadeUp} className="lg:col-span-2 card-parchment">
           <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-soft)" }}>
-            <span className="text-sm font-semibold text-gray-800">Action items</span>
-            <span className="text-[10px] font-medium text-gray-400">{actionItems.length} visible</span>
+            <span className="text-sm font-semibold text-gray-800">Action Items</span>
+            <span className="text-[10px] font-medium text-gray-400">{actionItems.length} requiring attention</span>
           </div>
           <div className="py-2">
             {actionItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <CheckCircle2 className="w-8 h-8 text-forest-400 mb-3" />
-                <p className="text-[13px] font-semibold text-gray-700">All clear</p>
-                <p className="text-[11px] text-gray-400">No urgent items from your assignments right now.</p>
+                <p className="text-[13px] font-semibold text-gray-700">All clear!</p>
+                <p className="text-[11px] text-gray-400">No items require your attention right now.</p>
               </div>
             ) : (
               actionItems.map((item) => (
-                <div key={`${item.type}-${item.id}`}
+                <div key={item.id}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-black/[0.02] cursor-pointer transition-colors"
                   style={{ borderBottom: "1px solid var(--border-hair)" }}
                   onClick={() => router.push(item.href)}>
@@ -240,58 +205,89 @@ export default function ReviewerDashboard() {
           </div>
         </motion.div>
 
+        {/* ── SLA Performance ── */}
         <motion.div variants={fadeUp} className="card-parchment">
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
-            <span className="text-sm font-semibold text-gray-800">Last 30 days</span>
+            <span className="text-sm font-semibold text-gray-800">SLA Performance</span>
           </div>
-          <div className="px-5 py-4 space-y-3 text-[12px] text-gray-600">
-            <div className="flex justify-between"><span>Completed assignments</span><span className="font-mono font-semibold">{completed30}</span></div>
-            <div className="flex justify-between"><span>Evidence accepts</span><span className="font-mono font-semibold">{dash?.evidenceRecommendationsAccept ?? "—"}</span></div>
-            <div className="flex justify-between"><span>Evidence reworks</span><span className="font-mono font-semibold">{dash?.evidenceRecommendationsRework ?? "—"}</span></div>
-            <button type="button" onClick={() => router.push("/enterprise/reviewer/my-metrics")}
+          <div className="px-5 py-4 space-y-4">
+            {[
+              { label: "SLA Compliance", value: mockMyMetrics.slaCompliance.current, target: mockMyMetrics.slaCompliance.target, color: "bg-forest-500" },
+              { label: "Rec. Acceptance", value: mockMyMetrics.recommendationAcceptanceRate.current, target: mockMyMetrics.recommendationAcceptanceRate.target, color: "bg-teal-500" },
+            ].map((metric) => (
+              <div key={metric.label}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] text-gray-500">{metric.label}</span>
+                  <span className={cn("text-[12px] font-bold font-mono", metric.value >= metric.target ? "text-forest-600" : "text-gold-600")}>
+                    {metric.value}%
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                  <div className={cn("h-full rounded-full transition-all", metric.color)} style={{ width: `${metric.value}%` }} />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Target: {metric.target}%</p>
+              </div>
+            ))}
+
+            <div style={{ borderTop: "1px solid var(--border-hair)", paddingTop: 12 }}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] text-gray-500">Avg Review Time</span>
+                <span className="text-[12px] font-bold font-mono text-gray-700">{mockMyMetrics.averageReviewTimeHours.current}h</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-gray-500">Reviews This Month</span>
+                <span className="text-[12px] font-bold font-mono text-gray-700">{mockMyMetrics.reviewsCompleted.thisMonth}</span>
+              </div>
+            </div>
+
+            <button onClick={() => router.push("/enterprise/reviewer/my-metrics")}
               className="w-full text-[11px] font-medium text-teal-600 hover:text-teal-700 flex items-center justify-center gap-1 pt-2">
-              Open metrics <ArrowRight className="w-3 h-3" />
+              View My Metrics <ArrowRight className="w-3 h-3" />
             </button>
           </div>
         </motion.div>
       </div>
 
+      {/* ═══ REVIEW QUEUE SUMMARY ═══ */}
       <motion.div variants={fadeUp} className="card-parchment mb-8">
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-soft)" }}>
-          <span className="text-sm font-semibold text-gray-800">Review queue</span>
-          <button type="button" onClick={() => router.push("/enterprise/reviewer/review-queue")}
+          <span className="text-sm font-semibold text-gray-800">Review Queue</span>
+          <button onClick={() => router.push("/enterprise/reviewer/review-queue")}
             className="text-[11px] font-medium text-teal-600 hover:text-teal-700 flex items-center gap-1">
             View all <ArrowRight className="w-3 h-3" />
           </button>
         </div>
-        {assignments.length === 0 ? (
+        {mockReviewQueue.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <CheckCircle2 className="w-8 h-8 text-forest-400 mb-3" />
-            <p className="text-[13px] font-semibold text-gray-700">No assignments yet</p>
-            <p className="text-[11px] text-gray-400 max-w-sm">When an enterprise administrator assigns you a project or evidence review, it will show up here.</p>
+            <p className="text-[13px] font-semibold text-gray-700">Your review queue is clear.</p>
           </div>
         ) : (
           <div>
-            {assignments.slice(0, 5).map((item, i) => {
-              const sla = formatTimeLeft(syntheticDeadline(item.assignedAt));
+            {mockReviewQueue.slice(0, 5).map((item, i) => {
+              const sla = formatTimeLeft(item.slaDeadline);
               return (
                 <div key={item.id}
                   className="flex items-center gap-4 px-5 py-3.5 hover:bg-black/[0.02] cursor-pointer transition-colors"
-                  style={{ borderBottom: i < Math.min(assignments.length, 5) - 1 ? "1px solid var(--border-hair)" : undefined }}
-                  onClick={() => router.push(`/enterprise/reviewer/review-queue/${item.id}`)}>
+                  style={{ borderBottom: i < mockReviewQueue.length - 1 ? "1px solid var(--border-hair)" : undefined }}
+                  onClick={() => router.push("/enterprise/reviewer/review-queue")}>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-gray-800 truncate">{item.title}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      {item.taskKind?.replace("_", " ") ?? "task"} · {item.status}
-                      {item.relatedId ? ` · ref ${item.relatedId}` : ""}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[13px] font-medium text-gray-800 truncate">{item.taskTitle}</p>
+                      {item.reworkRound > 1 && (
+                        <span className="text-[9px] font-semibold text-brown-600 bg-brown-50 border border-brown-200 px-1.5 py-0.5 rounded-full">
+                          Round {item.reworkRound}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{item.projectName} · {item.contributorId}</p>
                   </div>
                   <div className={cn("text-[10px] font-semibold px-2 py-1 rounded-lg", sla.bg, sla.color)}>
                     {sla.label}
                   </div>
-                  <span className="text-[11px] font-semibold text-teal-600 border border-teal-200 bg-teal-50 px-3 py-1.5 rounded-lg shrink-0">
-                    Open
-                  </span>
+                  <button className="text-[11px] font-semibold text-teal-600 border border-teal-200 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-all shrink-0">
+                    Open Review
+                  </button>
                 </div>
               );
             })}
@@ -299,32 +295,28 @@ export default function ReviewerDashboard() {
         )}
       </motion.div>
 
+      {/* ═══ ACTIVE TASK SIGNAL ═══ */}
       <motion.div variants={fadeUp} className="card-parchment">
         <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
-          <span className="text-sm font-semibold text-gray-800">Active assignments</span>
+          <span className="text-sm font-semibold text-gray-800">Active Task Signal</span>
         </div>
         <div className="flex flex-wrap gap-2 px-5 py-4">
-          {assignments.filter((t) => t.status !== "completed").length === 0 ? (
-            <p className="text-[12px] text-gray-400">No active assignments.</p>
-          ) : (
-            assignments.filter((t) => t.status !== "completed").map((task) => {
-              const statusColors: Record<string, string> = {
-                pending: "bg-gold-50 text-gold-700 border-gold-200",
-                in_progress: "bg-teal-50 text-teal-700 border-teal-200",
-              };
-              return (
-                <button key={task.id} type="button"
-                  onClick={() => router.push(`/enterprise/reviewer/review-queue/${task.id}`)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-medium transition-all hover:shadow-sm",
-                    statusColors[task.status] ?? "bg-gray-100 text-gray-600 border-gray-200",
-                  )}>
-                  <span className="truncate max-w-[200px]">{task.title}</span>
-                  <span className="text-[9px] uppercase font-bold opacity-60">{task.status.replace("_", " ")}</span>
-                </button>
-              );
-            })
-          )}
+          {mockTaskMonitor.filter(t => t.status !== "accepted").map((task) => {
+            const statusColors: Record<string, string> = {
+              submitted: "bg-gold-50 text-gold-700 border-gold-200",
+              in_progress: "bg-teal-50 text-teal-700 border-teal-200",
+              rework: "bg-red-50 text-red-700 border-red-200",
+              open: "bg-gray-100 text-gray-600 border-gray-200",
+            };
+            return (
+              <button key={task.id}
+                onClick={() => router.push("/enterprise/reviewer/task-monitor")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-medium transition-all hover:shadow-sm", statusColors[task.status] ?? "bg-gray-100 text-gray-600 border-gray-200")}>
+                <span className="truncate max-w-[140px]">{task.taskTitle}</span>
+                <span className="text-[9px] uppercase font-bold opacity-60">{task.status.replace("_", " ")}</span>
+              </button>
+            );
+          })}
         </div>
       </motion.div>
 

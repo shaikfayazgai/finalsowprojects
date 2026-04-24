@@ -9,20 +9,6 @@ export const authKeys = {
   sessions: ["auth", "sessions"] as const,
 };
 
-function updateSessionsCache(
-  old: unknown,
-  updater: (sessions: Array<{ id: string; is_current?: boolean }>) => Array<{ id: string; is_current?: boolean }>,
-) {
-  if (Array.isArray(old)) return updater(old as Array<{ id: string; is_current?: boolean }>);
-  if (old && typeof old === "object") {
-    const obj = old as Record<string, unknown>;
-    if (Array.isArray(obj.sessions)) return { ...obj, sessions: updater(obj.sessions as Array<{ id: string; is_current?: boolean }>) };
-    if (Array.isArray(obj.data)) return { ...obj, data: updater(obj.data as Array<{ id: string; is_current?: boolean }>) };
-    if (Array.isArray(obj.items)) return { ...obj, items: updater(obj.items as Array<{ id: string; is_current?: boolean }>) };
-  }
-  return old;
-}
-
 export function useCurrentUser() {
   const { data: session } = useSession();
   const accessToken = session?.user?.accessToken as string | undefined;
@@ -54,8 +40,8 @@ export function useRevokeSession() {
     mutationFn: (sessionId: string) => authApi.revokeSession(sessionId, accessToken!),
     onSuccess: (_data, sessionId) => {
       // Optimistically remove the session from the cache immediately
-      qc.setQueryData(authKeys.sessions, (old: unknown) =>
-        updateSessionsCache(old, (sessions) => sessions.filter((s) => s.id !== sessionId)),
+      qc.setQueryData(authKeys.sessions, (old: Awaited<ReturnType<typeof authApi.getSessions>> | undefined) =>
+        old ? old.filter((s) => s.id !== sessionId) : old,
       );
     },
   });
@@ -70,8 +56,8 @@ export function useRevokeAllSessions() {
     mutationFn: () => authApi.logoutAllSessions(accessToken!),
     onSuccess: () => {
       // Keep only current session in cache
-      qc.setQueryData(authKeys.sessions, (old: unknown) =>
-        updateSessionsCache(old, (sessions) => sessions.filter((s) => s.is_current)),
+      qc.setQueryData(authKeys.sessions, (old: Awaited<ReturnType<typeof authApi.getSessions>> | undefined) =>
+        old ? old.filter((s) => s.is_current) : old,
       );
     },
   });

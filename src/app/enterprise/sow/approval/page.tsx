@@ -2,47 +2,27 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  Search,
-  Filter,
-  Eye,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  ShieldCheck,
-  Scale,
-  UserCheck,
-  DollarSign,
-  Pen,
-  RotateCcw,
-  ChevronDown,
-  Layers,
-  Bell,
-  CheckCheck,
-  Send,
-  X,
-  Sparkles,
-  MessageSquare,
-  Paperclip,
-  File,
-  ImageIcon,
-  Building2,
-  XCircle,
+  Search, Eye, CheckCircle2, Clock, AlertTriangle, ShieldCheck, Scale,
+  UserCheck, DollarSign, Pen, Layers,
+  X, Filter, Check, Send, Undo2,
   type LucideIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils/cn";
-import { stagger, fadeUp, slideInRight, scaleIn } from "@/lib/utils/motion-variants";
-import { Badge, Button, Skeleton } from "@/components/ui";
-import { useSOWPipelineStore, type PipelineSOW, type SLAStatus, type ChangeRequestHistoryEntry } from "@/lib/stores/sow-pipeline-store";
-import { useNotificationStore } from "@/lib/stores/notification-store";
-import { useManualSOWList } from "@/lib/hooks/use-manual-sow";
+import { toast } from "@/lib/stores/toast-store";
+import { stagger, fadeUp } from "@/lib/utils/motion-variants";
+import { Badge } from "@/components/ui";
+import { TablePagination } from "@/components/ui/table-pagination";
+import {
+  useManualSOWList,
+  useApprovalStages,
+  useRecordApprovalDecision,
+} from "@/lib/hooks/use-manual-sow";
+import { useSowList } from "@/lib/hooks/use-sow-wizard";
 
-/* ═══════════════════════════════════════════════════════════════
-   Types
-   ═══════════════════════════════════════════════════════════════ */
+// ── Types ─────────────────────────────────────────────────────────────────
 
-interface PipelineStage {
+interface PipelineStageConfig {
   number: number;
   name: string;
   shortName: string;
@@ -52,566 +32,596 @@ interface PipelineStage {
   bgColor: string;
 }
 
+interface ApiStageDecision {
+  decision?: string;
+  comments?: string;
+  message?: string;
+  text?: string;
+  decided_at?: string;
+  created_at?: string;
+  decided_by?: string | { name?: string; email?: string };
+  reviewer?: string;
+  resolved?: boolean;
+  resolved_at?: string;
+  resolve_message?: string;
+}
 
-/* ═══════════════════════════════════════════════════════════════
-   Constants
-   ═══════════════════════════════════════════════════════════════ */
+interface ApiStage {
+  stage: number;
+  stage_name?: string;
+  status: "pending" | "in_progress" | "approved" | "rejected" | "changes_requested" | string;
+  reviewer?: string;
+  reviewed_at?: string;
+  comments?: string;
+  decision?: string;
+  decisions?: ApiStageDecision[];
+}
 
-const PIPELINE_STAGES: PipelineStage[] = [
-  {
-    number: 1,
-    name: "Business Owner Review",
-    shortName: "Business",
-    icon: UserCheck,
-    slaDescription: "3 business days",
-    color: "#6B7280",
-    bgColor: "rgba(107, 114, 128, 0.08)",
-  },
-  {
-    number: 2,
-    name: "GlimmoraTeam Commercial Review",
-    shortName: "Commercial",
-    icon: DollarSign,
-    slaDescription: "2 business days standard, auto-escalation after 4",
-    color: "#92400E",
-    bgColor: "rgba(146, 64, 14, 0.08)",
-  },
-  {
-    number: 3,
-    name: "Legal / Compliance Review",
-    shortName: "Legal",
-    icon: Scale,
-    slaDescription: "5 business days",
-    color: "#1E40AF",
-    bgColor: "rgba(30, 64, 175, 0.08)",
-  },
-  {
-    number: 4,
-    name: "Security Review",
-    shortName: "Security",
-    icon: ShieldCheck,
-    slaDescription: "3 business days",
-    color: "#065F46",
-    bgColor: "rgba(6, 95, 70, 0.08)",
-  },
-  {
-    number: 5,
-    name: "Final Sign-off",
-    shortName: "Sign-off",
-    icon: Pen,
-    slaDescription: "2 business days",
-    color: "#7C3AED",
-    bgColor: "rgba(124, 58, 237, 0.08)",
-  },
+export interface ChangeRequestRow {
+  id: string;
+  sowId: string;
+  sowTitle: string;
+  client: string;
+  requestedBy: string;
+  message: string;
+  resolveMessage?: string;
+  resolved: boolean;
+  resolvedAt?: string;
+  stage: number;
+  kind: "comment" | "request_changes";
+}
+
+interface NormalisedSOW {
+  id: string;
+  title: string;
+  client: string;
+  estimatedBudget?: number;
+  intakeMode: "ai_generated" | "manual_upload";
+  status: string;
+  submittedAt: string;
+  slaStatus: "on-track" | "at-risk" | "overdue";
+}
+
+// ── Stage config ──────────────────────────────────────────────────────────
+
+const PIPELINE_STAGES: PipelineStageConfig[] = [
+  { number: 1, name: "Business Owner Review",          shortName: "Business",   icon: UserCheck,   slaDescription: "3 business days", color: "var(--color-brown-600)",  bgColor: "var(--color-brown-50)"  },
+  { number: 2, name: "GlimmoraTeam Commercial Review", shortName: "Commercial", icon: DollarSign,  slaDescription: "2 business days", color: "var(--color-gold-700)",   bgColor: "var(--color-gold-50)"   },
+  { number: 3, name: "Legal / Compliance Review",      shortName: "Legal",      icon: Scale,       slaDescription: "5 business days", color: "var(--color-teal-700)",   bgColor: "var(--color-teal-50)"   },
+  { number: 4, name: "Security Review",                shortName: "Security",   icon: ShieldCheck, slaDescription: "3 business days", color: "var(--color-forest-700)", bgColor: "var(--color-forest-50)" },
+  { number: 5, name: "Final Sign-off",                 shortName: "Sign-off",   icon: Pen,         slaDescription: "2 business days", color: "var(--color-brown-700)",  bgColor: "var(--color-brown-100)" },
 ];
 
+// ── Helpers ───────────────────────────────────────────────────────────────
 
-
-/* ═══════════════════════════════════════════════════════════════
-   Helpers
-   ═══════════════════════════════════════════════════════════════ */
-
-function getSLABadgeVariant(status: SLAStatus): "forest" | "gold" | "danger" {
-  switch (status) {
-    case "on-track":
-      return "forest";
-    case "at-risk":
-      return "gold";
-    case "overdue":
-      return "danger";
+function extractPipelineStages(res: unknown): ApiStage[] {
+  if (!res) return [];
+  const r = res as Record<string, unknown>;
+  const d = (r.data ?? r) as Record<string, unknown>;
+  for (const key of ["stages", "approval_stages", "pipeline", "items"]) {
+    if (Array.isArray(d[key])) return d[key] as ApiStage[];
   }
+  return [];
 }
 
-function getSLALabel(status: SLAStatus): string {
-  switch (status) {
-    case "on-track":
-      return "On Track";
-    case "at-risk":
-      return "At Risk";
-    case "overdue":
-      return "Overdue";
-  }
-}
-
-function getStageBadgeVariant(stage: number): "beige" | "gold" | "teal" | "forest" | "brown" {
-  switch (stage) {
-    case 1:
-      return "beige";
-    case 2:
-      return "gold";
-    case 3:
-      return "teal";
-    case 4:
-      return "forest";
-    case 5:
-      return "brown";
-    default:
-      return "beige";
-  }
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function countSOWsAtStage(sows: PipelineSOW[], stage: number): number {
-  return sows.filter((s) => s.currentStage === stage).length;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Sub-Components
-   ═══════════════════════════════════════════════════════════════ */
-
-function PipelineProgress({
-  totalStages,
-  currentStage,
-  completedStages,
-  stageColor,
-}: {
-  totalStages: number;
-  currentStage: number;
-  completedStages: number[];
-  stageColor: string;
-}) {
-  return (
-    <div className="w-full space-y-1.5">
-      <div className="flex items-center">
-        {Array.from({ length: totalStages }, (_, i) => {
-          const num = i + 1;
-          const done = completedStages.includes(num);
-          const active = num === currentStage;
-          return (
-            <React.Fragment key={num}>
-              <div
-                className="flex items-center justify-center rounded-full text-[0.5rem] font-bold shrink-0"
-                style={{
-                  width: 18,
-                  height: 18,
-                  background: done ? "#2D6A4F" : active ? stageColor : "transparent",
-                  border: done || active ? "none" : "1.5px solid var(--border-soft)",
-                  color: done || active ? "#fff" : "var(--ink-faint)",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                {done ? <CheckCircle2 size={10} /> : num}
-              </div>
-              {num < totalStages && (
-                <div
-                  className="flex-1 h-[2px] rounded-full"
-                  style={{
-                    background: done ? "#2D6A4F" : "var(--border-soft)",
-                    opacity: done ? 0.7 : 0.35,
-                  }}
-                />
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-      <p className="text-[0.62rem]" style={{ color: "var(--ink-faint)" }}>
-        {completedStages.length}/{totalStages} stages complete
-      </p>
-    </div>
-  );
-}
-
-function PipelineStageCard({ stage, index, sows }: { stage: PipelineStage; index: number; sows: PipelineSOW[] }) {
-  const count = countSOWsAtStage(sows, stage.number);
-  const Icon = stage.icon;
-
-  return (
-    <motion.div
-      variants={fadeUp}
-      className="flex flex-col"
-      style={{
-        background: "var(--card-bg)",
-        border: "1px solid var(--border-soft)",
-        borderRadius: 14,
-        overflow: "hidden",
-        position: "relative",
-      }}
-    >
-      {/* Top color bar */}
-      <div style={{ height: 4, background: stage.color, opacity: 0.7 }} />
-
-      {/* Body */}
-      <div className="flex flex-col flex-1 p-4 gap-3">
-
-        {/* Icon + count row */}
-        <div className="flex items-center justify-between">
-          <div
-            className="flex items-center justify-center rounded-xl"
-            style={{ width: 38, height: 38, background: stage.bgColor }}
-          >
-            <Icon size={18} style={{ color: stage.color }} />
-          </div>
-          <div className="text-right">
-            <span
-              className="font-heading block"
-              style={{ fontSize: "2rem", fontWeight: 700, color: stage.color, lineHeight: 1 }}
-            >
-              {count}
-            </span>
-            <span className="text-[0.6rem] font-medium uppercase tracking-widest" style={{ color: "var(--ink-faint)" }}>
-              SOWs
-            </span>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div style={{ height: 1, background: "var(--border-soft)" }} />
-
-        {/* Stage label + name */}
-        <div>
-          <span
-            className="text-[0.6rem] font-bold uppercase tracking-[0.16em]"
-            style={{ color: stage.color, opacity: 0.8 }}
-          >
-            Stage {stage.number}
-          </span>
-          <h3
-            className="font-heading mt-0.5"
-            style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--ink)", lineHeight: 1.35 }}
-          >
-            {stage.name}
-          </h3>
-        </div>
-
-        {/* SLA */}
-        <div
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 mt-auto"
-          style={{ background: stage.bgColor }}
-        >
-          <Clock size={11} style={{ color: stage.color, opacity: 0.8, flexShrink: 0 }} />
-          <span className="text-[0.68rem]" style={{ color: stage.color, opacity: 0.9 }}>
-            {stage.slaDescription}
-          </span>
-        </div>
-
-        {/* Auto-escalation badge for stage 2 */}
-        {stage.number === 2 && (
-          <div
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5"
-            style={{ background: "rgba(146,64,14,0.06)", border: "1px solid rgba(146,64,14,0.14)" }}
-          >
-            <AlertTriangle size={10} style={{ color: "#92400E", flexShrink: 0 }} />
-            <span className="text-[0.62rem]" style={{ color: "#92400E" }}>
-              Auto-escalates after 4 days
-            </span>
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Main Page
-   ═══════════════════════════════════════════════════════════════ */
-
-function deriveStageFromApprovalStages(stages: Record<string, unknown>[] | undefined): { currentStage: number; completedStages: number[] } {
-  if (!stages || !Array.isArray(stages)) return { currentStage: 1, completedStages: [] };
-  const completed: number[] = [];
-  let current = 1;
-  // API returns stages with `stage` as a number (1-5) and `status` as a string
+function computeActiveStage(stages: ApiStage[]): number {
+  // If any stage has changes_requested, stay on the earliest one
   for (let i = 1; i <= 5; i++) {
-    const match = stages.find((s) => (s.stage as number) === i);
-    if (match && match.status === "approved") {
-      completed.push(i);
-      current = i + 1;
-    } else {
-      break;
-    }
+    const s = stages.find((x) => x.stage === i);
+    const st = String(s?.status ?? "").toLowerCase();
+    if (st === "changes_requested" || st === "rejected") return i;
   }
-  return { currentStage: Math.min(current, 5), completedStages: completed };
+  for (let i = 1; i <= 5; i++) {
+    const s = stages.find((x) => x.stage === i);
+    if (!s || s.status === "pending") return i;
+    if (s.status !== "approved") return i;
+  }
+  return 5;
 }
 
-function deriveSLAStatus(submittedAt: string | undefined): SLAStatus {
-  if (!submittedAt) return "on-track";
-  const days = (Date.now() - new Date(submittedAt).getTime()) / (1000 * 60 * 60 * 24);
+function computeCompleted(stages: ApiStage[]): number[] {
+  return stages.filter((s) => s.status === "approved").map((s) => s.stage);
+}
+
+function deriveSLA(submittedAt: string): "on-track" | "at-risk" | "overdue" {
+  const days = (Date.now() - new Date(submittedAt).getTime()) / 86_400_000;
   if (days > 10) return "overdue";
   if (days > 5) return "at-risk";
   return "on-track";
 }
 
-export default function SOWApprovalPipelinePage() {
-  const localSows = useSOWPipelineStore((s) => s.sows);
-  const updateSOW = useSOWPipelineStore((s) => s.updateSOW);
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
-  // Fetch real SOWs from API (status: approval)
-  const { data: apiRes, isLoading } = useManualSOWList({ status: "approval" });
-  const apiItems = ((apiRes?.data ?? apiRes) as Record<string, unknown>[] | undefined);
+function slaLabel(s: "on-track" | "at-risk" | "overdue") {
+  return s === "on-track" ? "On Track" : s === "at-risk" ? "At Risk" : "Overdue";
+}
+function slaVariant(s: "on-track" | "at-risk" | "overdue"): "forest" | "gold" | "danger" {
+  return s === "on-track" ? "forest" : s === "at-risk" ? "gold" : "danger";
+}
 
-  // Merge API SOWs into PipelineSOW shape, deduplicating with local store
-  const sows: PipelineSOW[] = React.useMemo(() => {
-    const apiPipelineSows: PipelineSOW[] = (Array.isArray(apiItems) ? apiItems : []).map((item) => {
-      const id = (item.id ?? item._id ?? "") as string;
-      const approvalStages = (item.approval_stages ?? item.approvalStages) as Record<string, unknown>[] | undefined;
-      const { currentStage, completedStages } = deriveStageFromApprovalStages(approvalStages);
-      const submittedAt = (item.submitted_at ?? item.submittedAt ?? item.created_at ?? item.createdAt) as string | undefined;
-      // If the local store has extra state (changesRequested, etc.), merge it
-      const local = localSows.find((s) => s.id === id);
-      return {
-        id,
-        title: (item.title ?? item.projectTitle ?? item.project_title ?? "Untitled") as string,
-        client: (item.client ?? item.clientOrganisation ?? item.client_organisation ?? "") as string,
-        currentStage,
-        stageApprover: (item.stageApprover ?? local?.stageApprover ?? "Assigned Reviewer") as string,
-        slaStatus: deriveSLAStatus(submittedAt),
-        submittedDate: submittedAt ?? new Date().toISOString(),
-        totalValue: (item.totalValue ?? item.total_value ?? local?.totalValue ?? "$0") as string,
-        completedStages,
-        submittedBy: (item.submittedBy ?? item.submitted_by ?? item.created_by) as string | undefined,
-        changesRequested: local?.changesRequested,
-        changeRequestReason: local?.changeRequestReason,
-        changeRequestedAt: local?.changeRequestedAt,
-        changeRequestedBy: local?.changeRequestedBy,
-        changeRequestHistory: local?.changeRequestHistory,
-      };
-    });
+function stageStatusStyle(status: string) {
+  if (status === "approved")           return { color: "var(--color-forest-700)", bg: "var(--color-forest-50)" };
+  if (status === "rejected")           return { color: "var(--danger)",           bg: "var(--danger-light)"    };
+  if (status === "changes_requested")  return { color: "var(--color-gold-700)",   bg: "var(--color-gold-50)"   };
+  if (status === "in_progress")        return { color: "var(--color-teal-700)",   bg: "var(--color-teal-50)"   };
+  return                                      { color: "var(--color-gray-500)",   bg: "var(--color-gray-100)"  };
+}
 
-    // Include local-only SOWs (not from API) as fallback
-    const apiIds = new Set(apiPipelineSows.map((s) => s.id));
-    const localOnly = localSows.filter((s) => !apiIds.has(s.id));
-    return [...apiPipelineSows, ...localOnly];
-  }, [apiItems, localSows]);
-  const pushNotification = useNotificationStore((s) => s.push);
-  const [stageFilter, setStageFilter] = React.useState<number | null>(null);
-  const [slaFilter, setSLAFilter] = React.useState<SLAStatus | null>(null);
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set());
-  const [expandedMessages, setExpandedMessages] = React.useState<Set<string>>(new Set());
-  const [resolvePanel, setResolvePanel] = React.useState<Record<string, boolean>>({});
-  const [resolveMessages, setResolveMessages] = React.useState<Record<string, string>>({});
+// ── Normalize ─────────────────────────────────────────────────────────────
 
-  function toggleExpand(id: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+function normalizeManualList(res: unknown): NormalisedSOW[] {
+  if (!res) return [];
+  const r = res as Record<string, unknown>;
+  let arr: Record<string, unknown>[] = [];
+  if (Array.isArray(r)) arr = r as Record<string, unknown>[];
+  else if (Array.isArray(r.data)) arr = r.data as Record<string, unknown>[];
+  else {
+    const d = (r.data ?? r) as Record<string, unknown>;
+    for (const k of ["sows", "items", "results", "documents"]) {
+      if (Array.isArray(d[k])) { arr = d[k] as Record<string, unknown>[]; break; }
+    }
   }
-
-  function openResolvePanel(id: string) {
-    setResolvePanel((prev) => ({ ...prev, [id]: true }));
-    setExpandedIds((prev) => { const n = new Set(prev); n.add(id); return n; });
-  }
-
-  function handleAIResolve(sow: PipelineSOW) {
-    const now = new Date().toISOString();
-    const aiMessage = `This change request has been reviewed and resolved automatically. The SOW "${sow.title}" has been assessed against the requested revisions. All noted concerns have been addressed and the document is ready to proceed to the next approval stage.`;
-
-    const historyEntry: ChangeRequestHistoryEntry = {
-      reason: sow.changeRequestReason ?? "",
-      requestedBy: sow.changeRequestedBy ?? "Unknown",
-      requestedAt: sow.changeRequestedAt ?? now,
-      resolvedAt: now,
-      resolveMessage: aiMessage,
-      stageAtRequest: sow.currentStage,
+  return arr.map((item) => {
+    const submittedAt = String(item.submitted_at ?? item.submittedAt ?? item.created_at ?? item.createdAt ?? new Date().toISOString());
+    return {
+      id:         String(item.id ?? item._id ?? ""),
+      title:      String(item.title ?? item.project_title ?? item.document_title ?? "Untitled"),
+      client:     String(item.client ?? item.client_organisation ?? item.clientOrganisation ?? ""),
+      intakeMode: "manual_upload" as const,
+      status:     String(item.status ?? ""),
+      submittedAt,
+      slaStatus:  deriveSLA(submittedAt),
     };
+  });
+}
 
-    updateSOW(sow.id, {
-      changesRequested: false,
-      changeRequestReason: undefined,
-      changeRequestedBy: undefined,
-      changeRequestedAt: undefined,
-      changeRequestHistory: [...(sow.changeRequestHistory ?? []), historyEntry],
-    });
-    pushNotification({
-      title: "AI Resolved Change Request",
-      body: `"${sow.title}" was automatically resolved by AI. The document is ready to proceed.`,
-      severity: "low",
-      href: `/enterprise/sow/${sow.id}/approve`,
-    });
-    setExpandedIds((prev) => { const n = new Set(prev); n.delete(sow.id); return n; });
-    setResolvePanel((prev) => { const n = { ...prev }; delete n[sow.id]; return n; });
-    setResolveMessages((prev) => { const n = { ...prev }; delete n[sow.id]; return n; });
+function normalizeAiList(res: unknown): NormalisedSOW[] {
+  if (!res) return [];
+  const r = res as Record<string, unknown>;
+  let arr: Record<string, unknown>[] = [];
+  if (Array.isArray(r)) arr = r as Record<string, unknown>[];
+  else if (Array.isArray(r.data)) arr = r.data as Record<string, unknown>[];
+  else {
+    const d = (r.data ?? r) as Record<string, unknown>;
+    for (const k of ["sows", "items", "results"]) {
+      if (Array.isArray(d[k])) { arr = d[k] as Record<string, unknown>[]; break; }
+    }
   }
-
-  function handleResolve(sow: PipelineSOW) {
-    const message = resolveMessages[sow.id]?.trim();
-    const now = new Date().toISOString();
-
-    const historyEntry: ChangeRequestHistoryEntry = {
-      reason: sow.changeRequestReason ?? "",
-      requestedBy: sow.changeRequestedBy ?? "Unknown",
-      requestedAt: sow.changeRequestedAt ?? now,
-      resolvedAt: now,
-      resolveMessage: message || undefined,
-      stageAtRequest: sow.currentStage,
+  return arr.map((item) => {
+    const gc = (item.generated_content ?? {}) as Record<string, unknown>;
+    const title = gc.document_title ? String(gc.document_title)
+      : String(item.document_title ?? item.title ?? item.project_title ?? `AI SOW ${String(item.wizard_id ?? item.id ?? "").slice(-6).toUpperCase()}`);
+    const bizOwner = String(item.business_owner_approver_id ?? "");
+    const client = bizOwner.includes(", ") ? bizOwner.split(", ").pop()?.trim() ?? "" : "";
+    const submittedAt = String(item.submitted_at ?? item.created_at ?? new Date().toISOString());
+    return {
+      id:         String(item.id ?? item._id ?? item.sow_id ?? item.wizard_id ?? ""),
+      title,
+      client,
+      intakeMode: "ai_generated" as const,
+      status:     String(item.status ?? "in_review"),
+      submittedAt,
+      slaStatus:  deriveSLA(submittedAt),
     };
+  });
+}
 
-    updateSOW(sow.id, {
-      changesRequested: false,
-      changeRequestReason: undefined,
-      changeRequestedBy: undefined,
-      changeRequestedAt: undefined,
-      changeRequestHistory: [...(sow.changeRequestHistory ?? []), historyEntry],
-    });
-    pushNotification({
-      title: "Change Request Resolved",
-      body: message
-        ? `"${sow.title}" resolved. Message: "${message}"`
-        : `"${sow.title}" has been marked as resolved. Please resume your review.`,
-      severity: "low",
-      href: `/enterprise/sow/${sow.id}/approve`,
-    });
-    setExpandedIds((prev) => { const n = new Set(prev); n.delete(sow.id); return n; });
-    setResolvePanel((prev) => { const n = { ...prev }; delete n[sow.id]; return n; });
-    setResolveMessages((prev) => { const n = { ...prev }; delete n[sow.id]; return n; });
-  }
+const MANUAL_APPROVAL_STATUSES = new Set(["approval", "in_review", "review", "pending_commercial_review", "changes_requested", "in_progress"]);
 
-  const changesRequestedSOWs = React.useMemo(
-    () => sows.filter((s) => s.changesRequested),
-    [sows]
+// ── Pipeline dot progress ─────────────────────────────────────────────────
+
+function PipelineDots({ currentStage, completedStages, stageColor }: {
+  currentStage: number; completedStages: number[]; stageColor: string;
+}) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: 5 }, (_, i) => {
+        const n = i + 1;
+        const done = completedStages.includes(n);
+        const active = n === currentStage;
+        return (
+          <React.Fragment key={n}>
+            <div className="flex items-center justify-center rounded-full shrink-0"
+              style={{ width: 22, height: 22, fontSize: 9, fontWeight: 700,
+                background: done ? "var(--color-forest-600)" : active ? stageColor : "transparent",
+                border: done || active ? "none" : "1.5px solid var(--border-soft)",
+                color: done || active ? "#fff" : "var(--ink-faint)" }}>
+              {done ? <Check size={10} /> : n}
+            </div>
+            {n < 5 && (
+              <div className="flex items-center justify-center" style={{ color: done ? "var(--color-forest-400)" : "var(--ink-faint)", opacity: done ? 0.8 : 0.35, fontSize: 10, fontWeight: 600, margin: "0 1px" }}>
+                &rsaquo;
+              </div> 
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
   );
+}
 
-  const filteredSOWs = React.useMemo(() => {
-    const filtered = sows.filter((sow) => {
-      if (stageFilter !== null && sow.currentStage !== stageFilter) return false;
-      if (slaFilter !== null && sow.slaStatus !== slaFilter) return false;
-      if (
-        searchQuery &&
-        !sow.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !sow.client.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-        return false;
-      return true;
+// ── SOW pipeline row ──────────────────────────────────────────────────────
+
+function SOWPipelineRow({ sow, onStageResolved, onDecisionsResolved }: {
+  sow: NormalisedSOW;
+  onStageResolved?: (sowId: string, activeStage: number) => void;
+  onDecisionsResolved?: (sowId: string, rows: ChangeRequestRow[]) => void;
+}) {
+  const { data: pipelineRes, isLoading: pipelineLoading } = useApprovalStages(sow.id);
+  // Keep hook instantiated so we don't break rules of hooks, even though we no longer render decision panels here
+  useRecordApprovalDecision(sow.id);
+
+  const apiStages = extractPipelineStages(pipelineRes);
+
+  // Debug: log the raw pipeline response so we can inspect its shape
+  React.useEffect(() => {
+    if (pipelineRes && typeof window !== "undefined") {
+      console.log(`[pipeline:${sow.id}]`, pipelineRes);
+    }
+  }, [pipelineRes, sow.id]);
+
+  const currentStage = apiStages.length > 0 ? computeActiveStage(apiStages) : 1;
+  const completedStages = computeCompleted(apiStages);
+  const stageCfg = PIPELINE_STAGES[currentStage - 1] ?? PIPELINE_STAGES[0];
+
+  // Detect if any stage is in changes_requested / rejected state
+  const changesRequestedStage = apiStages.find((s) => {
+    const st = String(s.status ?? "").toLowerCase();
+    return st === "changes_requested" || st === "rejected";
+  });
+
+  // Extract comment + request_changes decisions for the Change Request History table.
+  // Handles multiple API shapes:
+  //   1. stage.decisions[] — array of decision records
+  //   2. stage.comments (string) + stage.status === changes_requested/rejected
+  //   3. data.decisions / data.comments at the pipeline root level
+  const decisionRows = React.useMemo<ChangeRequestRow[]>(() => {
+    const rows: ChangeRequestRow[] = [];
+
+    const pushDecision = (
+      d: ApiStageDecision,
+      stageNum: number,
+      idxKey: string | number,
+    ) => {
+      const decisionType = String(d.decision ?? "").toLowerCase();
+      if (decisionType !== "comment" && decisionType !== "request_changes") return;
+      const requestedBy = typeof d.decided_by === "string"
+        ? d.decided_by
+        : String((d.decided_by as { name?: string; email?: string })?.name ?? (d.decided_by as { name?: string; email?: string })?.email ?? d.reviewer ?? "Enterprise Admin");
+      rows.push({
+        id: `${sow.id}-${stageNum}-${idxKey}`,
+        sowId: sow.id,
+        sowTitle: sow.title,
+        client: sow.client,
+        requestedBy,
+        message: String(d.comments ?? d.message ?? d.text ?? ""),
+        resolveMessage: d.resolve_message,
+        resolved: !!d.resolved || !!d.resolved_at,
+        resolvedAt: d.resolved_at ?? d.decided_at ?? d.created_at,
+        stage: stageNum,
+        kind: decisionType as "comment" | "request_changes",
+      });
+    };
+
+    apiStages.forEach((s) => {
+      const stageNum = s.stage;
+      // Case 1: array of decisions on the stage
+      const ds = Array.isArray(s.decisions) ? s.decisions : [];
+      ds.forEach((d, i) => pushDecision(d, stageNum, i));
+
+      // Case 2: single comment stored on the stage + changes_requested/rejected status
+      const st = String(s.status ?? "").toLowerCase();
+      const stageComment = s.comments ? String(s.comments) : "";
+      if (stageComment && (st === "changes_requested" || st === "rejected")) {
+        rows.push({
+          id: `${sow.id}-${stageNum}-rc`,
+          sowId: sow.id,
+          sowTitle: sow.title,
+          client: sow.client,
+          requestedBy: String(s.reviewer ?? "Glimmora Admin"),
+          message: stageComment,
+          resolved: false,
+          resolvedAt: s.reviewed_at,
+          stage: stageNum,
+          kind: "request_changes",
+        });
+      }
     });
-    // Changes-requested SOWs always float to the top
-    return [...filtered].sort((a, b) => {
-      if (a.changesRequested && !b.changesRequested) return -1;
-      if (!a.changesRequested && b.changesRequested) return 1;
-      return 0;
-    });
-  }, [sows, stageFilter, slaFilter, searchQuery]);
 
-  const totalInPipeline = sows.length;
-  const onTrackCount = sows.filter((s) => s.slaStatus === "on-track").length;
-  const atRiskCount = sows.filter((s) => s.slaStatus === "at-risk").length;
-  const overdueCount = sows.filter((s) => s.slaStatus === "overdue").length;
+    // Case 3: decisions at the pipeline root level (not nested per stage)
+    const r = pipelineRes as Record<string, unknown> | undefined;
+    const d = (r?.data ?? r) as Record<string, unknown> | undefined;
+    for (const key of ["decisions", "comments", "history", "change_requests"]) {
+      const arr = d?.[key];
+      if (Array.isArray(arr)) {
+        arr.forEach((entry, i) => {
+          const rawStage = (entry as Record<string, unknown>).stage ?? (entry as Record<string, unknown>).stage_number ?? 1;
+          pushDecision(entry as ApiStageDecision, Number(rawStage), `root-${i}`);
+        });
+      }
+    }
 
-  /* ── Chat panel state ── */
-  type ChatMsg = { from: "enterprise" | "glimmora"; text: string; time: string; files?: { name: string; size: number; type: string }[] };
-  const [chatMessages, setChatMessages] = React.useState<ChatMsg[]>([
-    { from: "glimmora", text: "Welcome to the Approval Pipeline. All SOWs in active review are listed here. We will notify you of any stage decisions or changes required.", time: "Mar 11, 09:00 AM" },
-    { from: "glimmora", text: "Stage 2 (GlimmoraTeam Commercial) for 'Smart Manufacturing IoT Dashboard' requires attention — budget ceiling appears insufficient for the declared scope.", time: "Mar 11, 02:15 PM" },
-    { from: "enterprise", text: "Understood. We are revising the budget and will submit an updated breakdown shortly.", time: "Mar 12, 09:45 AM", files: [{ name: "Budget_Revision_v2.xlsx", size: 48200, type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }] },
-    { from: "glimmora", text: "Received. Reviewing the updated figures now. Expect a decision within 1 business day.", time: "Mar 12, 11:30 AM" },
-  ]);
-  const [chatInput, setChatInput] = React.useState("");
-  const [chatFiles, setChatFiles] = React.useState<{ name: string; size: number; type: string }[]>([]);
-  const chatFileRef   = React.useRef<HTMLInputElement>(null);
-  const chatScrollRef = React.useRef<HTMLDivElement>(null);
+    // Deduplicate by id
+    const seen = new Set<string>();
+    return rows.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipelineRes]);
 
   React.useEffect(() => {
-    if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-  }, [chatMessages]);
+    if (!pipelineLoading) onStageResolved?.(sow.id, currentStage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipelineLoading, currentStage, sow.id]);
 
-  function formatBytes(n: number) {
-    if (n < 1024) return `${n} B`;
-    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  React.useEffect(() => {
+    if (!pipelineLoading) onDecisionsResolved?.(sow.id, decisionRows);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipelineLoading, decisionRows, sow.id]);
+
+  // Initials for approver avatar
+  const initials = "EA";
+
+  return (
+    <div
+      className="grid items-start gap-4 px-5 py-4 transition-colors hover:bg-amber-50/20"
+      style={{
+        gridTemplateColumns: "1.8fr 1fr 2fr 1.1fr auto",
+        borderBottom: "1px solid var(--border-hair)",
+      }}
+    >
+      {/* SOW column */}
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold leading-snug" style={{ color: "var(--ink)" }}>{sow.title}</p>
+        {sow.estimatedBudget != null && sow.estimatedBudget > 0 ? (
+          <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--ink-faint)" }}>
+            ${sow.estimatedBudget.toLocaleString()}
+          </p>
+        ) : null}
+      </div>
+
+      {/* Client column */}
+      <div className="min-w-0 pt-0.5">
+        <p className="text-[11.5px] leading-snug" style={{ color: "var(--ink-muted)" }}>{sow.client || "—"}</p>
+      </div>
+
+      {/* Pipeline progress column */}
+      <div className="min-w-0">
+        {pipelineLoading ? (
+          <div className="space-y-2">
+            <div className="h-4 w-36 rounded bg-gray-100 animate-pulse" />
+            <div className="h-2.5 w-20 rounded bg-gray-100 animate-pulse" />
+          </div>
+        ) : (
+          <div>
+            <PipelineDots currentStage={currentStage} completedStages={completedStages} stageColor={stageCfg.color} />
+            <div className="mt-1.5">
+              <span className="text-[10.5px] font-semibold block leading-tight" style={{ color: stageCfg.color }}>
+                {stageCfg.name}
+              </span>
+              <span className="text-[10px] mt-0.5 block" style={{ color: "var(--ink-faint)" }}>
+                {completedStages.length}/5 stages complete
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Approver column */}
+      <div className="flex items-center gap-2 pt-0.5">
+        <div
+          className="flex items-center justify-center rounded-full shrink-0 text-[10px] font-bold text-white"
+          style={{ width: 28, height: 28, background: "var(--color-brown-500)" }}
+        >
+          {initials}
+        </div>
+        <span className="text-[11.5px] leading-snug" style={{ color: "var(--ink-muted)" }}>Enterprise Admin</span>
+      </div>
+
+      {/* SLA + View column */}
+      <div className="flex flex-col items-end gap-1.5 pt-0.5">
+        {changesRequestedStage ? (
+          <Badge variant="gold" size="sm" dot>Changes Requested</Badge>
+        ) : (
+          <Badge variant={slaVariant(sow.slaStatus)} size="sm" dot>{slaLabel(sow.slaStatus)}</Badge>
+        )}
+        <span className="text-[10px] whitespace-nowrap" style={{ color: "var(--ink-faint)" }}>{formatDate(sow.submittedAt)}</span>
+        <Link href={`/enterprise/sow/approval/${sow.id}`}>
+          <button
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all hover:opacity-80"
+            style={{ background: stageCfg.bgColor, color: stageCfg.color, border: `1px solid ${stageCfg.color}22` }}
+          >
+            <Eye size={10} /> View
+          </button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────
+
+type ActiveTab = "all" | "s1" | "s2" | "s3" | "s4" | "s5" | "on-track" | "at-risk" | "overdue";
+
+export default function SOWApprovalPipelinePage() {
+  const [search, setSearch]           = React.useState("");
+  const [stageFilter, setStageFilter] = React.useState<number | null>(null);
+  const [slaFilter, setSlaFilter]     = React.useState<"on-track" | "at-risk" | "overdue" | null>(null);
+  const [activeTab, setActiveTab]     = React.useState<ActiveTab>("all");
+  const [pageSize, setPageSize]       = React.useState(10);
+  const [currentPage, setCurrentPage] = React.useState(1);
+
+  // Live stage counts from per-row pipeline fetches
+  const [sowStageMap, setSowStageMap] = React.useState<Record<string, number>>({});
+  const handleRowStage = React.useCallback((sowId: string, activeStage: number) => {
+    setSowStageMap((prev) => prev[sowId] === activeStage ? prev : { ...prev, [sowId]: activeStage });
+  }, []);
+  const computedStageCounts = React.useMemo(() => {
+    const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const stage of Object.values(sowStageMap)) {
+      if (stage >= 1 && stage <= 5) counts[stage] = (counts[stage] ?? 0) + 1;
+    }
+    return counts;
+  }, [sowStageMap]);
+
+  // Aggregate change-request decisions (comment + request_changes) from all pipelines
+  const [decisionsMap, setDecisionsMap] = React.useState<Record<string, ChangeRequestRow[]>>({});
+  const handleRowDecisions = React.useCallback((sowId: string, rows: ChangeRequestRow[]) => {
+    setDecisionsMap((prev) => {
+      const prevJson = JSON.stringify(prev[sowId] ?? []);
+      const nextJson = JSON.stringify(rows);
+      if (prevJson === nextJson) return prev;
+      return { ...prev, [sowId]: rows };
+    });
+  }, []);
+  const allDecisionRows = React.useMemo<ChangeRequestRow[]>(() => {
+    return Object.values(decisionsMap).flat().sort((a, b) => {
+      const ta = a.resolvedAt ? new Date(a.resolvedAt).getTime() : 0;
+      const tb = b.resolvedAt ? new Date(b.resolvedAt).getTime() : 0;
+      return tb - ta;
+    });
+  }, [decisionsMap]);
+
+  // Resolve state: which row is being resolved, the text, and the mutation
+  const [resolveRowId, setResolveRowId] = React.useState<string | null>(null);
+  const [resolveText, setResolveText]   = React.useState("");
+  const [resolvingSowId, setResolvingSowId] = React.useState<string | null>(null);
+  const resolveMutation = useRecordApprovalDecision(resolvingSowId);
+
+  const openResolve = (row: ChangeRequestRow) => {
+    setResolveRowId(row.id);
+    setResolvingSowId(row.sowId);
+    setResolveText("");
+  };
+  const closeResolve = () => {
+    setResolveRowId(null);
+    setResolveText("");
+  };
+  const submitResolve = (row: ChangeRequestRow) => {
+    if (!resolveText.trim()) return;
+    resolveMutation.mutate(
+      { stage: row.stage, decision: "resolve" as never, comments: resolveText.trim() },
+      {
+        onSuccess: () => {
+          toast.success("Change request resolved", "Your response has been sent to Glimmora admin for review.");
+          closeResolve();
+        },
+        onError: (err) => {
+          toast.error("Failed to resolve", err instanceof Error ? err.message : "Please try again.");
+        },
+      }
+    );
+  };
+
+  const { data: manualRes, isLoading: manualLoading } = useManualSOWList();
+  const { data: aiRes,     isLoading: aiLoading }     = useSowList();
+  const isLoading = manualLoading || aiLoading;
+
+  const allSows: NormalisedSOW[] = React.useMemo(() => {
+    const manual = normalizeManualList(manualRes).filter((s) => MANUAL_APPROVAL_STATUSES.has(s.status));
+    const ai     = normalizeAiList(aiRes).filter((s) => s.id);
+    const manualIds = new Set(manual.map((s) => s.id));
+    return [...ai.filter((s) => !manualIds.has(s.id)), ...manual];
+  }, [manualRes, aiRes]);
+
+  // Apply tab selection to filters
+  function applyTab(tab: ActiveTab) {
+    setActiveTab(tab);
+    setStageFilter(null);
+    setSlaFilter(null);
+    if (tab === "all") return;
+    if (tab === "s1") { setStageFilter(1); return; }
+    if (tab === "s2") { setStageFilter(2); return; }
+    if (tab === "s3") { setStageFilter(3); return; }
+    if (tab === "s4") { setStageFilter(4); return; }
+    if (tab === "s5") { setStageFilter(5); return; }
+    if (tab === "on-track" || tab === "at-risk" || tab === "overdue") {
+      setSlaFilter(tab);
+    }
   }
 
-  function handleChatSend() {
-    if (!chatInput.trim() && chatFiles.length === 0) return;
-    setChatMessages((prev) => [...prev, {
-      from: "enterprise",
-      text: chatInput.trim(),
-      time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-      files: chatFiles.length > 0 ? [...chatFiles] : undefined,
-    }]);
-    setChatInput("");
-    setChatFiles([]);
-    setTimeout(() => {
-      setChatMessages((prev) => [...prev, {
-        from: "glimmora",
-        text: "Message received. Our review team will respond shortly.",
-        time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-      }]);
-    }, 1200);
-  }
+  const filtered = React.useMemo(() => {
+    let list = [...allSows];
+    if (stageFilter !== null)   list = list.filter((s) => sowStageMap[s.id] === stageFilter);
+    if (slaFilter)              list = list.filter((s) => s.slaStatus === slaFilter);
+    if (search.trim().length >= 2) {
+      const q = search.toLowerCase();
+      list = list.filter((s) => s.title.toLowerCase().includes(q) || s.client.toLowerCase().includes(q));
+    }
+    return list;
+  }, [allSows, slaFilter, search, stageFilter, sowStageMap]);
 
+  React.useEffect(() => { setCurrentPage(1); }, [slaFilter, search, stageFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated  = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const onTrackCount = allSows.filter((s) => s.slaStatus === "on-track").length;
+  const atRiskCount  = allSows.filter((s) => s.slaStatus === "at-risk").length;
+  const overdueCount = allSows.filter((s) => s.slaStatus === "overdue").length;
+
+  const FILTER_TABS: { key: ActiveTab; label: string }[] = [
+    { key: "all",      label: "All"      },
+    { key: "s1",       label: "S1"       },
+    { key: "s2",       label: "S2"       },
+    { key: "s3",       label: "S3"       },
+    { key: "s4",       label: "S4"       },
+    { key: "s5",       label: "S5"       },
+    { key: "on-track", label: "On Track" },
+    { key: "at-risk",  label: "At Risk"  },
+    { key: "overdue",  label: "Overdue"  },
+  ];
+
+  // ── Skeleton ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-7xl space-y-8 px-6 py-8 lg:px-8">
+      <div className="space-y-6">
         {/* Header skeleton */}
         <div className="flex items-start justify-between">
           <div className="space-y-2">
-            <Skeleton className="h-7 w-48" />
-            <Skeleton className="h-4 w-80" />
+            <div className="h-7 w-52 rounded-lg bg-gray-100 animate-pulse" />
+            <div className="h-4 w-80 rounded bg-gray-100 animate-pulse" />
+            <div className="flex gap-2 mt-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-6 w-20 rounded-full bg-gray-100 animate-pulse" />
+              ))}
+            </div>
           </div>
-          <Skeleton className="h-9 w-40 rounded-lg" />
+          <div className="h-7 w-36 rounded-full bg-gray-100 animate-pulse" />
         </div>
 
-        {/* Pipeline Stage Cards — 5 columns */}
-        <div className="space-y-4">
-          <Skeleton className="h-5 w-32" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {/* Stage cards skeleton */}
+        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}>
+          <div className="px-5 py-3.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+            <div className="h-4 w-28 rounded bg-gray-100 animate-pulse" />
+          </div>
+          <div className="flex divide-x" style={{ borderColor: "var(--border-hair)" }}>
             {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="rounded-xl p-4 space-y-3"
-                style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}
-              >
-                <div className="flex items-center gap-2">
-                  <Skeleton className="w-8 h-8 rounded-lg" />
-                  <div className="space-y-1.5 flex-1">
-                    <Skeleton className="h-3.5 w-3/4" />
-                    <Skeleton className="h-2.5 w-1/2" />
-                  </div>
-                </div>
-                <Skeleton className="h-6 w-10" />
-                <Skeleton className="h-2 w-full" />
-                <Skeleton className="h-2.5 w-24" />
+              <div key={i} className="flex-1 flex flex-col items-center gap-2 px-4 py-5">
+                <div className="w-9 h-9 rounded-full bg-gray-100 animate-pulse" />
+                <div className="h-7 w-8 rounded bg-gray-100 animate-pulse" />
+                <div className="h-2.5 w-14 rounded bg-gray-100 animate-pulse" />
+                <div className="h-2.5 w-20 rounded bg-gray-100 animate-pulse" />
+                <div className="h-3 w-24 rounded bg-gray-100 animate-pulse" />
               </div>
             ))}
           </div>
         </div>
 
-        {/* Filter bar skeleton */}
-        <div
-          className="flex flex-wrap items-center gap-3 rounded-xl p-4"
-          style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}
-        >
-          <Skeleton className="h-4 w-14" />
-          <Skeleton className="h-9 w-56 rounded-lg" />
-          <div className="flex gap-1.5">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-7 w-16 rounded-md" />
-            ))}
-          </div>
-          <Skeleton className="h-9 w-28 rounded-lg ml-auto" />
-        </div>
-
-        {/* SOW cards skeleton */}
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="rounded-xl p-5 space-y-3"
-              style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="space-y-1.5 flex-1">
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-1/3" />
-                </div>
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-6 w-20 rounded-full" />
-                  <Skeleton className="h-6 w-16 rounded-full" />
-                </div>
+        {/* Table skeleton */}
+        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}>
+          <div className="h-14 bg-gray-50 animate-pulse" style={{ borderBottom: "1px solid var(--border-hair)" }} />
+          <div className="h-10 bg-gray-50 animate-pulse" style={{ borderBottom: "1px solid var(--border-hair)" }} />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-5 px-5 py-4" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3.5 w-2/3 rounded bg-gray-100 animate-pulse" />
+                <div className="h-2.5 w-1/4 rounded bg-gray-100 animate-pulse" />
               </div>
-              <div className="flex items-center gap-4">
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="h-3 w-20" />
-                <Skeleton className="h-3 w-16" />
-              </div>
+              <div className="h-3 w-20 rounded bg-gray-100 animate-pulse" />
+              <div className="h-5 w-40 rounded bg-gray-100 animate-pulse" />
+              <div className="h-7 w-20 rounded-full bg-gray-100 animate-pulse" />
+              <div className="h-14 w-24 rounded-lg bg-gray-100 animate-pulse" />
             </div>
           ))}
         </div>
@@ -620,739 +630,373 @@ export default function SOWApprovalPipelinePage() {
   }
 
   return (
-    <div className="flex gap-6 items-start">
-    <motion.div
-      className="flex-1 min-w-0 space-y-8"
-      variants={stagger}
-      initial="hidden"
-      animate="show"
-    >
+    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
+
       {/* ── Header ── */}
       <motion.div variants={fadeUp}>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1
-              className="font-heading"
-              style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--ink)" }}
-            >
-              Approval Pipeline
-            </h1>
-            <p className="mt-1.5 text-sm" style={{ color: "var(--ink-muted)" }}>
-              Track and manage SOW approvals across the five-stage pipeline.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div
-              className="flex items-center gap-2 rounded-lg px-3 py-2"
-              style={{
-                background: "var(--card-bg)",
-                border: "1px solid var(--border-soft)",
-              }}
-            >
-              <Layers size={16} style={{ color: "var(--ink-muted)" }} />
-              <span className="text-sm font-medium" style={{ color: "var(--ink)" }}>
-                {totalInPipeline} SOWs in Pipeline
-              </span>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ── Changes Requested Notification Banner ── */}
-      {changesRequestedSOWs.length > 0 && (
-        <motion.div variants={fadeUp} className="max-w-xl">
-          <div
-            className="rounded-xl px-4 py-3"
-            style={{
-              background: "#ffffff",
-              border: "1px solid rgba(166, 119, 99, 0.25)",
-            }}
+        <div className="flex items-start justify-between mb-2">
+          <h1 className="font-heading" style={{ fontSize: "1.6rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--ink)" }}>
+            Approval Pipeline
+          </h1>
+          {/* Badge: SOWs in pipeline */}
+          <span
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-semibold"
+            style={{ background: "var(--color-brown-50)", color: "var(--color-brown-700)", border: "1px solid var(--color-brown-200)" }}
           >
-            <div className="flex items-start gap-3">
-              <div
-                className="flex items-center justify-center rounded-lg shrink-0 mt-0.5"
-                style={{ width: 32, height: 32, background: "rgba(166, 119, 99, 0.12)" }}
-              >
-                <AlertTriangle size={15} style={{ color: "#A67763" }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold" style={{ color: "#6A4C3F" }}>
-                  {changesRequestedSOWs.length} SOW{changesRequestedSOWs.length > 1 ? "s require" : " requires"} attention
-                </p>
-                <div className="mt-2 space-y-2">
-                  <AnimatePresence initial={false}>
-                  {changesRequestedSOWs.map((sow) => {
-                    const isExpanded = expandedIds.has(sow.id);
-                    return (
-                      <motion.div
-                        key={sow.id}
-                        layout
-                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -12, scale: 0.96, transition: { duration: 0.28, ease: [0.4, 0, 1, 1] } }}
-                        transition={{ duration: 0.22, ease: [0, 0, 0.2, 1] }}
-                        className="rounded-lg"
-                        style={{ border: "1px solid rgba(166,119,99,0.22)", background: "rgba(166,119,99,0.04)" }}
-                      >
-                        {/* Header row — clickable to expand */}
-                        <button
-                          onClick={() => toggleExpand(sow.id)}
-                          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left transition-colors"
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(166,119,99,0.08)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs font-semibold truncate" style={{ color: "#6A4C3F" }}>
-                              {sow.title}
-                            </span>
-                            {sow.changeRequestedBy && (
-                              <span className="text-[0.65rem] shrink-0" style={{ color: "#A67763" }}>
-                                — {sow.changeRequestedBy}
-                              </span>
-                            )}
-                          </div>
-                          <ChevronDown
-                            size={13}
-                            style={{
-                              color: "#A67763",
-                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                              transition: "transform 0.2s ease",
-                              flexShrink: 0,
-                            }}
-                          />
-                        </button>
-
-                        {/* Expanded content — animated */}
-                        <AnimatePresence initial={false}>
-                          {isExpanded && (
-                            <motion.div
-                              key="expanded"
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
-                              className="overflow-hidden"
-                            >
-                              <div
-                                className="px-3 pb-3 pt-2 space-y-2.5"
-                                style={{ borderTop: "1px solid rgba(166,119,99,0.15)" }}
-                              >
-                                {sow.changeRequestReason && (
-                                  <div
-                                    className="rounded-md px-3 py-2"
-                                    style={{ background: "rgba(166,119,99,0.08)" }}
-                                  >
-                                    <p className="text-[0.65rem] font-semibold uppercase tracking-wider mb-1" style={{ color: "#A67763" }}>
-                                      Change Request Message
-                                    </p>
-                                    <p className="text-xs leading-relaxed" style={{ color: "#6A4C3F" }}>
-                                      {sow.changeRequestReason}
-                                    </p>
-                                  </div>
-                                )}
-
-                                <div className="flex items-center justify-between">
-                                  {sow.changeRequestedAt && (
-                                    <span className="text-[0.65rem]" style={{ color: "#A67763", opacity: 0.7 }}>
-                                      {new Date(sow.changeRequestedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                                    </span>
-                                  )}
-                                  {!resolvePanel[sow.id] && (
-                                    <div className="ml-auto flex items-center gap-2">
-                                      <button
-                                        onClick={() => handleAIResolve(sow)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-90"
-                                        style={{ background: "linear-gradient(135deg, #A67763, #8B5E4A)", color: "#fff" }}
-                                      >
-                                        <Sparkles size={12} />
-                                        Resolve with AI
-                                      </button>
-                                      <button
-                                        onClick={() => openResolvePanel(sow.id)}
-                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-90"
-                                        style={{ background: "#1E293B", color: "#fff" }}
-                                      >
-                                        Acknowledge & Resolve
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Resolve comment panel — animated */}
-                                <AnimatePresence initial={false}>
-                                  {resolvePanel[sow.id] && (
-                                    <motion.div
-                                      key="resolve-panel"
-                                      initial={{ height: 0, opacity: 0 }}
-                                      animate={{ height: "auto", opacity: 1 }}
-                                      exit={{ height: 0, opacity: 0 }}
-                                      transition={{ duration: 0.24, ease: [0.4, 0, 0.2, 1] }}
-                                      className="overflow-hidden"
-                                    >
-                                      <div
-                                        className="rounded-lg p-3 space-y-2"
-                                        style={{ background: "rgba(166,119,99,0.06)", border: "1px solid rgba(166,119,99,0.18)" }}
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <p className="text-[0.65rem] font-semibold uppercase tracking-wider" style={{ color: "#A67763" }}>
-                                            Message to Approver
-                                          </p>
-                                          <button
-                                            onClick={() => setResolvePanel((p) => ({ ...p, [sow.id]: false }))}
-                                            className="p-0.5 rounded hover:opacity-60 transition-opacity"
-                                          >
-                                            <X size={12} style={{ color: "#A67763" }} />
-                                          </button>
-                                        </div>
-                                        <textarea
-                                          rows={3}
-                                          placeholder="Explain what was resolved or any follow-up steps..."
-                                          value={resolveMessages[sow.id] ?? ""}
-                                          onChange={(e) => setResolveMessages((p) => ({ ...p, [sow.id]: e.target.value }))}
-                                          className="w-full resize-none rounded-md px-3 py-2 text-xs outline-none transition-all"
-                                          style={{
-                                            background: "var(--page-bg, #fff)",
-                                            border: "1px solid rgba(166,119,99,0.25)",
-                                            color: "var(--ink, #1a1a1a)",
-                                          }}
-                                        />
-                                        <div className="flex justify-end">
-                                          <button
-                                            onClick={() => handleResolve(sow)}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-90"
-                                            style={{ background: "#2D6A4F", color: "#fff" }}
-                                          >
-                                            <Send size={12} />
-                                            Send & Resolve
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
-                    );
-                  })}
-                  </AnimatePresence>
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* ── Summary Stats Row ── */}
-      <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: "rgba(6, 95, 70, 0.08)" }}>
-          <CheckCircle2 size={14} style={{ color: "#2D6A4F" }} />
-          <span className="text-xs font-medium" style={{ color: "#2D6A4F" }}>{onTrackCount} On Track</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: "rgba(146, 64, 14, 0.08)" }}>
-          <AlertTriangle size={14} style={{ color: "#92400E" }} />
-          <span className="text-xs font-medium" style={{ color: "#92400E" }}>{atRiskCount} At Risk</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: "rgba(185, 28, 28, 0.08)" }}>
-          <Clock size={14} style={{ color: "#B91C1C" }} />
-          <span className="text-xs font-medium" style={{ color: "#B91C1C" }}>{overdueCount} Overdue</span>
-        </div>
-      </motion.div>
-
-      {/* ── Pipeline Stage Overview Cards ── */}
-      <motion.div variants={fadeUp}>
-        <h2
-          className="font-heading mb-4"
-          style={{ fontSize: "1rem", fontWeight: 600, color: "var(--ink)" }}
-        >
-          Pipeline Stages
-        </h2>
-        <motion.div
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
-          variants={stagger}
-          initial="hidden"
-          animate="show"
-        >
-          {PIPELINE_STAGES.map((stage, i) => (
-            <PipelineStageCard key={stage.number} stage={stage} index={i} sows={sows} />
-          ))}
-        </motion.div>
-      </motion.div>
-
-      {/* ── Filters ── */}
-      <motion.div
-        variants={fadeUp}
-        className="flex flex-wrap items-center gap-3"
-        style={{
-          background: "var(--card-bg)",
-          border: "1px solid var(--border-soft)",
-          borderRadius: 12,
-          padding: "1rem 1.25rem",
-        }}
-      >
-        <div className="flex items-center gap-2 mr-2">
-          <Filter size={16} style={{ color: "var(--ink-muted)" }} />
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--ink-faint)" }}>
-            Filters
+            <Layers size={13} />
+            {allSows.length} SOWs in Pipeline
           </span>
         </div>
-
-        {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2"
-            style={{ color: "var(--ink-faint)" }}
-          />
-          <input
-            type="text"
-            placeholder="Search by title or client..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg py-2 pl-9 pr-3 text-sm outline-none"
-            style={{
-              background: "var(--page-bg)",
-              border: "1px solid var(--border-soft)",
-              color: "var(--ink)",
-            }}
-          />
-        </div>
-
-        {/* Stage filter buttons */}
-        <div className="flex items-center gap-1.5">
+        <p className="text-[13px] mb-3" style={{ color: "var(--ink-muted)" }}>
+          Track and manage SOW approvals across the five-stage review process.
+        </p>
+        {/* SLA pill summary row */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setStageFilter(null)}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-            )}
+            onClick={() => { setSlaFilter(slaFilter === "on-track" ? null : "on-track"); setActiveTab(slaFilter === "on-track" ? "all" : "on-track"); }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold transition-all hover:opacity-80"
             style={{
-              background: stageFilter === null ? "var(--ink)" : "transparent",
-              color: stageFilter === null ? "var(--page-bg)" : "var(--ink-muted)",
-              border: stageFilter === null ? "none" : "1px solid var(--border-soft)",
+              background: slaFilter === "on-track" ? "var(--color-forest-700)" : "var(--color-forest-50)",
+              color: slaFilter === "on-track" ? "#fff" : "var(--color-forest-700)",
+              border: "1px solid var(--color-forest-200)",
             }}
           >
-            All
+            <CheckCircle2 size={12} /> {onTrackCount} On Track
           </button>
-          {PIPELINE_STAGES.map((stage) => (
-            <button
-              key={stage.number}
-              onClick={() => setStageFilter(stageFilter === stage.number ? null : stage.number)}
-              className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-              style={{
-                background:
-                  stageFilter === stage.number ? stage.color : "transparent",
-                color:
-                  stageFilter === stage.number ? "#fff" : "var(--ink-muted)",
-                border:
-                  stageFilter === stage.number
-                    ? "none"
-                    : "1px solid var(--border-soft)",
-              }}
-            >
-              S{stage.number}
-            </button>
-          ))}
-        </div>
-
-        {/* SLA filter */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[0.65rem] font-semibold uppercase tracking-wider mr-1" style={{ color: "var(--ink-faint)" }}>
-            SLA
-          </span>
-          {(["on-track", "at-risk", "overdue"] as SLAStatus[]).map((status) => (
-            <button
-              key={status}
-              onClick={() => setSLAFilter(slaFilter === status ? null : status)}
-              className="rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
-              style={{
-                background:
-                  slaFilter === status
-                    ? status === "on-track"
-                      ? "#2D6A4F"
-                      : status === "at-risk"
-                      ? "#92400E"
-                      : "#B91C1C"
-                    : "transparent",
-                color:
-                  slaFilter === status ? "#fff" : "var(--ink-muted)",
-                border:
-                  slaFilter === status ? "none" : "1px solid var(--border-soft)",
-              }}
-            >
-              {getSLALabel(status)}
-            </button>
-          ))}
+          <button
+            onClick={() => { setSlaFilter(slaFilter === "at-risk" ? null : "at-risk"); setActiveTab(slaFilter === "at-risk" ? "all" : "at-risk"); }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold transition-all hover:opacity-80"
+            style={{
+              background: slaFilter === "at-risk" ? "var(--color-gold-700)" : "var(--color-gold-50)",
+              color: slaFilter === "at-risk" ? "#fff" : "var(--color-gold-700)",
+              border: "1px solid var(--color-gold-200)",
+            }}
+          >
+            <AlertTriangle size={12} /> {atRiskCount} At Risk
+          </button>
+          <button
+            onClick={() => { setSlaFilter(slaFilter === "overdue" ? null : "overdue"); setActiveTab(slaFilter === "overdue" ? "all" : "overdue"); }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold transition-all hover:opacity-80"
+            style={{
+              background: slaFilter === "overdue" ? "var(--danger)" : "rgba(239,68,68,0.06)",
+              color: slaFilter === "overdue" ? "#fff" : "var(--danger)",
+              border: "1px solid rgba(239,68,68,0.2)",
+            }}
+          >
+            <Clock size={12} /> {overdueCount} Overdue
+          </button>
         </div>
       </motion.div>
 
-      {/* ── SOW Pipeline Table ── */}
-      <motion.div
-        variants={fadeUp}
-        style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)", borderRadius: 14, overflow: "hidden" }}
-      >
-        {/* Header */}
-        <div
-          className="grid items-center px-6 py-3 gap-5"
-          style={{
-            gridTemplateColumns: "2fr 0.9fr 1.6fr 1.4fr 0.85fr 0.6fr",
-            background: "var(--page-bg)",
-            borderBottom: "1px solid var(--border-soft)",
-          }}
-        >
-          {["SOW", "Client", "Pipeline Progress", "Approver", "SLA", ""].map((h) => (
-            <span key={h || "a"} className="text-[0.62rem] font-bold uppercase tracking-[0.13em]" style={{ color: "var(--ink-faint)" }}>
-              {h}
-            </span>
-          ))}
+      {/* ── Pipeline Stages section ── */}
+      <motion.div variants={fadeUp} className="rounded-2xl overflow-hidden" style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}>
+        <div className="px-5 py-3.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+          <span className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>Pipeline Stages</span>
         </div>
-
-        {/* Empty */}
-        {filteredSOWs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-2">
-            <Layers size={28} style={{ color: "var(--ink-faint)", opacity: 0.35 }} />
-            <p className="text-sm" style={{ color: "var(--ink-muted)" }}>No SOWs match the current filters.</p>
-          </div>
-        ) : filteredSOWs.map((sow, idx) => {
-          const stage = PIPELINE_STAGES[sow.currentStage - 1];
-          const initials = sow.stageApprover.replace(/\(.*?\)/g, "").trim().split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-
-          return (
-            <motion.div
-              key={sow.id}
-              variants={slideInRight}
-              className="grid items-center px-6 py-4 gap-5 transition-colors"
-              style={{
-                gridTemplateColumns: "2fr 0.9fr 1.6fr 1.4fr 0.85fr 0.6fr",
-                borderBottom: idx < filteredSOWs.length - 1 ? "1px solid var(--border-soft)" : "none",
-                borderLeft: sow.changesRequested ? `3px solid ${stage.color}` : "3px solid transparent",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--page-bg)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              {/* SOW */}
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-[0.83rem] font-semibold leading-tight truncate" style={{ color: "var(--ink)" }}>
-                    {sow.title}
-                  </p>
-                  {sow.changesRequested && (
-                    <span className="inline-flex items-center gap-1 shrink-0 text-[0.58rem] font-bold uppercase tracking-wide rounded-full px-2 py-0.5"
-                      style={{ background: stage.bgColor, color: stage.color }}>
-                      <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: stage.color }} />
-                      Revision
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[0.68rem] font-semibold" style={{ color: "var(--ink-faint)" }}>{sow.totalValue}</span>
-                  {sow.submittedBy && (
-                    <span className="text-[0.68rem]" style={{ color: "var(--ink-faint)" }}>· {sow.submittedBy}</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Client */}
-              <span className="text-[0.78rem] min-w-0 block" style={{ color: "var(--ink-muted)", wordBreak: "break-word" }}>
-                {sow.client}
-              </span>
-
-              {/* Pipeline Progress */}
-              <div className="min-w-0 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-[18px] h-[18px] rounded flex items-center justify-center shrink-0" style={{ background: stage.bgColor }}>
-                      {React.createElement(stage.icon, { size: 10, style: { color: stage.color } })}
-                    </div>
-                    <span className="text-[0.7rem] font-semibold" style={{ color: stage.color }}>{stage.name}</span>
-                  </div>
-                  <span className="text-[0.62rem] font-medium" style={{ color: "var(--ink-faint)" }}>
-                    {sow.completedStages.length}/{5}
-                  </span>
-                </div>
-                <PipelineProgress
-                  totalStages={5}
-                  currentStage={sow.currentStage}
-                  completedStages={sow.completedStages}
-                  stageColor={stage.color}
-                />
-              </div>
-
-              {/* Approver */}
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[0.6rem] font-bold text-white"
-                  style={{ background: `${stage.color}cc` }}>
-                  {initials}
-                </div>
-                <div>
-                  <p className="text-[0.73rem] font-medium leading-tight" style={{ color: "var(--ink)" }}>
-                    {sow.stageApprover.replace(/\(.*?\)/, "").trim()}
-                  </p>
-                  {/\((.+?)\)/.test(sow.stageApprover) && (
-                    <p className="text-[0.62rem]" style={{ color: "var(--ink-faint)" }}>
-                      {sow.stageApprover.match(/\((.+?)\)/)?.[1]}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* SLA + date */}
-              <div className="space-y-1">
-                <Badge variant={getSLABadgeVariant(sow.slaStatus)} size="sm" dot>
-                  {getSLALabel(sow.slaStatus)}
-                </Badge>
-                <p className="text-[0.62rem]" style={{ color: "var(--ink-faint)" }}>{formatDate(sow.submittedDate)}</p>
-              </div>
-
-              {/* Action */}
-              <div className="flex justify-end">
-                <Link href={`/enterprise/sow/${sow.id}`}>
-                  <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold transition-all hover:opacity-80"
-                    style={{ background: stage.bgColor, color: stage.color }}>
-                    <Eye size={12} />
-                    View
-                  </button>
-                </Link>
-              </div>
-            </motion.div>
-          );
-        })}
-      </motion.div>
-
-      {/* ── Change Request History Table ── */}
-      {(() => {
-        const allHistory = sows.flatMap((sow) =>
-          (sow.changeRequestHistory ?? []).map((h) => ({ ...h, sowId: sow.id, sowTitle: sow.title, client: sow.client }))
-        ).sort((a, b) => new Date(b.resolvedAt).getTime() - new Date(a.resolvedAt).getTime());
-
-        return (
-          <motion.div variants={fadeUp}>
-            <div className="flex items-center gap-2 mb-4">
-              <RotateCcw size={18} style={{ color: "var(--ink-muted)" }} />
-              <h2 className="font-heading" style={{ fontSize: "1rem", fontWeight: 600, color: "var(--ink)" }}>
-                Change Request History
-              </h2>
-              {allHistory.length > 0 && (
-                <Badge variant="gold" size="sm">{allHistory.length} resolved</Badge>
-              )}
-            </div>
-
-            <div
-              style={{
-                background: "var(--card-bg)",
-                border: "1px solid var(--border-soft)",
-                borderRadius: 12,
-                overflow: "hidden",
-              }}
-            >
-              {/* Table header */}
-              <div
-                className="grid items-center gap-4 px-5 py-3 text-[0.62rem] font-bold uppercase tracking-[0.13em]"
+        <div className="grid" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+          {PIPELINE_STAGES.map((stage, idx) => {
+            const Icon = stage.icon;
+            const count = computedStageCounts[stage.number] ?? 0;
+            const isActive = stageFilter === stage.number;
+            return (
+              <button
+                key={stage.number}
+                onClick={() => {
+                  const next = isActive ? null : stage.number;
+                  setStageFilter(next);
+                  if (next === null) setActiveTab("all");
+                  else setActiveTab(`s${stage.number}` as ActiveTab);
+                }}
+                className="flex flex-col gap-3 px-4 py-5 text-left transition-all hover:brightness-[0.97]"
                 style={{
-                  gridTemplateColumns: "1.6fr 0.9fr 1.2fr 1.4fr 0.8fr",
-                  borderBottom: "1px solid var(--border-soft)",
-                  background: "var(--page-bg)",
-                  color: "var(--ink-faint)",
+                  borderRight: idx < 4 ? "1px solid var(--border-hair)" : "none",
+                  background: isActive ? stage.bgColor : "transparent",
+                  borderTop: isActive ? `2px solid ${stage.color}` : "2px solid transparent",
                 }}
               >
-                <span>SOW Title</span>
-                <span>Client</span>
-                <span>Requested By</span>
-                <span>Resolve Message</span>
-                <span>Resolved</span>
-              </div>
-
-              {allHistory.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-2">
-                  <RotateCcw size={28} style={{ color: "var(--ink-faint)", opacity: 0.4 }} />
-                  <p className="text-sm" style={{ color: "var(--ink-muted)" }}>No resolved change requests yet.</p>
-                  <p className="text-xs" style={{ color: "var(--ink-faint)" }}>Resolved requests will appear here.</p>
+                {/* Top: icon + count */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-center rounded-xl shrink-0"
+                    style={{ width: 36, height: 36, background: isActive ? stage.color : stage.bgColor }}>
+                    <Icon size={16} style={{ color: isActive ? "#fff" : stage.color }} />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[1.75rem] font-bold leading-none" style={{ color: isActive ? stage.color : "var(--ink-dark)" }}>{count}</div>
+                    <div className="text-[9px] font-semibold uppercase tracking-widest mt-0.5" style={{ color: "var(--ink-faint)" }}>SOWs</div>
+                  </div>
                 </div>
-              ) : (
-                allHistory.map((entry, idx) => {
 
-                  return (
-                    <motion.div
-                      key={`${entry.sowId}-${entry.resolvedAt}`}
-                      variants={slideInRight}
-                      className="grid items-center gap-4 px-5 py-4"
-                      style={{
-                        gridTemplateColumns: "1.6fr 0.9fr 1.2fr 1.4fr 0.8fr",
-                        borderBottom: idx < allHistory.length - 1 ? "1px solid var(--border-soft)" : "none",
-                      }}
-                    >
-                      {/* SOW Title */}
-                      <div>
-                        <p className="text-[0.82rem] font-semibold leading-snug" style={{ color: "var(--ink)" }}>{entry.sowTitle}</p>
-                        <Link href={`/enterprise/sow/${entry.sowId}`} className="text-[0.65rem] hover:underline" style={{ color: "var(--ink-faint)" }}>
-                          View SOW →
-                        </Link>
-                      </div>
+                {/* Stage label + name */}
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-wider mb-0.5" style={{ color: stage.color }}>
+                    Stage {stage.number}
+                  </div>
+                  <div className="text-[11.5px] font-semibold leading-snug" style={{ color: "var(--ink)" }}>
+                    {stage.name}
+                  </div>
+                </div>
 
-                      {/* Client */}
-                      <span className="text-[0.78rem]" style={{ color: "var(--ink-muted)" }}>{entry.client}</span>
+                {/* SLA info */}
+                <div className="mt-auto pt-2" style={{ borderTop: "1px solid var(--border-hair)" }}>
+                  {stage.number === 2 && (
+                    <div className="text-[10px] leading-snug mb-1.5" style={{ color: "var(--ink-faint)" }}>
+                      {stage.slaDescription} standard, auto-escalation after 4
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1" style={{ color: "var(--ink-faint)" }}>
+                    <Clock size={10} />
+                    <span className="text-[10.5px]">{stage.slaDescription}</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
 
-                      {/* Requested By */}
-                      <span className="text-[0.75rem]" style={{ color: "var(--ink-muted)" }}>{entry.requestedBy}</span>
+      {/* ── Main table card ── */}
+      <motion.div variants={fadeUp} className="rounded-2xl overflow-hidden" style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}>
 
-                      {/* Resolve Message */}
-                      {entry.resolveMessage ? (
-                        <button
-                          onClick={() => setExpandedMessages((prev) => {
-                            const next = new Set(prev);
-                            const key = `${entry.sowId}-${entry.resolvedAt}`;
-                            next.has(key) ? next.delete(key) : next.add(key);
-                            return next;
-                          })}
-                          className="text-left w-full"
-                        >
-                          <p
-                            className="text-[0.75rem] leading-snug"
-                            style={{ color: "var(--ink-muted)" }}
-                          >
-                            {expandedMessages.has(`${entry.sowId}-${entry.resolvedAt}`)
-                              ? entry.resolveMessage
-                              : entry.resolveMessage.length > 80
-                                ? entry.resolveMessage.slice(0, 80) + "…"
-                                : entry.resolveMessage}
-                          </p>
-                          {entry.resolveMessage.length > 80 && (
-                            <span className="text-[0.62rem] font-medium mt-0.5 block" style={{ color: "var(--ink-faint)" }}>
-                              {expandedMessages.has(`${entry.sowId}-${entry.resolvedAt}`) ? "Show less" : "Show more"}
-                            </span>
-                          )}
-                        </button>
-                      ) : (
-                        <span className="text-[0.75rem] italic" style={{ color: "var(--ink-faint)" }}>No message</span>
-                      )}
+        {/* Filters bar */}
+        <div className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+          {/* FILTERS button */}
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-semibold shrink-0 transition-colors hover:bg-gray-50"
+            style={{ border: "1px solid var(--border-soft)", color: "var(--ink-muted)" }}
+          >
+            <Filter size={12} />
+            FILTERS
+          </button>
 
-                      {/* Resolved date */}
-                      <div>
-                        <p className="text-[0.75rem]" style={{ color: "var(--ink-muted)" }}>{formatDate(entry.resolvedAt)}</p>
-                        <p className="text-[0.62rem]" style={{ color: "var(--ink-faint)" }}>
-                          {formatDate(entry.requestedAt)} requested
-                        </p>
-                      </div>
-                    </motion.div>
-                  );
-                })
-              )}
-            </div>
-          </motion.div>
-        );
-      })()}
-    </motion.div>
-
-    {/* ── Right: Chat / Notification Panel ── */}
-    <div className="w-[300px] shrink-0 sticky top-[60px]">
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: "calc(100vh - 100px)" }}>
-
-        {/* Header */}
-        <div className="px-4 py-3.5 border-b border-gray-100 flex items-center gap-2.5 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-brown-50 flex items-center justify-center shrink-0">
-            <MessageSquare className="w-4 h-4 text-brown-500" />
+          {/* Search */}
+          <div className="relative flex-1 max-w-xs">
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--ink-faint)" }} />
+            <input
+              type="text"
+              placeholder="Search by title or client…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg py-1.5 pl-8 pr-8 text-[12px] outline-none"
+              style={{ background: "var(--color-gray-50)", border: "1px solid var(--border-soft)", color: "var(--ink)" }}
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                <X size={11} style={{ color: "var(--ink-faint)" }} />
+              </button>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[12.5px] font-semibold text-gray-900">Pipeline Notifications</p>
-            <p className="text-[10.5px] text-gray-400 mt-0.5">Communicate with GlimmoraTeam reviewers</p>
+
+          {/* Pill tabs */}
+          <div className="flex items-center gap-1 ml-auto">
+            {FILTER_TABS.map(({ key, label }) => {
+              const isActive = activeTab === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => applyTab(key)}
+                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all whitespace-nowrap"
+                  style={{
+                    background: isActive ? "var(--color-brown-600)" : "transparent",
+                    color: isActive ? "#fff" : "var(--ink-muted)",
+                    border: isActive ? "1px solid var(--color-brown-600)" : "1px solid var(--border-soft)",
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
-          <div className="w-2 h-2 rounded-full bg-forest-400 shrink-0" />
         </div>
 
-        {/* Messages */}
-        <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ minHeight: 0 }}>
-          {chatMessages.map((msg, i) => (
-            <div key={i} className={cn("flex gap-2", msg.from === "enterprise" && "justify-end")}>
-              {msg.from === "glimmora" && (
-                <div className="w-6 h-6 rounded-full bg-brown-100 border border-brown-200 flex items-center justify-center shrink-0 mt-0.5">
-                  <Sparkles className="w-3 h-3 text-brown-600" />
-                </div>
-              )}
-              <div className={cn("max-w-[85%] space-y-1.5", msg.from === "enterprise" && "items-end flex flex-col")}>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-[10px] font-semibold text-gray-700">{msg.from === "glimmora" ? "GlimmoraTeam" : "You"}</span>
-                  <span className="text-[9px] text-gray-400">{msg.time}</span>
-                </div>
-                {msg.files && msg.files.length > 0 && (
-                  <div className="flex flex-col gap-1">
-                    {msg.files.map((f, fi) => (
-                      <div key={fi} className={cn("flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[10px]", msg.from === "enterprise" ? "bg-brown-500 text-white" : "bg-gray-100 text-gray-700")}>
-                        <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center shrink-0", msg.from === "enterprise" ? "bg-white/20" : "bg-brown-50")}>
-                          {f.type.startsWith("image/") ? <ImageIcon className={cn("w-3 h-3", msg.from === "enterprise" ? "text-white" : "text-brown-500")} /> : <File className={cn("w-3 h-3", msg.from === "enterprise" ? "text-white" : "text-brown-500")} />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate font-medium max-w-[110px]">{f.name}</p>
-                          <p className={cn("text-[9px]", msg.from === "enterprise" ? "text-white/60" : "text-gray-400")}>{formatBytes(f.size)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {msg.text && (
-                  <div className={cn("rounded-2xl px-3 py-2.5", msg.from === "glimmora" ? "rounded-tl-none bg-gray-50 border border-gray-100" : "rounded-tr-none bg-brown-500")}>
-                    <p className={cn("text-[11.5px] leading-relaxed", msg.from === "glimmora" ? "text-gray-600" : "text-white")}>{msg.text}</p>
-                  </div>
-                )}
-              </div>
-              {msg.from === "enterprise" && (
-                <div className="w-6 h-6 rounded-full bg-teal-100 border border-teal-200 flex items-center justify-center shrink-0 mt-0.5">
-                  <Building2 className="w-3 h-3 text-teal-600" />
-                </div>
-              )}
-            </div>
+        {/* Column headers */}
+        <div
+          className="grid items-center gap-3 px-5 py-2.5"
+          style={{
+            gridTemplateColumns: "2fr 1fr 2.2fr 1fr 1fr",
+            background: "var(--color-gray-50)",
+            borderBottom: "1px solid var(--border-hair)",
+          }}
+        >
+          {["SOW", "CLIENT", "PIPELINE PROGRESS", "APPROVER", "SLA"].map((h) => (
+            <span key={h} className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--ink-faint)" }}>{h}</span>
           ))}
         </div>
 
-        {/* Composer */}
-        <div className="px-4 py-3 border-t border-gray-100 bg-white shrink-0">
-          <AnimatePresence>
-            {chatFiles.length > 0 && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-2">
-                <div className="flex flex-wrap gap-1.5 py-1">
-                  {chatFiles.map((f, i) => (
-                    <div key={i} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5">
-                      <div className="w-5 h-5 rounded-md bg-brown-50 flex items-center justify-center shrink-0">
-                        {f.type.startsWith("image/") ? <ImageIcon className="w-3 h-3 text-brown-500" /> : <File className="w-3 h-3 text-brown-500" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-medium text-gray-700 truncate max-w-[100px]">{f.name}</p>
-                        <p className="text-[9px] text-gray-400">{formatBytes(f.size)}</p>
-                      </div>
-                      <button onClick={() => setChatFiles((prev) => prev.filter((_, j) => j !== i))} className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-all shrink-0">
-                        <XCircle className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <textarea
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
-            placeholder="Send a notification or message…"
-            rows={2}
-            className="w-full text-[12px] text-gray-700 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-200 outline-none focus:border-brown-300 focus:ring-2 focus:ring-brown-100 transition-all placeholder:text-gray-400 resize-none mb-2"
-          />
-          <input ref={chatFileRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
-            onChange={(e) => { const files = Array.from(e.target.files ?? []); setChatFiles((prev) => [...prev, ...files.map((f) => ({ name: f.name, size: f.size, type: f.type }))]); e.target.value = ""; }} />
-          <div className="flex items-center gap-2">
-            <button onClick={() => chatFileRef.current?.click()}
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-brown-500 hover:bg-brown-50 border border-gray-200 hover:border-brown-200 transition-all shrink-0" title="Attach file">
-              <Paperclip className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={handleChatSend} disabled={!chatInput.trim() && chatFiles.length === 0}
-              className={cn("flex-1 flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2 rounded-xl transition-all",
-                (chatInput.trim() || chatFiles.length > 0) ? "text-white bg-brown-500 hover:bg-brown-600" : "text-gray-400 bg-gray-100 cursor-not-allowed")}>
-              <Send className="w-3.5 h-3.5" /> Send
+        {/* Rows */}
+        {allSows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center mb-3"
+              style={{ background: "var(--color-brown-100)" }}>
+              <Layers className="w-5 h-5" style={{ color: "var(--color-brown-600)" }} />
+            </div>
+            <p className="text-[13.5px] font-semibold mb-1" style={{ color: "var(--ink)" }}>No SOWs in the approval pipeline</p>
+            <p className="text-[12px] max-w-70" style={{ color: "var(--ink-faint)" }}>SOWs submitted for approval will appear here with real-time pipeline status.</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Search size={24} style={{ color: "var(--ink-faint)", opacity: 0.35, marginBottom: 10 }} />
+            <p className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>No SOWs match your filters</p>
+            <button
+              onClick={() => { setSearch(""); setSlaFilter(null); setStageFilter(null); setActiveTab("all"); }}
+              className="mt-2.5 text-[12px] font-medium hover:underline"
+              style={{ color: "var(--color-brown-500)" }}
+            >
+              Clear all filters
             </button>
           </div>
+        ) : (
+          paginated.map((sow) => (
+            <SOWPipelineRow key={sow.id} sow={sow} onStageResolved={handleRowStage} onDecisionsResolved={handleRowDecisions} />
+          ))
+        )}
+
+        {/* Pagination footer */}
+        {filtered.length > 0 && (
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filtered.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(n) => { setPageSize(n); setCurrentPage(1); }}
+          />
+        )}
+      </motion.div>
+
+      {/* ── Change Request History ── */}
+      <motion.div variants={fadeUp} className="rounded-2xl overflow-hidden" style={{ background: "var(--card-bg)", border: "1px solid var(--border-soft)" }}>
+        <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+          <span className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>Change Request History</span>
+          <span className="text-[11px]" style={{ color: "var(--ink-faint)" }}>{allDecisionRows.length} total</span>
         </div>
-      </div>
-    </div>
-    </div>
+
+        {/* Column headers */}
+        <div
+          className="grid items-center gap-4 px-5 py-2.5"
+          style={{
+            gridTemplateColumns: "2fr 1fr 1fr 2fr 0.9fr",
+            background: "var(--color-gray-50)",
+            borderBottom: "1px solid var(--border-hair)",
+          }}
+        >
+          {["SOW TITLE", "CLIENT", "REQUESTED BY", "MESSAGE", "STATUS"].map((h) => (
+            <span key={h} className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--ink-faint)" }}>{h}</span>
+          ))}
+        </div>
+
+        {allDecisionRows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-2">
+            <Clock size={22} style={{ color: "var(--ink-faint)", opacity: 0.35 }} />
+            <p className="text-[12.5px]" style={{ color: "var(--ink-faint)" }}>No change requests yet.</p>
+          </div>
+        ) : (
+          allDecisionRows.map((row, i) => {
+            const isResolving   = resolveRowId === row.id;
+            const canResolve    = row.kind === "request_changes" && !row.resolved;
+            return (
+              <React.Fragment key={row.id}>
+                <div
+                  className="grid items-start gap-4 px-5 py-3.5 transition-colors hover:bg-amber-50/20"
+                  style={{
+                    gridTemplateColumns: "2fr 1fr 1fr 2fr 0.9fr",
+                    borderBottom: !isResolving && i < allDecisionRows.length - 1 ? "1px solid var(--border-hair)" : undefined,
+                  }}
+                >
+                  <div className="min-w-0">
+                    <Link href={`/enterprise/sow/${row.sowId}`} className="text-[11.5px] font-semibold leading-snug hover:underline" style={{ color: "var(--ink)" }}>
+                      {row.sowTitle}
+                    </Link>
+                    <p className="text-[10px] font-medium mt-0.5" style={{ color: "var(--ink-faint)" }}>
+                      Stage {row.stage} · {row.kind === "comment" ? "Comment" : "Change Request"}
+                    </p>
+                  </div>
+                  <div className="min-w-0 pt-0.5">
+                    <p className="text-[11.5px] leading-snug" style={{ color: "var(--ink-muted)" }}>{row.client || "—"}</p>
+                  </div>
+                  <div className="min-w-0 pt-0.5">
+                    <p className="text-[11.5px] leading-snug" style={{ color: "var(--ink-muted)" }}>{row.requestedBy}</p>
+                    {row.resolvedAt && (
+                      <p className="text-[10px] mt-0.5" style={{ color: "var(--ink-faint)" }}>{formatDate(row.resolvedAt)}</p>
+                    )}
+                  </div>
+                  <div className="min-w-0 pt-0.5">
+                    <p className="text-[11.5px] leading-snug" style={{ color: "var(--ink-muted)" }}>{row.message || "—"}</p>
+                    {row.resolveMessage && (
+                      <p className="text-[10.5px] italic mt-1" style={{ color: "var(--ink-faint)" }}>Resolved: {row.resolveMessage}</p>
+                    )}
+                  </div>
+                  <div className="pt-0.5 flex flex-col items-start gap-1.5">
+                    <Badge variant={row.resolved ? "forest" : row.kind === "request_changes" ? "gold" : "teal"} size="sm" dot>
+                      {row.resolved ? "Resolved" : row.kind === "request_changes" ? "Pending" : "Open"}
+                    </Badge>
+                    {canResolve && !isResolving && (
+                      <button
+                        onClick={() => openResolve(row)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10.5px] font-semibold transition-all hover:opacity-90"
+                        style={{ background: "var(--color-brown-500)", color: "#fff" }}
+                      >
+                        <Undo2 size={10} /> Resolve
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isResolving && (
+                  <div
+                    className="px-5 py-4 bg-amber-50/30"
+                    style={{ borderBottom: i < allDecisionRows.length - 1 ? "1px solid var(--border-hair)" : undefined }}
+                  >
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: "var(--color-brown-500)" }}>
+                        <Undo2 size={12} className="text-white" />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-bold" style={{ color: "var(--ink)" }}>Resolve change request</p>
+                        <p className="text-[10px]" style={{ color: "var(--ink-faint)" }}>
+                          Describe what you changed. This will be sent to Glimmora admin for re-approval.
+                        </p>
+                      </div>
+                    </div>
+                    <textarea
+                      rows={3}
+                      maxLength={600}
+                      value={resolveText}
+                      onChange={(e) => setResolveText(e.target.value)}
+                      placeholder="Explain how you addressed the change request..."
+                      className="w-full rounded-xl px-3 py-2.5 text-[12px] leading-relaxed resize-none focus:outline-none transition-all border bg-white"
+                      style={{ borderColor: "var(--border-soft)", color: "var(--ink)", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-brown-400)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(166,119,99,0.1)"; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-soft)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)"; }}
+                    />
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-[10px]" style={{ color: "var(--ink-faint)" }}>{resolveText.length}/600</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={closeResolve}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+                          style={{ background: "var(--color-gray-100)", color: "var(--ink-muted)" }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => submitResolve(row)}
+                          disabled={!resolveText.trim() || resolveMutation.isPending}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[11px] font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ background: "var(--color-brown-500)" }}
+                        >
+                          <Send size={10} />
+                          {resolveMutation.isPending ? "Sending…" : "Send to Admin"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })
+        )}
+      </motion.div>
+
+    </motion.div>
   );
 }
