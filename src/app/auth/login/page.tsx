@@ -696,6 +696,12 @@ function LoginPageContent() {
                 </p>
               </div>
 
+              {error && (
+                <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600 text-left">
+                  {error}
+                </div>
+              )}
+
               <div className="p-4 rounded-xl bg-teal-50 border border-teal-100 text-left space-y-2.5">
                 {[
                   "Protects against password breaches",

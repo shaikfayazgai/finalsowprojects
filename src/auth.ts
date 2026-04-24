@@ -3,8 +3,11 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { cookies } from "next/headers";
-import { authApi, isMfaPending } from "@/lib/api/auth";
+import { authApi, isMfaPending, isMfaVerifyPending } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
+import path from "path";
+import fs from "fs";
+import dotenv from "dotenv";
 
 export type UserRole = "contributor" | "enterprise" | "admin" | "super_admin" | "reviewer" | "mentor";
 
