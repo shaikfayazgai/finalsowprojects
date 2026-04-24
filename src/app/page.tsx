@@ -98,6 +98,7 @@ export default function HomePage() {
     const role = (session?.user as { role?: string })?.role;
     const dest =
       role === "admin"       ? "/admin/dashboard" :
+      role === "super_admin" ? "/admin/dashboard" :
       role === "reviewer"    ? "/enterprise/reviewer" :
       role === "contributor" ? "/contributor/dashboard" :
       role === "enterprise"  ? "/enterprise/dashboard" :
@@ -133,6 +134,7 @@ export default function HomePage() {
                 <Link
                   href={
                     session?.user?.role === "admin"       ? "/admin/dashboard" :
+                    session?.user?.role === "super_admin" ? "/admin/dashboard" :
                     session?.user?.role === "reviewer"    ? "/enterprise/reviewer" :
                     session?.user?.role === "contributor" ? "/contributor/dashboard" :
                     session?.user?.role === "enterprise"  ? "/enterprise/dashboard" :

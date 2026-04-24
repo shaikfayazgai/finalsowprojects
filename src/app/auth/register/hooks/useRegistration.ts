@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { COUNTRIES_DATA } from "../data";
 import { getPasswordStrength, getAgeFromDob } from "../helpers";
+import { registerContributor } from "@/lib/actions/register";
 import { usePricingConfig } from "@/lib/hooks/usePricingConfig";
 import type { RegistrationRole, ContributorType, SSOData } from "../types";
 

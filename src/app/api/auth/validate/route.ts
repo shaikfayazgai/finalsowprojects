@@ -1,63 +1,75 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authApi, isMfaPending } from "@/lib/api/auth";
+import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
-    // Dev-only hardcoded admin bypass
-    if (email?.trim().toLowerCase() === "admin@glimmora.dev" && password === "Admin@1234") {
-      return NextResponse.json({ ok: true, role: "admin" });
-    }
-
-    const response = await authApi.login(
+    // Pure credential check — does NOT issue tokens. The actual login and
+    // session creation happens later when the user clicks "Skip for now"
+    // (or completes MFA), which triggers signIn("credentials") → authApi.login().
+    const raw = (await authApi.validateCredentials(
       email?.trim().toLowerCase(),
       password,
-    );
+    )) as Record<string, unknown> | null;
 
-    // MFA pending — distinguish between "verify existing TOTP" and "setup required"
-    if (isMfaPending(response)) {
-      const mfaFlow = (response as unknown as Record<string, unknown>).status;
+    const r = raw ?? {};
+    const userObj = (r.user as Record<string, unknown> | undefined) ?? {};
+    const role =
+      (userObj.role as string | undefined) ??
+      (r.role as string | undefined) ??
+      null;
 
-      // MFA setup required but not yet configured — return user data + pending token
-      // so the login page can create a session without a second login call.
-      if (mfaFlow === "mfa_setup_required") {
-        const u = response.user;
-        return NextResponse.json({
-          ok: true,
-          mfaSetupRequired: true,
-          mfaSetupPendingToken: response.mfa_pending_token,
-          role: (u as { role?: string }).role ?? null,
-          user: {
-            id: u.id,
-            email: u.email,
-            firstName: u.firstName,
-            lastName: u.lastName,
-            role: (u as { role?: string }).role ?? null,
-          },
-        });
-      }
+    // Backend may return an MFA-pending shape even on /validate if the account
+    // has 2FA enforced — forward that so the frontend routes to TOTP entry.
+    const status = r.status as string | undefined;
+    const mfaPendingToken = (r.mfa_pending_token as string | undefined) ?? (r.mfaPendingToken as string | undefined);
 
-      // MFA verify required (user has TOTP set up) — return pending token
+    if (status === "mfa_setup_required") {
       return NextResponse.json({
         ok: true,
-        mfaRequired: true,
-        mfaPendingToken: response.mfa_pending_token,
+        mfaSetupRequired: true,
+        mfaSetupPendingToken: mfaPendingToken,
+        role,
+        user: {
+          id: userObj.id ?? "",
+          email: userObj.email ?? email,
+          firstName: userObj.firstName ?? "",
+          lastName: userObj.lastName ?? "",
+          role,
+        },
       });
     }
 
-    // Return the Glimmora API tokens so the login page can pass them
-    // into the NextAuth session (stored in the JWT via the jwt callback).
-    return NextResponse.json({
-      ok: true,
-      role: response.user?.role ?? null,
-      accessToken: response.access_token,
-      refreshToken: response.refresh_token,
-      expiresIn: response.expires_in,
-    });
+    if (status === "mfa_pending" || mfaPendingToken) {
+      return NextResponse.json({
+        ok: true,
+        mfaRequired: true,
+        mfaPendingToken,
+      });
+    }
+
+    return NextResponse.json({ ok: true, role });
   } catch (err) {
     if (err instanceof ApiError) {
+      // Backend gates login on phone-based SMS 2FA with a 403 carrying a
+      // JSON body like {"code":"MOBILE_2FA_REQUIRED","message":"…"}. Parse it
+      // and surface a dedicated code so the login page can route the user
+      // to phone verification instead of showing a generic 500.
+      if (err.status === 403) {
+        let code = "FORBIDDEN";
+        let message = err.message;
+        try {
+          const parsed = JSON.parse(err.message);
+          if (typeof parsed?.code === "string") code = parsed.code;
+          if (typeof parsed?.message === "string") message = parsed.message;
+        } catch {
+          /* message wasn't JSON — fall back to the raw string */
+        }
+        return NextResponse.json({ ok: false, error: code, message });
+      }
+
       if (err.status === 401 || err.status === 404) {
         const isNotFound =
           err.message.toLowerCase().includes("not found") ||
@@ -84,6 +96,15 @@ export async function POST(req: NextRequest) {
           },
         );
       }
+
+      // ApiError with an unexpected status — surface enough to debug without
+      // leaking the upstream body to the client.
+      console.error(
+        "[/api/auth/validate] upstream ApiError",
+        { status: err.status, message: err.message },
+      );
+    } else {
+      console.error("[/api/auth/validate] unexpected error", err);
     }
 
     return NextResponse.json(

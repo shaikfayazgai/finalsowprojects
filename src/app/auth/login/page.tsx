@@ -57,9 +57,6 @@ function LoginPageContent() {
 
   const [step, setStep] = useState<Step>("credentials");
   const [userRole, setUserRole] = useState<string>("");
-  // Role returned by /api/auth/validate — used to decide whether the MFA-prompt
-  // screen shows a "Skip for now" option (contributors and admins only).
-  const [pendingRole, setPendingRole] = useState<string>("");
   const mfaPendingTokenRef = useRef<string>("");
 
   // Credentials validated on the Sign In click but not yet exchanged for a
@@ -77,6 +74,7 @@ function LoginPageContent() {
     userRole === "contributor" ? "/contributor/dashboard" :
     userRole === "mentor"      ? "/mentor/dashboard" :
     userRole === "admin"       ? "/admin/dashboard" :
+    userRole === "super_admin" ? "/admin/dashboard" :
                                  "/enterprise/dashboard"
   );
   const [email, setEmail] = useState("");
@@ -261,10 +259,6 @@ function LoginPageContent() {
         user: validateData.user,
       };
 
-      // Role reported by the validate endpoint (used to decide if "Skip for now"
-      // should be visible on the MFA prompt screen).
-      setPendingRole(String(validateData.role ?? validateData.user?.role ?? "").toLowerCase());
-
       // Stash credentials/token so the MFA setup page can pick them up.
       try {
         sessionStorage.setItem("_mfa_setup_email", email.trim().toLowerCase());
@@ -295,16 +289,26 @@ function LoginPageContent() {
     setIsLoading(true);
     setError("");
 
+    const destForRole = (role?: string) => callbackUrl || (
+      role === "contributor" ? "/contributor/dashboard" :
+      role === "mentor"      ? "/mentor/dashboard" :
+      role === "admin"       ? "/admin/dashboard" :
+      role === "super_admin" ? "/admin/dashboard" :
+      role === "reviewer"    ? "/enterprise/reviewer" :
+                               "/enterprise/dashboard"
+    );
+
     try {
       if (creds.mfaSetupRequired && creds.user) {
         // Backend blocks tokens until MFA is set up — use the oauth shim
         // to create a session without real tokens.
+        const userRole = (creds.user as { role?: string }).role ?? "enterprise";
         const oauthResult = await signIn("glimmora-oauth", {
           userId: creds.user.id || "",
           email: creds.user.email || creds.email,
           firstName: creds.user.firstName || "",
           lastName: creds.user.lastName || "",
-          role: "enterprise",
+          role: userRole,
           accessToken: "",
           refreshToken: "",
           expiresIn: "0",
@@ -318,7 +322,7 @@ function LoginPageContent() {
           return;
         }
 
-        window.location.href = callbackUrl || "/enterprise/dashboard";
+        window.location.href = destForRole(userRole);
         return;
       }
 
@@ -334,46 +338,19 @@ function LoginPageContent() {
         return;
       }
 
-      if (result?.ok) {
-        const session = await getSession();
-        const role = (session?.user as { role?: string })?.role;
-        const accessToken = (session?.user as { accessToken?: string })?.accessToken;
-        if (accessToken) {
-          try {
-            sessionStorage.setItem("admin_token", accessToken);
-          } catch {
-            // sessionStorage unavailable
-          }
-        }
-
-        setUserRole(role || "enterprise");
-
-        // Login = returning user — send straight to dashboard.
-        // Onboarding wizard is only for first-time SSO users (handled in auth.ts signIn callback).
-        const dest = callbackUrl || (
-          role === "contributor" ? "/contributor/dashboard" :
-          role === "mentor"      ? "/mentor/dashboard" :
-          role === "admin"       ? "/admin/dashboard" :
-                                   "/enterprise/dashboard"
-        );
-        
-        setLoginDest(dest);
-
-        // Admin role skips MFA prompt — navigate directly to dashboard.
-        if (role === "admin") {
-          window.location.href = dest;
-          return;
-        }
-
-        // Store credentials for MFA setup page
+      const session = await getSession();
+      const role = (session?.user as { role?: string })?.role;
+      const accessToken = (session?.user as { accessToken?: string })?.accessToken;
+      if (accessToken) {
         try {
-          sessionStorage.setItem("_mfa_setup_email", email.trim().toLowerCase());
-          sessionStorage.setItem("_mfa_setup_password", password);
-        } catch { /* sessionStorage unavailable */ }
-
-        setStep("mfa-prompt");
-        setIsLoading(false);
+          sessionStorage.setItem("admin_token", accessToken);
+        } catch {
+          // sessionStorage unavailable
+        }
       }
+
+      setUserRole(role || "enterprise");
+      window.location.href = destForRole(role);
     } catch {
       setError("Something went wrong. Please try again.");
       setIsLoading(false);
@@ -410,7 +387,15 @@ function LoginPageContent() {
     }
   };
 
-  /* ── Google / Microsoft SSO via Glimmora OAuth API ── */
+  /* ── Google / Microsoft SSO via Glimmora OAuth API ──
+   *
+   * Routes through the backend's /api/v1/auth/oauth/{provider}/authorize
+   * endpoint (proxied by our /api/auth/oauth/authorize server route). The
+   * backend handles the Google/Microsoft roundtrip and redirects back to
+   * /auth/oauth/callback with tokens (or an MFA prompt) in the query string —
+   * we never talk to Google/Microsoft directly from this app. This is the
+   * shape required by the backend docs ("use this api for sso").
+   */
   const handleSSO = (provider: "google" | "microsoft") => {
     setError("");
     setErrorCode("");
@@ -722,16 +707,14 @@ function LoginPageContent() {
                 <Shield className="w-4 h-4" /> Set Up MFA Now
               </Button>
 
-              {(pendingRole === "contributor" || pendingRole === "admin") && (
-                <button
-                  type="button"
-                  disabled={isLoading}
-                  onClick={handleSkipMfa}
-                  className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-1 disabled:opacity-50"
-                >
-                  {isLoading ? "Signing in…" : "Skip for now"}
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={handleSkipMfa}
+                className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-1 disabled:opacity-50"
+              >
+                {isLoading ? "Signing in…" : "Skip for now"}
+              </button>
 
               <button
                 type="button"

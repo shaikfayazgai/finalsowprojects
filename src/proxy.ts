@@ -13,6 +13,7 @@ const DASHBOARD_BY_ROLE: Record<string, string> = {
   contributor: "/contributor/dashboard",
   mentor:      "/mentor/dashboard",
   admin:       "/admin/dashboard",
+  super_admin: "/admin/dashboard",
   reviewer:    "/enterprise/reviewer",
   enterprise:  "/enterprise/dashboard",
 };
@@ -68,6 +69,7 @@ export async function proxy(req: NextRequest) {
     contributor: "/contributor/dashboard",
     mentor: "/mentor/dashboard",
     admin: "/admin/dashboard",
+    super_admin: "/admin/dashboard",
     enterprise: "/enterprise/dashboard",
   };
 
@@ -78,9 +80,9 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Keep admin pages restricted to admin users only.
-  // Non-admin authenticated users are redirected to their own dashboard.
-  if (isAdminRoute && isLoggedIn && userRole !== "admin") {
+  // Keep admin pages restricted to admin/super_admin users only.
+  // Other authenticated users are redirected to their own dashboard.
+  if (isAdminRoute && isLoggedIn && userRole !== "admin" && userRole !== "super_admin") {
     const dest = dashboardMap[userRole] || "/enterprise/dashboard";
     return NextResponse.redirect(new URL(dest, req.nextUrl.origin));
   }

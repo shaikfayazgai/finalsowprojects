@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { authApi, isMfaPending } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
-export type UserRole = "contributor" | "enterprise" | "admin" | "reviewer" | "mentor";
+export type UserRole = "contributor" | "enterprise" | "admin" | "super_admin" | "reviewer" | "mentor";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Make the secret explicit to avoid env-resolution issues across runtimes/bundlers.
@@ -90,16 +90,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const password = typeof credentials?.password === "string" ? credentials.password : "";
 
           if (!email || !password) return null;
-
-          // Dev-only hardcoded admin bypass
-          if (email === "admin@glimmora.dev" && password === "Admin@1234") {
-            return {
-              id: "dev-admin-001",
-              name: "Glimmora Admin",
-              email: "admin@glimmora.dev",
-              role: "admin" as UserRole,
-            };
-          }
 
           const response = await authApi.login(email, password);
 

@@ -143,6 +143,46 @@ export const authApi = {
     });
   },
 
+  /** Register a new contributor account. */
+  async registerContributor(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+    contributorType: string;
+    countryOfResidence: string;
+    dateOfBirth: string;
+    timeZone: string;
+    weeklyAvailabilityHours: string;
+    departmentCategory: string;
+    primarySkills: string[];
+    secondarySkills?: string[];
+    otherSkills?: string[];
+    phone: string;
+    degree?: string;
+    branch?: string;
+    linkedin?: string;
+    careerStage?: string;
+    yearsExperience?: string;
+    workStart?: string;
+    workEnd?: string;
+    ndaSignatoryLegalName?: string;
+    mentorGuideAcknowledged?: boolean;
+    acceptTermsOfUse?: boolean;
+    acceptCodeOfConduct?: boolean;
+    acceptPrivacyPolicy?: boolean;
+    acceptHarassmentPolicy?: boolean;
+    acknowledgmentsAccepted?: boolean;
+    notifyNewTasksOptIn?: boolean;
+    marketingOptIn?: boolean;
+  }): Promise<{ user: GlimmoraUser }> {
+    return apiCall<{ user: GlimmoraUser }>("/api/v1/auth/register/contributor", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
   /** Credential-only check — validates email/password without issuing tokens. */
   async validateCredentials(email: string, password: string): Promise<unknown> {
     return apiCall("/api/v1/auth/validate", {

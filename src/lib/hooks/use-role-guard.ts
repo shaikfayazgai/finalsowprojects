@@ -4,10 +4,11 @@ import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
-type Role = "admin" | "reviewer" | "contributor" | "enterprise" | "mentor";
+type Role = "admin" | "super_admin" | "reviewer" | "contributor" | "enterprise" | "mentor";
 
 const DASHBOARD_BY_ROLE: Record<string, string> = {
   admin:       "/admin/dashboard",
+  super_admin: "/admin/dashboard",
   reviewer:    "/enterprise/reviewer",
   contributor: "/contributor/dashboard",
   enterprise:  "/enterprise/dashboard",
