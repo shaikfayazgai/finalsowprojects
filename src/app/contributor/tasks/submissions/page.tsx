@@ -77,15 +77,6 @@ const statusConfig: Record<string, { variant: string; label: string; icon: React
   under_review:   { variant: "gold",   label: "Under Review",   icon: Eye,          dotColor: "bg-gold-500" },
 };
 
-/* ═══ Task lookup ═══ */
-const taskMap = new Map<string, any>(mockContributorTasks.map((t: any) => [t.id, t]));
-function getTaskTitle(taskId: string) {
-  return taskMap.get(taskId)?.title ?? taskId;
-}
-function getTaskProject(taskId: string) {
-  return taskMap.get(taskId)?.projectTitle ?? "";
-}
-
 /* ═══ PAGE ═══ */
 
 export default function SubmissionsPage() {
@@ -125,7 +116,69 @@ export default function SubmissionsPage() {
         const res = await fetchSubmissions(token, { page: 1, page_size: 100 });
         setData(res);
 
-  const statusCounts = submissions.reduce((acc: Record<string, number>, s: any) => {
+        const uniqueTaskIds = [...new Set(res.items.map((s) => s.task_id))].slice(0, 10);
+        if (uniqueTaskIds.length > 0) {
+          setEvidenceLoading(true);
+          const results = await Promise.allSettled(
+            uniqueTaskIds.map((tid) => fetchLatestSubmission(token, tid)),
+          );
+          const map = new Map<string, SubmissionDetail>();
+          results.forEach((r, i) => {
+            if (r.status === "fulfilled") map.set(uniqueTaskIds[i], r.value);
+          });
+          setEvidenceMap(map);
+          setEvidenceLoading(false);
+        } else {
+          setEvidenceMap(new Map());
+          setEvidenceLoading(false);
+        }
+      });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load submissions. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (sessionStatus === "authenticated" && session?.user?.accessToken) {
+      load(session.user.accessToken as string);
+    } else if (sessionStatus === "unauthenticated") {
+      setLoading(false);
+      setError("Not authenticated.");
+    }
+  }, [sessionStatus, session?.user?.accessToken, load]);
+
+  /* Open / reset drawer */
+  function openDrawer() {
+    setTaskId(""); setMode("draft"); setVersion(1); setNotes(""); setSubmitError(null);
+    setDrawerOpen(true);
+  }
+
+  /* Create submission */
+  async function handleCreate() {
+    const token = tokenRef.current;
+    if (!token) return;
+    if (!taskId.trim()) { setSubmitError("Task ID is required."); return; }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await createSubmission(token, taskId.trim(), { submission_mode: mode, version, notes: notes.trim() || undefined });
+      toast.success("Submission created successfully.");
+      setDrawerOpen(false);
+      load(token, { bust: true });
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to create submission.";
+      setSubmitError(msg);
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const submissions: SubmissionItem[] = data?.items ?? [];
+
+  const statusCounts = submissions.reduce<Record<string, number>>((acc, s) => {
     acc[s.status] = (acc[s.status] || 0) + 1;
     return acc;
   }, {});
@@ -199,18 +252,29 @@ export default function SubmissionsPage() {
           <span>Submitted</span><span>Status</span><span>Review</span><span />
         </div>
 
-        {/* Rows */}
-        {submissions.length === 0 && (
+        {loading && <><RowSkeleton /><RowSkeleton /><RowSkeleton /></>}
+
+        {!loading && error && (
+          <div className="px-5 py-10 text-center">
+            <AlertCircle className="w-8 h-8 mx-auto mb-3 text-red-400" />
+            <p className="text-[13px] text-gray-700 mb-1 font-medium">Failed to load submissions</p>
+            <p className="text-[11px] text-gray-400 mb-4">{error}</p>
+            {tokenRef.current && (
+              <button onClick={() => tokenRef.current && load(tokenRef.current, { bust: true })}
+                className="inline-flex items-center gap-1.5 text-[12px] text-teal-600 hover:text-teal-700 font-medium">
+                <RefreshCw className="w-3.5 h-3.5" /> Try again
+              </button>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && submissions.length === 0 && (
           <div className="px-5 py-12 text-center">
             <ClipboardCheck className="w-8 h-8 mx-auto mb-3 text-gray-300" />
             <p className="text-[13px] text-gray-500 mb-1">No submissions yet</p>
             <p className="text-[11px] text-gray-400">Submitted task deliverables will appear here.</p>
           </div>
         )}
-        {submissions.map((sub: any, i: number) => {
-          const status = statusConfig[sub.status] || statusConfig.pending;
-          const StatusIcon = status.icon;
-          const taskId = sub.taskId;
 
         {!loading && !error && submissions.map((sub, i) => {
           const status = statusConfig[sub.status] || statusConfig.pending;
@@ -243,44 +307,52 @@ export default function SubmissionsPage() {
           <span className="text-sm font-semibold text-gray-800">Evidence Summary</span>
         </div>
         <div className="py-2">
-          {submissions.length === 0 && (
-            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No evidence to show</p></div>
-          )}
-          {submissions.map((sub: any, si: number) => {
-            const verifiedCount = sub.evidence.filter((e: any) => e.verified).length;
-            const totalCount = sub.evidence.length;
-            const pct = totalCount ? Math.round((verifiedCount / totalCount) * 100) : 0;
-            const status = statusConfig[sub.status] || statusConfig.pending;
 
-            return (
-              <div
-                key={sub.id}
-                className="px-5 py-3"
-                style={{ borderBottom: si < submissions.length - 1 ? "1px solid var(--border-hair)" : undefined }}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[12px] font-medium text-gray-700 truncate">{getTaskTitle(sub.taskId)}</span>
-                    <Badge variant={status.variant}>{status.label}</Badge>
-                  </div>
-                  <span className="text-[10px] font-mono text-gray-500 shrink-0">{verifiedCount}/{totalCount} verified</span>
+          {/* Loading skeletons */}
+          {(loading || evidenceLoading) && (
+            <div className="px-5 py-3 space-y-3 animate-pulse">
+              {[1, 2].map((n) => (
+                <div key={n}>
+                  <div className="h-3 w-40 bg-gray-200 rounded mb-2" />
+                  <div className="h-1.5 w-full bg-gray-100 rounded-full" />
                 </div>
-                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-700",
-                      pct === 100 ? "bg-forest-500" : pct >= 50 ? "bg-teal-400" : "bg-gold-400"
-                    )}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                {sub.files.length > 0 && (
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    {sub.files.map((file: any) => (
-                      <span key={file.name} className="text-[9px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                        <FileText className="w-2.5 h-2.5" />{file.name}
-                      </span>
-                    ))}
+              ))}
+            </div>
+          )}
+
+          {/* Empty */}
+          {!loading && !evidenceLoading && submissions.length === 0 && (
+            <div className="px-5 py-8 text-center">
+              <p className="text-[12px] text-gray-400">No evidence to show</p>
+            </div>
+          )}
+
+          {/* Rows — one per unique task_id, populated from latest-submission */}
+          {!loading && !evidenceLoading && submissions.length > 0 &&
+            [...new Set(submissions.map((s) => s.task_id))].map((tid, si, arr) => {
+              const detail   = evidenceMap.get(tid);
+              const sub      = submissions.find((s) => s.task_id === tid)!;
+              const status   = statusConfig[sub.status] || statusConfig.pending;
+
+              /* Evidence counts from latest-submission detail */
+              const evidence = detail?.evidence ?? [];
+              const files    = detail?.files    ?? [];
+              const acks     = detail?.checklist_acknowledgements ?? [];
+              const verified = acks.filter((a) => a.acknowledged).length;
+              const total    = acks.length || evidence.length || 0;
+              const pct      = total ? Math.round((verified / total) * 100) : 0;
+
+              return (
+                <div key={tid} className="px-5 py-3"
+                  style={{ borderBottom: si < arr.length - 1 ? "1px solid var(--border-hair)" : undefined }}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[12px] font-medium text-gray-700 truncate">{tid}</span>
+                      <Badge variant={status.variant}>{status.label}</Badge>
+                    </div>
+                    <span className="text-[10px] font-mono text-gray-500 shrink-0">
+                      {verified}/{total} verified
+                    </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
                     <div className={cn("h-full rounded-full transition-all duration-700",

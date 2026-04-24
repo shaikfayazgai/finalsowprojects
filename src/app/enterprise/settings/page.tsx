@@ -466,7 +466,7 @@ export default function SettingsPage() {
                       <Button variant="outline" size="sm" onClick={() => setIsEditingCompany(false)}>
                         Cancel
                       </Button>
-                      <Button variant="primary" size="sm" 
+                      <Button variant="primary" size="sm"
                         onClick={async () => {
                           try {
                             await sowApi.updateProfile({

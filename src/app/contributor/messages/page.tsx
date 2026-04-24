@@ -190,7 +190,7 @@ export default function MessagesPage() {
         t.senderName.toLowerCase().includes(q) ||
         t.projectName?.toLowerCase().includes(q) ||
         t.taskTitle?.toLowerCase().includes(q) ||
-        t.messages.some((m: any) => m.content.toLowerCase().includes(q))
+        t.messages.some((m) => m.content.toLowerCase().includes(q))
       );
     }
     list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -493,43 +493,58 @@ export default function MessagesPage() {
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-                {selected.messages.map((msg: any) => {
-                  const isUser = msg.sender === "user";
-                  const isAI = (msg as any).isAI;
-                  const rated = ratedMessages[msg.id];
-                  return (
-                    <div key={msg.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
-                      <div className={cn("max-w-[75%]", isUser ? "items-end" : "items-start")}>
-                        <div className={cn("rounded-2xl px-4 py-3",
-                          isUser
-                            ? "bg-brown-50 rounded-br-md"
-                            : "bg-white border border-gray-100 rounded-bl-md"
-                        )}>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-semibold text-gray-600">{msg.senderName}</span>
-                            <span className="text-[9px] text-gray-400">{formatTime(msg.timestamp)}</span>
-                            {isAI && <Badge variant="gold">AI</Badge>}
-                          </div>
-                          <p className="text-[12px] text-gray-700 leading-relaxed">{msg.content}</p>
-                        </div>
+                {loadingDetail ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-5 h-5 text-gray-300 animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {selected.messages.map((msg) => {
+                      const isUser = msg.sender === "user";
+                      const isAI   = msg.isAI;
+                      const rated  = ratedMessages[msg.id];
+                      return (
+                        <div key={msg.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+                          <div className={cn("max-w-[75%]", isUser ? "items-end" : "items-start")}>
+                            <div className={cn(
+                              "rounded-2xl px-4 py-3",
+                              isUser
+                                ? "bg-brown-50 rounded-br-md"
+                                : "bg-white border border-gray-100 rounded-bl-md",
+                            )}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[10px] font-semibold text-gray-600">{msg.senderName}</span>
+                                <span className="text-[9px] text-gray-400">{formatTime(msg.timestamp)}</span>
+                                {isAI && <Badge variant="gold">AI</Badge>}
+                              </div>
+                              <p className="text-[12px] text-gray-700 leading-relaxed">{msg.content}</p>
+                            </div>
 
-                        {/* Rate AI response — E4: "rate response (helpful/not helpful)" */}
-                        {isAI && !isUser && (
-                          <div className="flex items-center gap-1 mt-1.5 ml-1">
-                            <button onClick={() => handleRate(msg.id, "up")}
-                              className={cn("w-6 h-6 rounded-md flex items-center justify-center transition-colors",
-                                rated === "up" ? "bg-forest-50 text-forest-600" : "text-gray-300 hover:text-gray-500 hover:bg-gray-50"
-                              )}>
-                              <ThumbsUp className="w-3 h-3" />
-                            </button>
-                            <button onClick={() => handleRate(msg.id, "down")}
-                              className={cn("w-6 h-6 rounded-md flex items-center justify-center transition-colors",
-                                rated === "down" ? "bg-red-50 text-red-500" : "text-gray-300 hover:text-gray-500 hover:bg-gray-50"
-                              )}>
-                              <ThumbsDown className="w-3 h-3" />
-                            </button>
-                            {rated === "down" && (
-                              <span className="text-[9px] text-gray-400 ml-1">Feedback recorded</span>
+                            {/* Rate AI response */}
+                            {isAI && !isUser && (
+                              <div className="flex items-center gap-1 mt-1.5 ml-1">
+                                <button
+                                  onClick={() => handleRate(msg.id, "up")}
+                                  className={cn(
+                                    "w-6 h-6 rounded-md flex items-center justify-center transition-colors",
+                                    rated === "up" ? "bg-forest-50 text-forest-600" : "text-gray-300 hover:text-gray-500 hover:bg-gray-50",
+                                  )}
+                                >
+                                  <ThumbsUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleRate(msg.id, "down")}
+                                  className={cn(
+                                    "w-6 h-6 rounded-md flex items-center justify-center transition-colors",
+                                    rated === "down" ? "bg-red-50 text-red-500" : "text-gray-300 hover:text-gray-500 hover:bg-gray-50",
+                                  )}
+                                >
+                                  <ThumbsDown className="w-3 h-3" />
+                                </button>
+                                {rated === "down" && (
+                                  <span className="text-[9px] text-gray-400 ml-1">Feedback recorded</span>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>

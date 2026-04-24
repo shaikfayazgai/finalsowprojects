@@ -88,7 +88,14 @@ function Drawer({ open, onClose, title, children }: { open: boolean; onClose: ()
 
 /* ═══ Chart ═══ */
 
-const allChartData: { label: string; value: number }[] = [];
+export type ChartPoint = { label: string; value: number };
+
+/* Maps the UI period key to the exact value the API expects */
+const PERIOD_API_MAP: Record<"3m" | "6m" | "1y", ChartPeriod> = {
+  "3m": "3M",
+  "6m": "6m",
+  "1y": "1y",
+};
 
 /* Normalise whatever the API returns into ChartPoint[] */
 function parseChartString(raw: string): ChartPoint[] {
@@ -113,39 +120,10 @@ function parseChartString(raw: string): ChartPoint[] {
   }
 }
 
-function EarningsChart({ token }: { token: string | undefined }) {
+function EarningsChart() {
   const [period, setPeriod] = React.useState<"3m" | "6m" | "1y">("6m");
   const [retryCount, setRetryCount] = React.useState(0);
   const [hoveredIdx, setHoveredIdx] = React.useState<number | null>(null);
-  const [chartData, setChartData] = React.useState<ChartPoint[]>([]);
-  const [chartLoading, setChartLoading] = React.useState(true);
-  const [chartError, setChartError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!token) { setChartLoading(false); return; }
-    const apiPeriod = PERIOD_API_MAP[period];
-    setChartLoading(true);
-    setChartError(null);
-    const sk = sessionKeyFragment(token);
-    let live = true;
-    void dedupeAsync(`contrib:earn-chart:${sk}:${apiPeriod}:${retryCount}`, () =>
-      fetchEarningsChart(token, apiPeriod),
-    )
-      .then((raw) => {
-        if (!live) return;
-        const points = parseChartString(raw);
-        setChartData(points);
-        setChartLoading(false);
-      })
-      .catch((err: Error) => {
-        if (!live) return;
-        setChartError(err.message ?? "Failed to load chart data");
-        setChartLoading(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [token, period, retryCount]);
 
   const sliceCount = period === "3m" ? 3 : period === "6m" ? 6 : 12;
   const months = allChartData.slice(-sliceCount);
@@ -223,53 +201,71 @@ function EarningsChart({ token }: { token: string | undefined }) {
 
       {/* Chart body */}
       <div className="px-6 py-5">
-        {!hasData ? (
+        {chartLoading ? (
+          /* Skeleton bars while loading */
+          <div className="flex items-end gap-3 h-[120px] px-4">
+            {Array.from({ length: period === "3m" ? 3 : period === "6m" ? 6 : 12 }).map((_, i) => (
+              <div key={i} className="flex-1 rounded-t-md bg-gray-100 animate-pulse"
+                style={{ height: `${30 + ((i * 17) % 70)}%` }} />
+            ))}
+          </div>
+        ) : chartError ? (
+          /* 422 / network error inline */
+          <div className="flex flex-col items-center justify-center py-10 gap-2">
+            <AlertCircle className="w-5 h-5 text-red-400" />
+            <p className="text-[12px] text-red-500 text-center max-w-xs">{chartError}</p>
+            <button onClick={() => setRetryCount((c) => c + 1)}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-brown-500 hover:text-brown-600 transition-colors mt-1">
+              <RefreshCw className="w-3 h-3" /> Retry
+            </button>
+          </div>
+        ) : !hasData ? (
           <div className="py-12 text-center text-[12px] text-gray-400">No earnings data yet</div>
         ) : (
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
-          <defs>
-            <linearGradient id="earningsAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--color-brown-400)" stopOpacity="0.12" />
-              <stop offset="100%" stopColor="var(--color-brown-400)" stopOpacity="0.01" />
-            </linearGradient>
-          </defs>
-          {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
-            const y = PT + chartH - f * chartH;
-            return (
-              <g key={i}>
-                <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="var(--color-gray-100)" strokeWidth="1" />
-                <text x={PL - 10} y={y + 4} textAnchor="end" className="fill-gray-400" style={{ fontSize: 10, fontFamily: "var(--font-mono, monospace)" }}>
-                  ${Math.round(f * max).toLocaleString()}
-                </text>
-              </g>
-            );
-          })}
-          <path d={areaPath} fill="url(#earningsAreaGrad)" />
-          <path d={curvePath} fill="none" stroke="var(--color-brown-400)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          {points.map((p, i) => {
-            const isCurrent = i === points.length - 1;
-            return (
-              <g key={i} onMouseEnter={() => setHoveredIdx(i)} onMouseLeave={() => setHoveredIdx(null)} style={{ cursor: "pointer" }}>
-                <rect x={p.x - 30} y={PT} width={60} height={chartH + PB} fill="transparent" />
-                {hoveredIdx === i && <line x1={p.x} y1={PT} x2={p.x} y2={PT + chartH} stroke="var(--color-brown-200)" strokeWidth="1" strokeDasharray="4,4" />}
-                <circle cx={p.x} cy={p.y} r={isCurrent ? 6 : hoveredIdx === i ? 5 : 3.5}
-                  fill="white" stroke={isCurrent ? "var(--color-brown-500)" : hoveredIdx === i ? "var(--color-brown-400)" : "var(--color-gray-300)"}
-                  strokeWidth={isCurrent ? 2.5 : 2} />
-                {(hoveredIdx === i || isCurrent) && p.value > 0 && (
-                  <>
-                    <rect x={p.x - 32} y={p.y - 30} width={64} height={22} rx={6} fill={isCurrent ? "var(--color-brown-600)" : "var(--color-gray-700)"} />
-                    <text x={p.x} y={p.y - 15.5} textAnchor="middle" fill="white" style={{ fontSize: 11, fontWeight: 600, fontFamily: "var(--font-mono, monospace)" }}>
-                      ${p.value.toLocaleString()}
-                    </text>
-                  </>
-                )}
-                <text x={p.x} y={H - 10} textAnchor="middle" className={isCurrent ? "fill-brown-600" : "fill-gray-400"} style={{ fontSize: 11, fontWeight: isCurrent ? 600 : 500 }}>
-                  {p.label}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+            <defs>
+              <linearGradient id="earningsAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-brown-400)" stopOpacity="0.12" />
+                <stop offset="100%" stopColor="var(--color-brown-400)" stopOpacity="0.01" />
+              </linearGradient>
+            </defs>
+            {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
+              const y = PT + chartH - f * chartH;
+              return (
+                <g key={i}>
+                  <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="var(--color-gray-100)" strokeWidth="1" />
+                  <text x={PL - 10} y={y + 4} textAnchor="end" className="fill-gray-400" style={{ fontSize: 10, fontFamily: "var(--font-mono, monospace)" }}>
+                    ${Math.round(f * max).toLocaleString()}
+                  </text>
+                </g>
+              );
+            })}
+            <path d={areaPath} fill="url(#earningsAreaGrad)" />
+            <path d={curvePath} fill="none" stroke="var(--color-brown-400)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((p, i) => {
+              const isCurrent = i === points.length - 1;
+              return (
+                <g key={i} onMouseEnter={() => setHoveredIdx(i)} onMouseLeave={() => setHoveredIdx(null)} style={{ cursor: "pointer" }}>
+                  <rect x={p.x - 30} y={PT} width={60} height={chartH + PB} fill="transparent" />
+                  {hoveredIdx === i && <line x1={p.x} y1={PT} x2={p.x} y2={PT + chartH} stroke="var(--color-brown-200)" strokeWidth="1" strokeDasharray="4,4" />}
+                  <circle cx={p.x} cy={p.y} r={isCurrent ? 6 : hoveredIdx === i ? 5 : 3.5}
+                    fill="white" stroke={isCurrent ? "var(--color-brown-500)" : hoveredIdx === i ? "var(--color-brown-400)" : "var(--color-gray-300)"}
+                    strokeWidth={isCurrent ? 2.5 : 2} />
+                  {(hoveredIdx === i || isCurrent) && p.value > 0 && (
+                    <>
+                      <rect x={p.x - 32} y={p.y - 30} width={64} height={22} rx={6} fill={isCurrent ? "var(--color-brown-600)" : "var(--color-gray-700)"} />
+                      <text x={p.x} y={p.y - 15.5} textAnchor="middle" fill="white" style={{ fontSize: 11, fontWeight: 600, fontFamily: "var(--font-mono, monospace)" }}>
+                        ${p.value.toLocaleString()}
+                      </text>
+                    </>
+                  )}
+                  <text x={p.x} y={H - 10} textAnchor="middle" className={isCurrent ? "fill-brown-600" : "fill-gray-400"} style={{ fontSize: 11, fontWeight: isCurrent ? 600 : 500 }}>
+                    {p.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
         )}
       </div>
     </div>
@@ -745,8 +741,37 @@ export default function EarningsPage() {
   React.useEffect(() => { setPayoutPage(1); }, [payoutStatusFilter]);
 
   /* G2 data */
-  const processingPayouts = allPayouts.filter((p: any) => p.status === "processing");
-  const hasPayoutMethod = false;
+  const processingPayouts = payoutItems.filter((p: any) => p.status === "processing");
+
+  /* ── Payout Preferences ─────────────────────────────────────── */
+  const [prefs, setPrefs] = React.useState<PayoutPreferences | null>(null);
+  const [prefsLoading, setPrefsLoading] = React.useState(true);
+  const [prefsError, setPrefsError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (sessionStatus === "loading") return;
+    if (!token) { setPrefsLoading(false); return; }
+    setPrefsLoading(true);
+    setPrefsError(null);
+    const sk = sessionKeyFragment(token);
+    let live = true;
+    void dedupeAsync(`contrib:payout-prefs:${sk}`, () => fetchPayoutPreferences(token))
+      .then((data) => {
+        if (!live) return;
+        setPrefs(data);
+        setPrefsLoading(false);
+      })
+      .catch((err) => {
+        if (!live) return;
+        setPrefsError(err instanceof Error ? err.message : "Failed to load payout preferences");
+        setPrefsLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [token, sessionStatus]);
+
+  const hasPayoutMethod = !prefsLoading && !!prefs?.preferred_method && prefs.preferred_method !== "none";
   const isWomenTrack = profile.track === "women";
 
   /* ── Payout Preferences Edit Drawer ─────────────────────────── */

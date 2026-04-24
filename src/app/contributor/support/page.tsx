@@ -137,19 +137,7 @@ function FormDrawer({
    MOCK DATA
    ═══════════════════════════════════════════════════════════════ */
 
-interface Grievance {
-  id: string;
-  category: string;
-  subject: string;
-  description: string;
-  status: string;
-  anonymous: boolean;
-  createdAt: string;
-  updatedAt: string;
-  resolution?: string;
-}
-
-const mockGrievances: Grievance[] = [];
+/* mockGrievances removed — replaced by real API */
 
 const grievanceCategoryLabels: Record<string, string> = {
   review_dispute: "Review Decision Dispute",
@@ -1069,19 +1057,23 @@ function TicketsTab({
 
                 <AnimatePresence>
                   {isExpanded && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-                      <div className="px-5 pb-5 border-t border-gray-50">
-                        <p className="text-[12px] text-gray-500 leading-relaxed py-4">{ticket.description}</p>
-                        <div className="space-y-4">
-                          {ticket.messages.map((msg: any, i: number) => (
-                            <div key={i} className="flex gap-3 items-start">
-                              <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold", msg.sender === "contributor" ? "bg-brown-50 text-brown-500" : "bg-teal-50 text-teal-500")}>
-                                {msg.sender === "contributor" ? "Y" : "S"}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-[11px] font-semibold text-gray-700">{msg.sender === "contributor" ? "You" : "Support Agent"}</span>
-                                  <span className="text-[10px] text-gray-400">{formatDate(msg.sentAt)}</span>
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-5 pb-5 border-t border-gray-50 pt-4 space-y-4">
+
+                        {/* Loading detail */}
+                        {isLoadingDetail && (
+                          <div className="animate-pulse space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              {Array.from({ length: 4 }).map((_, i) => (
+                                <div key={i} className="bg-gray-50 rounded-xl px-4 py-3">
+                                  <div className="h-2.5 w-16 bg-gray-200 rounded mb-1.5" />
+                                  <div className="h-3.5 w-24 bg-gray-200 rounded" />
                                 </div>
                               ))}
                             </div>

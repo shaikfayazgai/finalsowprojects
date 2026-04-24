@@ -10,7 +10,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
-import { mockContributorProfile } from "@/mocks/data/contributor";
+import {
+  fetchContributorProfile,
+  isAvatarImageUrl,
+  patchContributorProfile,
+  putContributorProfileSkills,
+  type ContributorProfileResponse,
+} from "@/lib/api/contributor";
+import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { useContributorPhonePrefill } from "@/lib/stores/contributor-phone-store";
 
 /* ═══ Badge ═══ */
@@ -143,35 +150,40 @@ function normalizeProficiency(p?: string) {
 /* ═══ PAGE ═══ */
 
 export default function ProfileEditPage() {
-  const profile = mockContributorProfile;
+  const { data: session, status: sessionStatus } = useSession();
+  const token = session?.user?.accessToken;
+  const contributorId = session?.user?.id ?? "";
 
-  /* ─── Form State ─── */
-  const [displayName, setDisplayName] = React.useState(profile.displayName);
-  const [bio, setBio] = React.useState(profile.bio || "");
-  const [phone, setPhone] = React.useState(profile.phone || "");
-  const [country, setCountry] = React.useState(profile.country || "India");
+  const [displayName, setDisplayName] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [anonymousId, setAnonymousId] = React.useState("");
+  const [avatar, setAvatar] = React.useState("");
+  const [bio, setBio] = React.useState("");
+  const [phone, setPhone] = React.useState("");
+  const [country, setCountry] = React.useState("");
+  const [city, setCity] = React.useState("");
+  const [timezone, setTimezone] = React.useState("");
+  const [weeklyHours, setWeeklyHours] = React.useState(0);
+  const [availability, setAvailability] = React.useState("available");
+  const [language, setLanguage] = React.useState("en");
+  const [skills, setSkills] = React.useState<Array<{ name: string; proficiency: string }>>([]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time hydrate from registration
-  React.useEffect(() => {
-    const { phone: stored } = useContributorPhonePrefill.getState();
-    if (!stored || stored.replace(/\D/g, "").length < 7) return;
-    setPhone((prev) => (prev.replace(/\D/g, "").length >= 7 ? prev : stored));
-  }, []);
-  const [city, setCity] = React.useState(profile.city || "Bangalore");
-  const [timezone, setTimezone] = React.useState(profile.timezone);
-  const [weeklyHours, setWeeklyHours] = React.useState(profile.weeklyHours);
-  const [availability, setAvailability] = React.useState(profile.availability);
-  const [language, setLanguage] = React.useState(profile.language);
-
-  const [skills, setSkills] = React.useState(
-    profile.skills.map((s) => ({ name: s.name, proficiency: s.proficiency }))
-  );
-
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [retryKey, setRetryKey] = React.useState(0);
   const [showSuccess, setShowSuccess] = React.useState(false);
 
   const displayInitials = displayName
     ? displayName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()
     : "—";
+
+  React.useEffect(() => {
+    const { phone: stored } = useContributorPhonePrefill.getState();
+    if (!stored || stored.replace(/\D/g, "").length < 7) return;
+    setPhone((prev) => (prev.replace(/\D/g, "").length >= 7 ? prev : stored));
+  }, []);
 
   const applyProfileFromApi = React.useCallback((data: ContributorProfileResponse) => {
     setDisplayName(String(data.display_name ?? ""));
