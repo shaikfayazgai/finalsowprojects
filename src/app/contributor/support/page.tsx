@@ -8,11 +8,27 @@ import {
   CheckCircle2, MessageSquare, ChevronDown, X, Plus, FileText,
   Shield, Scale, Paperclip,
   Eye, EyeOff, TriangleAlert, Lock, Upload,
+  RefreshCw, AlertCircle,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Input, Textarea, Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
 import { mockSupportTickets } from "@/mocks/data/contributor";
+import {
+  fetchSupportFaqs, type SupportFaqItem,
+  fetchSupportTickets, type SupportTicketItem,
+  fetchSupportTicketDetail, type SupportTicketDetail,
+  createSupportTicket,
+  postSupportTicketMessage,
+  fetchGrievances, type GrievanceItem,
+  createGrievance,
+  fetchGrievanceDetail, type GrievanceDetail,
+  createSafetyReport,
+} from "@/lib/api/contributor";
+import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { ApiError } from "@/lib/api/client";
+import { toast } from "@/lib/stores/toast-store";
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
@@ -133,18 +149,7 @@ interface Grievance {
   resolution?: string;
 }
 
-const mockGrievances: Grievance[] = [
-  {
-    id: "grv-001",
-    category: "review_dispute",
-    subject: "Submission rejected despite meeting all acceptance criteria",
-    description: "My submission for task ctask-004 was rejected, but I've verified that all acceptance criteria were met. The reviewer's feedback mentions missing keyboard navigation, which was not listed in the original acceptance criteria.",
-    status: "under_review",
-    anonymous: false,
-    createdAt: "2026-03-20T09:00:00Z",
-    updatedAt: "2026-03-22T14:00:00Z",
-  },
-];
+const mockGrievances: Grievance[] = [];
 
 const grievanceCategoryLabels: Record<string, string> = {
   review_dispute: "Review Decision Dispute",
@@ -163,78 +168,85 @@ const safetyCategoryLabels: Record<string, string> = {
   other: "Other Safety Concern",
 };
 
-const faqCategories = [
-  {
-    id: "getting-started",
-    label: "Getting Started",
-    icon: Rocket,
-    articles: [
-      { q: "How do I set up my profile?", a: "After completing onboarding, navigate to Settings > Profile to add your skills, availability, and preferred languages. Your profile completeness percentage is shown on your dashboard." },
-      { q: "What is a PoDL credential?", a: "PoDL (Proof-of-Delivery Ledger) is a verifiable credential that proves you completed real project work. Unlike traditional certificates, PoDL credentials are tied to actual deliverables that were reviewed and accepted." },
-      { q: "How does task matching work?", a: "The platform uses your Skill Genome to match you with tasks. The AI considers your proficiency level, availability, timezone, and past performance to suggest the best-fit tasks." },
-    ],
-  },
-  {
-    id: "tasks",
-    label: "Tasks & Submissions",
-    icon: CheckCircle2,
-    articles: [
-      { q: "How do I submit my work?", a: "Open your active task, navigate to the Workroom, and use the Submit button. Before submitting, ensure all evidence checklist items are completed." },
-      { q: "What happens after I submit?", a: "Your submission enters the review pipeline. The Review Assistant performs an automated quality check, then a human reviewer evaluates against acceptance criteria. Feedback within 24-48 hours." },
-      { q: "Can I request a deadline extension?", a: "Yes. Submit a support ticket with category 'Task Question'. Include your task ID and the reason. The APG reviews extension requests within 24 hours." },
-    ],
-  },
-  {
-    id: "payments",
-    label: "Payments & Earnings",
-    icon: CreditCard,
-    articles: [
-      { q: "When do I get paid?", a: "Payment is triggered after your deliverable is accepted. Payouts are processed in weekly batches every Friday. Funds arrive within 3-5 business days." },
-      { q: "What payout methods are available?", a: "Bank Transfer (global), UPI (India), Mobile Money/JazzCash/EasyPaisa (Pakistan), PayPal (global), and Crypto (USDC). Configure in Settings > Payments." },
-      { q: "How is pricing determined?", a: "Task pricing is set by the Pricing Intelligence engine based on complexity, required skills, estimated hours, and market rates. No bidding or negotiation." },
-    ],
-  },
-  {
-    id: "technical",
-    label: "Technical Issues",
-    icon: Wrench,
-    articles: [
-      { q: "File upload is failing", a: "Check that your file is under 25MB and in a supported format (PDF, PNG, JPG, ZIP). Try clearing your browser cache or using a different browser." },
-      { q: "I can't access my workroom", a: "Workroom access requires an active task assignment. Try refreshing the page. If the issue persists, check if your task status has changed." },
-      { q: "How do I reset my password?", a: "Go to the login page and click 'Forgot Password'. Enter your email and you'll receive a reset link within 5 minutes." },
-    ],
-  },
-  {
-    id: "account",
-    label: "Account & Safety",
-    icon: Shield,
-    articles: [
-      { q: "How is my identity protected?", a: "The platform uses anonymized contributor IDs. Your real name is never shared with clients or other contributors. All grievances and safety reports are confidential by default." },
-      { q: "What is the grievance process?", a: "File a grievance through the Grievance tab. An independent team reviews within 5 business days. You can request anonymity and appeal any decision." },
-      { q: "How do I report harassment?", a: "Use the Safety tab. Reports are confidential by default. The safety team reviews within 24 hours. You can also block users from contacting you." },
-    ],
-  },
-];
+/* ── Category slug → label + icon mapping ── */
+const categoryMeta: Record<string, { label: string; icon: React.ElementType }> = {
+  "getting-started":   { label: "Getting Started",      icon: Rocket },
+  "getting_started":   { label: "Getting Started",      icon: Rocket },
+  tasks:               { label: "Tasks & Submissions",  icon: CheckCircle2 },
+  tasks_submissions:   { label: "Tasks & Submissions",  icon: CheckCircle2 },
+  payments:            { label: "Payments & Earnings",  icon: CreditCard },
+  payments_earnings:   { label: "Payments & Earnings",  icon: CreditCard },
+  technical:           { label: "Technical Issues",     icon: Wrench },
+  account:             { label: "Account & Safety",     icon: Shield },
+  account_safety:      { label: "Account & Safety",     icon: Shield },
+};
+
+function getCategoryMeta(slug: string) {
+  return categoryMeta[slug] ?? { label: slug.replace(/_|-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), icon: HelpCircle };
+}
+
+/* Group flat FAQ items by category slug */
+function groupByCategory(items: SupportFaqItem[]): Array<{ id: string; label: string; icon: React.ElementType; articles: SupportFaqItem[] }> {
+  const map = new Map<string, SupportFaqItem[]>();
+  items.forEach((item) => {
+    const existing = map.get(item.category) ?? [];
+    map.set(item.category, [...existing, item]);
+  });
+  return Array.from(map.entries()).map(([slug, articles]) => ({
+    id: slug,
+    ...getCategoryMeta(slug),
+    articles,
+  }));
+}
 
 /* ═══════════════════════════════════════════════════════════════
    DRAWER FORMS
    ═══════════════════════════════════════════════════════════════ */
 
-function NewTicketForm({ onClose }: { onClose: () => void }) {
-  const [subject, setSubject] = React.useState("");
-  const [category, setCategory] = React.useState("technical");
-  const [priority, setPriority] = React.useState("medium");
+function NewTicketForm({
+  token,
+  onClose,
+  onSuccess,
+}: {
+  token: string;
+  onClose: () => void;
+  onSuccess?: () => void;
+}) {
+  const [subject,     setSubject]     = React.useState("");
+  const [category,    setCategory]    = React.useState("technical");
+  const [priority,    setPriority]    = React.useState("medium");
   const [description, setDescription] = React.useState("");
   const [attachments, setAttachments] = React.useState<string[]>([]);
-  const [submitted, setSubmitted] = React.useState(false);
-  const [ticketId, setTicketId] = React.useState("");
+  const [submitting,  setSubmitting]  = React.useState(false);
+  const [submitted,   setSubmitted]   = React.useState(false);
+  const [ticketId,    setTicketId]    = React.useState("");
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
 
-  const handleSubmit = () => {
-    if (!subject.trim() || !description.trim()) return;
-    const newId = `TKT-${Date.now().toString(36).toUpperCase()}`;
-    setTicketId(newId);
-    setSubmitted(true);
-    setTimeout(() => onClose(), 3000);
+  const canSubmit = subject.trim() && description.trim() && !submitting;
+
+  const handleSubmit = async () => {
+    if (!canSubmit || !token) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const result = await createSupportTicket(token, {
+        subject:     subject.trim(),
+        category,
+        priority,
+        description: description.trim(),
+        attachment_ids: [],          // file upload API not yet available
+      });
+      setTicketId(result.id);
+      setSubmitted(true);
+      onSuccess?.();                 // refresh ticket list
+      setTimeout(() => onClose(), 3500);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to submit ticket. Please try again.";
+      setSubmitError(msg);
+      toast.error("Ticket Error", msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -244,7 +256,9 @@ function NewTicketForm({ onClose }: { onClose: () => void }) {
           <CheckCircle2 className="w-7 h-7 text-forest-500" />
         </div>
         <h3 className="text-[16px] font-semibold text-gray-800 mb-1">Ticket Submitted</h3>
-        <p className="text-[13px] text-gray-500 mb-2">Reference: <span className="font-mono font-semibold text-brown-600">{ticketId}</span></p>
+        <p className="text-[13px] text-gray-500 mb-2">
+          Reference: <span className="font-mono font-semibold text-brown-600">{ticketId}</span>
+        </p>
         <p className="text-[12px] text-gray-400">Expected response: within 24 hours</p>
       </div>
     );
@@ -285,7 +299,12 @@ function NewTicketForm({ onClose }: { onClose: () => void }) {
       </div>
       <div>
         <label className={fieldLabel}>Description *</label>
-        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe your issue in detail. Include task IDs, error messages, and steps to reproduce if applicable." className="min-h-[120px]" />
+        <Textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Describe your issue in detail. Include task IDs, error messages, and steps to reproduce if applicable."
+          className="min-h-[120px]"
+        />
       </div>
       <div>
         <label className={fieldLabel}>Attachments</label>
@@ -293,39 +312,107 @@ function NewTicketForm({ onClose }: { onClose: () => void }) {
           {attachments.map((file, i) => (
             <span key={i} className="inline-flex items-center gap-1.5 text-[11px] text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
               <Paperclip className="w-3 h-3 text-gray-400" /> {file}
-              <button onClick={() => setAttachments((p) => p.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-red-500"><X className="w-3 h-3" /></button>
+              <button onClick={() => setAttachments((p) => p.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-red-500">
+                <X className="w-3 h-3" />
+              </button>
             </span>
           ))}
-          <button onClick={() => setAttachments((p) => [...p, `file_${p.length + 1}.png`])} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-400 hover:text-gray-600 border border-dashed border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors">
+          <button
+            onClick={() => setAttachments((p) => [...p, `file_${p.length + 1}.png`])}
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-400 hover:text-gray-600 border border-dashed border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
+          >
             <Upload className="w-3 h-3" /> Add file
           </button>
         </div>
       </div>
+
+      {/* Inline error */}
+      {submitError && (
+        <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-100">
+          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+          <p className="text-[11px] text-red-600 leading-relaxed">{submitError}</p>
+        </div>
+      )}
+
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
-        <button onClick={onClose} className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Cancel</button>
-        <button onClick={handleSubmit} disabled={!subject.trim() || !description.trim()} className={cn("flex items-center gap-1.5 text-[12px] font-semibold px-5 py-2 rounded-xl transition-all", subject.trim() && description.trim() ? "text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 cursor-pointer" : "bg-gray-100 text-gray-400 cursor-not-allowed")}>
-          <Send className="w-3.5 h-3.5" /> Submit Ticket
+        <button
+          onClick={onClose}
+          disabled={submitting}
+          className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          className={cn(
+            "flex items-center gap-1.5 text-[12px] font-semibold px-5 py-2 rounded-xl transition-all",
+            canSubmit
+              ? "text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 cursor-pointer"
+              : "bg-gray-100 text-gray-400 cursor-not-allowed",
+          )}
+        >
+          {submitting ? (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Submitting…
+            </>
+          ) : (
+            <>
+              <Send className="w-3.5 h-3.5" /> Submit Ticket
+            </>
+          )}
         </button>
       </div>
     </div>
   );
 }
 
-function NewGrievanceForm({ onClose }: { onClose: () => void }) {
-  const [grvCategory, setGrvCategory] = React.useState("review_dispute");
-  const [grvSubject, setGrvSubject] = React.useState("");
+function NewGrievanceForm({
+  token,
+  onClose,
+  onSuccess,
+}: {
+  token: string;
+  onClose: () => void;
+  onSuccess?: () => void;
+}) {
+  const [grvCategory,    setGrvCategory]    = React.useState("review_dispute");
+  const [grvSubject,     setGrvSubject]     = React.useState("");
   const [grvDescription, setGrvDescription] = React.useState("");
-  const [grvTaskId, setGrvTaskId] = React.useState("");
-  const [grvAnonymous, setGrvAnonymous] = React.useState(false);
+  const [grvTaskId,      setGrvTaskId]      = React.useState("");
+  const [grvAnonymous,   setGrvAnonymous]   = React.useState(false);
   const [grvAttachments, setGrvAttachments] = React.useState<string[]>([]);
-  const [submitted, setSubmitted] = React.useState(false);
-  const [refId, setRefId] = React.useState("");
+  const [submitting,     setSubmitting]     = React.useState(false);
+  const [submitted,      setSubmitted]      = React.useState(false);
+  const [refId,          setRefId]          = React.useState("");
+  const [submitError,    setSubmitError]    = React.useState<string | null>(null);
 
-  const handleSubmit = () => {
-    if (!grvSubject.trim() || !grvDescription.trim()) return;
-    setRefId(`GRV-${Date.now().toString(36).toUpperCase()}`);
-    setSubmitted(true);
-    setTimeout(() => onClose(), 3000);
+  const canSubmit = grvSubject.trim() && grvDescription.trim() && !submitting;
+
+  const handleSubmit = async () => {
+    if (!canSubmit || !token) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const result = await createGrievance(token, {
+        category:          grvCategory,
+        subject:           grvSubject.trim(),
+        description:       grvDescription.trim(),
+        related_reference: grvTaskId.trim() || undefined,
+        anonymous:         grvAnonymous,
+        attachment_ids:    [],
+      });
+      setRefId(result.id);
+      setSubmitted(true);
+      onSuccess?.();
+      setTimeout(() => onClose(), 3500);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to submit grievance. Please try again.";
+      setSubmitError(msg);
+      toast.error("Grievance Error", msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -388,29 +475,59 @@ function NewGrievanceForm({ onClose }: { onClose: () => void }) {
           </div>
         </label>
       </div>
+
+      {submitError && (
+        <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-100">
+          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+          <p className="text-[11px] text-red-600 leading-relaxed">{submitError}</p>
+        </div>
+      )}
+
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
-        <button onClick={onClose} className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Cancel</button>
-        <button onClick={handleSubmit} disabled={!grvSubject.trim() || !grvDescription.trim()} className={cn("flex items-center gap-1.5 text-[12px] font-semibold px-5 py-2 rounded-xl transition-all", grvSubject.trim() && grvDescription.trim() ? "text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 cursor-pointer" : "bg-gray-100 text-gray-400 cursor-not-allowed")}>
-          <Scale className="w-3.5 h-3.5" /> Submit Grievance
+        <button onClick={onClose} disabled={submitting} className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50">Cancel</button>
+        <button
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          className={cn("flex items-center gap-1.5 text-[12px] font-semibold px-5 py-2 rounded-xl transition-all", canSubmit ? "text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 cursor-pointer" : "bg-gray-100 text-gray-400 cursor-not-allowed")}
+        >
+          {submitting ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Submitting…</> : <><Scale className="w-3.5 h-3.5" /> Submit Grievance</>}
         </button>
       </div>
     </div>
   );
 }
 
-function SafetyReportForm({ onClose }: { onClose: () => void }) {
+function SafetyReportForm({ onClose, token }: { onClose: () => void; token: string }) {
   const [safetyCategory, setSafetyCategory] = React.useState("harassment");
   const [safetyDescription, setSafetyDescription] = React.useState("");
   const [safetyRelated, setSafetyRelated] = React.useState("");
   const [safetyAttachments, setSafetyAttachments] = React.useState<string[]>([]);
   const [submitted, setSubmitted] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [refId, setRefId] = React.useState("");
 
-  const handleSubmit = () => {
-    if (!safetyDescription.trim()) return;
-    setRefId(`SAF-${Date.now().toString(36).toUpperCase()}`);
-    setSubmitted(true);
-    setTimeout(() => onClose(), 3000);
+  const handleSubmit = async () => {
+    if (!safetyDescription.trim() || !token) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const result = await createSafetyReport(token, {
+        category: safetyCategory,
+        description: safetyDescription.trim(),
+        related_reference: safetyRelated.trim() || undefined,
+        attachment_ids: safetyAttachments.length > 0 ? safetyAttachments : undefined,
+      });
+      setRefId(result.id);
+      setSubmitted(true);
+      setTimeout(() => onClose(), 4000);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to submit report. Please try again.";
+      setSubmitError(msg);
+      toast.error("Safety Report", msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -464,10 +581,17 @@ function SafetyReportForm({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
+      {submitError && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+          <AlertCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
+          <p className="text-[11px] text-red-600">{submitError}</p>
+        </div>
+      )}
       <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
-        <button onClick={onClose} className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">Cancel</button>
-        <button onClick={handleSubmit} disabled={!safetyDescription.trim()} className={cn("flex items-center gap-1.5 text-[12px] font-semibold px-5 py-2 rounded-xl transition-all", safetyDescription.trim() ? "text-white bg-gradient-to-r from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 cursor-pointer" : "bg-gray-100 text-gray-400 cursor-not-allowed")}>
-          <Shield className="w-3.5 h-3.5" /> Submit Report
+        <button onClick={onClose} disabled={submitting} className="text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50">Cancel</button>
+        <button onClick={handleSubmit} disabled={!safetyDescription.trim() || submitting} className={cn("flex items-center gap-1.5 text-[12px] font-semibold px-5 py-2 rounded-xl transition-all", safetyDescription.trim() && !submitting ? "text-white bg-gradient-to-r from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 cursor-pointer" : "bg-gray-100 text-gray-400 cursor-not-allowed")}>
+          {submitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
+          {submitting ? "Submitting…" : "Submit Report"}
         </button>
       </div>
     </div>
@@ -475,63 +599,150 @@ function SafetyReportForm({ onClose }: { onClose: () => void }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TAB 1 — HELP CENTER
+   TAB 1 — HELP CENTER (real API)
    ═══════════════════════════════════════════════════════════════ */
 
-function HelpCenterTab() {
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [activeCategory, setActiveCategory] = React.useState(faqCategories[0].id);
-  const [expandedArticle, setExpandedArticle] = React.useState<string | null>(null);
+function FaqSkeleton() {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="bg-white rounded-xl shadow-sm px-5 py-4 animate-pulse flex items-center gap-3.5">
+          <div className="w-6 h-6 rounded-lg bg-gray-200 shrink-0" />
+          <div className="h-4 bg-gray-200 rounded flex-1" />
+          <div className="w-4 h-4 bg-gray-200 rounded shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
-  const currentCategory = faqCategories.find((c) => c.id === activeCategory) || faqCategories[0];
+function HelpCenterTab({ token }: { token: string }) {
+  const [allFaqs,       setAllFaqs]       = React.useState<SupportFaqItem[]>([]);
+  const [loading,       setLoading]       = React.useState(true);
+  const [error,         setError]         = React.useState<string | null>(null);
+  const [searchQuery,   setSearchQuery]   = React.useState("");
+  const [searching,     setSearching]     = React.useState(false);
+  const [searchResults, setSearchResults] = React.useState<SupportFaqItem[] | null>(null);
+  const [activeCategory,   setActiveCategory]   = React.useState("");
+  const [expandedArticle,  setExpandedArticle]  = React.useState<string | null>(null);
+  const searchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const searchResults = React.useMemo(() => {
-    if (!searchQuery.trim()) return null;
-    const q = searchQuery.toLowerCase();
-    const results: Array<{ q: string; a: string; category: string; key: string }> = [];
-    faqCategories.forEach((cat) => {
-      cat.articles.forEach((art, idx) => {
-        if (art.q.toLowerCase().includes(q) || art.a.toLowerCase().includes(q))
-          results.push({ ...art, category: cat.label, key: `s-${cat.id}-${idx}` });
-      });
-    });
-    return results;
-  }, [searchQuery]);
+  /* ── Initial load — all FAQs ── */
+  const loadAll = React.useCallback(async (t: string) => {
+    if (!t) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const sk = sessionKeyFragment(t);
+      const res = await dedupeAsync(`contrib:support-faqs-all:${sk}`, () => fetchSupportFaqs(t, {}));
+      const items = res.items ?? [];
+      setAllFaqs(items);
+      /* auto-select first category */
+      if (items.length > 0) setActiveCategory(items[0].category);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to load help articles";
+      setError(msg);
+      toast.error("Help Center", msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => { if (token) loadAll(token); }, [token, loadAll]);
+
+  /* ── Debounced search via API ── */
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!val.trim()) { setSearchResults(null); return; }
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetchSupportFaqs(token, { q: val.trim() });
+        setSearchResults(res.items ?? []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+  };
+
+  const categories = React.useMemo(() => groupByCategory(allFaqs), [allFaqs]);
+  const currentCategoryData = categories.find((c) => c.id === activeCategory) ?? categories[0];
+
+  /* ── Articles shown in category view ── */
+  const visibleArticles = currentCategoryData?.articles ?? [];
 
   return (
     <div>
       {/* Search */}
       <div className="relative mb-5">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 pointer-events-none" />
-        <input type="text" placeholder="Search articles..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full text-[13px] text-gray-700 bg-white rounded-xl pl-11 pr-10 py-3 shadow-sm outline-none focus:ring-2 focus:ring-brown-100 transition-all placeholder:text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search articles..."
+          value={searchQuery}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          className="w-full text-[13px] text-gray-700 bg-white rounded-xl pl-11 pr-10 py-3 shadow-sm outline-none focus:ring-2 focus:ring-brown-100 transition-all placeholder:text-gray-400"
+        />
         {searchQuery && (
-          <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"><X className="w-3 h-3 text-gray-500" /></button>
+          <button
+            onClick={() => { setSearchQuery(""); setSearchResults(null); }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+          >
+            <X className="w-3 h-3 text-gray-500" />
+          </button>
         )}
       </div>
 
-      {searchResults ? (
+      {/* Error state */}
+      {error && !loading && (
+        <div className="bg-white rounded-xl shadow-sm px-5 py-5 mb-4 flex items-start gap-3">
+          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-[12px] font-semibold text-red-600 mb-1">Could not load help articles</p>
+            <p className="text-[11px] text-gray-400 mb-2">{error}</p>
+            <button onClick={() => loadAll(token)} className="flex items-center gap-1.5 text-[11px] font-semibold text-brown-600 hover:text-brown-700 transition-colors">
+              <RefreshCw className="w-3 h-3" /> Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Search results */}
+      {searchQuery.trim() ? (
         <div>
-          <p className="text-[11px] text-gray-400 mb-3">{searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for &ldquo;{searchQuery}&rdquo;</p>
-          {searchResults.length === 0 ? (
+          <p className="text-[11px] text-gray-400 mb-3">
+            {searching ? "Searching…" : `${(searchResults ?? []).length} result${(searchResults ?? []).length !== 1 ? "s" : ""} for "${searchQuery}"`}
+          </p>
+          {searching ? (
+            <FaqSkeleton />
+          ) : (searchResults ?? []).length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm py-12 text-center">
               <Search className="w-8 h-8 text-gray-200 mx-auto mb-2" />
               <p className="text-[13px] text-gray-500">No articles match your search</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {searchResults.map((r) => {
-                const isOpen = expandedArticle === r.key;
+              {(searchResults ?? []).map((r) => {
+                const { label: catLabel } = getCategoryMeta(r.category);
+                const isOpen = expandedArticle === r.id;
                 return (
-                  <div key={r.key} className="bg-white rounded-xl shadow-sm overflow-hidden">
-                    <button onClick={() => setExpandedArticle(isOpen ? null : r.key)} className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-gray-50/50 transition-colors">
+                  <div key={r.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <button onClick={() => setExpandedArticle(isOpen ? null : r.id)} className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-gray-50/50 transition-colors">
                       <HelpCircle className="w-3.5 h-3.5 text-gray-300 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-gray-700">{r.q}</p>
-                        <p className="text-[10px] text-gray-400">{r.category}</p>
+                        <p className="text-[12px] font-medium text-gray-700">{r.question}</p>
+                        <p className="text-[10px] text-gray-400">{catLabel}</p>
                       </div>
                       <ChevronDown className={cn("w-3.5 h-3.5 text-gray-300 shrink-0 transition-transform", isOpen && "rotate-180")} />
                     </button>
-                    {isOpen && <div className="px-5 pb-4 pl-12"><p className="text-[12px] text-gray-500 leading-relaxed">{r.a}</p></div>}
+                    {isOpen && (
+                      <div className="px-5 pb-4 pl-12">
+                        <p className="text-[12px] text-gray-500 leading-relaxed">{r.answer}</p>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -539,48 +750,71 @@ function HelpCenterTab() {
           )}
         </div>
       ) : (
-        <div>
-          {/* Category pills */}
-          <div className="flex items-center gap-1.5 mb-5 flex-wrap">
-            {faqCategories.map((cat) => {
-              const Icon = cat.icon;
-              const isActive = activeCategory === cat.id;
-              return (
-                <button key={cat.id} onClick={() => { setActiveCategory(cat.id); setExpandedArticle(null); }} className={cn("flex items-center gap-1.5 text-[11px] font-medium px-3 py-2 rounded-lg transition-all", isActive ? "bg-white text-gray-800 shadow-sm" : "text-gray-400 hover:text-gray-600 hover:bg-white/50")}>
-                  <Icon className={cn("w-3.5 h-3.5", isActive ? "text-brown-500" : "text-gray-400")} />
-                  {cat.label}
-                </button>
-              );
-            })}
+        /* Category browse */
+        loading ? (
+          <div>
+            {/* Category pill skeletons */}
+            <div className="flex items-center gap-1.5 mb-5 flex-wrap animate-pulse">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-8 w-28 bg-gray-200 rounded-lg" />
+              ))}
+            </div>
+            <FaqSkeleton />
           </div>
-          {/* Articles */}
-          <div className="space-y-2">
-            {currentCategory.articles.map((art, idx) => {
-              const key = `${activeCategory}-${idx}`;
-              const isOpen = expandedArticle === key;
-              return (
-                <div key={key} className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  <button onClick={() => setExpandedArticle(isOpen ? null : key)} className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors">
-                    <span className="w-6 h-6 rounded-lg bg-brown-50 flex items-center justify-center shrink-0 text-[10px] font-bold text-brown-400">{idx + 1}</span>
-                    <span className="flex-1 text-[13px] font-medium text-gray-800">{art.q}</span>
-                    <ChevronDown className={cn("w-4 h-4 text-gray-300 shrink-0 transition-transform duration-200", isOpen && "rotate-180")} />
+        ) : !error && categories.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm py-12 text-center">
+            <HelpCircle className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+            <p className="text-[13px] text-gray-500">No help articles available</p>
+          </div>
+        ) : (
+          <div>
+            {/* Category pills */}
+            <div className="flex items-center gap-1.5 mb-5 flex-wrap">
+              {categories.map((cat) => {
+                const Icon = cat.icon;
+                const isActive = activeCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => { setActiveCategory(cat.id); setExpandedArticle(null); }}
+                    className={cn("flex items-center gap-1.5 text-[11px] font-medium px-3 py-2 rounded-lg transition-all", isActive ? "bg-white text-gray-800 shadow-sm" : "text-gray-400 hover:text-gray-600 hover:bg-white/50")}
+                  >
+                    <Icon className={cn("w-3.5 h-3.5", isActive ? "text-brown-500" : "text-gray-400")} />
+                    {cat.label}
                   </button>
-                  <AnimatePresence>
-                    {isOpen && (
-                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-                        <div className="px-5 pb-5 pl-15">
-                          <div className="border-t border-gray-50 pt-3">
-                            <p className="text-[12px] text-gray-500 leading-[1.8]">{art.a}</p>
+                );
+              })}
+            </div>
+
+            {/* Articles */}
+            <div className="space-y-2">
+              {visibleArticles.map((art, idx) => {
+                const key = `${activeCategory}-${art.id}`;
+                const isOpen = expandedArticle === key;
+                return (
+                  <div key={key} className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <button onClick={() => setExpandedArticle(isOpen ? null : key)} className="w-full flex items-center gap-3.5 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors">
+                      <span className="w-6 h-6 rounded-lg bg-brown-50 flex items-center justify-center shrink-0 text-[10px] font-bold text-brown-400">{idx + 1}</span>
+                      <span className="flex-1 text-[13px] font-medium text-gray-800">{art.question}</span>
+                      <ChevronDown className={cn("w-4 h-4 text-gray-300 shrink-0 transition-transform duration-200", isOpen && "rotate-180")} />
+                    </button>
+                    <AnimatePresence>
+                      {isOpen && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+                          <div className="px-5 pb-5 pl-15">
+                            <div className="border-t border-gray-50 pt-3">
+                              <p className="text-[12px] text-gray-500 leading-[1.8]">{art.answer}</p>
+                            </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )
       )}
 
       {/* Emergency contact */}
@@ -600,24 +834,133 @@ function HelpCenterTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TAB 2 — SUPPORT TICKETS
+   TAB 2 — SUPPORT TICKETS (real API)
    ═══════════════════════════════════════════════════════════════ */
 
-function TicketsTab({ onOpenDrawer }: { onOpenDrawer: () => void }) {
-  const tickets = mockSupportTickets;
-  const [statusFilter, setStatusFilter] = React.useState("all");
+function TicketRowSkeleton() {
+  return (
+    <div className="bg-white rounded-xl shadow-sm px-5 py-4 animate-pulse flex items-center gap-4">
+      <div className="w-8 h-8 rounded-xl bg-gray-200 shrink-0" />
+      <div className="flex-1 space-y-2">
+        <div className="h-3.5 w-48 bg-gray-200 rounded" />
+        <div className="flex gap-2">
+          <div className="h-4 w-14 bg-gray-200 rounded-full" />
+          <div className="h-4 w-14 bg-gray-200 rounded-full" />
+          <div className="h-3 w-16 bg-gray-200 rounded" />
+        </div>
+      </div>
+      <div className="w-4 h-4 bg-gray-200 rounded shrink-0" />
+    </div>
+  );
+}
+
+function TicketsTab({
+  token,
+  onOpenDrawer,
+  onCountChange,
+}: {
+  token: string;
+  onOpenDrawer: () => void;
+  onCountChange: (count: number) => void;
+}) {
+  const [tickets,        setTickets]        = React.useState<SupportTicketItem[]>([]);
+  const [loading,        setLoading]        = React.useState(true);
+  const [error,          setError]          = React.useState<string | null>(null);
+  const [statusFilter,   setStatusFilter]   = React.useState("all");
   const [expandedTicket, setExpandedTicket] = React.useState<string | null>(null);
 
-  const filteredTickets = statusFilter === "all" ? tickets : tickets.filter((t) => {
-    if (statusFilter === "resolved") return t.status === "resolved" || t.status === "closed";
-    return t.status === statusFilter;
-  });
+  /* Detail cache: ticket_id → full detail (fetched on first expand) */
+  const [detailCache,   setDetailCache]   = React.useState<Record<string, SupportTicketDetail>>({});
+  const [detailLoading, setDetailLoading] = React.useState<Set<string>>(new Set());
+  const [detailError,   setDetailError]   = React.useState<Record<string, string>>({});
+
+  /* Reply state per ticket */
+  const [replyText,     setReplyText]     = React.useState<Record<string, string>>({});
+  const [replySending,  setReplySending]  = React.useState<Set<string>>(new Set());
+  const [replyError,    setReplyError]    = React.useState<Record<string, string>>({});
+
+  /* ── Fetch all tickets once ── */
+  const load = React.useCallback(async (t: string) => {
+    if (!t) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const sk = sessionKeyFragment(t);
+      const res = await dedupeAsync(`contrib:support-tickets:${sk}`, () =>
+        fetchSupportTickets(t, { page: 1, page_size: 100 }),
+      );
+      const items = res.items ?? [];
+      setTickets(items);
+      const openCount = items.filter((tk) =>
+        tk.status === "open" || tk.status === "in_progress" || tk.status === "pending",
+      ).length;
+      onCountChange(openCount);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to load tickets";
+      setError(msg);
+      toast.error("Tickets", msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [onCountChange]);
+
+  React.useEffect(() => { if (token) load(token); }, [token, load]);
+
+  /* ── Fetch ticket detail on expand (cached after first load) ── */
+  const handleExpand = React.useCallback(async (ticketId: string) => {
+    setExpandedTicket((prev) => (prev === ticketId ? null : ticketId));
+    if (!token || detailCache[ticketId] || detailLoading.has(ticketId)) return;
+    setDetailLoading((prev) => new Set(prev).add(ticketId));
+    try {
+      const detail = await fetchSupportTicketDetail(token, ticketId);
+      setDetailCache((prev) => ({ ...prev, [ticketId]: detail }));
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Could not load ticket details";
+      setDetailError((prev) => ({ ...prev, [ticketId]: msg }));
+    } finally {
+      setDetailLoading((prev) => { const s = new Set(prev); s.delete(ticketId); return s; });
+    }
+  }, [token, detailCache, detailLoading]);
+
+  /* ── Send a reply message to a ticket ── */
+  const handleReply = React.useCallback(async (ticketId: string) => {
+    const message = (replyText[ticketId] ?? "").trim();
+    if (!message || !token || replySending.has(ticketId)) return;
+    setReplySending((prev) => new Set(prev).add(ticketId));
+    setReplyError((prev) => { const n = { ...prev }; delete n[ticketId]; return n; });
+    try {
+      const newMsg = await postSupportTicketMessage(token, ticketId, { message, attachment_ids: [] });
+      /* Append new message to cached detail instantly */
+      setDetailCache((prev) => {
+        const existing = prev[ticketId];
+        if (!existing) return prev;
+        return { ...prev, [ticketId]: { ...existing, messages: [...existing.messages, newMsg] } };
+      });
+      /* Clear reply box */
+      setReplyText((prev) => { const n = { ...prev }; delete n[ticketId]; return n; });
+      toast.success("Reply sent", "Your message has been sent to support.");
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to send reply. Please try again.";
+      setReplyError((prev) => ({ ...prev, [ticketId]: msg }));
+      toast.error("Reply failed", msg);
+    } finally {
+      setReplySending((prev) => { const s = new Set(prev); s.delete(ticketId); return s; });
+    }
+  }, [token, replyText, replySending]);
+
+  /* ── Client-side status filter ── */
+  const filteredTickets = React.useMemo(() => {
+    if (statusFilter === "all") return tickets;
+    if (statusFilter === "resolved") return tickets.filter((t) => t.status === "resolved" || t.status === "closed");
+    if (statusFilter === "in_progress") return tickets.filter((t) => t.status === "in_progress" || t.status === "waiting_on_user" || t.status === "pending");
+    return tickets.filter((t) => t.status === statusFilter);
+  }, [tickets, statusFilter]);
 
   const statusFilters = [
-    { value: "all", label: "All", count: tickets.length },
-    { value: "open", label: "Open", count: tickets.filter((t) => t.status === "open").length },
-    { value: "in_progress", label: "In Progress", count: tickets.filter((t) => t.status === "in_progress").length },
-    { value: "resolved", label: "Resolved", count: tickets.filter((t) => t.status === "resolved" || t.status === "closed").length },
+    { value: "all",         label: "All",         count: tickets.length },
+    { value: "open",        label: "Open",        count: tickets.filter((t) => t.status === "open").length },
+    { value: "in_progress", label: "In Progress", count: tickets.filter((t) => t.status === "in_progress" || t.status === "waiting_on_user" || t.status === "pending").length },
+    { value: "resolved",    label: "Resolved",    count: tickets.filter((t) => t.status === "resolved" || t.status === "closed").length },
   ];
 
   return (
@@ -625,55 +968,112 @@ function TicketsTab({ onOpenDrawer }: { onOpenDrawer: () => void }) {
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-1 bg-white rounded-xl p-1 shadow-sm">
           {statusFilters.map((f) => (
-            <button key={f.value} onClick={() => setStatusFilter(f.value)} className={cn("text-[11px] font-medium px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5", statusFilter === f.value ? "bg-brown-50 text-brown-700" : "text-gray-400 hover:text-gray-600")}>
+            <button
+              key={f.value}
+              onClick={() => setStatusFilter(f.value)}
+              className={cn("text-[11px] font-medium px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5", statusFilter === f.value ? "bg-brown-50 text-brown-700" : "text-gray-400 hover:text-gray-600")}
+            >
               {f.label}
-              {f.count > 0 && <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded-full min-w-4 text-center", statusFilter === f.value ? "bg-brown-100 text-brown-600" : "bg-gray-100 text-gray-400")}>{f.count}</span>}
+              {f.count > 0 && (
+                <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded-full min-w-4 text-center", statusFilter === f.value ? "bg-brown-100 text-brown-600" : "bg-gray-100 text-gray-400")}>
+                  {f.count}
+                </span>
+              )}
             </button>
           ))}
         </div>
-        <button onClick={onOpenDrawer} className="flex items-center gap-1.5 text-[12px] font-semibold px-4 py-2 rounded-xl bg-brown-500 text-white hover:bg-brown-600 transition-all cursor-pointer">
+        <button
+          onClick={onOpenDrawer}
+          className="flex items-center gap-1.5 text-[12px] font-semibold px-4 py-2 rounded-xl bg-brown-500 text-white hover:bg-brown-600 transition-all cursor-pointer"
+        >
           <Plus className="w-3.5 h-3.5" /> New Ticket
         </button>
       </div>
 
-      {filteredTickets.length === 0 ? (
+      {/* Error */}
+      {error && !loading && (
+        <div className="bg-white rounded-xl shadow-sm px-5 py-5 mb-4 flex items-start gap-3">
+          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-[12px] font-semibold text-red-600 mb-1">Could not load tickets</p>
+            <p className="text-[11px] text-gray-400 mb-2">{error}</p>
+            <button onClick={() => load(token)} className="flex items-center gap-1.5 text-[11px] font-semibold text-brown-600 hover:text-brown-700 transition-colors">
+              <RefreshCw className="w-3 h-3" /> Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Skeletons */}
+      {loading && (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => <TicketRowSkeleton key={i} />)}
+        </div>
+      )}
+
+      {/* Empty */}
+      {!loading && !error && filteredTickets.length === 0 && (
         <div className="bg-white rounded-2xl shadow-sm py-14 text-center">
           <MessageSquare className="w-9 h-9 text-gray-200 mx-auto mb-2" />
           <p className="text-[13px] font-medium text-gray-500">No tickets found</p>
-          <p className="text-[11px] text-gray-400 mt-1">{statusFilter === "all" ? "You haven't submitted any support tickets yet" : `No ${statusFilter.replace("_", " ")} tickets`}</p>
+          <p className="text-[11px] text-gray-400 mt-1">
+            {statusFilter === "all" ? "You haven't submitted any support tickets yet" : `No ${statusFilter.replace("_", " ")} tickets`}
+          </p>
         </div>
-      ) : (
+      )}
+
+      {/* Ticket list */}
+      {!loading && !error && filteredTickets.length > 0 && (
         <div className="space-y-2">
           {filteredTickets.map((ticket) => {
-            const st = statusColors[ticket.status] || statusColors.open;
-            const prio = priorityColors[ticket.priority] || priorityColors.medium;
+            const st      = statusColors[ticket.status]   || statusColors.open;
+            const prio    = priorityColors[ticket.priority] || priorityColors.medium;
             const isExpanded = expandedTicket === ticket.id;
             const isResolved = ticket.status === "resolved" || ticket.status === "closed";
+            const categoryLabel: Record<string, string> = {
+              technical: "Technical Issue", account: "Account Issue",
+              task_question: "Task Question", payment: "Payment Issue", safety: "Safety Concern",
+            };
+
+            const detail     = detailCache[ticket.id] ?? null;
+            const isLoadingDetail = detailLoading.has(ticket.id);
+            const detailErr  = detailError[ticket.id] ?? null;
 
             return (
               <div key={ticket.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
-                <button onClick={() => setExpandedTicket(isExpanded ? null : ticket.id)} className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors">
+                <button
+                  onClick={() => handleExpand(ticket.id)}
+                  className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors"
+                >
                   <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center shrink-0", isResolved ? "bg-forest-50" : "bg-teal-50")}>
-                    {isResolved ? <CheckCircle2 className="w-4 h-4 text-forest-500" /> : <MessageSquare className="w-4 h-4 text-teal-500" />}
+                    {isResolved
+                      ? <CheckCircle2 className="w-4 h-4 text-forest-500" />
+                      : <MessageSquare className="w-4 h-4 text-teal-500" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium text-gray-800 truncate mb-0.5">{ticket.subject}</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <Pill {...st} />
                       <Pill {...prio} />
-                      <span className="text-[10px] text-gray-400">{timeAgo(ticket.createdAt)}</span>
-                      <span className="text-[10px] text-gray-400">· {ticket.messages.length} msg{ticket.messages.length !== 1 ? "s" : ""}</span>
+                      <span className="text-[10px] text-gray-400">{timeAgo(ticket.created_at)}</span>
+                      {ticket.category && (
+                        <span className="text-[10px] text-gray-400">· {categoryLabel[ticket.category] ?? ticket.category}</span>
+                      )}
+                      {detail && detail.messages.length > 0 && (
+                        <span className="text-[10px] text-gray-400">· {detail.messages.length} msg{detail.messages.length !== 1 ? "s" : ""}</span>
+                      )}
                     </div>
                   </div>
                   <ChevronDown className={cn("w-4 h-4 text-gray-300 shrink-0 transition-transform", isExpanded && "rotate-180")} />
                 </button>
+
                 <AnimatePresence>
                   {isExpanded && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
                       <div className="px-5 pb-5 border-t border-gray-50">
                         <p className="text-[12px] text-gray-500 leading-relaxed py-4">{ticket.description}</p>
                         <div className="space-y-4">
-                          {ticket.messages.map((msg, i) => (
+                          {ticket.messages.map((msg: any, i: number) => (
                             <div key={i} className="flex gap-3 items-start">
                               <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold", msg.sender === "contributor" ? "bg-brown-50 text-brown-500" : "bg-teal-50 text-teal-500")}>
                                 {msg.sender === "contributor" ? "Y" : "S"}
@@ -683,23 +1083,152 @@ function TicketsTab({ onOpenDrawer }: { onOpenDrawer: () => void }) {
                                   <span className="text-[11px] font-semibold text-gray-700">{msg.sender === "contributor" ? "You" : "Support Agent"}</span>
                                   <span className="text-[10px] text-gray-400">{formatDate(msg.sentAt)}</span>
                                 </div>
-                                <p className="text-[12px] text-gray-500 leading-relaxed">{msg.message}</p>
-                              </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                        {ticket.resolvedAt && (
-                          <div className="flex items-start gap-2.5 mt-4 px-4 py-3 rounded-xl bg-forest-50">
-                            <CheckCircle2 className="w-4 h-4 text-forest-500 mt-0.5 shrink-0" />
-                            <div>
-                              <span className="text-[11px] font-semibold text-forest-700 block mb-0.5">Resolved {formatDate(ticket.resolvedAt)}</span>
-                              <p className="text-[11px] text-forest-600 leading-relaxed">{(ticket as Record<string, unknown>).resolution as string || "This ticket has been resolved."}</p>
-                            </div>
+                            <div className="h-16 bg-gray-50 rounded-xl" />
                           </div>
                         )}
-                        {ticket.relatedTaskId && (
-                          <div className="flex items-center gap-2 mt-3 text-[11px] text-gray-400">
-                            <FileText className="w-3 h-3" /> Related task: <span className="text-gray-600 font-medium">{ticket.relatedTaskId}</span>
+
+                        {/* Detail error */}
+                        {detailErr && !isLoadingDetail && (
+                          <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50">
+                            <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                            <p className="text-[11px] text-red-600">{detailErr}</p>
+                          </div>
+                        )}
+
+                        {/* Full detail */}
+                        {detail && !isLoadingDetail && (
+                          <>
+                            {/* Metadata grid */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="bg-gray-50 rounded-xl px-4 py-3">
+                                <p className="text-[10px] font-medium text-gray-400 mb-0.5">Category</p>
+                                <p className="text-[12px] font-semibold text-gray-700">{categoryLabel[detail.category] ?? detail.category ?? "—"}</p>
+                              </div>
+                              <div className="bg-gray-50 rounded-xl px-4 py-3">
+                                <p className="text-[10px] font-medium text-gray-400 mb-0.5">Priority</p>
+                                <p className="text-[12px] font-semibold text-gray-700 capitalize">{detail.priority ?? "—"}</p>
+                              </div>
+                              <div className="bg-gray-50 rounded-xl px-4 py-3">
+                                <p className="text-[10px] font-medium text-gray-400 mb-0.5">Opened</p>
+                                <p className="text-[12px] font-semibold text-gray-700">{formatDate(detail.created_at)}</p>
+                              </div>
+                              <div className="bg-gray-50 rounded-xl px-4 py-3">
+                                <p className="text-[10px] font-medium text-gray-400 mb-0.5">Last Updated</p>
+                                <p className="text-[12px] font-semibold text-gray-700">{formatDate(detail.updated_at)}</p>
+                              </div>
+                            </div>
+
+                            {/* Description */}
+                            {detail.description && (
+                              <p className="text-[12px] text-gray-500 leading-relaxed">{detail.description}</p>
+                            )}
+
+                            {/* Message thread */}
+                            {detail.messages.length > 0 && (
+                              <div className="space-y-4">
+                                {detail.messages.map((msg) => {
+                                  const isContributor = msg.author?.toLowerCase() === "contributor" || msg.author?.toLowerCase() === "you";
+                                  return (
+                                    <div key={msg.id} className="flex gap-3 items-start">
+                                      <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold", isContributor ? "bg-brown-50 text-brown-500" : "bg-teal-50 text-teal-500")}>
+                                        {isContributor ? "Y" : "S"}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className="text-[11px] font-semibold text-gray-700">{isContributor ? "You" : (msg.author ?? "Support Agent")}</span>
+                                          <span className="text-[10px] text-gray-400">{formatDate(msg.created_at)}</span>
+                                        </div>
+                                        <p className="text-[12px] text-gray-500 leading-relaxed">{msg.message}</p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Resolved banner */}
+                            {isResolved && (
+                              <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-forest-50">
+                                <CheckCircle2 className="w-4 h-4 text-forest-500 mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="text-[11px] font-semibold text-forest-700 block mb-0.5">Ticket Resolved</span>
+                                  <p className="text-[11px] text-forest-600">This ticket has been resolved. Thank you for reaching out.</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Related IDs */}
+                            <div className="flex items-center gap-4 flex-wrap text-[11px] text-gray-400">
+                              <span className="flex items-center gap-1.5">
+                                <FileText className="w-3 h-3" />
+                                ID: <span className="font-mono font-semibold text-gray-600">{detail.id}</span>
+                              </span>
+                              {detail.related_task_id && (
+                                <span className="flex items-center gap-1.5">
+                                  <FileText className="w-3 h-3" />
+                                  Task: <span className="font-semibold text-gray-600">{detail.related_task_id}</span>
+                                </span>
+                              )}
+                              {detail.related_project_id && (
+                                <span className="flex items-center gap-1.5">
+                                  <FileText className="w-3 h-3" />
+                                  Project: <span className="font-semibold text-gray-600">{detail.related_project_id}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* ── Reply box (only for non-resolved tickets) ── */}
+                            {!isResolved && (
+                              <div className="border-t border-gray-50 pt-4 space-y-2">
+                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Reply to Support</p>
+                                <div className="flex gap-2 items-end">
+                                  <textarea
+                                    rows={2}
+                                    placeholder="Type your reply…"
+                                    value={replyText[ticket.id] ?? ""}
+                                    onChange={(e) => setReplyText((prev) => ({ ...prev, [ticket.id]: e.target.value }))}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleReply(ticket.id);
+                                    }}
+                                    className="flex-1 resize-none text-[12px] text-gray-700 placeholder-gray-300 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-brown-100 focus:border-brown-200 transition-all leading-relaxed"
+                                  />
+                                  <button
+                                    onClick={() => handleReply(ticket.id)}
+                                    disabled={!(replyText[ticket.id] ?? "").trim() || replySending.has(ticket.id)}
+                                    className={cn(
+                                      "flex items-center gap-1.5 text-[11px] font-semibold px-4 py-2.5 rounded-xl transition-all shrink-0",
+                                      (replyText[ticket.id] ?? "").trim() && !replySending.has(ticket.id)
+                                        ? "bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 text-white cursor-pointer"
+                                        : "bg-gray-100 text-gray-400 cursor-not-allowed",
+                                    )}
+                                  >
+                                    {replySending.has(ticket.id)
+                                      ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                      : <Send className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                                {replyError[ticket.id] && (
+                                  <p className="text-[10px] text-red-500">{replyError[ticket.id]}</p>
+                                )}
+                                <p className="text-[10px] text-gray-300">Press Ctrl+Enter to send</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Fallback while detail not yet loaded (first render) */}
+                        {!detail && !isLoadingDetail && !detailErr && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-gray-50 rounded-xl px-4 py-3">
+                              <p className="text-[10px] font-medium text-gray-400 mb-0.5">Category</p>
+                              <p className="text-[12px] font-semibold text-gray-700">{categoryLabel[ticket.category] ?? ticket.category ?? "—"}</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-xl px-4 py-3">
+                              <p className="text-[10px] font-medium text-gray-400 mb-0.5">Priority</p>
+                              <p className="text-[12px] font-semibold text-gray-700 capitalize">{ticket.priority ?? "—"}</p>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -716,11 +1245,75 @@ function TicketsTab({ onOpenDrawer }: { onOpenDrawer: () => void }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TAB 3 — GRIEVANCE (Flow J2)
+   TAB 3 — GRIEVANCE (real API)
    ═══════════════════════════════════════════════════════════════ */
 
-function GrievanceTab({ onOpenDrawer }: { onOpenDrawer: () => void }) {
+function GrievanceRowSkeleton() {
+  return (
+    <div className="bg-white rounded-xl shadow-sm px-5 py-4 animate-pulse flex items-center gap-4">
+      <div className="w-8 h-8 rounded-xl bg-gray-200 shrink-0" />
+      <div className="flex-1 space-y-2">
+        <div className="h-3.5 w-48 bg-gray-200 rounded" />
+        <div className="flex gap-2">
+          <div className="h-4 w-16 bg-gray-200 rounded-full" />
+          <div className="h-3 w-24 bg-gray-200 rounded" />
+        </div>
+      </div>
+      <div className="w-4 h-4 bg-gray-200 rounded shrink-0" />
+    </div>
+  );
+}
+
+function GrievanceTab({
+  token,
+  onOpenDrawer,
+  refreshKey,
+}: {
+  token: string;
+  onOpenDrawer: () => void;
+  refreshKey: number;
+}) {
+  const [grievances,        setGrievances]        = React.useState<GrievanceItem[]>([]);
+  const [loading,           setLoading]           = React.useState(true);
+  const [error,             setError]             = React.useState<string | null>(null);
   const [expandedGrievance, setExpandedGrievance] = React.useState<string | null>(null);
+  const [detailCache,       setDetailCache]       = React.useState<Record<string, GrievanceDetail>>({});
+  const [detailLoading,     setDetailLoading]     = React.useState<Set<string>>(new Set());
+  const [detailError,       setDetailError]       = React.useState<Record<string, string>>({});
+
+  const handleExpandGrievance = React.useCallback(async (grvId: string) => {
+    setExpandedGrievance((prev) => (prev === grvId ? null : grvId));
+    if (detailCache[grvId] || detailLoading.has(grvId) || !token) return;
+    setDetailLoading((prev) => new Set(prev).add(grvId));
+    try {
+      const detail = await fetchGrievanceDetail(token, grvId);
+      setDetailCache((prev) => ({ ...prev, [grvId]: detail }));
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to load grievance detail";
+      setDetailError((prev) => ({ ...prev, [grvId]: msg }));
+    } finally {
+      setDetailLoading((prev) => { const s = new Set(prev); s.delete(grvId); return s; });
+    }
+  }, [token, detailCache, detailLoading]);
+
+  const load = React.useCallback(async (t: string) => {
+    if (!t) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const sk = sessionKeyFragment(t);
+      const res = await dedupeAsync(`contrib:grievances:${sk}:${refreshKey}`, () => fetchGrievances(t));
+      setGrievances(res.items ?? []);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to load grievances";
+      setError(msg);
+      toast.error("Grievances", msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [refreshKey]);
+
+  React.useEffect(() => { if (token) load(token); }, [token, load, refreshKey]);
 
   return (
     <div>
@@ -733,12 +1326,7 @@ function GrievanceTab({ onOpenDrawer }: { onOpenDrawer: () => void }) {
           </button>
         </div>
         <div className="flex items-center gap-0">
-          {[
-            { step: "1", label: "Submit" },
-            { step: "2", label: "Review" },
-            { step: "3", label: "Investigate" },
-            { step: "4", label: "Resolution" },
-          ].map((s, i) => (
+          {[{ step: "1", label: "Submit" }, { step: "2", label: "Review" }, { step: "3", label: "Investigate" }, { step: "4", label: "Resolution" }].map((s, i) => (
             <React.Fragment key={s.step}>
               <div className="flex flex-col items-center flex-1">
                 <div className="w-6 h-6 rounded-full bg-brown-50 text-brown-500 flex items-center justify-center text-[10px] font-bold mb-1">{s.step}</div>
@@ -751,27 +1339,52 @@ function GrievanceTab({ onOpenDrawer }: { onOpenDrawer: () => void }) {
         <p className="text-[10px] text-gray-400 mt-3 text-center">Response: 5 business days · Anonymity available · Appeal if unsatisfied</p>
       </div>
 
-      {/* Grievance list */}
-      {mockGrievances.length === 0 ? (
+      {/* Error */}
+      {error && !loading && (
+        <div className="bg-white rounded-xl shadow-sm px-5 py-5 mb-4 flex items-start gap-3">
+          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-[12px] font-semibold text-red-600 mb-1">Could not load grievances</p>
+            <p className="text-[11px] text-gray-400 mb-2">{error}</p>
+            <button onClick={() => load(token)} className="flex items-center gap-1.5 text-[11px] font-semibold text-brown-600 hover:text-brown-700">
+              <RefreshCw className="w-3 h-3" /> Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Skeletons */}
+      {loading && (
+        <div className="space-y-2">
+          {Array.from({ length: 2 }).map((_, i) => <GrievanceRowSkeleton key={i} />)}
+        </div>
+      )}
+
+      {/* Empty */}
+      {!loading && !error && grievances.length === 0 && (
         <div className="bg-white rounded-2xl shadow-sm py-14 text-center">
           <Scale className="w-9 h-9 text-gray-200 mx-auto mb-2" />
           <p className="text-[13px] font-medium text-gray-500">No grievances filed</p>
         </div>
-      ) : (
+      )}
+
+      {/* Grievance list */}
+      {!loading && !error && grievances.length > 0 && (
         <div className="space-y-2">
-          {mockGrievances.map((grv) => {
+          {grievances.map((grv) => {
             const st = statusColors[grv.status] || statusColors.open;
             const isExpanded = expandedGrievance === grv.id;
             return (
               <div key={grv.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
-                <button onClick={() => setExpandedGrievance(isExpanded ? null : grv.id)} className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors">
+                <button onClick={() => handleExpandGrievance(grv.id)} className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors">
                   <div className="w-8 h-8 rounded-xl bg-gold-50 flex items-center justify-center shrink-0"><Scale className="w-4 h-4 text-gold-500" /></div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium text-gray-800 truncate mb-0.5">{grv.subject}</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <Pill {...st} />
-                      <span className="text-[10px] text-gray-400">{grievanceCategoryLabels[grv.category]}</span>
-                      <span className="text-[10px] text-gray-400">· {timeAgo(grv.createdAt)}</span>
+                      <span className="text-[10px] text-gray-400">{grievanceCategoryLabels[grv.category] ?? grv.category}</span>
+                      <span className="text-[10px] text-gray-400">· {timeAgo(grv.created_at)}</span>
+                      {grv.anonymous && <span className="flex items-center gap-1 text-[10px] text-gray-400"><EyeOff className="w-3 h-3" /> Anonymous</span>}
                     </div>
                   </div>
                   <ChevronDown className={cn("w-4 h-4 text-gray-300 shrink-0 transition-transform", isExpanded && "rotate-180")} />
@@ -780,7 +1393,7 @@ function GrievanceTab({ onOpenDrawer }: { onOpenDrawer: () => void }) {
                   {isExpanded && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
                       <div className="px-5 pb-5 border-t border-gray-50 pt-4">
-                        <p className="text-[12px] text-gray-500 leading-relaxed mb-4">{grv.description}</p>
+                        {/* Status progress */}
                         <div className="flex items-center gap-0 mb-4">
                           {["Submitted", "Under Review", "Investigation", "Resolution"].map((step, i) => {
                             const stepStatuses = ["submitted", "under_review", "investigation", "resolved"];
@@ -800,17 +1413,49 @@ function GrievanceTab({ onOpenDrawer }: { onOpenDrawer: () => void }) {
                             );
                           })}
                         </div>
-                        <div className="flex items-center gap-4 text-[10px] text-gray-400">
-                          <span>Filed: {formatDate(grv.createdAt)}</span>
-                          <span>Updated: {formatDate(grv.updatedAt)}</span>
-                          {grv.anonymous && <span className="flex items-center gap-1 text-gray-500"><EyeOff className="w-3 h-3" /> Anonymous</span>}
-                        </div>
-                        {grv.resolution && (
-                          <div className="mt-3 px-4 py-3 rounded-xl bg-forest-50">
-                            <p className="text-[11px] font-semibold text-forest-700 mb-1">Resolution</p>
-                            <p className="text-[11px] text-forest-600 leading-relaxed">{grv.resolution}</p>
+                        {/* Detail loading skeleton */}
+                        {detailLoading.has(grv.id) && (
+                          <div className="space-y-2 mb-3">
+                            <div className="h-3 bg-gray-100 rounded animate-pulse w-full" />
+                            <div className="h-3 bg-gray-100 rounded animate-pulse w-4/5" />
                           </div>
                         )}
+                        {/* Detail error */}
+                        {detailError[grv.id] && !detailLoading.has(grv.id) && (
+                          <p className="text-[10px] text-red-500 mb-3">{detailError[grv.id]}</p>
+                        )}
+                        {/* Full detail: description + related_reference */}
+                        {detailCache[grv.id] && !detailLoading.has(grv.id) && (
+                          <div className="space-y-2 mb-3">
+                            {detailCache[grv.id].description && (
+                              <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                                <p className="text-[10px] font-semibold text-gray-500 mb-1">Description</p>
+                                <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{detailCache[grv.id].description}</p>
+                              </div>
+                            )}
+                            {detailCache[grv.id].related_reference && (
+                              <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                                <FileText className="w-3 h-3 shrink-0" />
+                                Related: <span className="font-mono text-gray-600">{detailCache[grv.id].related_reference}</span>
+                              </div>
+                            )}
+                            {detailCache[grv.id].updated_at && (
+                              <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                                <span>Updated: {formatDate(detailCache[grv.id].updated_at)}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {/* Dates + anonymous badge */}
+                        <div className="flex items-center gap-4 text-[10px] text-gray-400">
+                          <span>Filed: {formatDate(grv.created_at)}</span>
+                          {grv.anonymous && <span className="flex items-center gap-1 text-gray-500"><EyeOff className="w-3 h-3" /> Anonymous</span>}
+                        </div>
+                        {/* Grievance ID */}
+                        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-gray-400">
+                          <FileText className="w-3 h-3" />
+                          ID: <span className="font-mono font-semibold text-gray-600">{grv.id}</span>
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -895,9 +1540,31 @@ type TabId = "help" | "tickets" | "grievance" | "safety";
 type FormId = "ticket" | "grievance" | "safety" | null;
 
 export default function SupportPage() {
-  const [activeTab, setActiveTab] = React.useState<TabId>("help");
-  const [activeDrawer, setActiveDrawer] = React.useState<FormId>(null);
-  const openTicketCount = mockSupportTickets.filter((t) => t.status === "open" || t.status === "in_progress").length;
+  const { data: session, status: sessionStatus } = useSession();
+  const tokenRef = React.useRef<string>("");
+  if (session?.user?.accessToken) tokenRef.current = session.user.accessToken as string;
+  const token = tokenRef.current;
+
+  const [activeTab,            setActiveTab]            = React.useState<TabId>("help");
+  const [activeDrawer,         setActiveDrawer]         = React.useState<FormId>(null);
+  const [openTicketCount,      setOpenTicketCount]      = React.useState(0);
+  const [ticketsRefreshKey,    setTicketsRefreshKey]    = React.useState(0);
+  const [grievancesRefreshKey, setGrievancesRefreshKey] = React.useState(0);
+
+  const refreshTickets = React.useCallback(() => {
+    setTicketsRefreshKey((k) => k + 1);
+    setActiveTab("tickets");
+    setActiveDrawer(null);
+  }, []);
+
+  const refreshGrievances = React.useCallback(() => {
+    setGrievancesRefreshKey((k) => k + 1);
+    setActiveTab("grievance");
+    setActiveDrawer(null);
+  }, []);
+
+  /* wait for session before rendering API-driven tabs */
+  const ready = sessionStatus !== "loading";
 
   const tabs: Array<{ id: TabId; label: string; icon: React.ElementType; count?: number }> = [
     { id: "help", label: "Help Center", icon: BookOpen },
@@ -939,22 +1606,44 @@ export default function SupportPage() {
         </motion.div>
 
         <motion.div variants={fadeUp}>
-          {activeTab === "help" && <HelpCenterTab />}
-          {activeTab === "tickets" && <TicketsTab onOpenDrawer={() => setActiveDrawer("ticket")} />}
-          {activeTab === "grievance" && <GrievanceTab onOpenDrawer={() => setActiveDrawer("grievance")} />}
+          {activeTab === "help" && <HelpCenterTab token={ready ? token : ""} />}
+          {activeTab === "tickets" && (
+            <TicketsTab
+              key={ticketsRefreshKey}
+              token={ready ? token : ""}
+              onOpenDrawer={() => setActiveDrawer("ticket")}
+              onCountChange={setOpenTicketCount}
+            />
+          )}
+          {activeTab === "grievance" && (
+            <GrievanceTab
+              key={grievancesRefreshKey}
+              token={ready ? token : ""}
+              onOpenDrawer={() => setActiveDrawer("grievance")}
+              refreshKey={grievancesRefreshKey}
+            />
+          )}
           {activeTab === "safety" && <SafetyTab onOpenDrawer={() => setActiveDrawer("safety")} />}
         </motion.div>
       </motion.div>
 
       {/* Drawers */}
       <FormDrawer open={activeDrawer === "ticket"} onClose={() => setActiveDrawer(null)} title={formTitles.ticket}>
-        <NewTicketForm onClose={() => setActiveDrawer(null)} />
+        <NewTicketForm
+          token={ready ? token : ""}
+          onClose={() => setActiveDrawer(null)}
+          onSuccess={refreshTickets}
+        />
       </FormDrawer>
       <FormDrawer open={activeDrawer === "grievance"} onClose={() => setActiveDrawer(null)} title={formTitles.grievance}>
-        <NewGrievanceForm onClose={() => setActiveDrawer(null)} />
+        <NewGrievanceForm
+          token={ready ? token : ""}
+          onClose={() => setActiveDrawer(null)}
+          onSuccess={refreshGrievances}
+        />
       </FormDrawer>
       <FormDrawer open={activeDrawer === "safety"} onClose={() => setActiveDrawer(null)} title={formTitles.safety}>
-        <SafetyReportForm onClose={() => setActiveDrawer(null)} />
+        <SafetyReportForm token={ready ? token : ""} onClose={() => setActiveDrawer(null)} />
       </FormDrawer>
     </>
   );

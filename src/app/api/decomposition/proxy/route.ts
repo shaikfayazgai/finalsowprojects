@@ -15,29 +15,13 @@ import { getToken } from "next-auth/jwt";
 
 const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
 
-// Dedicated service account — separate from the user's personal account
-const ENT_SVC_EMAIL_BASE = "glimmora-decomp-svc";
-const ENT_SVC_PASSWORD = "DecompSvc@2026!";
-
-// Use a persistent email — generate once, then reuse
-function getServiceEmail(): string {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require("fs");
-    const emailPath = "/tmp/glimmora-decomp-svc-email.txt";
-    if (fs.existsSync(emailPath)) {
-      return fs.readFileSync(emailPath, "utf8").trim();
-    }
-    // Generate a new unique email
-    const email = `${ENT_SVC_EMAIL_BASE}-${Date.now()}@glimmora.dev`;
-    fs.writeFileSync(emailPath, email, "utf8");
-    return email;
-  } catch {
-    return `${ENT_SVC_EMAIL_BASE}@glimmora.dev`;
-  }
-}
-
-const ENT_SVC_EMAIL = getServiceEmail();
+// Use the SAME service account as /api/sow/token so plans created by one
+// route are accessible by the other (same enterprise tenant). Override via
+// env vars in production.
+const ENT_SVC_EMAIL =
+  process.env.GLIMMORA_ENTERPRISE_SERVICE_EMAIL || "enterprise-service@glimmora.com";
+const ENT_SVC_PASSWORD =
+  process.env.GLIMMORA_ENTERPRISE_SERVICE_PASSWORD || "Test@12345";
 
 // ── State (persisted to file so TOTP secret survives restarts) ───────────
 let cachedToken: { token: string; expiresAt: number } | null = null;
@@ -277,30 +261,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  // Priority 1: User's own token (available when MFA was completed)
-  let token = jwt.glimmoraAccessToken as string | undefined;
-  let tokenSource = token ? "user-session" : "none";
-
-  // Priority 2: Refresh user's expired token
-  if (!token && jwt.glimmoraRefreshToken) {
-    try {
-      const data = await glimmoraFetch("/api/v1/auth/refresh", {
-        method: "POST",
-        body: JSON.stringify({ refresh_token: jwt.glimmoraRefreshToken }),
-      });
-      if (data.access_token) {
-        token = data.access_token;
-        tokenSource = "user-refresh";
-      }
-    } catch { /* fall through */ }
+  // Delegate to /api/sow/token?role=enterprise so this proxy and the
+  // direct-fetch create/list path share ONE token source. Forwarding cookies
+  // preserves the user's NextAuth session for the inner request.
+  let token: string | undefined;
+  let tokenSource = "sow-token-endpoint";
+  try {
+    const origin = req.nextUrl.origin;
+    const cookie = req.headers.get("cookie") ?? "";
+    const tokenRes = await fetch(`${origin}/api/sow/token?role=enterprise`, {
+      headers: cookie ? { cookie } : {},
+    });
+    const tokenJson = await tokenRes.json().catch(() => ({}));
+    token = tokenJson?.token as string | undefined;
+  } catch {
+    // fall through to service account below
   }
 
-  // Priority 3: Dedicated enterprise service account (handles MFA skip case)
+  // Fallback: acquire service account token directly (handles MFA-setup)
   if (!token) {
     const entToken = await acquireEnterpriseToken();
     if (entToken) {
       token = entToken;
-      tokenSource = "enterprise-service";
+      tokenSource = "enterprise-service-fallback";
     }
   }
 

@@ -252,19 +252,21 @@ export default function LearningPage() {
         )}
       </motion.div>
 
-      {/* ═══ FILTERS ═══ */}
-      <motion.div variants={fadeUp} className="card-parchment px-5 py-4 mb-6">
-        <div className="flex flex-wrap items-end gap-3">
-          {/* Type */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Type</span>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="text-[12px] border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300"
-            >
-              {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+      {/* ═══ EMPTY STATE ═══ */}
+      {recommendations.length === 0 && (
+        <motion.div variants={fadeUp} className="card-parchment px-6 py-16 text-center">
+          <Sparkles className="w-8 h-8 mx-auto mb-3 text-gray-300" />
+          <p className="text-[14px] font-medium text-gray-500 mb-1">No recommendations yet</p>
+          <p className="text-[12px] text-gray-400 max-w-[360px] mx-auto">Complete tasks and add skills to your profile to receive personalised AI learning suggestions.</p>
+        </motion.div>
+      )}
+
+      {/* ═══ TASK-BASED RECOMMENDATIONS ═══ */}
+      {taskBased.length > 0 && (
+        <motion.div variants={fadeUp} className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-gray-800">Recommended for Your Tasks</h2>
+            <span className="text-[11px] text-gray-400">{taskBased.length} recommendations</span>
           </div>
 
           {/* Priority */}
