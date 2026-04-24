@@ -8,7 +8,13 @@ export async function POST(req: NextRequest) {
 
     // Dev-only hardcoded admin bypass
     if (email?.trim().toLowerCase() === "admin@glimmora.dev" && password === "Admin@1234") {
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({
+        ok: true,
+        accessToken:  "",
+        refreshToken: "",
+        expiresIn:    3600,
+        user: { id: "dev-admin-001", email: "admin@glimmora.dev", firstName: "Glimmora", lastName: "Admin", role: "admin" },
+      });
     }
 
     const response = await authApi.login(
@@ -45,13 +51,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Return the Glimmora API tokens so the login page can pass them
-    // into the NextAuth session (stored in the JWT via the jwt callback).
+    // Return tokens + user so the login page can create a session via
+    // signIn("glimmora-oauth") without making a second login API call.
     return NextResponse.json({
       ok: true,
-      accessToken: response.access_token,
+      accessToken:  response.access_token,
       refreshToken: response.refresh_token,
-      expiresIn: response.expires_in,
+      expiresIn:    response.expires_in,
+      user: {
+        id:        response.user.id,
+        email:     response.user.email,
+        firstName: response.user.firstName,
+        lastName:  response.user.lastName,
+        role:      response.user.role,
+      },
     });
   } catch (err) {
     if (err instanceof ApiError) {
@@ -64,21 +77,21 @@ export async function POST(req: NextRequest) {
         if (isNotFound) {
           return NextResponse.json(
             {
+              ok: false,
               error: "NO_ACCOUNT",
               message:
                 "We couldn't find an account associated with this email. Please check your email or create a new account to get started.",
             },
-            { status: 401 },
           );
         }
 
         return NextResponse.json(
           {
+            ok: false,
             error: "WRONG_PASSWORD",
             message:
               "The password you entered is incorrect. Please try again or reset your password.",
           },
-          { status: 401 },
         );
       }
     }
