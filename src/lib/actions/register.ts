@@ -3,15 +3,14 @@
 import { prisma } from "@/lib/db";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
-import {
-  contributorRegistrationSchema,
-  enterpriseRegistrationSchema,
-} from "@/lib/validations/registration";
+import { contributorRegistrationSchema, enterpriseRegistrationSchema } from "@/lib/validations/registration";
 import { sendEmail, buildEmailHtml } from "@/lib/email";
 import { DEFAULT_TEMPLATES } from "@/lib/stores/email-template-store";
 import { getBaseUrl } from "@/lib/utils/base-url";
 
-export type ActionResult = { success: true } | { success: false; error: string };
+export type ActionResult =
+  | { success: true; emailWarning?: string }
+  | { success: false; error: string };
 
 // ── Contributor Registration ──────────────────────────────────────────────
 
@@ -60,7 +59,7 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
 
     const baseUrl = getBaseUrl();
     const contributorTpl = DEFAULT_TEMPLATES.welcome_contributor;
-    sendEmail({
+    const emailResult = await sendEmail({
       to: v.email.toLowerCase(),
       subject: contributorTpl.subject.replace("{{firstName}}", v.firstName),
       html: buildEmailHtml({
@@ -73,9 +72,11 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
           onboardingUrl: `${baseUrl}/contributor/onboarding`,
         },
       }),
-    }).catch(() => {/* fire-and-forget */});
+    });
 
-    return { success: true };
+    return emailResult.success
+      ? { success: true }
+      : { success: true, emailWarning: emailResult.error ?? "Welcome email failed to send." };
   } catch (err) {
     if (err instanceof ApiError) {
       console.error("[registerContributor] API error", err.status, err.message);
@@ -227,7 +228,7 @@ export async function registerEnterprise(data: unknown): Promise<ActionResult> {
 
     const baseUrl = getBaseUrl();
     const enterpriseTpl = DEFAULT_TEMPLATES.welcome_enterprise;
-    sendEmail({
+    const emailResult = await sendEmail({
       to: v.adminEmail.toLowerCase(),
       subject: enterpriseTpl.subject.replace("{{orgName}}", v.orgName),
       html: buildEmailHtml({
@@ -240,9 +241,11 @@ export async function registerEnterprise(data: unknown): Promise<ActionResult> {
           dashboardUrl: `${baseUrl}/enterprise/dashboard`,
         },
       }),
-    }).catch(() => {/* fire-and-forget */});
+    });
 
-    return { success: true };
+    return emailResult.success
+      ? { success: true }
+      : { success: true, emailWarning: emailResult.error ?? "Welcome email failed to send." };
   } catch (err) {
     if (err instanceof ApiError) {
       if (err.status === 409) {

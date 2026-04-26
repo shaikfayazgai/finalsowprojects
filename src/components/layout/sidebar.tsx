@@ -228,6 +228,7 @@ export function Sidebar({ config }: SidebarProps) {
                             <Link
                               key={item.href}
                               href={effectiveHref}
+                              prefetch={false}
                               onClick={() => closeMobile()}
                               className={cn(
                                 "group/item relative flex items-center gap-2.5 rounded-xl transition-colors duration-150",

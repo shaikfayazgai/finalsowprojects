@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import QRCode from "qrcode";
 
 /**
  * Server-side MFA endpoint that handles ALL MFA scenarios:
@@ -11,6 +12,18 @@ import { NextRequest, NextResponse } from "next/server";
  */
 
 const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
+
+async function normalizeQrUri(initData: Record<string, unknown>): Promise<string> {
+  const qrPng = String(initData.qr_code_png_base64 || initData.qrCodePngBase64 || "");
+  if (qrPng) {
+    return `data:image/png;base64,${qrPng}`;
+  }
+  const otpauthUri = String(initData.otpauth_uri || initData.otpAuthUri || "");
+  if (!otpauthUri) return "";
+  if (otpauthUri.startsWith("data:image/")) return otpauthUri;
+  // Some backend responses only return otpauth:// URI; render a PNG QR for browser <img>.
+  return await QRCode.toDataURL(otpauthUri, { margin: 1, width: 220 });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,8 +51,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ phase: "setup", ...confirmData });
     }
 
+    // Init-only path with existing pending token (no need to re-login or store password in client state)
+    if (action === "init" && providedToken) {
+      const initRes = await fetch(`${GLIMMORA_API}/api/v1/auth/mfa/setup/init`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${providedToken}`,
+        },
+      });
+      const initData = await initRes.json().catch(() => ({}));
+      if (!initRes.ok) {
+        if (initData.code === "WRONG_MFA_PHASE" || (initData.detail && String(initData.detail).includes("WRONG_MFA_PHASE"))) {
+          return NextResponse.json({ phase: "verify", mfa_pending_token: providedToken });
+        }
+        return NextResponse.json(initData, { status: initRes.status });
+      }
+      const secret = initData.secret || initData.secret_base32 || initData.secretBase32 || initData.totp_secret || "";
+      const qrUri = await normalizeQrUri(initData as Record<string, unknown>);
+      return NextResponse.json({
+        phase: "setup",
+        qr_uri: qrUri,
+        secret,
+        mfa_pending_token: providedToken,
+      });
+    }
+
     if (!email || !password) {
-      return NextResponse.json({ error: "Missing email or password" }, { status: 400 });
+      return NextResponse.json(
+        { error: "NO_MFA_CONTEXT", message: "Missing MFA context. Please login again." },
+        { status: 400 },
+      );
     }
 
     // Step 1: Fresh login
@@ -91,13 +133,12 @@ export async function POST(req: NextRequest) {
           return NextResponse.json(initData, { status: initRes.status });
         }
 
-        const qrPng = initData.qr_code_png_base64 || initData.qrCodePngBase64 || "";
-        const otpauthUri = initData.otpauth_uri || initData.otpAuthUri || "";
         const secret = initData.secret || initData.secret_base32 || initData.secretBase32 || initData.totp_secret || "";
+        const qrUri = await normalizeQrUri(initData as Record<string, unknown>);
 
         return NextResponse.json({
           phase: "setup",
-          qr_uri: qrPng ? `data:image/png;base64,${qrPng}` : otpauthUri,
+          qr_uri: qrUri,
           secret,
           mfa_pending_token: pendingToken,
         });

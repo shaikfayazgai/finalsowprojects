@@ -35,6 +35,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { sowApi } from "@/lib/api/sow";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { authApi } from "@/lib/api/auth";
 import { ApiError, fetchInternal } from "@/lib/api/client";
@@ -465,7 +466,29 @@ export default function SettingsPage() {
                       <Button variant="outline" size="sm" onClick={() => setIsEditingCompany(false)}>
                         Cancel
                       </Button>
-                      <Button variant="primary" size="sm" onClick={() => { setIsEditingCompany(false); toast.success("Company profile saved successfully."); }}>
+                      <Button variant="primary" size="sm"
+                        onClick={async () => {
+                          try {
+                            await sowApi.updateProfile({
+                              company_name: companyName,
+                              industry: industryType,
+                              company_size: companySize,
+                              address_line1: addressLine1,
+                              address_line2: addressLine2,
+                              city,
+                              state: addrState,
+                              postal_code: postalCode,
+                              country,
+                              website,
+                              email: primaryEmail,
+                            } as any);
+                            setIsEditingCompany(false);
+                            toast.success("Company profile saved successfully.");
+                          } catch {
+                            toast.error("Failed to save. Please try again.");
+                          }
+                        }}
+                      >
                         Save
                       </Button>
                     </div>

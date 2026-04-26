@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,10 +5,57 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  
 }
-//example
+
 model User {
-  id   Int    @id @default(autoincrement())
-  name String
+  id            String               @id @default(cuid())
+  email         String               @unique
+  passwordHash  String?
+  provider      String?
+  firstName     String
+  lastName      String               @default("")
+  role          String               @default("contributor")
+  phone         String?
+  emailVerified Boolean              @default(false)
+  phoneVerified Boolean              @default(false)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  contributorProfile ContributorProfile?
+}
+
+model ContributorProfile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  contribType        String
+  country            String
+  dob                DateTime
+  timezone           String
+  departmentCategory String
+  departmentOther    String?
+  primarySkills      String[]
+  secondarySkills    String[]
+  otherSkills        String[]
+  availability       String
+  degree             String?
+  branch             String?
+  linkedin           String?
+  careerStage        String?
+  yearsExperience    String?
+  workStart          String?
+  workEnd            String?
+
+  ndaAccepted        Boolean  @default(false)
+  ndaSignature       String   @default("")
+  acceptTos          Boolean  @default(false)
+  acceptCoc          Boolean  @default(false)
+  acceptPrivacy      Boolean  @default(false)
+  acceptFee          Boolean  @default(false)
+  acceptAhp          Boolean  @default(false)
+  marketingOptIn     Boolean  @default(false)
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }

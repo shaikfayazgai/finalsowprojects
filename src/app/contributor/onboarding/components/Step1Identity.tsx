@@ -1,14 +1,21 @@
 "use client";
 
-import { ArrowRight, CheckCircle, AlertCircle, Check, GraduationCap, Briefcase, Users, User } from "lucide-react";
+import {
+  ArrowRight, CheckCircle, AlertCircle, Check, GraduationCap, Briefcase, Users, User, Smartphone,
+} from "lucide-react";
 import { Button, Label } from "@/components/ui";
 import { CountryCombobox } from "@/app/auth/register/components/CountryCombobox";
+import { CountryDialPicker } from "@/app/auth/register/components/CountryDialPicker";
+import { COUNTRIES_DATA } from "@/app/auth/register/data";
 import type { ContributorType } from "@/app/auth/register/types";
 
 interface Props {
   firstName: string;    setFirstName: (v: string) => void;
   lastName: string;     setLastName: (v: string) => void;
-  email: string;        setEmail: (v: string) => void;
+  phoneCountry: string; setPhoneCountry: (v: string) => void;
+  phone: string;        setPhone: (v: string) => void;
+  email: string;
+  setEmail: (v: string) => void;
   contribType: ContributorType; setContribType: (v: ContributorType) => void;
   country: string;      setCountry: (v: string) => void;
   image?: string;
@@ -29,12 +36,17 @@ const CONTRIBUTOR_TYPES: {
 ];
 
 export function Step1Identity({
-  firstName, setFirstName, lastName, setLastName, email,
+  firstName, setFirstName, lastName, setLastName,
+  phoneCountry, setPhoneCountry, phone, setPhone,
+  email, setEmail: _setEmail,
   contribType, setContribType,
   country, setCountry,
   image,
   error, onContinue, ssoProvider = null,
 }: Props) {
+  const selectedPhoneCountry = COUNTRIES_DATA.find((c) => c.name === phoneCountry);
+  const phoneMaxLen = selectedPhoneCountry?.phoneMaxLength ?? 12;
+
   return (
     <div className="max-w-xl">
       {/* Header */}
@@ -94,6 +106,37 @@ export function Step1Identity({
             />
           </div>
         </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <Smartphone className="w-3.5 h-3.5 text-gray-400" />
+            Mobile Number <span className="text-red-400">*</span>
+          </Label>
+          <div className="flex flex-1 items-center rounded-xl border border-gray-200 bg-white outline-none focus-within:border-teal-400 transition-colors">
+            <CountryDialPicker
+              value={phoneCountry}
+              onChange={(name) => {
+                const c = COUNTRIES_DATA.find((x) => x.name === name)!;
+                setPhoneCountry(c.name);
+                setPhone(c.code + " ");
+              }}
+            />
+            <input
+              type="tel"
+              placeholder={`Number (${phoneMaxLen} digits)`}
+              value={phone.replace(/^\+\d+\s?/, "")}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, "").slice(0, phoneMaxLen);
+                const cc = selectedPhoneCountry?.code ?? "";
+                setPhone(`${cc} ${digits}`);
+              }}
+              maxLength={phoneMaxLen}
+              autoComplete="tel-national"
+              className="flex-1 h-11 px-3 text-sm text-gray-800 bg-transparent outline-none placeholder:text-gray-400"
+            />
+          </div>
+        </div>
+
         {/* Contributor Type */}
         <div className="space-y-2">
           <Label className="text-sm font-medium text-gray-700">

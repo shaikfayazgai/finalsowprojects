@@ -854,7 +854,7 @@ export default function SOWAIDraftReviewPage() {
                   approvalStages: INITIAL_APPROVAL_STAGES,
                 });
                 setSubmitted(true);
-                setTimeout(() => router.push(`/enterprise/sow/${newId}/approve`), 1500);
+                setTimeout(() => router.push(`/enterprise/sow/${newId}?tab=approval`), 600);
               }}
               className="flex items-center gap-1.5 rounded-lg transition-all duration-200"
               style={{
