@@ -6,10 +6,11 @@ import {
   Users, UserPlus, Search, KeyRound, Shield, Building2,
   ChevronDown, MoreHorizontal, CheckCircle2, Clock, Ban,
   X, Send, Pencil, Trash2, Eye, RefreshCw, ShieldCheck,
-  UserCog, ArrowUpDown, ArrowUp, ArrowDown,
+  UserCog, ArrowUpDown, ArrowUp, ArrowDown, ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
+import { COUNTRIES_DATA } from "@/app/auth/register/data";
 
 /* ════════════════════════ Types ════════════════════════ */
 
@@ -20,9 +21,12 @@ interface PlatformUser {
   id:         string;
   name:       string;
   email:      string;
+  mobile?:    string;
   role:       Role;
   status:     Status;
   org?:       string;
+  department?: string;
+  description?: string;
   joinedAt:   string;
   lastActive: string;
   avatar?:    string;
@@ -246,45 +250,146 @@ interface AddUserModalProps {
 function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
   const [name,  setName]  = React.useState("");
   const [email, setEmail] = React.useState("");
-  const [role,  setRole]  = React.useState<Role>("contributor");
+  const [phoneCountry, setPhoneCountry] = React.useState("India");
+  const [mobile, setMobile] = React.useState("");
+  const [active, setActive] = React.useState<"yes" | "no">("yes");
+  const [department, setDepartment] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [role,  setRole]  = React.useState<Role>("admin");
   const [org,   setOrg]   = React.useState("");
+  const [view, setView] = React.useState<"role" | "details">("role");
   const [step,  setStep]  = React.useState<"form" | "success">("form");
-  const [errors, setErrors] = React.useState<{ name?: string; email?: string }>({});
+  const [errors, setErrors] = React.useState<{ name?: string; email?: string; mobile?: string }>({});
+  const [submitError, setSubmitError] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
 
   function reset() {
-    setName(""); setEmail(""); setRole("contributor"); setOrg("");
+    setName(""); setEmail(""); setPhoneCountry("India"); setMobile(""); setActive("yes"); setDepartment(""); setDescription("");
+    setRole("admin"); setOrg("");
+    setView("role");
     setStep("form"); setErrors({});
+    setSubmitError("");
+    setSubmitting(false);
   }
 
   function handleClose() { reset(); onClose(); }
 
+  React.useEffect(() => {
+    if (open) reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  function handleRoleChange(nextRole: Role) {
+    setRole(nextRole);
+    setSubmitError("");
+    if (nextRole !== "admin") {
+      setPhoneCountry("India");
+      setMobile("");
+      setActive("yes");
+      setDepartment("");
+      setDescription("");
+      setErrors(prev => ({ name: prev.name, email: prev.email }));
+    }
+    setView("details");
+  }
+
   function validate() {
     const e: typeof errors = {};
+    const selectedCountry = COUNTRIES_DATA.find(c => c.name === phoneCountry);
+    const phoneDigits = mobile.replace(/\D/g, "");
     if (!name.trim())  e.name  = "Name is required";
     if (!email.trim()) e.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "Enter a valid email";
+    if (role === "admin" && !phoneDigits) e.mobile = "Mobile number is required";
+    else if (role === "admin" && selectedCountry && phoneDigits.length > selectedCountry.phoneMaxLength) {
+      e.mobile = `Mobile number must be ${selectedCountry.phoneMaxLength} digits or less`;
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
+    setSubmitError("");
+    setSubmitting(true);
+    const selectedCountry = COUNTRIES_DATA.find(c => c.name === phoneCountry);
+    const mobileWithCode = selectedCountry ? `${selectedCountry.code} ${mobile}`.trim() : mobile.trim();
+
+    const [firstName, ...rest] = name.trim().split(/\s+/);
+    const lastName = rest.join(" ");
+    const payload = {
+      // Common variants to handle backend naming differences.
+      full_name: name.trim(),
+      firstName,
+      first_name: firstName,
+      lastName,
+      last_name: lastName,
+      name: name.trim(),
+      email: email.trim(),
+      role,
+      phone: role === "admin" ? (mobileWithCode || undefined) : undefined,
+      mobile: role === "admin" ? (mobileWithCode || undefined) : undefined,
+      mobile_number: role === "admin" ? (mobileWithCode || undefined) : undefined,
+      isActive: role === "admin" ? active === "yes" : undefined,
+      active: role === "admin" ? active : undefined,
+      status: role === "admin" ? (active === "yes" ? "active" : "invited") : "invited",
+      department: role === "admin" ? (department.trim() || undefined) : undefined,
+      description: role === "admin" ? (description.trim() || undefined) : undefined,
+      org: org.trim() || undefined,
+      organisation: org.trim() || undefined,
+      organization: org.trim() || undefined,
+      sendInvite: true,
+      send_invite: true,
+    };
+    try {
+      const res = await fetch("/api/superadmin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSubmitError(
+          (data as { error?: string; message?: string }).error ||
+          (data as { error?: string; message?: string }).message ||
+          "Failed to send invite. Please try again.",
+        );
+        setSubmitting(false);
+        return;
+      }
+    } catch {
+      setSubmitError("Network error while creating user. Please try again.");
+      setSubmitting(false);
+      return;
+    }
+
     const newUser: PlatformUser = {
       id:         `u-${Date.now()}`,
       name:       name.trim(),
       email:      email.trim(),
+      mobile:     role === "admin" ? (mobileWithCode || undefined) : undefined,
       role,
-      status:     "invited",
+      status:     role === "admin" ? (active === "yes" ? "active" : "invited") : "invited",
       org:        org.trim() || undefined,
+      department: role === "admin" ? (department.trim() || undefined) : undefined,
+      description: role === "admin" ? (description.trim() || undefined) : undefined,
       joinedAt:   new Date().toISOString().slice(0, 10),
       lastActive: "—",
     };
     onAdd(newUser);
+    setSubmitting(false);
     setStep("success");
   }
 
   const rc = ROLE_CONFIG[role];
+  const selectedCountry = COUNTRIES_DATA.find(c => c.name === phoneCountry);
+  const phoneMaxLen = selectedCountry?.phoneMaxLength ?? 12;
+  const baseInputClass =
+    "w-full h-11 px-3.5 text-[13px] rounded-xl border border-beige-100 bg-beige-50 text-brown-950 placeholder:text-beige-350 focus:bg-white focus:border-brown-300 focus:outline-none transition-all duration-200";
+  const invalidInputClass = "border-red-300 focus:border-red-400";
+  const legacyInputClass =
+    "w-full h-10 px-3.5 text-[13px] rounded-xl border bg-beige-50 text-brown-950 placeholder:text-beige-300 focus:bg-white focus:outline-none transition-all";
 
   return (
     <AnimatePresence>
@@ -306,7 +411,10 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
             className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
           >
             <div
-              className="w-full max-w-md rounded-2xl bg-white border border-beige-100 overflow-hidden pointer-events-auto"
+              className={cn(
+                "w-full rounded-2xl bg-white border border-beige-100 overflow-hidden pointer-events-auto",
+                view === "role" ? "max-w-[560px]" : role === "admin" ? "max-w-[500px]" : "max-w-md",
+              )}
               style={{ boxShadow: "0 24px 60px rgba(33,23,19,0.14)" }}
             >
               {step === "form" ? (
@@ -314,14 +422,29 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
                   {/* Modal header */}
                   <div className="flex items-start justify-between px-6 pt-6 pb-5 border-b border-beige-50">
                     <div>
+                      {view === "details" && (
+                        <button
+                          type="button"
+                          onClick={() => setView("role")}
+                          className="inline-flex items-center gap-1.5 mb-2 text-[11px] font-semibold text-brown-600 hover:text-brown-800 transition-colors"
+                          aria-label="Back to role selection"
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5" />
+                          Back to role selection
+                        </button>
+                      )}
                       <div className="flex items-center gap-2 mb-1">
                         <div className="w-7 h-7 rounded-lg bg-brown-50 flex items-center justify-center">
                           <UserPlus className="w-3.5 h-3.5 text-brown-600" />
                         </div>
-                        <h2 className="font-heading text-[17px] font-bold text-brown-950">Add User</h2>
+                        <h2 className="font-heading text-[17px] font-bold text-brown-950">
+                          {view === "role" ? "Select Role" : "Add User"}
+                        </h2>
                       </div>
-                      <p className="text-[12px] text-beige-500">
-                        An invitation email will be sent to the provided address.
+                      <p className="text-[12px] text-beige-500 leading-relaxed">
+                        {view === "role"
+                          ? "Choose a role to continue with onboarding fields."
+                          : "An invitation email will be sent to the provided address."}
                       </p>
                     </div>
                     <button
@@ -332,65 +455,88 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
                     </button>
                   </div>
 
-                  <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+                  <form
+                    onSubmit={handleSubmit}
+                    className={cn(
+                      view === "role" ? "px-6 py-5 space-y-6" : "px-5 py-4 space-y-5",
+                    )}
+                  >
 
-                    {/* Role picker */}
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-beige-500 mb-2">
-                        Role
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(["admin", "enterprise", "contributor", "reviewer"] as Role[]).map(r => {
-                          const c = ROLE_CONFIG[r];
-                          const RIcon = c.icon;
-                          const selected = role === r;
-                          return (
-                            <button
-                              key={r}
-                              type="button"
-                              onClick={() => setRole(r)}
-                              className={cn(
-                                "flex items-start gap-2.5 rounded-xl p-3 border transition-all text-left",
-                                selected
-                                  ? "border-brown-300 bg-brown-50 ring-1 ring-brown-200"
-                                  : "border-beige-100 hover:border-beige-200 hover:bg-beige-50",
-                              )}
-                            >
-                              <div className={cn(
-                                "w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
-                                selected ? c.bg : "bg-beige-100",
-                              )}>
-                                <RIcon className={cn("w-3 h-3", selected ? c.text : "text-beige-400")} />
-                              </div>
-                              <div>
-                                <p className={cn(
-                                  "text-[12px] font-semibold leading-tight",
-                                  selected ? "text-brown-950" : "text-brown-700",
+                    {/* Role picker step */}
+                    {view === "role" && (
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-beige-500 mb-2.5">
+                          Role
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(["admin", "enterprise", "contributor", "reviewer"] as Role[]).map(r => {
+                            const c = ROLE_CONFIG[r];
+                            const RIcon = c.icon;
+                            const selected = role === r;
+                            return (
+                              <button
+                                key={r}
+                                type="button"
+                                onClick={() => handleRoleChange(r)}
+                                className={cn(
+                                  "flex items-start gap-2.5 rounded-xl p-3 border transition-all text-left",
+                                  selected
+                                    ? "border-brown-300 bg-brown-50 ring-1 ring-brown-200 shadow-sm"
+                                    : "border-beige-100 hover:border-beige-200 hover:bg-beige-50",
+                                )}
+                              >
+                                <div className={cn(
+                                  "w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
+                                  selected ? c.bg : "bg-beige-100",
                                 )}>
-                                  {c.label}
-                                </p>
-                                <p className="text-[10px] text-beige-400 mt-0.5 leading-snug">
-                                  {c.description}
-                                </p>
-                              </div>
-                            </button>
-                          );
-                        })}
+                                  <RIcon className={cn("w-3 h-3", selected ? c.text : "text-beige-400")} />
+                                </div>
+                                <div>
+                                  <p className={cn(
+                                    "text-[12px] font-semibold leading-tight",
+                                    selected ? "text-brown-950" : "text-brown-700",
+                                  )}>
+                                    {c.label}
+                                  </p>
+                                  <p className="text-[10px] text-beige-400 mt-1 leading-snug">
+                                    {c.description}
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-3 pt-5">
+                          <button
+                            type="button"
+                            onClick={handleClose}
+                            className="flex-1 h-10 rounded-xl border border-beige-200 text-[13px] font-semibold text-brown-600 hover:bg-beige-50 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {view === "details" && (
+                      <>
+                        <div className="rounded-xl border border-beige-100 bg-beige-50 px-3.5 py-2.5">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-beige-500 mb-1">Selected Role</p>
+                          <p className="text-[13px] font-semibold text-brown-800">{ROLE_CONFIG[role].label}</p>
+                        </div>
 
                     {/* Name */}
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-widest text-beige-500 mb-1.5">
-                        Full Name
+                        Full Name <span className="text-red-500">*</span>
                       </label>
                       <input
                         value={name}
                         onChange={e => setName(e.target.value)}
                         placeholder="e.g. Sarah Mitchell"
                         className={cn(
-                          "w-full h-10 px-3.5 text-[13px] rounded-xl border bg-beige-50 text-brown-950 placeholder:text-beige-300 focus:bg-white focus:outline-none transition-all",
-                          errors.name ? "border-red-300 focus:border-red-400" : "border-beige-100 focus:border-brown-300",
+                          role === "admin" ? baseInputClass : legacyInputClass,
+                          errors.name ? invalidInputClass : "",
                         )}
                       />
                       {errors.name && <p className="text-[11px] text-red-500 mt-1">{errors.name}</p>}
@@ -399,7 +545,7 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
                     {/* Email */}
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-widest text-beige-500 mb-1.5">
-                        Email Address
+                        Email Address <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="email"
@@ -407,12 +553,111 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
                         onChange={e => setEmail(e.target.value)}
                         placeholder="e.g. sarah@company.com"
                         className={cn(
-                          "w-full h-10 px-3.5 text-[13px] rounded-xl border bg-beige-50 text-brown-950 placeholder:text-beige-300 focus:bg-white focus:outline-none transition-all",
-                          errors.email ? "border-red-300 focus:border-red-400" : "border-beige-100 focus:border-brown-300",
+                          role === "admin" ? baseInputClass : legacyInputClass,
+                          errors.email ? invalidInputClass : "",
                         )}
                       />
                       {errors.email && <p className="text-[11px] text-red-500 mt-1">{errors.email}</p>}
                     </div>
+
+                    {role === "admin" && (
+                      <>
+                        {/* Mobile number */}
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-beige-500 mb-1.5">
+                            Mobile Number <span className="text-red-500">*</span>
+                          </label>
+                          <div className="grid grid-cols-[1.2fr_1fr_2.4fr] gap-2">
+                            <select
+                              value={phoneCountry}
+                              onChange={e => setPhoneCountry(e.target.value)}
+                              className={baseInputClass}
+                            >
+                              {COUNTRIES_DATA.map(country => (
+                                <option key={country.name} value={country.name}>
+                                  {country.name}
+                                </option>
+                              ))}
+                            </select>
+                            <div className={cn(
+                              "h-11 px-3.5 text-[13px] rounded-xl border border-beige-100 bg-beige-50 text-brown-900 flex items-center font-semibold",
+                              errors.mobile ? "border-red-300" : "",
+                            )}>
+                              {selectedCountry?.code ?? "+91"}
+                            </div>
+                            <input
+                              type="tel"
+                              inputMode="numeric"
+                              maxLength={phoneMaxLen}
+                              value={mobile}
+                              onChange={e => setMobile(e.target.value.replace(/\D/g, "").slice(0, phoneMaxLen))}
+                              placeholder="Phone number"
+                              className={cn(
+                                baseInputClass,
+                                errors.mobile ? invalidInputClass : "",
+                              )}
+                            />
+                          </div>
+                          {errors.mobile && <p className="text-[11px] text-red-500 mt-1">{errors.mobile}</p>}
+                        </div>
+
+                        {/* Active */}
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-beige-500 mb-2">
+                            Active <span className="text-red-500">*</span>
+                          </label>
+                          <div className="flex items-center gap-6 rounded-xl border border-beige-100 bg-beige-50 px-3.5 py-2.5">
+                            <label className="inline-flex items-center gap-2 text-[12px] font-medium text-brown-700 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="active-status"
+                                checked={active === "yes"}
+                                onChange={() => setActive("yes")}
+                                className="h-3.5 w-3.5 accent-brown-700"
+                              />
+                              Yes
+                            </label>
+                            <label className="inline-flex items-center gap-2 text-[12px] font-medium text-brown-700 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="active-status"
+                                checked={active === "no"}
+                                onChange={() => setActive("no")}
+                                className="h-3.5 w-3.5 accent-brown-700"
+                              />
+                              No
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Department (optional) */}
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-beige-500 mb-1.5">
+                            Department <span className="font-medium normal-case tracking-normal text-beige-400">(Optional)</span>
+                          </label>
+                          <input
+                            value={department}
+                            onChange={e => setDepartment(e.target.value)}
+                            placeholder="e.g. Operations"
+                            className={baseInputClass}
+                          />
+                        </div>
+
+                        {/* Description (optional) */}
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-beige-500 mb-1.5">
+                            Description <span className="font-medium normal-case tracking-normal text-beige-400">(Optional)</span>
+                          </label>
+                          <textarea
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            placeholder="Add a short description"
+                            rows={3}
+                            className="w-full min-h-[88px] px-3.5 py-2.5 text-[13px] rounded-xl border border-beige-100 bg-beige-50 text-brown-950 placeholder:text-beige-350 focus:bg-white focus:border-brown-300 focus:outline-none transition-all duration-200 resize-none"
+                          />
+                        </div>
+                      </>
+                    )}
 
                     {/* Organization (enterprise / reviewer) */}
                     {(role === "enterprise" || role === "reviewer") && (
@@ -424,7 +669,7 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
                           value={org}
                           onChange={e => setOrg(e.target.value)}
                           placeholder={role === "enterprise" ? "e.g. Acme Corp" : "e.g. GlimmoraTeam"}
-                          className="w-full h-10 px-3.5 text-[13px] rounded-xl border border-beige-100 bg-beige-50 text-brown-950 placeholder:text-beige-300 focus:bg-white focus:border-brown-300 focus:outline-none transition-all"
+                          className={legacyInputClass}
                         />
                       </div>
                     )}
@@ -440,23 +685,32 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
                       </span>
                     </div>
 
+                    {submitError && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-[11px] font-medium text-red-700">
+                        {submitError}
+                      </div>
+                    )}
+
                     {/* Actions */}
-                    <div className="flex items-center gap-3 pt-1">
+                    <div className="flex items-center gap-3 pt-2">
                       <button
                         type="button"
                         onClick={handleClose}
-                        className="flex-1 h-10 rounded-xl border border-beige-200 text-[13px] font-semibold text-brown-600 hover:bg-beige-50 transition-colors"
+                        className="flex-1 h-11 rounded-xl border border-beige-200 text-[13px] font-semibold text-brown-600 hover:bg-beige-50 active:scale-[0.99] transition-all duration-200"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 h-10 rounded-xl bg-brown-950 hover:bg-brown-800 text-white text-[13px] font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                        disabled={submitting}
+                        className="flex-1 h-11 rounded-xl bg-brown-950 hover:bg-brown-800 active:scale-[0.99] text-white text-[13px] font-semibold flex items-center justify-center gap-2 transition-all duration-200 shadow-sm"
                       >
                         <Send className="w-3.5 h-3.5" />
-                        Send Invite
+                        {submitting ? "Sending..." : "Send Invite"}
                       </button>
                     </div>
+                      </>
+                    )}
                   </form>
                 </>
               ) : (

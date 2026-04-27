@@ -16,32 +16,39 @@ export async function POST(req: NextRequest) {
       password,
     );
 
-    // MFA pending — distinguish between "verify existing TOTP" and "setup required"
+    const raw = response as Record<string, unknown>;
+    const status = typeof raw.status === "string" ? raw.status : "";
+    const mfaToken =
+      typeof raw.mfa_pending_token === "string"
+        ? raw.mfa_pending_token
+        : typeof raw.mfaPendingToken === "string"
+          ? raw.mfaPendingToken
+          : "";
+
+    // First-time MFA enrollment — backend uses status mfa_setup_required (not mfa_pending).
+    if (status === "mfa_setup_required" && mfaToken) {
+      const u = raw.user as
+        | { id?: string; email?: string; firstName?: string; lastName?: string }
+        | undefined;
+      return NextResponse.json({
+        ok: true,
+        mfaSetupRequired: true,
+        mfaSetupPendingToken: mfaToken,
+        user: {
+          id: u?.id ?? "",
+          email: u?.email ?? "",
+          firstName: u?.firstName ?? "",
+          lastName: u?.lastName ?? "",
+        },
+      });
+    }
+
+    // MFA verify required (user already has TOTP) — return pending token for login page.
     if (isMfaPending(response)) {
-      const mfaFlow = (response as unknown as Record<string, unknown>).status;
-
-      // MFA setup required but not yet configured — return user data + pending token
-      // so the login page can create a session without a second login call.
-      if (mfaFlow === "mfa_setup_required") {
-        const u = response.user;
-        return NextResponse.json({
-          ok: true,
-          mfaSetupRequired: true,
-          mfaSetupPendingToken: response.mfa_pending_token,
-          user: {
-            id: u.id,
-            email: u.email,
-            firstName: u.firstName,
-            lastName: u.lastName,
-          },
-        });
-      }
-
-      // MFA verify required (user has TOTP set up) — return pending token
       return NextResponse.json({
         ok: true,
         mfaRequired: true,
-        mfaPendingToken: response.mfa_pending_token,
+        mfaPendingToken: mfaToken || (response as { mfa_pending_token?: string }).mfa_pending_token,
       });
     }
 

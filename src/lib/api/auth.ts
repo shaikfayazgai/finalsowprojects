@@ -208,6 +208,7 @@ export const authApi = {
     if (input.purpose === "registration" && input.channel === "phone" && input.phone) {
       const res = await fetch("/api/auth/otp/send-phone", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: input.phone }),
       });
@@ -225,6 +226,7 @@ export const authApi = {
     if (input.purpose === "registration" && input.channel === "email" && input.email) {
       const res = await fetch("/api/auth/otp/send-email", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: input.email }),
       });
@@ -288,6 +290,7 @@ export const authApi = {
         if (input.channel === "email" && input.email) {
           const res = await fetch("/api/auth/otp/send-email", {
             method: "POST",
+            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: input.email }),
           });
@@ -312,6 +315,7 @@ export const authApi = {
     if (input.purpose === "registration" && input.channel === "phone" && input.phone) {
       const res = await fetch("/api/auth/otp/verify-phone", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: input.phone, code: input.code }),
       });
@@ -333,6 +337,7 @@ export const authApi = {
     if (input.purpose === "registration" && input.channel === "email" && input.email) {
       const res = await fetch("/api/auth/otp/verify-email", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: input.email, code: input.code }),
       });

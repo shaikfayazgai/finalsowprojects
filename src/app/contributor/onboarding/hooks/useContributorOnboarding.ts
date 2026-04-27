@@ -126,6 +126,7 @@ export function useContributorOnboarding() {
   const [cooldown,          setCooldown]          = useState(0);
   const [phoneVerified,     setPhoneVerified]     = useState(false);
   const [phoneOtpLoading,   setPhoneOtpLoading]   = useState(false);
+  const [phoneOtpDevHint,   setPhoneOtpDevHint]   = useState("");
 
   // Email already verified by OAuth — pre-set to true
   const [verificationEmail, setVerificationEmail] = useState(ssoData?.email ?? "");
@@ -134,6 +135,7 @@ export function useContributorOnboarding() {
   const [emailCooldown,     setEmailCooldown]     = useState(0);
   const [emailVerified,     setEmailVerified]     = useState(true); // SSO = already verified
   const [emailOtpLoading,   setEmailOtpLoading]   = useState(false);
+  const [emailOtpDevHint, setEmailOtpDevHint]   = useState("");
 
   const [ndaAccepted,   setNdaAccepted]   = useState(false);
   const [ndaSignature,  setNdaSignature]  = useState("");
@@ -160,6 +162,13 @@ export function useContributorOnboarding() {
     }
   }, [step, country]);
 
+  useEffect(() => {
+    setPhoneVerified(false);
+    setOtpSent(false);
+    setOtp("");
+    setPhoneOtpDevHint("");
+  }, [phoneCountry, phone]);
+
   /* ─── Skill helpers ─── */
   const addPrimarySkill    = (s: string) => { if (primarySkills.length   < 20) setPrimarySkills(  (p) => [...p, s]); setSkillInput("");          };
   const removePrimarySkill = (s: string) => setPrimarySkills(  (p) => p.filter((x) => x !== s));
@@ -180,19 +189,68 @@ export function useContributorOnboarding() {
 
   async function sendOTP() {
     if (!phone || phone.replace(/\D/g, "").length < 7) { setError("Please enter a valid phone number"); return; }
-    setError(""); setPhoneOtpLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setPhoneOtpLoading(false); setOtpSent(true); startCooldown();
+    setError("");
+    setPhoneOtpDevHint("");
+    setPhoneOtpLoading(true);
+    try {
+      const res = await fetchInternal("/api/auth/otp/send-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(
+          (data as { message?: string }).message ??
+            "Could not send SMS OTP. Use a 10-digit Indian number or check your connection.",
+        );
+        return;
+      }
+      setOtpSent(true);
+      startCooldown();
+      const d = data as { devFallback?: boolean; devOtp?: string };
+      if (d.devFallback === true && typeof d.devOtp === "string" && d.devOtp.length === 6) {
+        setPhoneOtpDevHint(
+          `Development mode: SMS was not delivered. Use this code: ${d.devOtp}`,
+        );
+      }
+    } catch {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setPhoneOtpLoading(false);
+    }
   }
   async function verifyOTP() {
     if (otp.length !== 6) { setError("Please enter the 6-digit code"); return; }
-    setError(""); setPhoneOtpLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setPhoneOtpLoading(false); setPhoneVerified(true);
+    setError("");
+    setPhoneOtpLoading(true);
+    try {
+      const res = await fetchInternal("/api/auth/otp/verify-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code: otp }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(
+          (data as { message?: string }).message ??
+            "Invalid or expired code. Request a new OTP and try again.",
+        );
+        return;
+      }
+      setPhoneOtpDevHint("");
+      setPhoneVerified(true);
+    } catch {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setPhoneOtpLoading(false);
+    }
   }
   async function sendEmailOTP() {
     if (!verificationEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(verificationEmail)) { setError("Please enter a valid email address"); return; }
-    setError(""); setEmailOtpLoading(true);
+    setError("");
+    setEmailOtpDevHint("");
+    setEmailOtpLoading(true);
     try {
       const res = await fetchInternal("/api/auth/otp/send-email", {
         method: "POST",
@@ -202,6 +260,11 @@ export function useContributorOnboarding() {
       const data = await res.json();
       if (!res.ok) { setError(data.message); return; }
       setEmailOtpSent(true); startEmailCooldown();
+      if (data.devFallback === true && typeof data.devOtp === "string" && data.devOtp.length === 6) {
+        setEmailOtpDevHint(
+          `Development mode: email was not delivered (SMTP). Use this code: ${data.devOtp}`,
+        );
+      }
     } catch {
       setError("Failed to send email. Please check your connection and try again.");
     } finally {
@@ -219,6 +282,7 @@ export function useContributorOnboarding() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.message); return; }
+      setEmailOtpDevHint("");
       setEmailVerified(true);
     } catch {
       setError("Verification failed. Please try again.");
@@ -346,9 +410,9 @@ export function useContributorOnboarding() {
     // Step 3
     phoneCountry, setPhoneCountry,
     phone, setPhone,
-    otpSent, otp, setOtp, cooldown, phoneVerified, phoneOtpLoading,
+    otpSent, otp, setOtp, cooldown, phoneVerified, phoneOtpLoading, phoneOtpDevHint,
     verificationEmail, setVerificationEmail,
-    emailOtpSent, emailOtp, setEmailOtp, emailCooldown, emailVerified, emailOtpLoading,
+    emailOtpSent, emailOtp, setEmailOtp, emailCooldown, emailVerified, emailOtpLoading, emailOtpDevHint,
     ndaAccepted, setNdaAccepted,
     ndaSignature, setNdaSignature,
     ndaSignedFile, setNdaSignedFile,

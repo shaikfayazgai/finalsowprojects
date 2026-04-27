@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
-import { authApi, isMfaPending } from "@/lib/api/auth";
+import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
 export type UserRole = "contributor" | "enterprise" | "admin" | "reviewer" | "mentor";
@@ -94,26 +94,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
 
           const response = await authApi.login(email, password);
+          const status = (response as { status?: string }).status;
+          const mfaFlow = (response as { mfa_flow?: string }).mfa_flow;
 
-          // MFA pending (code required) — block login until verified
-          if (isMfaPending(response) && (response as any).mfa_flow !== "setup") {
+          // TOTP verification required — block NextAuth session until user completes MFA on login page.
+          if (status === "mfa_pending" && mfaFlow !== "setup") {
             return null;
           }
 
-          // MFA setup required — allow login.
-          // The API may still include tokens alongside the MFA-pending payload;
-          // include them so enterprise endpoints work without re-login.
-          if (isMfaPending(response)) {
-            const u = (response as any).user ?? {};
-            const r = response as any;
+          // MFA enrollment (mfa_setup_required) or setup-phase mfa_pending — allow constrained session.
+          // The API may still include tokens alongside the MFA payload; pass them through when present.
+          if (status === "mfa_setup_required" || status === "mfa_pending") {
+            const u = (response as { user?: Record<string, string> }).user ?? {};
+            const r = response as Record<string, unknown>;
             return {
-              id: u.id ?? "",
-              name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim(),
-              email: u.email ?? email,
-              role: (u.role ?? "enterprise") as UserRole,
-              ...(r.access_token ? { accessToken: r.access_token } : {}),
-              ...(r.refresh_token ? { refreshToken: r.refresh_token } : {}),
-              ...(r.expires_in ? { expiresIn: r.expires_in } : {}),
+              id: (u.id as string) ?? "",
+              name: `${(u.firstName as string) ?? ""} ${(u.lastName as string) ?? ""}`.trim(),
+              email: (u.email as string) ?? email,
+              role: ((u.role as string) ?? "enterprise") as UserRole,
+              ...(typeof r.access_token === "string" ? { accessToken: r.access_token } : {}),
+              ...(typeof r.refresh_token === "string" ? { refreshToken: r.refresh_token } : {}),
+              ...(typeof r.expires_in === "number" ? { expiresIn: r.expires_in } : {}),
             };
           }
 

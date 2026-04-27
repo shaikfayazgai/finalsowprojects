@@ -120,6 +120,8 @@ interface Props {
   cooldown: number;
   phoneVerified: boolean;
   phoneOtpLoading: boolean;
+  /** Local dev only: shown when SMS gateway is skipped or fails. */
+  phoneOtpDevHint?: string;
   verificationEmail: string;
   setVerificationEmail: (v: string) => void;
   emailOtpSent: boolean;
@@ -128,6 +130,8 @@ interface Props {
   emailCooldown: number;
   emailVerified: boolean;
   emailOtpLoading: boolean;
+  /** Local dev only: shown when SMTP fails but API returns a fallback OTP. */
+  emailOtpDevHint?: string;
   ndaAccepted: boolean;
   setNdaAccepted: (v: boolean) => void;
   ndaSignature: string;
@@ -149,8 +153,10 @@ export function Step2Verification({
   phoneCountry, setPhoneCountry,
   phone, setPhone,
   otpSent, otp, setOtp, cooldown, phoneVerified, phoneOtpLoading,
+  phoneOtpDevHint = "",
   verificationEmail, setVerificationEmail,
-  emailOtpSent, emailOtp, setEmailOtp, emailCooldown, emailVerified, emailOtpLoading,
+  emailOtpSent, emailOtp, setEmailOtp,   emailCooldown, emailVerified, emailOtpLoading,
+  emailOtpDevHint = "",
   ndaAccepted, setNdaAccepted,
   ndaSignature, setNdaSignature,
   ndaSignedFile, setNdaSignedFile,
@@ -413,9 +419,16 @@ export function Step2Verification({
 
             {otpSent && !phoneVerified && (
               <div className="space-y-3 p-3 rounded-xl bg-teal-50/60 border border-teal-100">
-                <p className="text-xs text-teal-700">
-                  A 6-digit code was sent to <strong>{phone}</strong>. Valid for 5 minutes.
-                </p>
+                {phoneOtpDevHint ? (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-900 leading-relaxed font-medium">{phoneOtpDevHint}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-teal-700">
+                    A 6-digit code was sent to <strong>{phone}</strong>. Valid for 5 minutes.
+                  </p>
+                )}
                 <div className="flex gap-2 items-center">
                   <Input id="otp" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
                     placeholder="Enter 6-digit code"
@@ -488,9 +501,16 @@ export function Step2Verification({
 
             {emailOtpSent && !emailVerified && (
               <div className="space-y-3 p-3 rounded-xl bg-teal-50/60 border border-teal-100">
-                <p className="text-xs text-teal-700">
-                  A 6-digit code was sent to <strong>{verificationEmail}</strong>. Valid for 5 minutes.
-                </p>
+                {emailOtpDevHint ? (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-900 leading-relaxed font-medium">{emailOtpDevHint}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-teal-700">
+                    A 6-digit code was sent to <strong>{verificationEmail}</strong>. Valid for 5 minutes.
+                  </p>
+                )}
                 <div className="flex gap-2 items-center">
                   <Input id="email-otp" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
                     placeholder="Enter 6-digit code"

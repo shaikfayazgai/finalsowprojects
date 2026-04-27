@@ -1,17 +1,44 @@
 import nodemailer from "nodemailer";
 import type { ReactElement } from "react";
+import type { Transporter } from "nodemailer";
+import dns from "node:dns";
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+try {
+  dns.setDefaultResultOrder("ipv4first");
+} catch {
+  /* ignore on older runtimes */
+}
 
-const FROM = process.env.EMAIL_FROM ?? `GlimmoraTeam <${process.env.GMAIL_USER}>`;
+function createTransporter(): { transporter: Transporter | null; configError: string | null } {
+  const user = process.env.GMAIL_USER?.trim();
+  const pass = process.env.GMAIL_APP_PASSWORD?.trim();
+  if (!user || !pass) {
+    return {
+      transporter: null,
+      configError: "Gmail is not configured: set GMAIL_USER and GMAIL_APP_PASSWORD in .env.local.",
+    };
+  }
+
+  const host = process.env.SMTP_HOST?.trim() || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT?.trim() || "587");
+  const secure = port === 465;
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    requireTLS: !secure && port === 587,
+    auth: { user, pass },
+    connectionTimeout: 20_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 25_000,
+    tls: { minVersion: "TLSv1.2" },
+    // Prefer IPv4 when IPv6/DNS paths are flaky (helps some "ENOTFOUND" / routing cases).
+    family: 4,
+  });
+
+  return { transporter, configError: null };
+}
 
 export interface SendEmailOptions {
   to: string | string[];
@@ -23,6 +50,8 @@ export interface SendEmailOptions {
 export interface SendEmailResult {
   success: boolean;
   messageId?: string;
+  /** Present when success is false — safe to log, do not expose to end users in production. */
+  error?: string;
 }
 
 /** Build a professional branded HTML email from a body snippet and template settings. */
@@ -89,13 +118,23 @@ export function buildEmailHtml({
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
+  const { transporter, configError } = createTransporter();
+  if (!transporter) {
+    console.error("[sendEmail]", configError);
+    return { success: false, error: configError ?? "SMTP not configured" };
+  }
+
+  const from =
+    process.env.EMAIL_FROM?.trim() ||
+    `GlimmoraTeam <${process.env.GMAIL_USER!.trim()}>`;
+
   try {
     const html = options.html ?? (options.react
       ? (await import("react-dom/server")).renderToStaticMarkup(options.react)
       : "");
 
     const info = await transporter.sendMail({
-      from: FROM,
+      from,
       to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
       subject: options.subject,
       html,
@@ -103,7 +142,8 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
 
     return { success: true, messageId: info.messageId };
   } catch (err) {
-    console.error("[sendEmail] error:", err);
-    return { success: false };
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[sendEmail] error:", message);
+    return { success: false, error: message };
   }
 }

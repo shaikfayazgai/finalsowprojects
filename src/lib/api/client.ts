@@ -25,7 +25,7 @@ export async function fetchInternal(
     ? AbortSignal.any([externalSignal, timeoutSignal])
     : timeoutSignal;
   try {
-    return await fetch(path, { ...rest, signal });
+    return await fetch(path, { credentials: "include", ...rest, signal });
   } catch (err) {
     if (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError")) {
       throw new ApiError(408, "Request timed out. Please try again.");

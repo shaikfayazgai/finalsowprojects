@@ -112,6 +112,7 @@ export default function EnterpriseRegisterPage() {
               cooldown={reg.cooldown}
               phoneVerified={reg.phoneVerified}
               phoneOtpLoading={reg.phoneOtpLoading}
+              phoneOtpDevHint={reg.phoneOtpDevHint}
               adminEmail={reg.adminEmail}
               setAdminEmail={reg.setAdminEmail}
               initialAdminEmail={reg.initialAdminEmail}
@@ -121,6 +122,7 @@ export default function EnterpriseRegisterPage() {
               emailCooldown={reg.emailCooldown}
               emailVerified={reg.emailVerified}
               emailOtpLoading={reg.emailOtpLoading}
+              emailOtpDevHint={reg.emailOtpDevHint}
               error={reg.error}
               onSendOTP={reg.sendOTP}
               onVerifyOTP={reg.verifyOTP}
