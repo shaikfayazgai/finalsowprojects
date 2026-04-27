@@ -153,13 +153,13 @@ function ResetPasswordContent() {
     setError("");
     setIsLoading(true);
     try {
-      const res = await fetchInternal("/api/auth/password/change", {
+      const res = await fetchInternal("/api/auth/password/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token,
           new_password: password,
-          confirmPassword: confirm,
+          confirm_password: confirm,
         }),
       });
       if (!res.ok) {
