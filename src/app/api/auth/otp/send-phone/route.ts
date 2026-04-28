@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SignJWT } from "jose";
-import crypto from "crypto";
 
 function getSecret() {
   const s = process.env.AUTH_SECRET;
