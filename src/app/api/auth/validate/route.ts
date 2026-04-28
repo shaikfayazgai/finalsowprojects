@@ -53,22 +53,45 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, role });
   } catch (err) {
     if (err instanceof ApiError) {
-      // Backend gates login on phone-based SMS 2FA with a 403 carrying a
-      // JSON body like {"code":"MOBILE_2FA_REQUIRED","message":"…"}. Parse it
-      // and surface a dedicated code so the login page can route the user
-      // to phone verification instead of showing a generic 500.
+      // Backend signals special 403s with a structured detail body.
+      // Read it from err.body first; fall back to JSON-parsing err.message
+      // for older ApiErrors that don't carry the body.
       if (err.status === 403) {
-        let code = "FORBIDDEN";
-        let message = err.message;
-        try {
-          const parsed = JSON.parse(err.message);
-          if (typeof parsed?.code === "string") code = parsed.code;
-          if (typeof parsed?.message === "string") message = parsed.message;
-        } catch {
-          /* message wasn't JSON — fall back to the raw string */
+        let detail: { code?: string; message?: string; redirect_to?: string } | undefined;
+        const bodyDetail = (err.body as { detail?: typeof detail } | undefined)?.detail;
+        if (bodyDetail) {
+          detail = bodyDetail;
+        } else {
+          try {
+            const parsed = JSON.parse(err.message);
+            if (parsed && typeof parsed === "object") {
+              detail = {
+                code: typeof parsed.code === "string" ? parsed.code : undefined,
+                message: typeof parsed.message === "string" ? parsed.message : undefined,
+                redirect_to: typeof parsed.redirect_to === "string" ? parsed.redirect_to : undefined,
+              };
+            }
+          } catch {
+            /* not JSON — leave detail undefined */
+          }
         }
+
+        // First-login temp password → tell the login page to route to /auth/change-password.
+        if (detail?.code === "PASSWORD_CHANGE_REQUIRED") {
+          return NextResponse.json({
+            ok: true,
+            passwordChangeRequired: true,
+            redirectTo: detail.redirect_to ?? "/auth/change-password",
+            message: detail.message ?? "Temporary password must be changed before login.",
+          });
+        }
+
+        // Any other 403 (e.g. MOBILE_2FA_REQUIRED) → surface code so the page can route.
+        const code = detail?.code ?? "FORBIDDEN";
+        const message = detail?.message ?? err.message;
         return NextResponse.json({ ok: false, error: code, message });
       }
+
 
       if (err.status === 401 || err.status === 404) {
         const isNotFound =

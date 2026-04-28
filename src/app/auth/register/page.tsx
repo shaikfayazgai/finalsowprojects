@@ -733,14 +733,12 @@ function ContributorRegisterContent() {
                     cooldown={reg.cooldown}
                     phoneVerified={reg.phoneVerified}
                     phoneOtpLoading={reg.phoneOtpLoading}
-                    phoneOtpDevHint={reg.phoneOtpDevHint}
                     verificationEmail={reg.verificationEmail} setVerificationEmail={reg.setVerificationEmail}
                     emailOtpSent={reg.emailOtpSent}
                     emailOtp={reg.emailOtp} setEmailOtp={reg.setEmailOtp}
                     emailCooldown={reg.emailCooldown}
                     emailVerified={reg.emailVerified}
                     emailOtpLoading={reg.emailOtpLoading}
-                    emailOtpDevHint={reg.emailOtpDevHint}
                     ndaAccepted={reg.ndaAccepted} setNdaAccepted={reg.setNdaAccepted}
                     ndaSignature={reg.ndaSignature} setNdaSignature={reg.setNdaSignature}
                     ndaSignedFile={reg.ndaSignedFile} setNdaSignedFile={reg.setNdaSignedFile}

@@ -219,14 +219,12 @@ export default function OnboardingModal() {
                     cooldown={ob.cooldown}
                     phoneVerified={ob.phoneVerified}
                     phoneOtpLoading={ob.phoneOtpLoading}
-                    phoneOtpDevHint={ob.phoneOtpDevHint}
                     verificationEmail={ob.verificationEmail} setVerificationEmail={ob.setVerificationEmail}
                     emailOtpSent={ob.emailOtpSent}
                     emailOtp={ob.emailOtp}                   setEmailOtp={ob.setEmailOtp}
                     emailCooldown={ob.emailCooldown}
                     emailVerified={ob.emailVerified}
                     emailOtpLoading={ob.emailOtpLoading}
-                    emailOtpDevHint={ob.emailOtpDevHint}
                     ndaAccepted={ob.ndaAccepted}             setNdaAccepted={ob.setNdaAccepted}
                     ndaSignature={ob.ndaSignature}           setNdaSignature={ob.setNdaSignature}
                     ndaSignedFile={ob.ndaSignedFile}         setNdaSignedFile={ob.setNdaSignedFile}

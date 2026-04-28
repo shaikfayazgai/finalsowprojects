@@ -247,6 +247,15 @@ function LoginPageContent() {
         return;
       }
 
+      // First-login temp password — backend says password must be changed before login.
+      // Route to /auth/change-password with email prefilled. Do NOT persist the temp password.
+      if (validateData.passwordChangeRequired) {
+        const target = (validateData.redirectTo as string) || "/auth/change-password";
+        const url = `${target}?email=${encodeURIComponent(email.trim().toLowerCase())}`;
+        window.location.href = url;
+        return;
+      }
+
       // MFA required — skip signIn, store the pending token and show TOTP step
       if (validateData.mfaRequired) {
         mfaPendingTokenRef.current = validateData.mfaPendingToken ?? "";

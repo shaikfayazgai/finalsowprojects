@@ -7,6 +7,7 @@ import {
   ChevronDown, MoreHorizontal, CheckCircle2, Clock, Ban,
   X, Send, Pencil, Trash2, Eye, RefreshCw, ShieldCheck,
   UserCog, ArrowUpDown, ArrowUp, ArrowDown, ArrowLeft,
+  Copy, Check, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
@@ -246,6 +247,11 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
   const [errors, setErrors] = React.useState<{ name?: string; email?: string; mobile?: string }>({});
   const [submitError, setSubmitError] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
+  // Holds the temp password returned by the backend for the newly created admin.
+  // SECURITY: in-memory only. Never logged, never persisted to storage. Cleared on reset/close.
+  const [tempPassword, setTempPassword] = React.useState("");
+  const [createdEmail, setCreatedEmail] = React.useState("");
+  const [copied, setCopied] = React.useState(false);
 
   function reset() {
     setName(""); setEmail(""); setPhoneCountry("India"); setMobile(""); setActive("yes"); setDepartment(""); setDescription("");
@@ -254,6 +260,29 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
     setStep("form"); setErrors({});
     setSubmitError("");
     setSubmitting(false);
+    setTempPassword("");
+    setCreatedEmail("");
+    setCopied(false);
+  }
+
+  // Drop the temp password if the modal is unmounted for any reason.
+  React.useEffect(() => {
+    return () => {
+      setTempPassword("");
+      setCreatedEmail("");
+      setCopied(false);
+    };
+  }, []);
+
+  async function handleCopyTempPassword() {
+    if (!tempPassword) return;
+    try {
+      await navigator.clipboard.writeText(tempPassword);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard unavailable — leave UI as-is; user can select the text manually.
+    }
   }
 
   function handleClose() { reset(); onClose(); }
@@ -298,34 +327,48 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
     setSubmitError("");
     setSubmitting(true);
     const selectedCountry = COUNTRIES_DATA.find(c => c.name === phoneCountry);
-    const mobileWithCode = selectedCountry ? `${selectedCountry.code} ${mobile}`.trim() : mobile.trim();
+    // E.164 — country code + digits only, no space (e.g. +919876543210)
+    const mobileE164 =
+      role === "admin" && selectedCountry
+        ? `${selectedCountry.code}${mobile.replace(/\D/g, "")}`
+        : "";
 
-    const [firstName, ...rest] = name.trim().split(/\s+/);
-    const lastName = rest.join(" ");
-    const payload = {
-      // Common variants to handle backend naming differences.
-      full_name: name.trim(),
-      firstName,
-      first_name: firstName,
-      lastName,
-      last_name: lastName,
-      name: name.trim(),
-      email: email.trim(),
+    // Canonical payload per backend contract for POST /api/v1/superadmin/users.
+    const payload: Record<string, unknown> = {
       role,
-      phone: role === "admin" ? (mobileWithCode || undefined) : undefined,
-      mobile: role === "admin" ? (mobileWithCode || undefined) : undefined,
-      mobile_number: role === "admin" ? (mobileWithCode || undefined) : undefined,
-      isActive: role === "admin" ? active === "yes" : undefined,
-      active: role === "admin" ? active : undefined,
-      status: role === "admin" ? (active === "yes" ? "active" : "invited") : "invited",
-      department: role === "admin" ? (department.trim() || undefined) : undefined,
-      description: role === "admin" ? (description.trim() || undefined) : undefined,
-      org: org.trim() || undefined,
-      organisation: org.trim() || undefined,
-      organization: org.trim() || undefined,
-      sendInvite: true,
-      send_invite: true,
+      full_name: name.trim(),
+      email: email.trim().toLowerCase(),
     };
+    if (role === "admin") {
+      payload.mobile_number = mobileE164;
+      payload.active = active === "yes" ? "Yes" : "No";
+      if (department.trim()) payload.department = department.trim();
+      if (description.trim()) payload.description = description.trim();
+    }
+    if ((role === "enterprise" || role === "reviewer") && org.trim()) {
+      payload.organisation = org.trim();
+    }
+
+    type CreateAdminResponse = {
+      success: boolean;
+      message: string;
+      data: {
+        id: string;
+        role: "admin";
+        fullName: string;
+        email: string;
+        mobileNumber: string;
+        isActive: boolean;
+        accountStatus: "ACTIVE" | "EXPIRED";
+        requiresPasswordChange: boolean;
+        isFirstLogin: boolean;
+        department: string | null;
+        description: string | null;
+        temporaryPassword: string;
+      };
+    };
+
+    let created: CreateAdminResponse["data"] | null = null;
     try {
       const res = await fetch("/api/superadmin/users", {
         method: "POST",
@@ -335,13 +378,15 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setSubmitError(
+          (data as { error?: string; message?: string; detail?: string }).detail ||
           (data as { error?: string; message?: string }).error ||
           (data as { error?: string; message?: string }).message ||
-          "Failed to send invite. Please try again.",
+          "Failed to create user. Please try again.",
         );
         setSubmitting(false);
         return;
       }
+      created = (data as CreateAdminResponse).data ?? null;
     } catch {
       setSubmitError("Network error while creating user. Please try again.");
       setSubmitting(false);
@@ -349,19 +394,28 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
     }
 
     const newUser: PlatformUser = {
-      id:         `u-${Date.now()}`,
-      name:       name.trim(),
-      email:      email.trim(),
-      mobile:     role === "admin" ? (mobileWithCode || undefined) : undefined,
+      id:         created?.id ?? `u-${Date.now()}`,
+      name:       created?.fullName ?? name.trim(),
+      email:      created?.email ?? email.trim().toLowerCase(),
+      mobile:     role === "admin" ? (created?.mobileNumber ?? mobileE164 ?? undefined) : undefined,
       role,
-      status:     role === "admin" ? (active === "yes" ? "active" : "invited") : "invited",
+      status:     role === "admin"
+                    ? (created?.accountStatus === "ACTIVE" ? "active" : "invited")
+                    : "invited",
       org:        org.trim() || undefined,
-      department: role === "admin" ? (department.trim() || undefined) : undefined,
-      description: role === "admin" ? (description.trim() || undefined) : undefined,
+      department: role === "admin" ? (created?.department ?? (department.trim() || undefined)) ?? undefined : undefined,
+      description: role === "admin" ? (created?.description ?? (description.trim() || undefined)) ?? undefined : undefined,
       joinedAt:   new Date().toISOString().slice(0, 10),
       lastActive: "—",
     };
     onAdd(newUser);
+
+    // Surface the temp password (admin only) to the super admin.
+    if (role === "admin" && created?.temporaryPassword) {
+      setTempPassword(created.temporaryPassword);
+    }
+    setCreatedEmail(newUser.email);
+
     setSubmitting(false);
     setStep("success");
   }
@@ -699,15 +753,61 @@ function AddUserModal({ open, onClose, onAdd }: AddUserModalProps) {
                 </>
               ) : (
                 /* Success state */
-                <div className="px-6 py-10 text-center">
+                <div className="px-6 py-8 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-forest-50 border border-forest-100 flex items-center justify-center mx-auto mb-4">
                     <CheckCircle2 className="w-7 h-7 text-forest-500" />
                   </div>
-                  <h3 className="font-heading text-[18px] font-bold text-brown-950 mb-1">Invite Sent!</h3>
+                  <h3 className="font-heading text-[18px] font-bold text-brown-950 mb-1">
+                    {tempPassword ? "Admin Created" : "Invite Sent!"}
+                  </h3>
                   <p className="text-[12px] text-beige-500 mb-1">
-                    An invitation has been sent to
+                    {tempPassword
+                      ? "Account created successfully for"
+                      : "An invitation has been sent to"}
                   </p>
-                  <p className="text-[13px] font-semibold text-brown-800 mb-6">{email}</p>
+                  <p className="text-[13px] font-semibold text-brown-800 mb-5">
+                    {createdEmail || email}
+                  </p>
+
+                  {tempPassword && (
+                    <>
+                      <div className="text-left rounded-xl border border-beige-100 bg-beige-50 p-3 mb-3">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-beige-500 mb-1.5">
+                          Temporary Password
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <code
+                            className="flex-1 truncate font-mono text-[13px] font-semibold text-brown-950 px-3 py-2 rounded-lg bg-white border border-beige-200 select-all"
+                            aria-label="Temporary password (copy with the button)"
+                          >
+                            {tempPassword}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={handleCopyTempPassword}
+                            className={cn(
+                              "h-9 px-3 rounded-lg text-[12px] font-semibold flex items-center gap-1.5 transition-colors shrink-0",
+                              copied
+                                ? "bg-forest-50 text-forest-700 border border-forest-200"
+                                : "bg-brown-950 text-white hover:bg-brown-800",
+                            )}
+                            aria-label={copied ? "Copied" : "Copy temporary password"}
+                          >
+                            {copied
+                              ? <><Check className="w-3.5 h-3.5" /> Copied</>
+                              : <><Copy className="w-3.5 h-3.5" /> Copy</>}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 mb-5 text-left">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-[11px] leading-snug text-amber-800">
+                          Share this password securely with the new admin. They will be required to change it on first login. This value won&apos;t be shown again.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => { reset(); }}
