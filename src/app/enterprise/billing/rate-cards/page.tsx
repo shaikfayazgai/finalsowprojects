@@ -22,10 +22,13 @@ import {
   Calendar,
   Globe,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { toast } from "@/lib/stores/toast-store";
+import { useRateCardsStore } from "@/lib/stores/rate-cards-store";
+import { downloadCSV, todayStamp } from "@/lib/utils/file-download";
 import {
   Badge,
   Button,
@@ -72,20 +75,6 @@ const skillIconMap: Record<string, { icon: React.ElementType; gradient: string; 
 };
 
 const defaultIconConfig = { icon: Code2, gradient: "from-forest-500 to-teal-500", shadow: "shadow-forest-500/20" };
-
-/* ---------- Mock data ---------- */
-const initialRateCards: RateCard[] = [
-  { id: "rc-1", skill: "Frontend Development", level: "Junior", region: "South Asia", hourlyRate: 25, dailyRate: 200, currency: "USD", effectiveFrom: "2026-01-15", status: "active", icon: Code2, gradient: "from-teal-500 to-teal-600", shadow: "shadow-teal-500/20" },
-  { id: "rc-2", skill: "Frontend Development", level: "Mid", region: "South Asia", hourlyRate: 50, dailyRate: 400, currency: "USD", effectiveFrom: "2026-01-15", status: "active", icon: Code2, gradient: "from-teal-400 to-forest-500", shadow: "shadow-teal-400/20" },
-  { id: "rc-3", skill: "Frontend Development", level: "Senior", region: "Global", hourlyRate: 85, dailyRate: 680, currency: "USD", effectiveFrom: "2026-01-15", status: "active", icon: Code2, gradient: "from-forest-500 to-forest-600", shadow: "shadow-forest-500/20" },
-  { id: "rc-4", skill: "Backend Development", level: "Junior", region: "South Asia", hourlyRate: 30, dailyRate: 240, currency: "USD", effectiveFrom: "2026-02-01", status: "active", icon: Server, gradient: "from-brown-400 to-brown-600", shadow: "shadow-brown-400/20" },
-  { id: "rc-5", skill: "Backend Development", level: "Mid", region: "Middle East", hourlyRate: 55, dailyRate: 440, currency: "USD", effectiveFrom: "2026-02-01", status: "active", icon: Server, gradient: "from-brown-500 to-brown-600", shadow: "shadow-brown-500/20" },
-  { id: "rc-6", skill: "Backend Development", level: "Senior", region: "Global", hourlyRate: 95, dailyRate: 760, currency: "USD", effectiveFrom: "2026-02-01", status: "active", icon: Server, gradient: "from-brown-600 to-brown-700", shadow: "shadow-brown-600/20" },
-  { id: "rc-7", skill: "UI/UX Design", level: "Junior", region: "Southeast Asia", hourlyRate: 28, dailyRate: 224, currency: "USD", effectiveFrom: "2026-01-20", status: "active", icon: Palette, gradient: "from-gold-400 to-gold-500", shadow: "shadow-gold-400/20" },
-  { id: "rc-8", skill: "UI/UX Design", level: "Mid", region: "South Asia", hourlyRate: 50, dailyRate: 400, currency: "USD", effectiveFrom: "2026-01-20", status: "active", icon: Palette, gradient: "from-gold-500 to-gold-600", shadow: "shadow-gold-500/20" },
-  { id: "rc-9", skill: "UI/UX Design", level: "Senior", region: "Global", hourlyRate: 75, dailyRate: 600, currency: "USD", effectiveFrom: "2026-01-20", status: "active", icon: Palette, gradient: "from-gold-600 to-brown-500", shadow: "shadow-gold-600/20" },
-  { id: "rc-10", skill: "QA Engineering", level: "Mid", region: "Africa", hourlyRate: 40, dailyRate: 320, currency: "USD", effectiveFrom: "2026-03-01", status: "draft", icon: Bug, gradient: "from-teal-400 to-forest-500", shadow: "shadow-teal-400/20" },
-];
 
 /* ---------- Helpers ---------- */
 function formatCurrency(amount: number, currency: string): string {
@@ -392,7 +381,22 @@ function DeleteConfirmDialog({
 
 /* ---------- Page ---------- */
 export default function RateCardsPage() {
-  const [rateCards, setRateCards] = React.useState(initialRateCards);
+  const storeCards = useRateCardsStore((s) => s.rateCards);
+  const addCardToStore = useRateCardsStore((s) => s.addCard);
+  const updateCardInStore = useRateCardsStore((s) => s.updateCard);
+  const deleteCardFromStore = useRateCardsStore((s) => s.deleteCard);
+  const setCardStatusInStore = useRateCardsStore((s) => s.setStatus);
+
+  // Decorate store data with icon/gradient/shadow for rendering
+  const rateCards: RateCard[] = React.useMemo(
+    () =>
+      storeCards.map((c) => {
+        const iconConfig = skillIconMap[c.skill] || defaultIconConfig;
+        return { ...c, icon: iconConfig.icon, gradient: iconConfig.gradient, shadow: iconConfig.shadow };
+      }),
+    [storeCards]
+  );
+
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [skillFilter, setSkillFilter] = React.useState("all");
@@ -439,22 +443,12 @@ export default function RateCardsPage() {
   const activeCount = rateCards.filter((r) => r.status === "active").length;
 
   const handleAddCard = (data: Omit<RateCard, "id" | "icon" | "gradient" | "shadow">) => {
-    const iconConfig = skillIconMap[data.skill] || defaultIconConfig;
-    const newCard: RateCard = {
-      ...data,
-      id: `rc-${Date.now()}`,
-      icon: iconConfig.icon,
-      gradient: iconConfig.gradient,
-      shadow: iconConfig.shadow,
-    };
-    setRateCards((prev) => [...prev, newCard]);
+    addCardToStore({ ...data, id: `rc-${Date.now()}` });
   };
 
   const handleToggleStatus = (card: RateCard) => {
     const newStatus = card.status === "active" ? "draft" : "active";
-    setRateCards((prev) =>
-      prev.map((c) => (c.id === card.id ? { ...c, status: newStatus } : c))
-    );
+    setCardStatusInStore(card.id, newStatus);
     toast.success(
       newStatus === "active" ? "Rate Card Activated" : "Rate Card Archived",
       `${card.skill} (${card.level}) is now ${newStatus === "active" ? "active" : "in draft"}.`
@@ -462,7 +456,27 @@ export default function RateCardsPage() {
   };
 
   const handleDeleteCard = (cardId: string) => {
-    setRateCards((prev) => prev.filter((c) => c.id !== cardId));
+    deleteCardFromStore(cardId);
+  };
+
+  const handleExport = () => {
+    const headers = ["Skill", "Level", "Region", "Hourly Rate", "Daily Rate", "Currency", "Effective From", "Status"];
+    const rows = filtered.map((c) => [
+      c.skill,
+      c.level,
+      c.region,
+      c.hourlyRate,
+      c.dailyRate,
+      c.currency,
+      c.effectiveFrom,
+      c.status,
+    ]);
+    try {
+      downloadCSV(`rate-cards-${todayStamp()}.csv`, headers, rows);
+      toast.success("Export Complete", `${rows.length} rate card${rows.length === 1 ? "" : "s"} exported as CSV.`);
+    } catch {
+      toast.error("Export Failed", "Could not generate the CSV. Please try again.");
+    }
   };
 
   return (
@@ -492,6 +506,13 @@ export default function RateCardsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border-[1.5px] border-beige-200 bg-white/80 hover:bg-beige-50 text-[12px] font-semibold text-brown-700 transition-all"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Export CSV
+          </button>
           <Link href="/enterprise/billing/pricing">
             <button className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border-[1.5px] border-brown-300 text-brown-600 text-[12px] font-semibold hover:border-brown-500 hover:bg-brown-50 transition-all">
               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -709,14 +730,7 @@ export default function RateCardsPage() {
                       }
                       editCard={card}
                       onSave={(data) => {
-                        const iconConfig = skillIconMap[data.skill] || defaultIconConfig;
-                        setRateCards((prev) =>
-                          prev.map((c) =>
-                            c.id === card.id
-                              ? { ...c, ...data, icon: iconConfig.icon, gradient: iconConfig.gradient, shadow: iconConfig.shadow }
-                              : c
-                          )
-                        );
+                        updateCardInStore(card.id, data);
                       }}
                       existingCards={rateCards}
                     />
@@ -769,14 +783,7 @@ export default function RateCardsPage() {
                         }
                         editCard={card}
                         onSave={(data) => {
-                          const iconConfig = skillIconMap[data.skill] || defaultIconConfig;
-                          setRateCards((prev) =>
-                            prev.map((c) =>
-                              c.id === card.id
-                                ? { ...c, ...data, icon: iconConfig.icon, gradient: iconConfig.gradient, shadow: iconConfig.shadow }
-                                : c
-                            )
-                          );
+                          updateCardInStore(card.id, data);
                         }}
                         existingCards={rateCards}
                       />

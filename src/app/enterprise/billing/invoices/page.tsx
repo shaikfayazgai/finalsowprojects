@@ -31,6 +31,7 @@ import {
 import { toast } from "@/lib/stores/toast-store";
 import { mockInvoices } from "@/mocks/data/enterprise-billing";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
+import { downloadCSV, todayStamp } from "@/lib/utils/file-download";
 
 const statusConfig: Record<
   string,
@@ -91,6 +92,26 @@ export default function InvoiceListPage() {
   const totalPaid = mockInvoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
   const outstanding = totalInvoiced - totalPaid;
 
+  const handleExport = () => {
+    const headers = ["Invoice #", "Project", "Status", "Issued", "Due", "Amount (USD)", "Paid (USD)", "Currency"];
+    const rows = filtered.map((inv) => [
+      inv.number,
+      getProjectTitle(inv.projectId),
+      inv.status,
+      inv.issuedDate,
+      inv.dueDate,
+      inv.amount,
+      inv.paidAmount,
+      inv.currency,
+    ]);
+    try {
+      downloadCSV(`invoices-${todayStamp()}.csv`, headers, rows);
+      toast.success("Export Complete", `${rows.length} invoice${rows.length === 1 ? "" : "s"} exported as CSV.`);
+    } catch {
+      toast.error("Export Failed", "Could not generate the CSV. Please try again.");
+    }
+  };
+
   return (
     <motion.div
       variants={stagger}
@@ -132,7 +153,7 @@ export default function InvoiceListPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => toast.info("Export CSV", "CSV export requires backend integration.")}
+          onClick={handleExport}
         >
           <Download className="w-3.5 h-3.5" />
           Export CSV

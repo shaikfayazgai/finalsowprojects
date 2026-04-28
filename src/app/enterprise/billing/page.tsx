@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui";
 import { toast } from "@/lib/stores/toast-store";
 import { mockInvoices, billingStats } from "@/mocks/data/enterprise-billing";
 import { mockProjects, mockDeliverables, mockMilestones } from "@/mocks/data/enterprise-projects";
+import { downloadCSV, downloadPdf, todayStamp } from "@/lib/utils/file-download";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -130,11 +131,43 @@ function MonthlySpendChart() {
    BILLING DASHBOARD PAGE (G3/G4)
    ═══════════════════════════════════ */
 export default function BillingDashboardPage() {
-  const handleExport = (format: "csv" | "pdf") => {
-    if (format === "csv") {
-      toast.info("Export CSV", "CSV export requires backend integration.");
-    } else {
-      toast.info("Export PDF", "PDF export requires backend integration.");
+  const handleExport = async (format: "csv" | "pdf") => {
+    const headers = ["Invoice #", "Project", "Status", "Issued", "Due", "Amount (USD)", "Paid (USD)"];
+    const rows = mockInvoices.map((inv) => [
+      inv.number,
+      mockProjects.find((p) => p.id === inv.projectId)?.title ?? inv.projectId,
+      inv.status,
+      inv.issuedDate,
+      inv.dueDate,
+      inv.amount,
+      inv.paidAmount,
+    ]);
+
+    try {
+      if (format === "csv") {
+        downloadCSV(`billing-overview-${todayStamp()}.csv`, headers, rows);
+        toast.success("Export Complete", `Billing overview exported as CSV (${rows.length} invoices).`);
+      } else {
+        await downloadPdf(`billing-overview-${todayStamp()}.pdf`, {
+          title: "Billing Overview",
+          subtitle: "Financial Report",
+          summary: [
+            { label: "Total Budget", value: formatCurrency(totalBudget) },
+            { label: "Total Spent", value: formatCurrency(totalSpent) },
+            { label: "Pending Payouts", value: formatCurrency(pendingPayouts) },
+            { label: "Active Invoices", value: String(activeInvoices) },
+          ],
+          table: {
+            headers,
+            rows,
+            colWeights: [1.4, 2.6, 1, 1.2, 1.2, 1.3, 1.3],
+          },
+          footerNote: "Generated from current billing data. Connect backend API for live data.",
+        });
+        toast.success("Export Complete", `Billing overview exported as PDF (${rows.length} invoices).`);
+      }
+    } catch {
+      toast.error("Export Failed", "Could not generate the file. Please try again.");
     }
   };
 

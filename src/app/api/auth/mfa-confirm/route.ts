@@ -13,6 +13,18 @@ import QRCode from "qrcode";
 
 const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
 
+async function fetchUser(accessToken: string): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await fetch(`${GLIMMORA_API}/api/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 async function normalizeQrUri(initData: Record<string, unknown>): Promise<string> {
   const qrPng = String(initData.qr_code_png_base64 || initData.qrCodePngBase64 || "");
   if (qrPng) {
@@ -48,7 +60,8 @@ export async function POST(req: NextRequest) {
       if (!confirmRes.ok) {
         return NextResponse.json(confirmData, { status: confirmRes.status });
       }
-      return NextResponse.json({ phase: "setup", ...confirmData });
+      const user = confirmData.access_token ? await fetchUser(confirmData.access_token) : null;
+      return NextResponse.json({ phase: "setup", ...confirmData, ...(user ? { user } : {}) });
     }
 
     // Init-only path with existing pending token (no need to re-login or store password in client state)
@@ -177,7 +190,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(confirmData, { status: confirmRes.status });
       }
 
-      return NextResponse.json({ phase: "setup", ...confirmData });
+      const user = confirmData.access_token ? await fetchUser(confirmData.access_token) : null;
+      return NextResponse.json({ phase: "setup", ...confirmData, ...(user ? { user } : {}) });
     } else {
       // MFA already configured — use verify endpoint
       return await verifyMfa(pendingToken, code);
