@@ -26,6 +26,7 @@ import {
   type EarningsSummary, type ChartPeriod, type EarningsListParams, type PayoutPreferences,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { ApiError } from "@/lib/api/client";
 
 /* ═══ Helpers ═══ */
 
