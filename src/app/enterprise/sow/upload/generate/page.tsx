@@ -28,16 +28,9 @@ const AI_SOW_STEPS: FlowStep[] = [
 ];
 import { StatusBanner } from "@/components/enterprise/sow/StatusBanner";
 import { SowBadge, riskVariant } from "@/components/enterprise/sow/SowBadge";
-import {
-  mockPreviewMetrics,
-  mockGeneratedSowSections,
-  mockRiskAssessment,
-  mockSourceTraceability,
-  mockGenerationHallucinationLayers,
-} from "@/mocks/data/sow-upload-flow";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { useHallucinationAnalysis, useRiskAssessment, useSow, useSowAction } from "@/lib/hooks/use-sow-wizard";
-import { useManualSOW, useSOWPreview, useHallucinationLayers, useConfirmAndSubmit } from "@/lib/hooks/use-manual-sow";
+import { useHallucinationAnalysis, useRiskAssessment, useSow } from "@/lib/hooks/use-sow-wizard";
+import { useManualSOW, useSOWPreview, useHallucinationLayers, useSubmitSOW, useApprovalStages } from "@/lib/hooks/use-manual-sow";
 
 /* ── Generation stages ── */
 const GEN_STAGES = [
@@ -388,7 +381,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
-/* ═══ Full read-only commercial-details preview ═══ */
+/* ═══ Full read-only details preview ═══ */
 function ReadOnlyDetailsPreview({ details }: { details: any }) {
   const bc = details?.businessContext ?? {};
   const ds = details?.deliveryScope ?? {};
@@ -467,6 +460,7 @@ export default function GeneratePreviewPage({
   flow = "manual",
   reviewData,
   onBack,
+  onRejectRegenerate,
   detailsOverride,
 }: {
   sowId?: string | null;
@@ -475,6 +469,10 @@ export default function GeneratePreviewPage({
   /** Override the back-button behaviour. Required for flows (like AI wizard)
    *  where back must mutate parent state rather than navigate to a URL. */
   onBack?: () => void;
+  /** Called when the user confirms "Reject & Regenerate". For the AI flow
+   *  this should reset the wizard to step 0. Falls back to navigating to the
+   *  upload selection page for the manual flow. */
+  onRejectRegenerate?: () => void;
   /** Override the read-only details preview (during "generating" phase).
    *  AI wizard supplies this built from its own form data so it doesn't
    *  display the manual flow's commercialDetails. */
@@ -506,8 +504,8 @@ export default function GeneratePreviewPage({
   const [activeTab, setActiveTab] = React.useState<TabKey>("sow");
 
   const sowId = sowIdProp ?? store.uploadedSowId;
-  const sowAction = useSowAction(flow === "ai" ? (sowId ?? null) : null);
-  const confirmMutation = useConfirmAndSubmit(flow === "manual" ? (sowId ?? null) : null);
+  const submitSOW = useSubmitSOW(sowId ?? null, flow);
+  const { refetch: refetchApprovalPipeline } = useApprovalStages(sowId ?? null);
   const [submitError, setSubmitError] = React.useState<string>("");
 
   // ── AI flow queries (endpoint: /api/v1/sows/{id}) ──
@@ -554,35 +552,39 @@ export default function GeneratePreviewPage({
 
   type HallucinationLayer = SOWReviewHallucinationLayer;
 
-  // Merge priority: prop overrides > fetched API data > mocks.
+  // Track whether data loaded successfully
+  const dataLoadedSuccessfully = !!(reviewData || activeFetchedReview);
+
+  // Merge priority: prop overrides > fetched API data (no mock fallback)
   const metrics: SOWReviewMetrics = {
-    ...mockPreviewMetrics,
+    confidence: 0,
+    riskScore: 0,
+    hallucinationFlags: 0,
+    completeness: 0,
     ...(activeFetchedReview?.metrics ?? {}),
     ...(reviewData?.metrics ?? {}),
   };
   const riskData: SOWReviewRiskData = {
-    ...mockRiskAssessment,
+    riskLevel: "unknown",
+    riskScore: 0,
+    factors: [],
     ...(activeFetchedRisk ?? {}),
     ...(reviewData?.riskAssessment ?? {}),
-    factors:
-      reviewData?.riskAssessment?.factors
-      ?? activeFetchedRisk?.factors
-      ?? mockRiskAssessment.factors,
   };
   const hallucinationLayers: HallucinationLayer[] =
     reviewData?.hallucinationLayers
     ?? activeFetchedHallucination
-    ?? (mockGenerationHallucinationLayers as HallucinationLayer[]);
+    ?? [];
   const sowSections: SOWReviewSection[] =
-    reviewData?.sections ?? activeFetchedReview?.sections ?? mockGeneratedSowSections;
-  const traceability: SOWReviewTraceability[] = reviewData?.traceability ?? mockSourceTraceability;
+    reviewData?.sections ?? activeFetchedReview?.sections ?? [];
+  const traceability: SOWReviewTraceability[] = reviewData?.traceability ?? [];
 
   // Back-navigation target is flow-specific.
   // AI wizard → return to the 10-step generator (parent toggles state).
   // Manual upload → return to the details form (router navigation).
   const backTarget = flow === "ai"
     ? { label: "Back to Review",             href: "/enterprise/sow/generate" }
-    : { label: "Back to Commercial Details", href: "/enterprise/sow/upload/commercial-details" };
+    : { label: "Back to Commercial Details", href: "/enterprise/sow/upload/details" };
 
   const handleBack = () => {
     if (onBack) {
@@ -618,6 +620,16 @@ export default function GeneratePreviewPage({
 
   /* Mount-only initializer — guarded against Strict Mode double-invoke */
   const didInitRef = React.useRef(false);
+  /* Redirect to SOW detail page (Approval tab) after successful submission */
+  React.useEffect(() => {
+    if (!submitted) return;
+    const target = sowId ? `/enterprise/sow/${sowId}?tab=approval` : "/enterprise/sow";
+    // Prefetch the route so navigation is instant
+    router.prefetch(target);
+    const timer = setTimeout(() => router.push(target), 600);
+    return () => clearTimeout(timer);
+  }, [submitted, sowId, router]);
+
   React.useEffect(() => {
     if (didInitRef.current) return;
     didInitRef.current = true;
@@ -674,30 +686,32 @@ export default function GeneratePreviewPage({
 
   const handleSubmit = () => {
     setSubmitError("");
-    if (!sowId) {
+
+    const onSubmitSuccess = () => {
+      // Pre-fetch the approval pipeline so the approve page loads instantly
+      refetchApprovalPipeline();
       setSubmitted(true);
+      // Redirect to SOW list after successful submission
+      setTimeout(() => {
+        router.push("/enterprise/sow");
+      }, 600);
+    };
+
+    if (!sowId) {
+      console.warn("handleSubmit: sowId is missing", { sowIdProp, storeId: store.uploadedSowId });
+      onSubmitSuccess();
       return;
     }
-    if (flow === "manual") {
-      confirmMutation.mutate(
-        { confirms_accuracy: true },
-        {
-          onSuccess: () => setSubmitted(true),
-          onError: (err: Error) => setSubmitError(err.message ?? "Submission failed"),
-        },
-      );
-      return;
-    }
-    sowAction.mutate(
-      { action: "submit" },
-      {
-        onSuccess: () => setSubmitted(true),
-        onError: (err) =>
-          setSubmitError(
-            err instanceof Error ? err.message : "Failed to submit SOW. Please try again.",
-          ),
+
+    console.log("handleSubmit: Calling generateManualSOW with sowId:", sowId);
+    submitSOW.mutate(undefined, {
+      onSuccess: onSubmitSuccess,
+      onError: (err) => {
+        const errMsg = err instanceof Error ? err.message : "Failed to submit SOW. Please try again.";
+        console.error("handleSubmit: Mutation error:", errMsg);
+        setSubmitError(errMsg);
       },
-    );
+    });
   };
 
   /* ── Metric card ── */
@@ -734,6 +748,19 @@ export default function GeneratePreviewPage({
             : "Assembling your document from extracted content and commercial inputs."}
         </p>
       </motion.div>
+
+      {/* Data loading error */}
+      {genPhase === "complete" && !dataLoadedSuccessfully && (
+        <motion.div variants={fadeUp} className="rounded-xl bg-amber-50 border border-amber-200 px-5 py-4 mb-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[13px] font-medium text-amber-900">Document data could not be loaded</p>
+              <p className="text-[12px] text-amber-700 mt-1">The document details couldn't be retrieved. Please refresh the page or contact support if the problem continues.</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* ═══ READ-ONLY DETAILS PREVIEW (visible during generating phase) ═══ */}
       {genPhase === "generating" && (
@@ -1282,7 +1309,11 @@ export default function GeneratePreviewPage({
                 </button>
                 <button onClick={() => {
                     setShowRejectModal(false);
-                    router.push("/enterprise/sow/upload");
+                    if (onRejectRegenerate) {
+                      onRejectRegenerate();
+                    } else {
+                      router.push("/enterprise/sow/upload");
+                    }
                   }}
                   className="flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-r from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 px-5 py-2.5 rounded-xl transition-all">
                   <RotateCcw className="w-3.5 h-3.5" /> Discard & Regenerate
@@ -1460,15 +1491,15 @@ export default function GeneratePreviewPage({
                       )}
                       <div className="flex gap-2">
                         <button onClick={() => setShowSubmitModal(false)}
-                          disabled={sowAction.isPending || confirmMutation.isPending}
+                          disabled={submitSOW.isPending}
                           className="flex-1 text-[11.5px] font-medium text-gray-500 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                           Cancel
                         </button>
                         <button onClick={handleSubmit}
-                          disabled={sowAction.isPending || confirmMutation.isPending}
+                          disabled={submitSOW.isPending}
                           className="flex-[2] flex items-center justify-center gap-1.5 text-[12px] font-bold text-white py-2.5 rounded-xl transition-all bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 disabled:opacity-70 disabled:cursor-wait"
                           style={{ boxShadow: "0 4px 14px rgba(166,119,99,0.35)" }}>
-                          {sowAction.isPending || confirmMutation.isPending ? (
+                          {submitSOW.isPending ? (
                             <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting...</>
                           ) : (
                             <><Send className="w-3.5 h-3.5" /> Confirm &amp; Submit</>

@@ -33,25 +33,65 @@ async function getAdminToken(): Promise<string | null> {
   return null;
 }
 
-export async function POST(req: NextRequest) {
+async function resolveCallerToken(req: NextRequest, body?: Record<string, unknown>): Promise<string | null> {
   const secureCookie = req.nextUrl.protocol === "https:";
   const jwt = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
   if (!jwt?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return null;
   }
 
-  let token = jwt.glimmoraAccessToken as string | undefined;
+  const headerAuth = req.headers.get("authorization") || "";
+  const headerToken = headerAuth.toLowerCase().startsWith("bearer ")
+    ? headerAuth.slice(7).trim()
+    : undefined;
+
+  const bodyToken = typeof body?.accessToken === "string" ? body.accessToken : undefined;
+  if (body && "accessToken" in body) delete body.accessToken;
+
+  let token = bodyToken || headerToken || (jwt.glimmoraAccessToken as string | undefined);
   if (!token) {
     token = (await getAdminToken()) ?? undefined;
   }
+  return token ?? null;
+}
 
+export async function GET(req: NextRequest) {
+  const token = await resolveCallerToken(req);
   if (!token) {
     return NextResponse.json(
-      { error: "No admin token available. Set GLIMMORA_ADMIN_EMAIL and GLIMMORA_ADMIN_PASSWORD in .env." },
+      { error: "No admin token available. Please sign in again as enterprise admin." },
       { status: 503 },
     );
   }
 
+  const upstream = `${GLIMMORA_API}/api/v1/users/reviewers/list`;
+  const res = await fetch(upstream, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+
+  if (res.status === 401 && ADMIN_EMAIL && ADMIN_PASSWORD) {
+    cachedAdminToken = null;
+    const freshToken = await getAdminToken();
+    if (freshToken) {
+      const retry = await fetch(upstream, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${freshToken}`,
+        },
+      });
+      const retryData = await retry.json().catch(() => ({}));
+      return NextResponse.json(retryData, { status: retry.status });
+    }
+  }
+
+  return NextResponse.json(data, { status: res.status });
+}
+
+export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -59,7 +99,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const upstream = `${GLIMMORA_API}/api/v1/reviewers/invitations`;
+  const token = await resolveCallerToken(req, body);
+
+  if (!token) {
+    return NextResponse.json(
+      { error: "No admin token available. Please sign in again as enterprise admin." },
+      { status: 503 },
+    );
+  }
+
+  const resendExisting = Boolean(body.resendExisting);
+  if ("resendExisting" in body) delete body.resendExisting;
+  const upstream = resendExisting
+    ? `${GLIMMORA_API}/api/v1/users/reviewers/resend-invite`
+    : `${GLIMMORA_API}/api/v1/users`;
 
   const res = await fetch(upstream, {
     method: "POST",

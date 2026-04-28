@@ -25,7 +25,12 @@ export const contributorRegistrationSchema = z.object({
   yearsExperience:    z.string().optional(),
   workStart:          z.string().optional(),
   workEnd:            z.string().optional(),
-  phone:              z.string().optional(),
+  studentCurrency:    z.string().optional(),
+  studentHourlyRate:  z.string().optional(),
+  phone: z
+    .string()
+    .min(1, "Mobile number is required")
+    .refine((s) => s.replace(/\D/g, "").length >= 7, "Enter a valid mobile number"),
   ndaSignature:       z.string().min(1, "NDA signature is required"),
   acceptTos:          z.literal(true, { message: "Must accept Terms of Use" }),
   acceptCoc:          z.literal(true, { message: "Must accept Code of Conduct" }),

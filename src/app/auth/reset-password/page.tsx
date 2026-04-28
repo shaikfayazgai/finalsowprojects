@@ -156,11 +156,16 @@ function ResetPasswordContent() {
       const res = await fetchInternal("/api/auth/password/change", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, new_password: password }),
+        body: JSON.stringify({
+          token,
+          new_password: password,
+          confirmPassword: confirm,
+        }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        setError(err?.message ?? "Failed to reset password");
+        const err = await res.json().catch(() => ({}));
+        const errorMessage = typeof err?.message === "string" ? err.message : "Failed to reset password";
+        setError(errorMessage);
         return;
       }
       setSuccess(true);
@@ -359,7 +364,7 @@ function ResetPasswordContent() {
                       className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600"
                     >
                       <AlertCircle className="w-4 h-4 shrink-0" />
-                      {error}
+                      {typeof error === "string" ? error : "An error occurred"}
                     </motion.div>
                   )}
                 </AnimatePresence>

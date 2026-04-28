@@ -151,58 +151,75 @@ export function AddReviewerModal({ open, onClose }: AddReviewerModalProps) {
     try {
       const res = await fetch("/api/reviewers/invitations", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(((session?.user as { accessToken?: string } | undefined)?.accessToken)
+            ? { Authorization: `Bearer ${(session?.user as { accessToken?: string }).accessToken}` }
+            : {}),
+        },
         body: JSON.stringify({
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
           email: form.email.trim(),
+          jobTitle: form.designation.trim(),
           designation: form.designation.trim(),
           department: form.department.trim(),
           username: form.username.trim(),
-          role: form.role,
-          status: form.status,
+          status: form.status === "active" ? "ACTIVE" : "INVITED",
           language: form.language,
           timeZone: form.timeZone,
-          tempPassword: localPwd,
+          accessToken: (session?.user as { accessToken?: string } | undefined)?.accessToken,
         }),
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setErrors({ email: data?.error ?? data?.message ?? "Failed to send invitation. Please try again." });
+        const detail = data?.detail;
+        const msg =
+          typeof detail === "string"
+            ? detail
+            : detail?.message ?? data?.error ?? data?.message ?? "Failed to send invitation. Please try again.";
+        if (String(msg).toLowerCase().includes("already registered as a reviewer")) {
+          const resend = await fetch("/api/reviewers/invitations", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(((session?.user as { accessToken?: string } | undefined)?.accessToken)
+                ? { Authorization: `Bearer ${(session?.user as { accessToken?: string }).accessToken}` }
+                : {}),
+            },
+            body: JSON.stringify({
+              email: form.email.trim(),
+              resendExisting: true,
+              accessToken: (session?.user as { accessToken?: string } | undefined)?.accessToken,
+            }),
+          });
+          const resendData = await resend.json().catch(() => ({}));
+          if (!resend.ok) {
+            const resendMsg = resendData?.detail?.message ?? resendData?.error ?? resendData?.message ?? "Failed to resend invitation.";
+            setErrors({ email: resendMsg });
+            setSaving(false);
+            return;
+          }
+          const resendInner = resendData?.data ?? resendData;
+          resolvedPassword = resendInner?.temporaryPassword ?? resendInner?.tempPassword ?? resolvedPassword;
+          setTempPassword(resolvedPassword);
+          setSaving(false);
+          setStep("success");
+          return;
+        }
+        setErrors({ email: msg });
         setSaving(false);
         return;
       }
 
-      resolvedPassword = data?.tempPassword ?? localPwd;
+      const inner = data?.data ?? data;
+      resolvedPassword = inner?.temporaryPassword ?? inner?.tempPassword ?? localPwd;
     } catch {
       setErrors({ email: "Network error. Please try again." });
       setSaving(false);
       return;
-    }
-
-    // Send invitation email using the API-returned password
-    try {
-      await fetch("/api/email/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "reviewer_invitation",
-          to: form.email.trim(),
-          payload: {
-            reviewerName: `${form.firstName.trim()} ${form.lastName.trim()}`,
-            designation: form.designation.trim(),
-            inviterName: session?.user?.name ?? "GlimmoraTeam Admin",
-            inviterOrg: "GlimmoraTeam",
-            loginEmail: form.email.trim(),
-            tempPassword: resolvedPassword,
-            loginUrl: `${window.location.origin}/auth/login`,
-          },
-        }),
-      });
-    } catch {
-      // Email failure is non-blocking — invitation was already created
     }
 
     setTempPassword(resolvedPassword);
@@ -211,6 +228,7 @@ export function AddReviewerModal({ open, onClose }: AddReviewerModalProps) {
   };
 
   const handleCopyCredentials = () => {
+    if (!tempPassword.trim()) return;
     const text = `Login URL: https://app.glimmorateam.com/auth/login\nEmail: ${form.email.trim()}\nTemporary Password: ${tempPassword}`;
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(text).catch(() => {});
@@ -375,7 +393,19 @@ export function AddReviewerModal({ open, onClose }: AddReviewerModalProps) {
             <DialogHeader>
               <DialogTitle className="text-brown-900 font-heading">Invitation Sent</DialogTitle>
               <DialogDescription className="text-beige-500 text-[12px]">
-                Login credentials have been sent to <span className="font-medium text-brown-700">{form.email.trim()}</span>.
+                {tempPassword.trim() ? (
+                  <>
+                    Login credentials have been sent to{" "}
+                    <span className="font-medium text-brown-700">{form.email.trim()}</span>.
+                  </>
+                ) : (
+                  <>
+                    An invitation email was sent to{" "}
+                    <span className="font-medium text-brown-700">{form.email.trim()}</span>. They can sign in with their
+                    existing password and use <span className="font-medium text-brown-700">Log In & Continue</span> in
+                    the email.
+                  </>
+                )}
               </DialogDescription>
             </DialogHeader>
 
@@ -383,25 +413,51 @@ export function AddReviewerModal({ open, onClose }: AddReviewerModalProps) {
               <div className="flex items-center gap-3 rounded-xl bg-teal-50 border border-teal-100 px-4 py-3">
                 <CheckCircle2 className="w-4 h-4 text-teal-500 shrink-0" />
                 <p className="text-[12px] font-semibold text-teal-700">
-                  {form.firstName.trim()} {form.lastName.trim()} added as <span className="capitalize">{roleLabel}</span>
+                  {tempPassword.trim() ? (
+                    <>
+                      {form.firstName.trim()} {form.lastName.trim()} added as{" "}
+                      <span className="capitalize">{roleLabel}</span>
+                    </>
+                  ) : (
+                    <>
+                      Invitation email sent for{" "}
+                      <span className="capitalize">{roleLabel}</span>{" "}
+                      <span className="font-medium">
+                        {form.firstName.trim()} {form.lastName.trim()}
+                      </span>
+                    </>
+                  )}
                 </p>
               </div>
 
               <div className="rounded-xl border border-beige-200 bg-white overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2 border-b border-beige-100 bg-beige-50/60">
                   <KeyRound className="w-3 h-3 text-beige-400" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-beige-500">Login Credentials</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-beige-500">
+                    {tempPassword.trim() ? "Login Credentials" : "Sign-in"}
+                  </span>
                 </div>
                 <div className="px-4 py-3 space-y-2 font-mono text-[11px]">
                   <div className="flex justify-between items-center">
                     <span className="text-beige-500">Email</span>
                     <span className="font-semibold text-brown-800">{form.email.trim()}</span>
                   </div>
-                  <div className="border-t border-beige-100" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-beige-500">Temp Password</span>
-                    <span className="font-semibold text-brown-800 tracking-widest">{tempPassword}</span>
-                  </div>
+                  {tempPassword.trim() ? (
+                    <>
+                      <div className="border-t border-beige-100" />
+                      <div className="flex justify-between items-center">
+                        <span className="text-beige-500">Temp Password</span>
+                        <span className="font-semibold text-brown-800 tracking-widest">{tempPassword}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="border-t border-beige-100" />
+                      <p className="text-[11px] text-brown-700 font-sans leading-relaxed py-1">
+                        No new temporary password was issued. The reviewer should use their existing password.
+                      </p>
+                    </>
+                  )}
                   <div className="border-t border-beige-100" />
                   <div className="flex justify-between items-center">
                     <span className="text-beige-500">Login URL</span>
@@ -410,9 +466,11 @@ export function AddReviewerModal({ open, onClose }: AddReviewerModalProps) {
                 </div>
               </div>
 
-              <Button variant="outline" size="sm" className="w-full" onClick={handleCopyCredentials}>
-                {copied ? <><Check className="w-3.5 h-3.5 text-teal-500" />Copied!</> : <><Copy className="w-3.5 h-3.5" />Copy credentials</>}
-              </Button>
+              {tempPassword.trim() ? (
+                <Button variant="outline" size="sm" className="w-full" onClick={handleCopyCredentials}>
+                  {copied ? <><Check className="w-3.5 h-3.5 text-teal-500" />Copied!</> : <><Copy className="w-3.5 h-3.5" />Copy credentials</>}
+                </Button>
+              ) : null}
             </div>
 
             <DialogFooter>

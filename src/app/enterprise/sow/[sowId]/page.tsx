@@ -3,7 +3,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -46,6 +46,7 @@ import {
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { sowApi } from "@/lib/api/sow";
 import { toast } from "@/lib/stores/toast-store";
 import { useNotificationStore } from "@/lib/stores/notification-store";
 import { useSowMessagesStore } from "@/lib/stores/sow-messages-store";
@@ -55,6 +56,7 @@ import {
   Badge,
   Button,
   Progress,
+  Skeleton,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -70,7 +72,7 @@ import { StatusTimeline } from "@/components/enterprise/status-timeline";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { useSowStore, INITIAL_APPROVAL_STAGES } from "@/lib/stores/sow-store";
 import { useSOWPipelineStore } from "@/lib/stores/sow-pipeline-store";
-import { useConfirmAndSubmit, useManualSOW } from "@/lib/hooks/use-manual-sow";
+import { useConfirmAndSubmit, useSOWDetail, useApprovalStages, useRecordApprovalDecision } from "@/lib/hooks/use-manual-sow";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
 import {
   mockSOWClauses,
@@ -264,12 +266,34 @@ const auditActionIcon: Record<string, React.ElementType> = {
   reviewed: Eye,
 };
 
+const DEFAULT_APPROVAL_STAGES = [
+  { stage: "business" as const,            status: "in_review" as const, reviewer: "Enterprise Admin" },
+  { stage: "glimmora_commercial" as const, status: "pending" as const },
+  { stage: "legal" as const,               status: "pending" as const },
+  { stage: "security" as const,            status: "pending" as const },
+  { stage: "final" as const,               status: "pending" as const },
+];
+
+const SOW_DEFAULTS = {
+  title: "Untitled SOW", client: "", status: "draft" as const,
+  intakeMode: "manual_upload" as const, confidentiality: "internal" as const,
+  dataSensitivity: "internal" as const, version: 1,
+  createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  createdBy: "", fileSize: "—", pages: 0, parsedSections: 0, totalSections: 0,
+  aiConfidence: 0, riskScore: { overall: 0, completeness: 0, confidence: 0, compliance: 0, patternMatch: 0 },
+  tags: [], estimatedBudget: 0, estimatedDuration: "", stakeholders: [],
+  approvalStages: DEFAULT_APPROVAL_STAGES,
+};
+
 /* ══════════════════════════════════════════════════════════════
    Main Component
    ══════════════════════════════════════════════════════════════ */
 
 export default function SOWDetailPage() {
   const params = useParams();
+  const pathname = usePathname();
+  const backHref = pathname.includes("/approval/") ? "/enterprise/sow/approval" : "/enterprise/sow";
+  const backLabel = pathname.includes("/approval/") ? "Approval Pipeline" : "SOW Repository";
   const sowId = params.sowId as string;
   const allSows = useSowStore((s) => s.sows);
   const addSow = useSowStore((s) => s.addSow);
@@ -277,43 +301,104 @@ export default function SOWDetailPage() {
   const addPipelineSOW = useSOWPipelineStore((s) => s.addSOW);
   const updatePipelineSOW = useSOWPipelineStore((s) => s.updateSOW);
   const pipelineSows = useSOWPipelineStore((s) => s.sows);
-  const { data: apiSowRes } = useManualSOW(sowId);
+  const { data: apiSowData, isLoading: apiSowLoading, flow: apiFlow } = useSOWDetail(sowId);
   const confirmAndSubmit = useConfirmAndSubmit(sowId);
-  /* If the API returned a SOW, merge its fields on top of the mock/store record */
-  const apiSowData = apiSowRes?.data as Record<string, unknown> | null | undefined;
-  const normalizedApiSow = React.useMemo(() => {
-    if (!apiSowData) return null;
-    const d = { ...apiSowData } as Record<string, unknown>;
-    if (d.approval_stages && !d.approvalStages) d.approvalStages = d.approval_stages;
-    if (d.parsed_sections && !d.parsedSections) d.parsedSections = d.parsed_sections;
-    if (d.total_sections && !d.totalSections) d.totalSections = d.total_sections;
-    return d;
-  }, [apiSowData]);
+  // Declared up here so the approval-pipeline query below can enable polling
+  // while stage 2 is active (the enterprise user waits for GlimmoraTeam admin).
+  const [activeApprovalIdx, setActiveApprovalIdx] = React.useState(0);
+  const { data: pipelineApiData } = useApprovalStages(
+    sowId,
+    activeApprovalIdx === 1 ? 10000 : undefined,
+  );
+  const recordDecision = useRecordApprovalDecision(sowId);
   const sow = React.useMemo(() => {
-    // Try to find the SOW by its actual ID first
+    // Real-time API data takes priority (works for both manual and AI SOWs)
+    const raw = apiSowData as Record<string, unknown> | null | undefined;
+    if (raw) {
+      const gc = apiFlow === "ai"
+        ? ((raw.generated_content ?? {}) as Record<string, unknown>)
+        : ({} as Record<string, unknown>);
+      const updatedAt = String(raw.updated_at ?? raw.updatedAt ?? raw.created_at ?? raw.createdAt ?? new Date().toISOString());
+      const title = String(gc.document_title ?? raw.title ?? raw.project_title ?? raw.projectTitle ?? "Untitled SOW");
+      let client = String(raw.client ?? raw.client_organisation ?? raw.clientOrganisation ?? gc.client_name ?? gc.client ?? "");
+      if (!client) {
+        const bizOwner = String(raw.business_owner_approver_id ?? "");
+        if (bizOwner.includes(", ")) client = bizOwner.split(", ").pop()?.trim() ?? "";
+      }
+      const qm = (raw.quality_metrics ?? raw.qualityMetrics ?? {}) as Record<string, unknown>;
+      const riskRaw = raw.risk_score ?? raw.riskScore ?? qm.risk_score ?? qm.riskScore;
+      let riskOverall = 0;
+      if (typeof riskRaw === "number") {
+        riskOverall = riskRaw;
+      } else if (riskRaw && typeof riskRaw === "object") {
+        riskOverall = Number((riskRaw as Record<string, unknown>).overall ?? 0);
+      } else {
+        const conf = Number(qm.overall_confidence ?? raw.confidence_score ?? raw.confidenceScore ?? raw.aiConfidence ?? 0);
+        riskOverall = conf > 0 ? Math.round(100 - conf) : 0;
+      }
+      const rawStages = (raw.approval_stages ?? raw.approvalStages) as unknown[] | undefined;
+      const approvalStages: import("@/types/enterprise").SOWApprovalStage[] =
+        Array.isArray(rawStages) && rawStages.length > 0
+          ? (rawStages as import("@/types/enterprise").SOWApprovalStage[])
+          : DEFAULT_APPROVAL_STAGES;
+      const fileSizeBytes = Number(raw.file_size ?? raw.fileSize ?? 0);
+      const fileSize = fileSizeBytes > 0
+        ? fileSizeBytes >= 1_000_000
+          ? `${(fileSizeBytes / 1_000_000).toFixed(1)} MB`
+          : `${(fileSizeBytes / 1_000).toFixed(0)} KB`
+        : String(raw.file_size_label ?? raw.fileSizeLabel ?? "—");
+      return {
+        ...SOW_DEFAULTS,
+        id: String(raw.id ?? raw._id ?? raw.sow_id ?? sowId),
+        title,
+        client,
+        status: String(raw.status ?? "draft") as import("@/types/enterprise").SowStatus,
+        intakeMode: (String(raw.intake_mode ?? raw.intakeMode ?? (apiFlow === "ai" ? "ai_generated" : "manual_upload"))) as import("@/types/enterprise").SowIntakeMode,
+        confidentiality: String(raw.confidentiality ?? raw.data_sensitivity ?? raw.dataSensitivity ?? "internal") as import("@/types/enterprise").ConfidentialityLevel,
+        dataSensitivity: String(raw.data_sensitivity ?? raw.dataSensitivity ?? "internal") as import("@/types/enterprise").DataSensitivity,
+        version: Number(raw.version ?? 1),
+        createdAt: String(raw.created_at ?? raw.createdAt ?? updatedAt),
+        updatedAt,
+        createdBy: String(raw.created_by ?? raw.createdBy ?? "Enterprise Admin"),
+        approvedBy: raw.approved_by ? String(raw.approved_by) : raw.approvedBy ? String(raw.approvedBy) : undefined,
+        approvedAt: raw.approved_at ? String(raw.approved_at) : raw.approvedAt ? String(raw.approvedAt) : undefined,
+        fileSize,
+        pages: Number(raw.pages ?? raw.page_count ?? raw.pageCount ?? 0),
+        parsedSections: Number(raw.parsed_sections ?? raw.parsedSections ?? 0),
+        totalSections: Number(raw.total_sections ?? raw.totalSections ?? 0),
+        aiConfidence: Number(raw.ai_confidence ?? raw.aiConfidence ?? qm.overall_confidence ?? raw.confidence_score ?? 0),
+        riskScore: {
+          overall: riskOverall,
+          completeness: Number((riskRaw as Record<string, unknown>)?.completeness ?? qm.completeness ?? 0),
+          confidence: Number((riskRaw as Record<string, unknown>)?.confidence ?? qm.confidence ?? 0),
+          compliance: Number((riskRaw as Record<string, unknown>)?.compliance ?? qm.compliance ?? 0),
+          patternMatch: Number((riskRaw as Record<string, unknown>)?.pattern_match ?? (riskRaw as Record<string, unknown>)?.patternMatch ?? 0),
+        },
+        tags: Array.isArray(raw.tags) ? (raw.tags as string[]) : [],
+        estimatedBudget: Number(raw.estimated_budget ?? raw.estimatedBudget ?? 0),
+        estimatedDuration: String(raw.estimated_duration ?? raw.estimatedDuration ?? raw.timeline ?? ""),
+        stakeholders: Array.isArray(raw.stakeholders) ? (raw.stakeholders as string[]) : [],
+        slaCompliance: raw.sla_compliance ? Number(raw.sla_compliance) : raw.slaCompliance ? Number(raw.slaCompliance) : undefined,
+        industry: raw.industry ? String(raw.industry) : undefined,
+        gapAnalysisScore: raw.gap_analysis_score ? Number(raw.gap_analysis_score) : raw.gapAnalysisScore ? Number(raw.gapAnalysisScore) : undefined,
+        approvalStages,
+        planId: raw.plan_id ? String(raw.plan_id) : raw.planId ? String(raw.planId) : undefined,
+        templateId: raw.template_id ? String(raw.template_id) : raw.templateId ? String(raw.templateId) : undefined,
+      } satisfies import("@/types/enterprise").SOW;
+    }
+
     const exactMatch = allSows.find((s) => s.id === sowId)
       ?? mockSOWs.find((s) => s.id === sowId);
     const pipelineMeta = pipelineSows.find((s) => s.id === sowId);
 
-    if (exactMatch) {
-      // Found in a real store — merge API data on top for real-time fields
-      return normalizedApiSow ? { ...exactMatch, ...normalizedApiSow, id: sowId } : exactMatch;
-    }
+    if (exactMatch) return exactMatch;
 
-    // API-only SOW (no local store match) — use the API payload atop a base shape
-    if (normalizedApiSow) {
-      return { ...allSows[0], ...normalizedApiSow, id: sowId };
-    }
-
-    // SOW only exists in the pipeline store (no mock/store entry).
-    // Build a synthetic record from the pipeline metadata so the correct
-    // approval stage is shown instead of whatever allSows[0] happens to have.
     if (pipelineMeta) {
       const stageKeys = ["business", "glimmora_commercial", "legal", "security", "final"] as const;
       const completed = pipelineMeta.completedStages;
       const current = pipelineMeta.currentStage;
       return {
-        ...(allSows[0]),   // use as a shape template for fields like riskScore, pages, etc.
+        ...SOW_DEFAULTS,
         id: sowId,
         title: pipelineMeta.title,
         client: pipelineMeta.client,
@@ -324,27 +409,96 @@ export default function SOWDetailPage() {
           if (num === current) return { stage: key, status: "in_review" as const, reviewer: "Enterprise Admin" };
           return { stage: key, status: "pending" as const };
         }),
-      };
+      } as import("@/types/enterprise").SOW;
     }
 
-    // Last resort fallback
-    return allSows[0];
-  }, [allSows, pipelineSows, sowId, normalizedApiSow]);
-  const linkedProject = mockProjects.find((p) => p.sowId === sow.id);
-  const sections = mockSOWSections.filter((s) => s.sowId === sow.id);
-  const clauses = mockSOWClauses.filter((c) => c.sowId === sow.id);
-  const versions = generateVersionHistory(sow);
-  const auditTrail = generateAuditTrail(sow);
-  const ethicsScreening = mockEthicsScreening[sow.id] || [];
-  const regulatoryItems = mockRegulatoryAlignment[sow.id] || [];
-  const genParams = mockGenerationParams[sow.id];
-  const hallucinationLayers = mockHallucinationLayers[sow.id] || [];
-  const sensitivityReqs = sensitivityHandlingRequirements[sow.dataSensitivity] || [];
+    return { ...SOW_DEFAULTS, id: sowId } as import("@/types/enterprise").SOW;
+  }, [apiSowData, apiFlow, allSows, pipelineSows, sowId]);
+  const linkedProject = sow ? mockProjects.find((p) => p.sowId === sow.id) : undefined;
+  const apiSections = React.useMemo(() => {
+    const raw = apiSowData as Record<string, unknown> | null | undefined;
+    const gc = (raw?.generated_content ?? {}) as Record<string, unknown>;
+    const list = gc.sections as Array<{ section_id: string; title: string; confidence: number; content: string }> | undefined;
+    if (!list?.length) return null;
+    return list.map((s, i) => ({
+      id: s.section_id,
+      sowId: sowId,
+      title: s.title,
+      content: s.content,
+      confidence: s.confidence,
+      order: i + 1,
+    }));
+  }, [apiSowData, sowId]);
+  const sections = apiSections ?? (sow ? mockSOWSections.filter((s) => s.sowId === sow.id) : []);
+
+  // Derive approval stages from GET /api/v1/approvals/{sow_id} when available,
+  // so the stepper always reflects the real pipeline state.
+  const pipelineResolvedStages = React.useMemo(() => {
+    const pRaw = (pipelineApiData as any)?.data;
+    const pArr: Record<string, unknown>[] = Array.isArray(pRaw)
+      ? pRaw
+      : Array.isArray((pRaw as any)?.stages)
+      ? (pRaw as any).stages
+      : Array.isArray((pRaw as any)?.approval_stages)
+      ? (pRaw as any).approval_stages
+      : [];
+    if (pArr.length === 0) return null;
+    const stageKeyMap: Record<number, string> = { 1: "business", 2: "glimmora_commercial", 3: "legal", 4: "security", 5: "final" };
+    return [1, 2, 3, 4, 5].map((num) => {
+      const apiSt = pArr.find((s) => Number(s.stage ?? s.stage_number) === num);
+      const rawStatus = String(apiSt?.status ?? "pending").toLowerCase();
+      const status: import("@/types/enterprise").ApprovalStageStatus =
+        rawStatus === "approved" ? "approved" :
+        rawStatus === "rejected" || rawStatus === "changes_requested" ? "rejected" :
+        rawStatus === "in_review" || rawStatus === "active" || rawStatus === "in_progress" ? "in_review" :
+        "pending";
+      return {
+        stage: stageKeyMap[num] as import("@/types/enterprise").ApprovalStage,
+        status,
+        reviewer: String(apiSt?.reviewer_name ?? apiSt?.reviewer ?? "") || undefined,
+      } satisfies import("@/types/enterprise").SOWApprovalStage;
+    });
+  }, [pipelineApiData]);
+
+  // Use pipeline API stages for the stepper display; fall back to sow.approvalStages
+  const displayStages = pipelineResolvedStages ?? sow?.approvalStages ?? DEFAULT_APPROVAL_STAGES;
+
+  // Derive the effective active stage index from the pipeline API (when available),
+  // so checklist + form reflect the real in_review stage, not just local clicks.
+  // If any stage has been sent back with changes_requested ("rejected"), stay on
+  // that stage — the SOW must be resolved before it can advance.
+  const effectiveActiveIdx = React.useMemo(() => {
+    if (!pipelineResolvedStages) return null;
+    const rejectedIdx = pipelineResolvedStages.findIndex((s) => s.status === "rejected");
+    if (rejectedIdx >= 0) return rejectedIdx;
+    const inReviewIdx = pipelineResolvedStages.findIndex((s) => s.status === "in_review");
+    if (inReviewIdx >= 0) return inReviewIdx;
+    const pendingIdx = pipelineResolvedStages.findIndex((s) => s.status === "pending");
+    if (pendingIdx >= 0) return pendingIdx;
+    return pipelineResolvedStages.length; // all approved
+  }, [pipelineResolvedStages]);
+
+  const changesRequestedStageIdx = React.useMemo(() => {
+    if (!pipelineResolvedStages) return -1;
+    return pipelineResolvedStages.findIndex((s) => s.status === "rejected");
+  }, [pipelineResolvedStages]);
+
+  const clauses = sow ? mockSOWClauses.filter((c) => c.sowId === sow.id) : [];
+  const versions = sow ? generateVersionHistory(sow) : [];
+  const auditTrail = sow ? generateAuditTrail(sow) : [];
+  const ethicsScreening = sow ? mockEthicsScreening[sow.id] || [] : [];
+  const regulatoryItems = sow ? mockRegulatoryAlignment[sow.id] || [] : [];
+  const genParams = sow ? mockGenerationParams[sow.id] : undefined;
+  const hallucinationLayers = sow ? mockHallucinationLayers[sow.id] || [] : [];
+  const sensitivityReqs = sow ? sensitivityHandlingRequirements[sow.dataSensitivity] || [] : [];
 
   /* UI state */
   const [expandedSections, setExpandedSections] = React.useState<Set<string>>(
     () => new Set(sections.slice(0, 3).map((s) => s.id))
   );
+  const [isDownloading, setIsDownloading] = React.useState(false);
+  const [showComment, setShowComment] = React.useState(false);
+  const [commentText, setCommentText] = React.useState("");
   const [showSubmitModal, setShowSubmitModal] = React.useState(false);
   const [submitSuccess, setSubmitSuccess] = React.useState(false);
   const [clauseTypeFilter, setClauseTypeFilter] = React.useState("all");
@@ -353,7 +507,6 @@ export default function SOWDetailPage() {
   const [docSearch, setDocSearch] = React.useState("");
   const [approvalChecked, setApprovalChecked] = React.useState<Record<string, boolean>>({});
   const [signatureText, setSignatureText] = React.useState("");
-  const [activeApprovalIdx, setActiveApprovalIdx] = React.useState(0);
   const [showRequestChanges, setShowRequestChanges] = React.useState(false);
   const [requestChangesNote, setRequestChangesNote] = React.useState("");
   const [requestCategory, setRequestCategory] = React.useState<"scope"|"deliverables"|"timeline"|"other">("scope");
@@ -362,20 +515,34 @@ export default function SOWDetailPage() {
   const sectionDropdownRef = React.useRef<HTMLDivElement>(null);
   const sectionTriggerRef = React.useRef<HTMLButtonElement>(null);
   const [dropdownCoords, setDropdownCoords] = React.useState({ top: 0, left: 0, width: 0 });
+  // Track which SOW ID we've already initialised the stage index for so that
+  // API refetches (triggered after approve/comment) never reset the stage the
+  // user has already advanced to.
+  const approvalInitialisedFor = React.useRef<string | null>(null);
 
-  // Sync the active approval stage index to the first in_review stage whenever
-  // the SOW changes (e.g. navigating from the pipeline page to a SOW at stage 3+).
   React.useEffect(() => {
+    if (!sow) return;
+    // Only auto-sync once per SOW — after that, user actions drive the index.
+    if (approvalInitialisedFor.current === sowId) return;
+    approvalInitialisedFor.current = sowId;
     const idx = sow.approvalStages.findIndex((s) => s.status === "in_review");
     if (idx >= 0) {
       setActiveApprovalIdx(idx);
     } else {
-      // All approved or all pending — fall back to first pending, or last stage
       const pendingIdx = sow.approvalStages.findIndex((s) => s.status === "pending");
       setActiveApprovalIdx(pendingIdx >= 0 ? pendingIdx : sow.approvalStages.length);
     }
     setApprovalChecked({});
-  }, [sow.id]);
+  }, [sow?.id]);
+
+  // When the pipeline API resolves and reports an in_review stage different
+  // from our local index, advance the local index to match. This keeps the
+  // checklist/form in sync with the real pipeline state across refetches.
+  React.useEffect(() => {
+    if (effectiveActiveIdx === null) return;
+    setActiveApprovalIdx((prev) => (prev === effectiveActiveIdx ? prev : effectiveActiveIdx));
+    setApprovalChecked({});
+  }, [effectiveActiveIdx]);
 
   React.useEffect(() => {
     if (!sectionDropdownOpen) return;
@@ -403,6 +570,7 @@ export default function SOWDetailPage() {
 
   // Seed initial stage_activated message on first visit
   React.useEffect(() => {
+    if (!sow) return;
     const thread = useSowMessagesStore.getState().getThread(sow.id);
     if (thread.length === 0) {
       const activatedMsg = buildActivatedMessage(sow.id, 0, sow.title);
@@ -415,7 +583,67 @@ export default function SOWDetailPage() {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sow.id]);
+  }, [sow?.id]);
+
+  /* Filtered clauses */
+  const filteredClauses = React.useMemo(() => {
+    let list = [...clauses];
+    if (clauseTypeFilter !== "all") list = list.filter((c) => c.type === clauseTypeFilter);
+    if (clauseSearch.trim()) {
+      const q = clauseSearch.toLowerCase();
+      list = list.filter(
+        (c) => c.text.toLowerCase().includes(q) || c.sectionRef.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [clauses, clauseTypeFilter, clauseSearch]);
+
+  /* Prohibited clause count */
+  const prohibitedCount = clauses.filter((c) => c.isProhibited).length;
+
+  /* Clause type counts for filter */
+  const clauseTypeCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    clauses.forEach((c) => { counts[c.type] = (counts[c.type] || 0) + 1; });
+    return counts;
+  }, [clauses]);
+
+  /* Filtered audit events */
+  const filteredAudit = React.useMemo(() => {
+    if (auditTypeFilter === "all") return auditTrail;
+    return auditTrail.filter((e) => e.action === auditTypeFilter);
+  }, [auditTrail, auditTypeFilter]);
+
+  /* Document sections filtered by search */
+  const filteredDocSections = React.useMemo(() => {
+    if (!docSearch.trim()) return sections;
+    const q = docSearch.toLowerCase();
+    return sections.filter(
+      (s) => s.title.toLowerCase().includes(q) || s.content.toLowerCase().includes(q)
+    );
+  }, [sections, docSearch]);
+
+  if (apiSowLoading && !apiSowData) {
+    return (
+      <div className="max-w-[1400px] mx-auto space-y-5 p-6">
+        <Skeleton className="h-5 w-40 rounded" />
+        <div className="rounded-2xl border border-beige-200/50 bg-white/70 p-6 space-y-4">
+          <Skeleton className="h-7 w-2/3 rounded" />
+          <Skeleton className="h-4 w-1/3 rounded" />
+          <div className="flex gap-2 mt-2">
+            <Skeleton className="h-6 w-20 rounded-full" />
+            <Skeleton className="h-6 w-24 rounded-full" />
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+        </div>
+        <Skeleton className="h-[400px] rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (!sow) return null;
 
   const toggleSection = (id: string) => {
     setExpandedSections((prev) => {
@@ -493,7 +721,7 @@ export default function SOWDetailPage() {
       setTimeout(() => setShowSubmitModal(false), 2000);
     };
 
-    if (normalizedApiSow) {
+    if (apiSowData) {
       confirmAndSubmit.mutate(
         { confirms_accuracy: true },
         {
@@ -510,43 +738,46 @@ export default function SOWDetailPage() {
     finalizeSubmit();
   }
 
-  /* Filtered clauses */
-  const filteredClauses = React.useMemo(() => {
-    let list = [...clauses];
-    if (clauseTypeFilter !== "all") list = list.filter((c) => c.type === clauseTypeFilter);
-    if (clauseSearch.trim()) {
-      const q = clauseSearch.toLowerCase();
-      list = list.filter(
-        (c) => c.text.toLowerCase().includes(q) || c.sectionRef.toLowerCase().includes(q)
-      );
+  async function handleDownloadPdf() {
+    if (isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const blob = await sowApi.exportSOW(sowId, "pdf");
+      const contentType = blob.type;
+
+      // API may return JSON with a download URL instead of raw bytes
+      if (contentType.includes("json") || blob.size < 500) {
+        const text = await blob.text();
+        try {
+          const json = JSON.parse(text);
+          const downloadUrl = json?.data?.url ?? json?.url ?? json?.download_url ?? json?.pdf_url;
+          if (downloadUrl) {
+            window.open(downloadUrl, "_blank");
+            return;
+          }
+        } catch {
+          // not JSON — fall through to blob download
+        }
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${sow.title.replace(/[^a-z0-9]/gi, "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      // Delay revoke so browser has time to start the download
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 2000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Download failed";
+      toast.error("Download failed", msg);
+    } finally {
+      setIsDownloading(false);
     }
-    return list;
-  }, [clauses, clauseTypeFilter, clauseSearch]);
-
-  /* Prohibited clause count */
-  const prohibitedCount = clauses.filter((c) => c.isProhibited).length;
-
-  /* Clause type counts for filter */
-  const clauseTypeCounts = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    clauses.forEach((c) => { counts[c.type] = (counts[c.type] || 0) + 1; });
-    return counts;
-  }, [clauses]);
-
-  /* Filtered audit events */
-  const filteredAudit = React.useMemo(() => {
-    if (auditTypeFilter === "all") return auditTrail;
-    return auditTrail.filter((e) => e.action === auditTypeFilter);
-  }, [auditTrail, auditTypeFilter]);
-
-  /* Document sections filtered by search */
-  const filteredDocSections = React.useMemo(() => {
-    if (!docSearch.trim()) return sections;
-    const q = docSearch.toLowerCase();
-    return sections.filter(
-      (s) => s.title.toLowerCase().includes(q) || s.content.toLowerCase().includes(q)
-    );
-  }, [sections, docSearch]);
+  }
 
   return (
     <motion.div
@@ -558,132 +789,140 @@ export default function SOWDetailPage() {
       {/* ── Breadcrumb ── */}
       <motion.div variants={fadeUp}>
         <Link
-          href="/enterprise/sow"
+          href={backHref}
           className="inline-flex items-center gap-2 text-sm text-beige-600 hover:text-brown-700 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          SOW Repository
+          {backLabel}
         </Link>
       </motion.div>
 
-      {/* ── Header (B6 Step 1) ── */}
+      {/* ── Header ── */}
       <motion.div
         variants={fadeUp}
-        className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm px-6 py-5"
+        className="rounded-2xl border border-beige-200/50 bg-white/80 backdrop-blur-sm overflow-hidden"
       >
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            {/* Row 1: Title + status */}
-            <div className="flex items-center gap-3 mb-2 flex-wrap">
-              <h1 className="text-xl font-bold text-brown-900 tracking-tight font-heading">
-                {sow.title}
-              </h1>
-              <Badge variant={statusVariantMap[sow.status]} size="md" dot>
-                {statusLabel[sow.status]}
-              </Badge>
-            </div>
-            {/* Row 2: Sub-metadata + secondary badges */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-[11px] text-beige-500">{sow.id.toUpperCase()}</span>
-              <span className="w-1 h-1 rounded-full bg-beige-300" />
-              <span className="text-[12px] text-beige-600">{sow.client}</span>
-              <span className="w-1 h-1 rounded-full bg-beige-300" />
-              <span className="text-[12px] text-beige-600">v{sow.version}</span>
-              <span className="w-1 h-1 rounded-full bg-beige-300" />
-              <span className="text-[12px] text-beige-600">{sow.fileSize}</span>
-              <span className="w-1 h-1 rounded-full bg-beige-300" />
-              <span className="text-[12px] text-beige-600">By {sow.createdBy}</span>
-              <span className="w-1 h-1 rounded-full bg-beige-300" />
-              <Badge
-                variant={sow.intakeMode === "ai_generated" ? "teal" : "beige"}
-                size="sm"
-              >
-                {sow.intakeMode === "ai_generated" ? (
-                  <><Bot className="w-3 h-3" /> AI Generated</>
-                ) : (
-                  <><Upload className="w-3 h-3" /> Manual Upload</>
-                )}
-              </Badge>
-              <Badge variant={confidentialityVariantMap[sow.confidentiality]} size="sm">
-                <Shield className="w-3 h-3" />
-                {sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1)}
-              </Badge>
-              {sow.riskScore.overall > 0 && (
-                <Badge
-                  variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"}
-                  size="sm"
-                >
-                  Risk {sow.riskScore.overall}/100
+        {/* Top accent bar */}
+        <div className="h-1 w-full bg-gradient-to-r from-brown-400 via-brown-300 to-beige-300" />
+
+        <div className="px-7 pt-6 pb-5">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-2.5 flex-wrap">
+                <h1 className="text-[22px] font-bold text-brown-900 tracking-tight font-heading leading-snug">
+                  {sow.title}
+                </h1>
+                <Badge variant={statusVariantMap[sow.status]} size="md" dot>
+                  {statusLabel[sow.status]}
                 </Badge>
+              </div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {sow.client && (
+                  <span className="text-[13px] font-medium text-brown-700">{sow.client}</span>
+                )}
+                <span className="w-px h-3.5 bg-beige-200" />
+                <span className="text-[12px] text-beige-500">v{sow.version}</span>
+                {sow.fileSize && sow.fileSize !== "—" && (
+                  <>
+                    <span className="w-px h-3.5 bg-beige-200" />
+                    <span className="text-[12px] text-beige-500">{sow.fileSize}</span>
+                  </>
+                )}
+                {sow.createdBy && (
+                  <>
+                    <span className="w-px h-3.5 bg-beige-200" />
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-4.5 h-4.5 rounded-full bg-gradient-to-br from-brown-200 to-beige-200 flex items-center justify-center">
+                        <User className="w-2.5 h-2.5 text-brown-600" />
+                      </div>
+                      <span className="text-[12px] text-beige-500">{sow.createdBy}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              {/* Metric row */}
+              <div className="flex items-center gap-6 mt-4 pt-4 border-t border-beige-100">
+                <div>
+                  <p className="text-[10px] font-semibold text-beige-400 uppercase tracking-widest mb-0.5">Estimated Budget</p>
+                  <p className="text-[13px] font-bold text-brown-800">{sow.estimatedBudget > 0 ? `$${sow.estimatedBudget.toLocaleString()}` : "TBD"}</p>
+                </div>
+                <div className="w-px h-8 bg-beige-200" />
+                <div>
+                  <p className="text-[10px] font-semibold text-beige-400 uppercase tracking-widest mb-0.5">Estimated Duration</p>
+                  <p className="text-[13px] font-bold text-brown-800">{sow.estimatedDuration || "TBD"}</p>
+                </div>
+              </div>
+
+              {/* Badges row */}
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
+                <Badge variant={sow.intakeMode === "ai_generated" ? "teal" : "beige"} size="sm">
+                  {sow.intakeMode === "ai_generated"
+                    ? <><Bot className="w-3 h-3" /> AI Generated</>
+                    : <><Upload className="w-3 h-3" /> Manual Upload</>
+                  }
+                </Badge>
+                <Badge variant={confidentialityVariantMap[sow.confidentiality]} size="sm">
+                  <Lock className="w-3 h-3" />
+                  {sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1)}
+                </Badge>
+                {sow.riskScore.overall > 0 && (
+                  <Badge variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"} size="sm">
+                    <Gauge className="w-3 h-3" />
+                    Risk {sow.riskScore.overall}/100
+                  </Badge>
+                )}
+                {sow.aiConfidence > 0 && (
+                  <Badge variant={confidenceColor(sow.aiConfidence) === "forest" ? "forest" : confidenceColor(sow.aiConfidence) === "teal" ? "teal" : "gold"} size="sm">
+                    <Sparkles className="w-3 h-3" />
+                    AI {sow.aiConfidence}% Confidence
+                  </Badge>
+                )}
+                <span className="text-[11px] text-beige-400 pl-0.5">Updated {formatDate(sow.updatedAt)}</span>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="flex items-center gap-2 shrink-0">
+              {(sow.status === "draft" || sow.status === "review") && isValidated && (
+                <Button variant="gradient-primary" size="sm" onClick={() => setShowSubmitModal(true)}>
+                  <Send className="w-3.5 h-3.5" />
+                  Submit for Approval
+                </Button>
+              )}
+              {sow.status === "draft" && !isValidated && (
+                <Link href={sow.intakeMode === "ai_generated" ? "/enterprise/sow/generate" : "/enterprise/sow/upload"}>
+                  <Button variant="outline" size="sm">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Continue Setup
+                  </Button>
+                </Link>
+              )}
+              {sow.status === "approval" && (
+                <Link href={`/enterprise/sow/${sow.id}/approve`}>
+                  <Button variant="outline" size="sm">
+                    <Clock className="w-3.5 h-3.5" />
+                    View Approval Progress
+                  </Button>
+                </Link>
+              )}
+              {sow.status === "approved" && sow.planId && (
+                <Link href={`/enterprise/decomposition/${sow.planId}`}>
+                  <Button variant="outline" size="sm">
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    View Plan
+                  </Button>
+                </Link>
+              )}
+              {sow.status === "approved" && !sow.planId && (
+                <Link href={`/enterprise/decomposition?sowId=${sow.id}`}>
+                  <Button variant="gradient-primary" size="sm">
+                    <Layers className="w-3.5 h-3.5" />
+                    Start Decomposition
+                  </Button>
+                </Link>
               )}
             </div>
           </div>
-
-          {/* Status-aware header actions (B6 Step 1 a-e) */}
-          <div className="flex items-center gap-2 shrink-0">
-          {(sow.status === "draft" || sow.status === "review") && isValidated && (
-            <Button variant="gradient-primary" size="sm" onClick={() => setShowSubmitModal(true)}>
-              <Send className="w-3.5 h-3.5" />
-              Submit for Approval
-            </Button>
-          )}
-          {sow.status === "draft" && !isValidated && (
-            <Link href={sow.intakeMode === "ai_generated" ? "/enterprise/sow/generate" : "/enterprise/sow/upload"}>
-              <Button variant="outline" size="sm">
-                <Sparkles className="w-3.5 h-3.5" />
-                Continue Setup
-              </Button>
-            </Link>
-          )}
-          {sow.status === "approval" && (
-            <Link href={`/enterprise/sow/${sow.id}/approve`}>
-              <Button variant="outline" size="sm">
-                <Clock className="w-3.5 h-3.5" />
-                View Approval Progress
-              </Button>
-            </Link>
-          )}
-          {sow.status === "approved" && sow.planId && (
-            <Link href={`/enterprise/decomposition/${sow.planId}`}>
-              <Button variant="outline" size="sm">
-                <ExternalLink className="w-3.5 h-3.5" />
-                View Plan
-              </Button>
-            </Link>
-          )}
-          {sow.status === "approved" && !sow.planId && (
-            <Link href={`/enterprise/decomposition?sowId=${sow.id}`}>
-              <Button variant="gradient-primary" size="sm">
-                <Layers className="w-3.5 h-3.5" />
-                Start Decomposition
-              </Button>
-            </Link>
-          )}
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ── Top Metadata Strip ── */}
-      <motion.div variants={fadeUp} className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm px-5 py-4">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {[
-            { icon: BookOpen, label: "Pages", value: `${sow.pages}` },
-            { icon: Layers, label: "Sections", value: `${sow.parsedSections}/${sow.totalSections}` },
-            { icon: DollarSign, label: "Est. Budget", value: sow.estimatedBudget > 0 ? `$${(sow.estimatedBudget / 1000).toFixed(0)}K` : "TBD" },
-            { icon: Clock, label: "Duration", value: sow.estimatedDuration },
-            { icon: Users, label: "Stakeholders", value: `${sow.stakeholders.length}` },
-            { icon: Calendar, label: "Updated", value: formatDate(sow.updatedAt) },
-          ].map(({ icon: Icon, label, value }, i) => (
-            <div key={label} className={cn("flex items-center gap-3", i > 0 && "lg:border-l lg:border-beige-200/50 lg:pl-4")}>
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-beige-50 to-beige-100 border border-beige-200/50 flex items-center justify-center shrink-0">
-                <Icon className="w-4 h-4 text-brown-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold text-beige-400 uppercase tracking-widest">{label}</p>
-                <p className="text-[15px] font-bold text-brown-900 truncate leading-tight">{value}</p>
-              </div>
-            </div>
-          ))}
         </div>
       </motion.div>
 
@@ -697,31 +936,11 @@ export default function SOWDetailPage() {
               <TabsTrigger value="approval" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Approval
               </TabsTrigger>
-              <TabsTrigger value="ai-analysis" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
-                <Sparkles className="w-3.5 h-3.5 shrink-0" /> AI Analysis
-              </TabsTrigger>
-              <TabsTrigger value="audit" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
-                <History className="w-3.5 h-3.5 shrink-0" /> Audit
-              </TabsTrigger>
-              <TabsTrigger value="clauses" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
-                <Scale className="w-3.5 h-3.5 shrink-0" /> Clauses
-                {prohibitedCount > 0 && (
-                  <span className="ml-1 w-4 h-4 rounded-full bg-brown-500 text-white text-[9px] font-bold flex items-center justify-center">
-                    {prohibitedCount}
-                  </span>
-                )}
-              </TabsTrigger>
               <TabsTrigger value="document" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
                 <BookOpen className="w-3.5 h-3.5 shrink-0" /> Document
               </TabsTrigger>
               <TabsTrigger value="linked" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
                 <Link2 className="w-3.5 h-3.5 shrink-0" /> Linked
-              </TabsTrigger>
-              <TabsTrigger value="metadata" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
-                <FileText className="w-3.5 h-3.5 shrink-0" /> Metadata
-              </TabsTrigger>
-              <TabsTrigger value="risk" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
-                <ShieldCheck className="w-3.5 h-3.5 shrink-0" /> Risk & Compliance
               </TabsTrigger>
               <TabsTrigger value="versions" className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-brown-500 data-[state=active]:text-brown-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none text-[12.5px] font-medium text-gray-500 px-3 py-3 hover:text-gray-700 transition-colors">
                 <GitBranch className="w-3.5 h-3.5 shrink-0" /> Versions
@@ -1001,9 +1220,6 @@ export default function SOWDetailPage() {
                       className="h-8 pl-8 pr-3 text-xs rounded-lg border border-beige-200 bg-white/80 text-brown-800 placeholder:text-beige-400 focus:outline-none focus:ring-2 focus:ring-brown-200 w-[180px]"
                     />
                   </div>
-                  <Button variant="outline" size="sm" className="h-8 text-xs">
-                    <Download className="w-3.5 h-3.5" /> Download
-                  </Button>
                 </div>
               </div>
 
@@ -1072,36 +1288,35 @@ export default function SOWDetailPage() {
                               />
                             </div>
                             <span className="text-[11px] font-mono font-semibold text-beige-600 w-8 text-right">{section.confidence}%</span>
-                            {section.aiSuggestion && <Sparkles className="w-3.5 h-3.5 text-gold-500 shrink-0" />}
+                            {(section as { aiSuggestion?: string }).aiSuggestion && <Sparkles className="w-3.5 h-3.5 text-gold-500 shrink-0" />}
                           </div>
                           {isExpanded ? <ChevronUp className="w-4 h-4 text-beige-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-beige-400 shrink-0" />}
                         </button>
 
                         {isExpanded && (
                           <div className="px-4 pb-4 pt-0 border-t border-beige-100">
-                            <p className="text-[13px] text-brown-700 leading-relaxed mt-3">{section.content}</p>
-                            {section.aiSuggestion && (
-                              <div className="mt-3 rounded-xl bg-gradient-to-r from-gold-50 to-beige-50 border border-gold-200/60 p-3.5">
-                                <div className="flex items-start gap-2">
-                                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-gold-400 to-gold-500 flex items-center justify-center shrink-0 mt-0.5">
-                                    <Sparkles className="w-3 h-3 text-white" />
-                                  </div>
-                                  <div>
-                                    <p className="text-[11px] font-bold text-gold-800 uppercase tracking-wider mb-0.5">AI Suggestion</p>
-                                    <p className="text-[12px] text-gold-700 leading-relaxed">{section.aiSuggestion}</p>
-                                    <div className="flex items-center gap-2 mt-2">
-                                      <Button variant="secondary" size="sm" className="text-[11px] h-7">
-                                        <CheckCircle2 className="w-3 h-3" /> Accept
-                                      </Button>
-                                      <Button variant="outline" size="sm" className="text-[11px] h-7">
-                                        <X className="w-3 h-3" /> Dismiss
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            <div className="mt-3 flex items-center gap-2">
+                            <div className="mt-3 text-[13px] text-brown-700 leading-relaxed space-y-2">
+                              {section.content.split("\n\n").map((block, bi) => {
+                                const lines = block.split("\n").filter(Boolean);
+                                const isBulletBlock = lines.every((l) => l.trimStart().startsWith("-") || l.trimStart().startsWith("*") || l.startsWith("  -"));
+                                if (isBulletBlock) {
+                                  return (
+                                    <ul key={bi} className="list-none space-y-1 pl-1">
+                                      {lines.map((line, li) => (
+                                        <li key={li} className="flex items-start gap-2">
+                                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brown-300 shrink-0" />
+                                          <span dangerouslySetInnerHTML={{ __html: line.replace(/^\s*[-*]\s*/, "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>") }} />
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  );
+                                }
+                                return (
+                                  <p key={bi} dangerouslySetInnerHTML={{ __html: block.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br/>") }} />
+                                );
+                              })}
+                            </div>
+                            <div className="mt-4 flex items-center gap-2">
                               <span className="text-[10px] font-semibold text-beige-500 uppercase tracking-wider">Confidence</span>
                               <div className="flex-1">
                                 <Progress value={section.confidence} size="sm" variant={confidenceVariant(section.confidence)} />
@@ -1532,39 +1747,63 @@ export default function SOWDetailPage() {
                 ],
               };
 
-              const totalStages     = sow.approvalStages.length;
-              const isDone         = activeApprovalIdx >= totalStages;
+              const totalStages = displayStages.length;
+              // isDone: pipeline says all approved, OR local index has passed all stages
+              const isDone = pipelineResolvedStages
+                ? displayStages.every((s) => s.status === "approved")
+                : totalStages > 0 && activeApprovalIdx >= totalStages;
               const activeStageIdx = isDone ? totalStages - 1 : activeApprovalIdx;
+              // activeStage for checklist/form uses local index so user can still interact
               const activeStage    = sow.approvalStages[activeApprovalIdx];
               const activeMeta     = !isDone && activeStage ? STAGE_META[activeStage.stage] : null;
-              const checklist      = !isDone && activeStage ? (STAGE_CHECKLISTS[activeStage.stage] ?? []) : [];
+              // Stage 2 is owned by the GlimmoraTeam admin — enterprise users
+              // cannot act on it, only wait for the admin's approval.
+              const isGlimmoraCommercialStage = activeStage?.stage === "glimmora_commercial";
+              const checklist      = !isDone && activeStage && !isGlimmoraCommercialStage
+                ? (STAGE_CHECKLISTS[activeStage.stage] ?? [])
+                : [];
               const allChecked     = checklist.every((_, i) => approvalChecked[`${activeApprovalIdx}-${i}`]);
 
               const handleApprove = () => {
                 const stageName = activeMeta?.name ?? "Stage";
-                toast.success(`Stage ${activeApprovalIdx + 1} Approved`, `${stageName} has been approved successfully.`);
-                addSowMessage(sow.id, buildApprovedMessage(sow.id, activeApprovalIdx, sow.title, sow.createdBy));
-                pushNotification({
-                  title: `Stage ${activeApprovalIdx + 1} Approved — ${stageName}`,
-                  body: `"${sow.title}" has moved to the next approval stage.`,
-                  severity: "medium",
-                  href: `/enterprise/sow/${sow.id}`,
-                });
-                const nextMsg = buildNextApproverMessage(sow.id, activeApprovalIdx + 1, sow.title);
-                if (nextMsg) {
-                  addSowMessage(sow.id, nextMsg);
+                const doLocalApprove = () => {
+                  toast.success(`Stage ${activeApprovalIdx + 1} Approved`, `${stageName} has been approved successfully.`);
+                  addSowMessage(sow.id, buildApprovedMessage(sow.id, activeApprovalIdx, sow.title, sow.createdBy));
                   pushNotification({
-                    title: nextMsg.subject,
-                    body: nextMsg.body,
+                    title: `Stage ${activeApprovalIdx + 1} Approved — ${stageName}`,
+                    body: `"${sow.title}" has moved to the next approval stage.`,
                     severity: "medium",
                     href: `/enterprise/sow/${sow.id}`,
                   });
-                }
-                setApprovalChecked({});
-                setSignatureText("");
-                setShowRequestChanges(false);
-                setRequestChangesNote("");
-                setActiveApprovalIdx(prev => prev + 1);
+                  const nextMsg = buildNextApproverMessage(sow.id, activeApprovalIdx + 1, sow.title);
+                  if (nextMsg) {
+                    addSowMessage(sow.id, nextMsg);
+                    pushNotification({
+                      title: nextMsg.subject,
+                      body: nextMsg.body,
+                      severity: "medium",
+                      href: `/enterprise/sow/${sow.id}`,
+                    });
+                  }
+                  setApprovalChecked({});
+                  setSignatureText("");
+                  setShowRequestChanges(false);
+                  setRequestChangesNote("");
+                  setShowComment(false);
+                  setCommentText("");
+                  setActiveApprovalIdx(prev => prev + 1);
+                };
+
+                recordDecision.mutate(
+                  { stage: activeApprovalIdx + 1, decision: "approve", comments: signatureText },
+                  {
+                    onSuccess: doLocalApprove,
+                    onError: () => {
+                      // API failed — still advance locally so UI isn't blocked
+                      doLocalApprove();
+                    },
+                  }
+                );
               };
 
               const PRE_FILLED_NOTES: Record<number, string> = {
@@ -1578,6 +1817,13 @@ export default function SOWDetailPage() {
               const handleSubmitRequestChanges = () => {
                 const stageName = activeMeta?.name ?? `Stage ${activeApprovalIdx + 1}`;
                 const noteText = requestChangesNote || PRE_FILLED_NOTES[activeApprovalIdx] || "Please review and address the feedback.";
+
+                // Send to decide API with decision: request_changes
+                recordDecision.mutate({
+                  stage: activeApprovalIdx + 1,
+                  decision: "request_changes",
+                  comments: `[${requestSection}] ${noteText}`,
+                });
 
                 // Push into global notification bell
                 pushNotification({
@@ -1625,15 +1871,75 @@ export default function SOWDetailPage() {
                 setShowRequestChanges(false);
               };
 
+              const handleSendComment = () => {
+                if (!commentText.trim()) return;
+                recordDecision.mutate(
+                  { stage: activeApprovalIdx + 1, decision: "comment" as any, comments: commentText },
+                  {
+                    onSuccess: () => {
+                      toast.success("Comment sent", "Your comment has been sent to Glimmora admin.");
+                      setCommentText("");
+                      setShowComment(false);
+                    },
+                    onError: (err) => {
+                      toast.error("Failed to send", err instanceof Error ? err.message : "Please try again.");
+                    },
+                  }
+                );
+              };
+
+              // Extract decisions/comments from the API pipeline for each stage
+              const pipelineStages = (pipelineApiData as any)?.data?.stages ?? (pipelineApiData as any)?.data ?? [];
+              const stageDecisions: Array<{ decision: string; comments: string; decided_at: string; decided_by: string; reply?: string }> =
+                (() => {
+                  const stage = Array.isArray(pipelineStages)
+                    ? pipelineStages.find((s: any) => s.stage_number === activeApprovalIdx + 1 || s.stage === activeApprovalIdx + 1)
+                    : null;
+                  const raw = stage?.decisions ?? stage?.comments ?? [];
+                  if (!Array.isArray(raw)) return [];
+                  return raw.map((d: any) => ({
+                    decision: String(d.decision ?? d.type ?? "comment"),
+                    comments: String(d.comments ?? d.message ?? d.text ?? ""),
+                    decided_at: String(d.decided_at ?? d.created_at ?? d.timestamp ?? ""),
+                    decided_by: String(d.decided_by?.name ?? d.decided_by?.email ?? d.author ?? d.reviewer ?? "Admin"),
+                    reply: d.reply ? String(d.reply) : undefined,
+                  }));
+                })();
+
+              const isChangesRequested = changesRequestedStageIdx >= 0;
+              const rejectedStageMeta = isChangesRequested
+                ? STAGE_META[displayStages[changesRequestedStageIdx].stage]
+                : null;
+
               return (
                 <div className="space-y-0">
                   {/* ── Banner ── */}
-                  {!isDone && activeMeta && (
+                  {isChangesRequested && (
+                    <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-gold-50 border-b border-gold-100">
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="w-4 h-4 text-gold-600 shrink-0" />
+                        <p className="text-[13px] text-gold-800">
+                          Changes requested on{" "}
+                          <span className="font-bold">{rejectedStageMeta?.name ?? `Stage ${changesRequestedStageIdx + 1}`}</span>
+                          {" "}— resolve the request below to resume approval.
+                        </p>
+                      </div>
+                      <Link
+                        href="/enterprise/sow/approval"
+                        className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all"
+                        style={{ background: "linear-gradient(135deg,#A67763,#8B5E4A)", boxShadow: "0 2px 8px rgba(166,119,99,0.35)" }}
+                      >
+                        <Undo2 className="w-3.5 h-3.5" />
+                        Resolve in Pipeline
+                      </Link>
+                    </div>
+                  )}
+                  {!isChangesRequested && !isDone && activeMeta && (
                     <div className="flex items-center gap-3 px-5 py-3.5 bg-teal-50 border-b border-teal-100">
                       <Clock className="w-4 h-4 text-teal-600 shrink-0" />
                       <p className="text-[13px] text-teal-800">
                         {activeMeta.name} — waiting for:{" "}
-                        <span className="font-bold">Enterprise Admin</span>
+                        <span className="font-bold">{activeMeta.role}</span>
                       </p>
                     </div>
                   )}
@@ -1659,11 +1965,16 @@ export default function SOWDetailPage() {
                     <div className="relative flex items-start justify-between">
                       {/* connecting line behind circles */}
                       <div className="absolute top-5 left-0 right-0 h-px bg-beige-200 z-0" />
-                      {sow.approvalStages.map((stage, idx) => {
-                        const isApproved = idx < activeApprovalIdx;
-                        const isActive   = idx === activeApprovalIdx && !isDone;
-                        const isRejected = false;
-                        const meta       = STAGE_META[stage.stage] ?? { name: stage.stage, role: "" };
+                      {displayStages.map((stage, idx) => {
+                        // Use real pipeline status when available, else fall back to local index
+                        const isApproved = pipelineResolvedStages
+                          ? stage.status === "approved"
+                          : idx < activeApprovalIdx;
+                        const isActive = pipelineResolvedStages
+                          ? stage.status === "in_review"
+                          : idx === activeApprovalIdx && !isDone;
+                        const isRejected = stage.status === "rejected";
+                        const meta = STAGE_META[stage.stage] ?? { name: stage.stage, role: "" };
                         return (
                           <div key={stage.stage} className="relative z-10 flex flex-col items-center gap-2 flex-1">
                             <div className={cn(
@@ -1697,7 +2008,7 @@ export default function SOWDetailPage() {
                   </div>
 
                   {/* ── Checklist ── */}
-                  {!isDone && activeStage && checklist.length > 0 && (
+                  {!isChangesRequested && !isDone && activeStage && checklist.length > 0 && (
                     <div className="px-6 py-5 border-b border-beige-100">
                       <p className="text-[10px] font-bold text-beige-500 uppercase tracking-widest mb-4">
                         Stage {activeApprovalIdx + 1} Review Checklist
@@ -1744,8 +2055,33 @@ export default function SOWDetailPage() {
                     </div>
                   )}
 
+                  {/* ── GlimmoraTeam-owned stage notice ── */}
+                  {!isChangesRequested && !isDone && isGlimmoraCommercialStage && (
+                    <div className="px-6 py-6 border-b border-beige-100 bg-teal-50/40">
+                      <div className="flex items-start gap-3 max-w-2xl">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                          style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.3)" }}
+                        >
+                          <Clock className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-[13px] font-bold text-teal-900 mb-1">
+                            Awaiting GlimmoraTeam Admin review
+                          </p>
+                          <p className="text-[12px] text-teal-800 leading-relaxed">
+                            Stage 2 — GlimmoraTeam Commercial Review — is signed off by the GlimmoraTeam Admin.
+                            No action is required from you. This SOW will automatically advance to{" "}
+                            <span className="font-semibold">Stage 3 — Legal / Compliance Review</span>{" "}
+                            as soon as the admin approves.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── Digital Signature ── */}
-                  {!isDone && activeStage && (
+                  {!isChangesRequested && !isDone && activeStage && !isGlimmoraCommercialStage && (
                     <div className="px-6 py-3.5 border-b border-beige-100">
                       <p className="text-[9px] font-bold text-beige-500 uppercase tracking-widest mb-1">
                         Digital Signature
@@ -1931,7 +2267,7 @@ export default function SOWDetailPage() {
                   </AnimatePresence>
 
                   {/* ── Action buttons ── */}
-                  {!isDone && activeStage && (
+                  {!isChangesRequested && !isDone && activeStage && !isGlimmoraCommercialStage && (
                     <div className="px-6 py-4 flex items-center gap-3">
                       <button
                         onClick={handleApprove}
@@ -1946,20 +2282,142 @@ export default function SOWDetailPage() {
                         <CheckCircle2 className="w-4 h-4" />
                         Approve Stage {activeApprovalIdx + 1}
                       </button>
-                      <button
-                        onClick={() => {
-                          setShowRequestChanges(v => !v);
-                          setRequestChangesNote(PRE_FILLED_NOTES[activeApprovalIdx] ?? "");
-                          setRequestCategory("scope");
-                        }}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all"
-                        style={{ background: "linear-gradient(135deg, #A67763, #8B5E4A)", boxShadow: "0 3px 10px rgba(166,119,99,0.35)" }}
-                        onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 5px 16px rgba(166,119,99,0.5)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 3px 10px rgba(166,119,99,0.35)"; e.currentTarget.style.transform = ""; }}
+                      {activeApprovalIdx === 1 && (
+                        <button
+                          onClick={() => {
+                            setShowRequestChanges(v => !v);
+                            setRequestChangesNote(PRE_FILLED_NOTES[activeApprovalIdx] ?? "");
+                            setRequestCategory("scope");
+                            setShowComment(false);
+                          }}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all"
+                          style={{ background: "linear-gradient(135deg, #A67763, #8B5E4A)", boxShadow: "0 3px 10px rgba(166,119,99,0.35)" }}
+                          onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 5px 16px rgba(166,119,99,0.5)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 3px 10px rgba(166,119,99,0.35)"; e.currentTarget.style.transform = ""; }}
+                        >
+                          <Undo2 className="w-4 h-4" />
+                          Request Changes
+                        </button>
+                      )}
+                      {activeApprovalIdx !== 1 && (
+                        <button
+                          onClick={() => { setShowComment(v => !v); setShowRequestChanges(false); }}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold border border-beige-200 text-brown-700 bg-beige-50 hover:bg-beige-100 transition-all"
+                        >
+                          <MessageSquareDiff className="w-4 h-4" />
+                          Comment
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Comment panel ── */}
+                  <AnimatePresence>
+                    {showComment && !isDone && activeStage && (
+                      <motion.div
+                        key="comment-panel"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                        className="overflow-hidden border-b border-beige-100"
                       >
-                        <Undo2 className="w-4 h-4" />
-                        Request Changes
-                      </button>
+                        <div className="bg-white px-6 py-4">
+                          <div className="max-w-sm">
+                            <div className="flex items-center justify-between mb-2.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-beige-100">
+                                  <MessageSquareDiff className="w-3.5 h-3.5 text-brown-600" />
+                                </div>
+                                <div>
+                                  <p className="text-[12.5px] font-bold text-gray-800 leading-none">Send comment to Glimmora admin</p>
+                                  <p className="text-[10px] text-gray-400 mt-0.5">Stage {activeApprovalIdx + 1} — {activeMeta?.name}</p>
+                                </div>
+                              </div>
+                            </div>
+                            <textarea
+                              rows={3}
+                              maxLength={500}
+                              value={commentText}
+                              onChange={e => setCommentText(e.target.value)}
+                              placeholder="Write your comment..."
+                              className="w-full rounded-xl px-3 py-2.5 text-[12px] text-gray-700 leading-relaxed resize-none focus:outline-none transition-all border border-gray-200 bg-white"
+                              style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
+                              onFocus={e => { e.currentTarget.style.borderColor = "rgba(42,96,104,0.4)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(42,96,104,0.08)"; }}
+                              onBlur={e => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)"; }}
+                            />
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-[10px] text-gray-400">{commentText.length}/500</span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setShowComment(false)}
+                                  className="px-3 py-1.5 rounded-lg text-[11.5px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all"
+                                >Cancel</button>
+                                <button
+                                  onClick={handleSendComment}
+                                  disabled={!commentText.trim() || recordDecision.isPending}
+                                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[11.5px] font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.35)" }}
+                                >
+                                  <Send className="w-3 h-3" />
+                                  {recordDecision.isPending ? "Sending…" : "Send"}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* ── Comments thread from API ── */}
+                  {stageDecisions.length > 0 && (
+                    <div className="px-6 py-4 border-t border-beige-100 space-y-3">
+                      <p className="text-[10px] font-bold text-beige-500 uppercase tracking-widest">
+                        Stage {activeApprovalIdx + 1} — Comments &amp; Decisions
+                      </p>
+                      {stageDecisions.map((d, i) => (
+                        <div key={i} className="space-y-2">
+                          <div className={cn(
+                            "rounded-xl p-3 border text-[12px] leading-relaxed",
+                            d.decision === "approve"
+                              ? "bg-forest-50 border-forest-100 text-forest-800"
+                              : d.decision === "request_changes"
+                              ? "bg-gold-50 border-gold-100 text-gold-800"
+                              : "bg-beige-50 border-beige-100 text-brown-700"
+                          )}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-bold">
+                                {d.decided_by}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant={d.decision === "approve" ? "forest" : d.decision === "request_changes" ? "gold" : "beige"}
+                                  size="sm"
+                                >
+                                  {d.decision === "approve" ? "Approved" : d.decision === "request_changes" ? "Changes Requested" : "Comment"}
+                                </Badge>
+                                {d.decided_at && (
+                                  <span className="text-[10px] text-beige-400">
+                                    {new Date(d.decided_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {d.comments && <p>{d.comments}</p>}
+                          </div>
+                          {/* Reply from Glimmora admin */}
+                          {d.reply && (
+                            <div className="ml-6 rounded-xl p-3 border border-teal-100 bg-teal-50 text-[12px] text-teal-800">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Bot className="w-3.5 h-3.5 text-teal-600" />
+                                <span className="text-[11px] font-bold text-teal-700">Glimmora Admin</span>
+                              </div>
+                              <p>{d.reply}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
 

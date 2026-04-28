@@ -159,6 +159,8 @@ export default function OnboardingModal() {
                   <Step1Identity
                     firstName={ob.firstName}     setFirstName={ob.setFirstName}
                     lastName={ob.lastName}       setLastName={ob.setLastName}
+                    phoneCountry={ob.phoneCountry} setPhoneCountry={ob.setPhoneCountry}
+                    phone={ob.phone}             setPhone={ob.setPhone}
                     email={ob.email}             setEmail={ob.setEmail}
                     contribType={ob.contribType} setContribType={ob.setContribType}
                     country={ob.country}         setCountry={ob.setCountry}
@@ -191,8 +193,15 @@ export default function OnboardingModal() {
                     addOtherSkill={ob.addOtherSkill}         removeOtherSkill={ob.removeOtherSkill}
                     workStart={ob.workStart}                 setWorkStart={ob.setWorkStart}
                     workEnd={ob.workEnd}                     setWorkEnd={ob.setWorkEnd}
+                    jobTitle={ob.jobTitle}                   setJobTitle={ob.setJobTitle}
                     careerStage={ob.careerStage}             setCareerStage={ob.setCareerStage}
                     yearsExperience={ob.yearsExperience}     setYearsExperience={ob.setYearsExperience}
+                    studentCurrency={ob.studentCurrency}
+                    studentHourlyRate={ob.studentHourlyRate}
+                    womenRateCurrency={ob.womenRateCurrency}
+                    womenRateTable={ob.womenRateTable}
+                    generalRateCurrency={ob.generalRateCurrency}
+                    generalRateTable={ob.generalRateTable}
                     error={ob.error}
                     onContinue={ob.goToStep3}
                     onBack={() => { ob.setStep(1); ob.setError(""); }}

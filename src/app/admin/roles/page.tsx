@@ -34,23 +34,7 @@ interface PlatformUser {
 
 /* ════════════════════════ Mock data ════════════════════════ */
 
-const MOCK_USERS: PlatformUser[] = [
-  { id: "u-001", name: "Priya Sharma",    email: "priya@glimmora.io",         role: "admin",        status: "active",    joinedAt: "2025-01-10", lastActive: "2026-04-14" },
-  { id: "u-002", name: "Rahul Mehta",     email: "rahul@glimmora.io",         role: "admin",        status: "active",    joinedAt: "2025-01-10", lastActive: "2026-04-13" },
-  { id: "u-003", name: "James Carter",    email: "james@techvista.com",        role: "enterprise",   status: "active",    org: "TechVista Solutions",   joinedAt: "2025-03-15", lastActive: "2026-04-12" },
-  { id: "u-004", name: "Sarah Mitchell",  email: "sarah@precisiontech.io",     role: "enterprise",   status: "active",    org: "PrecisionTech Industries", joinedAt: "2025-04-02", lastActive: "2026-04-10" },
-  { id: "u-005", name: "Aiko Tanaka",     email: "aiko@assure.now",           role: "enterprise",   status: "invited",   org: "AssureNow Insurance",   joinedAt: "2026-03-28", lastActive: "—" },
-  { id: "u-006", name: "Arjun Reddy",     email: "arjun.r@glimmora.io",       role: "reviewer",     status: "active",    org: "GlimmoraTeam",          joinedAt: "2025-06-01", lastActive: "2026-04-14" },
-  { id: "u-007", name: "Kavita Nair",     email: "kavita.n@glimmora.io",      role: "reviewer",     status: "active",    org: "GlimmoraTeam",          joinedAt: "2025-06-15", lastActive: "2026-04-11" },
-  { id: "u-008", name: "Daniel Osei",     email: "d.osei@glimmora.io",        role: "reviewer",     status: "invited",   org: "GlimmoraTeam",          joinedAt: "2026-04-01", lastActive: "—" },
-  { id: "u-009", name: "Lena Fischer",    email: "lena.f@contributors.net",   role: "contributor",  status: "active",    joinedAt: "2025-07-20", lastActive: "2026-04-13" },
-  { id: "u-010", name: "Carlos Mendez",   email: "carlos.m@contributors.net", role: "contributor",  status: "active",    joinedAt: "2025-08-05", lastActive: "2026-04-12" },
-  { id: "u-011", name: "Mei Lin",         email: "mei.lin@contributors.net",  role: "contributor",  status: "active",    joinedAt: "2025-09-14", lastActive: "2026-04-10" },
-  { id: "u-012", name: "Tobias Werner",   email: "tobias@contributors.net",   role: "contributor",  status: "suspended", joinedAt: "2025-10-01", lastActive: "2026-02-20" },
-  { id: "u-013", name: "Nia Johnson",     email: "nia.j@contributors.net",    role: "contributor",  status: "invited",   joinedAt: "2026-04-10", lastActive: "—" },
-  { id: "u-014", name: "Hiroshi Tanaka",  email: "hiroshi@hireforce.co",      role: "enterprise",   status: "active",    org: "HireForce Global",      joinedAt: "2025-11-12", lastActive: "2026-04-09" },
-  { id: "u-015", name: "Fatima Al-Sayed", email: "fatima@glimmora.io",        role: "reviewer",     status: "active",    org: "GlimmoraTeam",          joinedAt: "2025-12-01", lastActive: "2026-04-14" },
-];
+const MOCK_USERS: PlatformUser[] = [];
 
 /* ════════════════════════ Config ════════════════════════ */
 

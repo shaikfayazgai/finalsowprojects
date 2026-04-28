@@ -40,6 +40,25 @@ export function useManualSOWList(params?: {
   });
 }
 
+/**
+ * Admin variant — forces the enterprise service token so dev admins without
+ * a personal glimmora access token still see enterprise-owned manual SOWs.
+ */
+export function useAdminManualSOWList(params?: {
+  status?: string;
+  intake_mode?: string;
+  client?: string;
+  page?: number;
+  limit?: number;
+  sort?: string;
+  order?: "asc" | "desc";
+}) {
+  return useQuery({
+    queryKey: [...manualSowKeys.list(params), "admin"] as const,
+    queryFn: () => sowApi.listManualSOWsAsAdmin(params),
+  });
+}
+
 // ── Single SOW ────────────────────────────────────────────────────────────
 
 export function useManualSOW(sowId: string | null) {
@@ -48,6 +67,57 @@ export function useManualSOW(sowId: string | null) {
     queryFn: () => sowApi.getManualSOW(sowId!),
     enabled: !!sowId,
   });
+}
+
+// ── Generic SOW detail (works for both AI and manual flows) ───────────────
+//
+// Fires both endpoints in parallel:
+//   - Manual: GET /api/v1/sow/{sowId}
+//   - AI:     GET /api/v1/sows/{sowId}
+//
+// Returns the first successful response (manual takes priority).
+// Exposes `flow` so callers know which path to use for mutations.
+
+const aiSowKeys = {
+  sow: (id: string) => ["ai-sow", id] as const,
+};
+
+export function useSOWDetail(sowId: string | null): {
+  data: Record<string, unknown> | null;
+  isLoading: boolean;
+  flow: "manual" | "ai";
+  refetch: () => void;
+} {
+  const manualQuery = useQuery({
+    queryKey: manualSowKeys.sow(sowId ?? ""),
+    queryFn: () => sowApi.getManualSOW(sowId!),
+    enabled: !!sowId,
+    retry: 1,
+  });
+
+  const aiQuery = useQuery({
+    queryKey: aiSowKeys.sow(sowId ?? ""),
+    queryFn: () => sowApi.getSow(sowId!),
+    enabled: !!sowId,
+    retry: 1,
+  });
+
+  const manualData = (manualQuery.data?.data ?? null) as Record<string, unknown> | null;
+  const aiData     = (aiQuery.data?.data ?? null) as Record<string, unknown> | null;
+
+  // Manual takes priority; fall back to AI
+  const data = manualData ?? aiData;
+  const flow: "manual" | "ai" = manualData ? "manual" : "ai";
+
+  return {
+    data,
+    isLoading: manualQuery.isLoading && aiQuery.isLoading,
+    flow,
+    refetch: () => {
+      manualQuery.refetch();
+      aiQuery.refetch();
+    },
+  };
 }
 
 // ── Upload SOW ────────────────────────────────────────────────────────────
@@ -97,16 +167,24 @@ export function useUpdateManualSOW(sowId: string | null) {
   });
 }
 
-export function useDeleteManualSOW() {
+export function useDeleteSOW() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (sowId: string) => sowApi.deleteManualSOW(sowId),
+    mutationFn: (sowId: string) => sowApi.deleteSOW(sowId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: manualSowKeys.list() });
+      qc.invalidateQueries({ queryKey: ["sow", "sows"] });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to delete SOW";
+      console.error("[DeleteSOW]", msg);
     },
   });
 }
+
+/** @deprecated use useDeleteSOW */
+export const useDeleteManualSOW = useDeleteSOW;
 
 // ── Upload status (with polling) ──────────────────────────────────────────
 
@@ -351,6 +429,41 @@ export function useConfirmAndSubmit(sowId: string | null) {
   });
 }
 
+// ── Generic submit hook (handles both AI and manual flows) ────────────────
+//
+// Replaces the pattern of using useSowAction (AI) + useConfirmAndSubmit (manual)
+// in separate conditionals. Pass the sowId and the intake flow; the hook picks
+// the correct API endpoint internally and invalidates all relevant caches.
+
+export function useSubmitSOW(sowId: string | null, flow: "ai" | "manual") {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (opts?: { notes?: string }) => {
+      console.log("useSubmitSOW.mutationFn called:", { sowId, flow });
+      if (!sowId) throw new Error("No SOW id");
+      if (flow === "ai") {
+        console.log("Calling sowApi.sowAction");
+        return sowApi.sowAction(sowId, { action: "submit" });
+      }
+      console.log("Calling sowApi.generateManualSOW with sowId:", sowId);
+      return sowApi.generateManualSOW(sowId);
+    },
+    onSuccess: (data) => {
+      console.log("useSubmitSOW.onSuccess:", { sowId, data });
+      if (!sowId) return;
+      // Invalidate manual-sow caches
+      qc.invalidateQueries({ queryKey: manualSowKeys.sow(sowId) });
+      qc.invalidateQueries({ queryKey: manualSowKeys.list() });
+      // Invalidate approval pipeline so approve page loads fresh data
+      qc.invalidateQueries({ queryKey: manualSowKeys.approvalStages(sowId) });
+    },
+    onError: (error) => {
+      console.error("useSubmitSOW.onError:", { sowId, error: error instanceof Error ? error.message : error });
+    },
+  });
+}
+
 // ── Approval pipeline (uses /api/v1/approvals/ endpoints) ────────────────
 
 /** Stage key → 1-based number mapping for the approval API */
@@ -362,11 +475,51 @@ const STAGE_NUMBER: Record<string, number> = {
   final: 5,
 };
 
-export function useApprovalStages(sowId: string | null) {
+/** Query key for per-SOW approval pipeline */
+export const approvalKeys = {
+  pipeline: (sowId: string) => ["approval-pipeline", sowId] as const,
+};
+
+export function useApprovalStages(sowId: string | null, refetchInterval?: number) {
   return useQuery({
-    queryKey: manualSowKeys.approvalStages(sowId ?? ""),
+    queryKey: approvalKeys.pipeline(sowId ?? ""),
     queryFn: () => sowApi.getApprovalPipeline(sowId!),
     enabled: !!sowId,
+    refetchInterval,
+  });
+}
+
+/** Record approve/request_changes decision directly by stage number */
+export function useRecordApprovalDecision(sowId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      stage,
+      decision,
+      comments,
+      reviewer,
+    }: {
+      stage: number;
+      decision: "approve" | "request_changes" | "reject_regenerate";
+      comments?: string;
+      reviewer?: string;
+    }) => {
+      if (!sowId) throw new Error("No SOW id");
+      return sowApi.recordApprovalDecision(sowId, stage, {
+        decision,
+        comments,
+        ...(reviewer ? { reviewer, decided_by: reviewer } : {}),
+      });
+    },
+    onSuccess: () => {
+      if (sowId) {
+        qc.invalidateQueries({ queryKey: approvalKeys.pipeline(sowId) });
+        qc.invalidateQueries({ queryKey: manualSowKeys.approvalStages(sowId) });
+        qc.invalidateQueries({ queryKey: manualSowKeys.sow(sowId) });
+        qc.invalidateQueries({ queryKey: manualSowKeys.list() });
+        qc.invalidateQueries({ queryKey: ["sow", "sows"] });
+      }
+    },
   });
 }
 

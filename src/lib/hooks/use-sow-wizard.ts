@@ -119,11 +119,40 @@ export function useSowList() {
   });
 }
 
+/**
+ * Admin variant — forces the enterprise service token so dev admins without
+ * a personal glimmora access token still see enterprise-owned SOWs.
+ */
+export function useAdminSowList() {
+  return useQuery({
+    queryKey: [...sowKeys.sows(), "admin"] as const,
+    queryFn: () => sowApi.listSowsAsAdmin(),
+  });
+}
+
 export function useSow(sowId: string | null) {
   return useQuery({
     queryKey: sowKeys.sow(sowId ?? ""),
     queryFn: () => sowApi.getSow(sowId!),
     enabled: !!sowId,
+  });
+}
+
+// ── Delete AI SOW (reject_regenerate action) ──────────────────────────────
+
+export function useDeleteAiSOW() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sowId, changeNotes }: { sowId: string; changeNotes?: string | null }) =>
+      sowApi.sowAction(sowId, { action: "reject_regenerate", change_notes: changeNotes ?? null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: sowKeys.sows() });
+      qc.invalidateQueries({ queryKey: sowKeys.all });
+    },
+    onError: (err: unknown) => {
+      console.error("[DeleteAiSOW]", err instanceof Error ? err.message : err);
+    },
   });
 }
 

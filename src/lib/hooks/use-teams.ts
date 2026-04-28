@@ -9,8 +9,21 @@ import {
 import { ApiError } from "@/lib/api/client";
 
 const shouldRetry = (failureCount: number, error: unknown) => {
-  if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404)) return false;
+  if (error instanceof ApiError) {
+    // Never retry auth / not-found errors
+    if ([401, 403, 404].includes(error.status)) return false;
+    // Retry 503 (backend cold-start) up to 3 times
+    if (error.status === 503) return failureCount < 3;
+  }
   return failureCount < 1;
+};
+
+const retryDelay = (failureCount: number, error: unknown) => {
+  // Back off longer for 503 cold-start: 3 s → 6 s → 12 s
+  if (error instanceof ApiError && error.status === 503) {
+    return Math.min(3_000 * 2 ** failureCount, 15_000);
+  }
+  return 1_000;
 };
 
 export const teamsKeys = {
@@ -25,6 +38,7 @@ export function useProjectsList() {
     queryKey: teamsKeys.projects(),
     queryFn: () => teamsApi.listProjects(),
     retry: shouldRetry,
+    retryDelay,
   });
 }
 
@@ -34,6 +48,7 @@ export function useTeamComposition(projectId: string | null | undefined) {
     queryFn: () => teamsApi.getTeamComposition(projectId!),
     enabled: !!projectId,
     retry: shouldRetry,
+    retryDelay,
   });
 }
 
@@ -43,6 +58,7 @@ export function useSkillCoverage(projectId: string | null | undefined) {
     queryFn: () => teamsApi.getSkillCoverage(projectId!),
     enabled: !!projectId,
     retry: shouldRetry,
+    retryDelay,
   });
 }
 

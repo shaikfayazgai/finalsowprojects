@@ -8,13 +8,13 @@ import {
   Download,
   BarChart3,
   CheckCircle2,
-  Copy,
   Receipt,
   DollarSign,
   ClipboardList,
   TrendingUp,
   Eye,
   Loader2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
@@ -27,6 +27,7 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { toast } from "@/lib/stores/toast-store";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
 
@@ -90,21 +91,7 @@ const recentExports = [
   { id: 4, name: "task-pricing-feb-2026.pdf", type: "Task Pricing", format: "PDF", date: "Feb 20, 2026", size: "1.8 MB" },
 ];
 
-function generateMockReport(reportId: string, fmt: string): void {
-  const filename = `${reportId}-report-${new Date().toISOString().split("T")[0]}.${fmt}`;
-  let content: string;
-  let mimeType: string;
-
-  if (fmt === "csv") {
-    content = `"Report","${reportId}","Generated","${new Date().toISOString()}"\n"Type","Date","Amount","Status"\n"Invoice","2026-03-01","$12,500","Paid"\n"Invoice","2026-03-05","$8,200","Pending"\n"Payout","2026-03-02","$3,400","Disbursed"`;
-    mimeType = "text/csv";
-  } else {
-    // For PDF mock, generate a text file since real PDF generation requires a library
-    content = `FINANCIAL REPORT\n${"=".repeat(40)}\nReport: ${reportId}\nGenerated: ${new Date().toLocaleString()}\n\nThis is a mock report preview.\nIn production, this would be a formatted PDF document.`;
-    mimeType = "text/plain";
-  }
-
-  const blob = new Blob([content], { type: mimeType });
+function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -115,6 +102,103 @@ function generateMockReport(reportId: string, fmt: string): void {
   URL.revokeObjectURL(url);
 }
 
+async function buildPdfBytes(reportId: string): Promise<Uint8Array> {
+  const date = new Date().toISOString().split("T")[0];
+  const pdfDoc = await PDFDocument.create();
+  const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold    = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const page = pdfDoc.addPage([595, 842]);
+  const { width, height } = page.getSize();
+  const margin = 50;
+  let y = height - margin;
+
+  const reportLabel = reportId
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+
+  // Header bar
+  page.drawRectangle({ x: 0, y: height - 70, width, height: 70, color: rgb(0.11, 0.47, 0.44) });
+  page.drawText("GlimmoraTeam", { x: margin, y: height - 30, size: 14, font: bold, color: rgb(1, 1, 1) });
+  page.drawText("Financial Report", { x: margin, y: height - 50, size: 10, font: regular, color: rgb(0.8, 0.95, 0.93) });
+
+  y = height - 100;
+
+  page.drawText(reportLabel, { x: margin, y, size: 18, font: bold, color: rgb(0.13, 0.15, 0.18) });
+  y -= 20;
+  page.drawText(`Generated: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, {
+    x: margin, y, size: 9, font: regular, color: rgb(0.45, 0.45, 0.5),
+  });
+  y -= 6;
+  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: rgb(0.85, 0.87, 0.9) });
+  y -= 24;
+
+  const rows = [
+    ["Type",     "Date",       "Description",               "Amount",  "Status"],
+    ["Invoice",  "2026-03-01", "SOW #2024-001 Milestone 1", "$12,500", "Paid"],
+    ["Invoice",  "2026-03-05", "SOW #2024-002 Delivery",    "$8,200",  "Pending"],
+    ["Payout",   "2026-03-02", "Contributor Disbursement",  "$3,400",  "Disbursed"],
+    ["Invoice",  "2026-02-28", "Platform Fee Q1",            "$1,200",  "Paid"],
+    ["Payout",   "2026-02-25", "Milestone Bonus Pool",       "$950",    "Disbursed"],
+  ];
+  const colX = [margin, 130, 210, 360, 460];
+
+  rows.forEach((row, i) => {
+    const isHeader = i === 0;
+    if (isHeader) {
+      page.drawRectangle({ x: margin - 4, y: y - 4, width: width - margin * 2 + 8, height: 18, color: rgb(0.95, 0.97, 0.97) });
+    } else if (i % 2 === 0) {
+      page.drawRectangle({ x: margin - 4, y: y - 4, width: width - margin * 2 + 8, height: 18, color: rgb(0.98, 0.99, 0.99) });
+    }
+    row.forEach((cell, ci) => {
+      page.drawText(cell, {
+        x: colX[ci], y,
+        size: isHeader ? 9 : 8.5,
+        font: isHeader ? bold : regular,
+        color: isHeader ? rgb(0.13, 0.15, 0.18) : rgb(0.25, 0.27, 0.32),
+      });
+    });
+    y -= 22;
+  });
+
+  y -= 12;
+  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: rgb(0.85, 0.87, 0.9) });
+  y -= 18;
+  page.drawText("* This is a mock report. Connect the backend API to generate live data.", {
+    x: margin, y, size: 7.5, font: regular, color: rgb(0.6, 0.6, 0.65),
+  });
+
+  page.drawText(`GlimmoraTeam  ·  Confidential  ·  ${date}`, {
+    x: margin, y: 30, size: 8, font: regular, color: rgb(0.65, 0.65, 0.7),
+  });
+  page.drawText("Page 1 of 1", {
+    x: width - margin - 40, y: 30, size: 8, font: regular, color: rgb(0.65, 0.65, 0.7),
+  });
+
+  return pdfDoc.save();
+}
+
+async function generateMockReport(reportId: string, fmt: string): Promise<void> {
+  const date = new Date().toISOString().split("T")[0];
+  const filename = `${reportId}-report-${date}.${fmt}`;
+
+  if (fmt === "csv") {
+    const content = [
+      `"Report","${reportId}","Generated","${new Date().toISOString()}"`,
+      `"Type","Date","Amount","Status"`,
+      `"Invoice","2026-03-01","$12,500","Paid"`,
+      `"Invoice","2026-03-05","$8,200","Pending"`,
+      `"Payout","2026-03-02","$3,400","Disbursed"`,
+    ].join("\n");
+    triggerDownload(new Blob([content], { type: "text/csv" }), filename);
+    return;
+  }
+
+  const pdfBytes = await buildPdfBytes(reportId);
+  triggerDownload(new Blob([pdfBytes as BlobPart], { type: "application/pdf" }), filename);
+}
+
 export default function FinancialReportsPage() {
   const [selectedReport, setSelectedReport] = React.useState("billing-summary");
   const [format, setFormat] = React.useState("csv");
@@ -122,26 +206,47 @@ export default function FinancialReportsPage() {
   const [dateRange, setDateRange] = React.useState("last-30");
   const [project, setProject] = React.useState("all");
   const [generating, setGenerating] = React.useState(false);
+  const [previewing, setPreviewing] = React.useState(false);
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+
+  // Clean up object URL when preview closes
+  React.useEffect(() => {
+    if (!previewUrl) return;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  const handlePreview = async () => {
+    setPreviewing(true);
+    try {
+      const pdfBytes = await buildPdfBytes(selectedReport);
+      const url = URL.createObjectURL(new Blob([pdfBytes as BlobPart], { type: "application/pdf" }));
+      setPreviewUrl(url);
+    } catch {
+      toast.error("Preview Failed", "Could not generate the preview. Please try again.");
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewUrl(null);
+  };
 
   const selectedReportData = reportTypes.find((r) => r.id === selectedReport);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setGenerating(true);
-    // Simulate generation delay so user sees the loading state
-    setTimeout(() => {
-      generateMockReport(selectedReport, format);
-      setGenerating(false);
+    try {
+      await generateMockReport(selectedReport, format);
       toast.success(
         "Report Downloaded",
         `${selectedReportData?.title} saved as ${selectedReport}-report-${new Date().toISOString().split("T")[0]}.${format}`
       );
-    }, 800);
-  };
-
-  const handleCopyEndpoint = () => {
-    const endpoint = `GET /v1/reports/billing?type=${selectedReport}&format=${format}&scope=${scope}`;
-    navigator.clipboard?.writeText(endpoint);
-    toast.info("API Endpoint Copied", endpoint);
+    } catch {
+      toast.error("Download Failed", "Could not generate the report. Please try again.");
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
@@ -327,58 +432,17 @@ export default function FinancialReportsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  toast.info(
-                    "Preview",
-                    `${selectedReportData?.title} — ${selectedReportData?.records} ${selectedReportData?.recordLabel} for ${dateRange === "last-7" ? "last 7 days" : dateRange === "last-30" ? "last 30 days" : dateRange === "last-90" ? "last 90 days" : dateRange === "ytd" ? "year to date" : "all time"}`
-                  );
-                }}
+                onClick={handlePreview}
+                disabled={previewing}
               >
-                <Eye className="w-3.5 h-3.5" />
-                Preview
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyEndpoint}
-              >
-                <Copy className="w-3.5 h-3.5" />
-                Copy API Endpoint
+                {previewing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Eye className="w-3.5 h-3.5" />
+                )}
+                {previewing ? "Loading…" : "Preview"}
               </Button>
             </div>
-          </div>
-
-          {/* API Endpoint Reference */}
-          <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <h3 className="text-[13px] font-semibold text-brown-800">
-                API Access
-              </h3>
-              <Badge variant="teal" size="sm">
-                REST
-              </Badge>
-            </div>
-            <div className="rounded-xl bg-brown-950 p-4 font-mono text-[12px] text-beige-200 leading-relaxed overflow-x-auto">
-              <p className="text-beige-400"># Billing Report API</p>
-              <p className="mt-1">
-                <span className="text-forest-400">GET</span>{" "}
-                <span className="text-gold-400">/v1/reports/billing</span>
-                <span className="text-beige-500">?type=</span>
-                <span className="text-teal-400">{selectedReport}</span>
-                <span className="text-beige-500">&format=</span>
-                <span className="text-teal-400">{format}</span>
-                <span className="text-beige-500">&scope=</span>
-                <span className="text-teal-400">{scope}</span>
-              </p>
-              <p className="mt-2 text-beige-400"># Authentication: Bearer Token (OAuth2)</p>
-              <p className="text-beige-500">
-                Authorization: Bearer {"<"}your_api_key{">"}
-              </p>
-            </div>
-            <p className="text-[11px] text-beige-500 mt-2">
-              Requires <span className="font-medium text-beige-600">reports:read</span> OAuth2 scope.
-              See API documentation for full query parameters.
-            </p>
           </div>
         </motion.div>
 
@@ -393,7 +457,6 @@ export default function FinancialReportsPage() {
               {[
                 { label: "Reports Generated", value: "23", sub: "This month", accent: "text-teal-600", bg: "bg-teal-50" },
                 { label: "Total Downloads", value: "67", sub: "All time", accent: "text-forest-600", bg: "bg-forest-50" },
-                { label: "API Calls", value: "142", sub: "Last 30 days", accent: "text-gold-600", bg: "bg-gold-50" },
               ].map((stat) => (
                 <div
                   key={stat.label}
@@ -463,6 +526,55 @@ export default function FinancialReportsPage() {
           </div>
         </motion.div>
       </div>
+
+      {/* PDF Preview Modal */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={closePreview}
+        >
+          <div
+            className="relative w-full max-w-4xl h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-beige-100 bg-white shrink-0">
+              <div className="flex items-center gap-2.5">
+                <FileDown className="w-4 h-4 text-forest-600" />
+                <span className="text-sm font-semibold text-brown-900">
+                  {selectedReportData?.title} — Preview
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    await generateMockReport(selectedReport, "pdf");
+                    closePreview();
+                  }}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download
+                </Button>
+                <button
+                  onClick={closePreview}
+                  className="p-1.5 rounded-lg text-beige-400 hover:text-brown-700 hover:bg-beige-100 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* PDF iframe */}
+            <iframe
+              src={previewUrl}
+              className="flex-1 w-full border-0"
+              title="Report Preview"
+            />
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

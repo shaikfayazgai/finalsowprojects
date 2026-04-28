@@ -41,37 +41,21 @@ import { toast } from "@/lib/stores/toast-store";
    version comparison, two-panel layout
    ══════════════════════════════════════════ */
 
-/* ── Mock evidence files with checklist status ── */
-const mockEvidenceFiles = [
-  { name: "api-endpoints-spec.pdf", type: "pdf", size: "2.4 MB", icon: FileText, submittedAt: "2026-03-03T14:00:00Z", status: "verified" as const },
-  { name: "screenshot-ledger-ui.png", type: "image", size: "1.1 MB", icon: ImageIcon, submittedAt: "2026-03-03T14:02:00Z", status: "verified" as const },
-  { name: "general-ledger.service.ts", type: "code", size: "18 KB", icon: Code2, submittedAt: "2026-03-03T14:05:00Z", status: "pending" as const },
-  { name: "test-results.json", type: "json", size: "42 KB", icon: FileJson, submittedAt: "2026-03-03T14:08:00Z", status: "pending" as const },
-  { name: "integration-report.pdf", type: "pdf", size: "890 KB", icon: FileText, submittedAt: "2026-03-03T14:10:00Z", status: "verified" as const },
-];
+type EvidenceFileItem = { name: string; type: string; size: string; icon: any; submittedAt: string; status: "verified" | "pending" | "rejected" };
+const mockEvidenceFiles: EvidenceFileItem[] = [];
 
-/* ── Mock mentor review data ── */
-const mockMentorReview = {
-  reviewerId: "mentor-R4H",
-  reviewerName: "Mentor R-4H",
-  decision: "approved_with_notes" as const,
-  score: 4.6,
-  reviewedAt: "2026-03-04T09:30:00Z",
-  notes: "Code quality is strong with proper error handling. Test coverage meets threshold at 94%. Recommend minor optimization of the query batch processing logic in the service layer for production scale. All API endpoints match the SOW specification.",
-  criteria: [
-    { label: "Code Quality", score: 4.8, maxScore: 5 },
-    { label: "Test Coverage", score: 4.5, maxScore: 5 },
-    { label: "SOW Alignment", score: 4.7, maxScore: 5 },
-    { label: "Documentation", score: 4.4, maxScore: 5 },
-  ],
-};
+const mockMentorReview: {
+  reviewerId: string;
+  reviewerName: string;
+  decision: "approved_with_notes" | "approved" | "rework" | "rejected";
+  score: number;
+  reviewedAt: string;
+  notes: string;
+  criteria: Array<{ label: string; score: number; maxScore: number }>;
+} | null = null;
 
-/* ── Mock version history ── */
-const mockVersions = [
-  { version: "v3", submittedAt: "2026-03-03T14:00:00Z", filesChanged: 3, status: "current" as const, notes: "Addressed rework feedback — improved error handling and added batch processing." },
-  { version: "v2", submittedAt: "2026-03-01T10:00:00Z", filesChanged: 5, status: "superseded" as const, notes: "Updated API endpoints and test suite based on review comments." },
-  { version: "v1", submittedAt: "2026-02-28T16:00:00Z", filesChanged: 5, status: "superseded" as const, notes: "Initial submission with all required evidence files." },
-];
+type VersionItem = { version: string; submittedAt: string; filesChanged: number; status: "current" | "superseded"; notes: string };
+const mockVersions: VersionItem[] = [];
 
 const fileTypeColors: Record<string, { bg: string; text: string; border: string }> = {
   pdf: { bg: "bg-brown-50", text: "text-brown-600", border: "border-brown-200/50" },
@@ -117,15 +101,15 @@ export default function ReviewDetailPage() {
   const params = useParams();
   const deliverableId = params.deliverableId as string;
 
-  const deliverable = mockDeliverables.find((d) => d.id === deliverableId) ?? mockDeliverables[0];
-  const project = mockProjects.find((p) => p.id === deliverable.projectId);
-  const milestone = mockMilestones.find((m) => m.id === deliverable.milestoneId);
+  const deliverable = mockDeliverables.find((d) => d.id === deliverableId);
+  const project = deliverable ? mockProjects.find((p) => p.id === deliverable.projectId) : undefined;
+  const milestone = deliverable ? mockMilestones.find((m) => m.id === deliverable.milestoneId) : undefined;
 
   const [selectedFile, setSelectedFile] = React.useState(0);
   const [activeAction, setActiveAction] = React.useState<"approve" | "rework" | "reject" | null>(null);
   const [actionNotes, setActionNotes] = React.useState("");
-  /* Derive initial decision state from mock data (already-decided deliverables) */
-  const initialDecision = deliverable.decidedAt
+  /* Derive initial decision state from existing deliverable */
+  const initialDecision = deliverable?.decidedAt
     ? deliverable.decision === "approved"
       ? "approve" as const
       : deliverable.decision === "rework_requested"
@@ -144,6 +128,15 @@ export default function ReviewDetailPage() {
     setActionNotes("");
     setSelectedFile(0);
   }, [deliverableId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!deliverable) {
+    return (
+      <div className="card-parchment px-6 py-16 text-center">
+        <p className="text-[14px] font-medium text-gray-600 mb-1">Deliverable not found</p>
+        <p className="text-[12px] text-gray-400">This deliverable may have been removed.</p>
+      </div>
+    );
+  }
 
   const handleConfirmDecision = () => {
     if (!activeAction) return;
@@ -194,9 +187,9 @@ export default function ReviewDetailPage() {
     },
     {
       label: "Mentor Reviewed",
-      description: `Score: ${mockMentorReview.score}/5`,
-      timestamp: formatDate(mockMentorReview.reviewedAt),
-      status: "completed" as const,
+      description: mockMentorReview ? `Score: ${mockMentorReview.score}/5` : "—",
+      timestamp: mockMentorReview ? formatDate(mockMentorReview.reviewedAt) : undefined,
+      status: mockMentorReview ? ("completed" as const) : ("upcoming" as const),
     },
     {
       label: "Enterprise Review",
@@ -383,6 +376,7 @@ export default function ReviewDetailPage() {
           </div>
 
           {/* Mentor Review Section */}
+          {mockMentorReview && (
           <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -391,19 +385,19 @@ export default function ReviewDetailPage() {
                   Mentor Review
                 </h3>
                 <Badge variant="forest" size="sm" dot>
-                  {mockMentorReview.decision === "approved_with_notes" ? "Approved w/ Notes" : "Approved"}
+                  {(mockMentorReview as any).decision === "approved_with_notes" ? "Approved w/ Notes" : "Approved"}
                 </Badge>
               </div>
               <div className="flex items-center gap-1.5">
                 <Star className="w-3.5 h-3.5 fill-gold-400 text-gold-400" />
-                <span className="text-[13px] font-bold text-brown-800">{mockMentorReview.score}</span>
+                <span className="text-[13px] font-bold text-brown-800">{(mockMentorReview as any).score}</span>
                 <span className="text-[10px] text-beige-500">/5</span>
               </div>
             </div>
 
             {/* Criteria scores */}
             <div className="grid grid-cols-2 gap-3 mb-4">
-              {mockMentorReview.criteria.map((c) => (
+              {(mockMentorReview as any).criteria.map((c: any) => (
                 <div key={c.label} className="flex items-center justify-between p-2.5 rounded-lg bg-beige-50/60 border border-beige-100/50">
                   <span className="text-[11px] font-medium text-brown-700">{c.label}</span>
                   <div className="flex items-center gap-1">
@@ -425,14 +419,15 @@ export default function ReviewDetailPage() {
                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-forest-400 to-forest-600 flex items-center justify-center text-[8px] font-bold text-white shrink-0">
                   R4
                 </div>
-                <span className="text-[11px] font-semibold text-brown-800">{mockMentorReview.reviewerName}</span>
-                <span className="text-[10px] text-beige-400">&middot; {formatShortDate(mockMentorReview.reviewedAt)}</span>
+                <span className="text-[11px] font-semibold text-brown-800">{(mockMentorReview as any).reviewerName}</span>
+                <span className="text-[10px] text-beige-400">&middot; {formatShortDate((mockMentorReview as any).reviewedAt)}</span>
               </div>
               <p className="text-[12px] text-brown-700 leading-relaxed italic">
-                &ldquo;{mockMentorReview.notes}&rdquo;
+                &ldquo;{(mockMentorReview as any).notes}&rdquo;
               </p>
             </div>
           </div>
+          )}
 
           {/* Version Comparison */}
           <div className="rounded-2xl border border-beige-200/50 bg-white/70 backdrop-blur-sm p-5">

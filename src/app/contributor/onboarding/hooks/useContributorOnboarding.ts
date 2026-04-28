@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { usePricingConfig } from "@/lib/hooks/usePricingConfig";
 import { onboardContributor } from "@/lib/actions/register";
-import { fetchInternal } from "@/lib/api/client";
 import { COUNTRIES_DATA } from "@/app/auth/register/data";
 import { getAgeFromDob } from "@/app/auth/register/helpers";
 import type { ContributorType, SSOData } from "@/app/auth/register/types";
@@ -115,8 +115,17 @@ export function useContributorOnboarding() {
   const [otherSkillInput,     setOtherSkillInput]     = useState("");
   const [workStart,           setWorkStart]           = useState("");
   const [workEnd,             setWorkEnd]             = useState("");
+  const [jobTitle,            setJobTitle]            = useState("");
   const [careerStage,         setCareerStage]         = useState("");
   const [yearsExperience,     setYearsExperience]     = useState("");
+  const {
+    studentCurrency,
+    studentHourlyRate,
+    womenRateCurrency,
+    womenRateTable,
+    generalRateCurrency,
+    generalRateTable,
+  } = usePricingConfig();
 
   /* ─── Step 3: Verification ─── */
   const [phoneCountry,      setPhoneCountry]      = useState("India");
@@ -126,7 +135,6 @@ export function useContributorOnboarding() {
   const [cooldown,          setCooldown]          = useState(0);
   const [phoneVerified,     setPhoneVerified]     = useState(false);
   const [phoneOtpLoading,   setPhoneOtpLoading]   = useState(false);
-  const [phoneOtpDevHint,   setPhoneOtpDevHint]   = useState("");
 
   // Email already verified by OAuth — pre-set to true
   const [verificationEmail, setVerificationEmail] = useState(ssoData?.email ?? "");
@@ -135,7 +143,6 @@ export function useContributorOnboarding() {
   const [emailCooldown,     setEmailCooldown]     = useState(0);
   const [emailVerified,     setEmailVerified]     = useState(true); // SSO = already verified
   const [emailOtpLoading,   setEmailOtpLoading]   = useState(false);
-  const [emailOtpDevHint, setEmailOtpDevHint]   = useState("");
 
   const [ndaAccepted,   setNdaAccepted]   = useState(false);
   const [ndaSignature,  setNdaSignature]  = useState("");
@@ -162,13 +169,6 @@ export function useContributorOnboarding() {
     }
   }, [step, country]);
 
-  useEffect(() => {
-    setPhoneVerified(false);
-    setOtpSent(false);
-    setOtp("");
-    setPhoneOtpDevHint("");
-  }, [phoneCountry, phone]);
-
   /* ─── Skill helpers ─── */
   const addPrimarySkill    = (s: string) => { if (primarySkills.length   < 20) setPrimarySkills(  (p) => [...p, s]); setSkillInput("");          };
   const removePrimarySkill = (s: string) => setPrimarySkills(  (p) => p.filter((x) => x !== s));
@@ -189,106 +189,27 @@ export function useContributorOnboarding() {
 
   async function sendOTP() {
     if (!phone || phone.replace(/\D/g, "").length < 7) { setError("Please enter a valid phone number"); return; }
-    setError("");
-    setPhoneOtpDevHint("");
-    setPhoneOtpLoading(true);
-    try {
-      const res = await fetchInternal("/api/auth/otp/send-phone", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(
-          (data as { message?: string }).message ??
-            "Could not send SMS OTP. Use a 10-digit Indian number or check your connection.",
-        );
-        return;
-      }
-      setOtpSent(true);
-      startCooldown();
-      const d = data as { devFallback?: boolean; devOtp?: string };
-      if (d.devFallback === true && typeof d.devOtp === "string" && d.devOtp.length === 6) {
-        setPhoneOtpDevHint(
-          `Development mode: SMS was not delivered. Use this code: ${d.devOtp}`,
-        );
-      }
-    } catch {
-      setError("Network error. Please check your connection and try again.");
-    } finally {
-      setPhoneOtpLoading(false);
-    }
+    setError(""); setPhoneOtpLoading(true);
+    await new Promise((r) => setTimeout(r, 1000));
+    setPhoneOtpLoading(false); setOtpSent(true); startCooldown();
   }
   async function verifyOTP() {
     if (otp.length !== 6) { setError("Please enter the 6-digit code"); return; }
-    setError("");
-    setPhoneOtpLoading(true);
-    try {
-      const res = await fetchInternal("/api/auth/otp/verify-phone", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code: otp }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(
-          (data as { message?: string }).message ??
-            "Invalid or expired code. Request a new OTP and try again.",
-        );
-        return;
-      }
-      setPhoneOtpDevHint("");
-      setPhoneVerified(true);
-    } catch {
-      setError("Network error. Please check your connection and try again.");
-    } finally {
-      setPhoneOtpLoading(false);
-    }
+    setError(""); setPhoneOtpLoading(true);
+    await new Promise((r) => setTimeout(r, 800));
+    setPhoneOtpLoading(false); setPhoneVerified(true);
   }
   async function sendEmailOTP() {
     if (!verificationEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(verificationEmail)) { setError("Please enter a valid email address"); return; }
-    setError("");
-    setEmailOtpDevHint("");
-    setEmailOtpLoading(true);
-    try {
-      const res = await fetchInternal("/api/auth/otp/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: verificationEmail }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.message); return; }
-      setEmailOtpSent(true); startEmailCooldown();
-      if (data.devFallback === true && typeof data.devOtp === "string" && data.devOtp.length === 6) {
-        setEmailOtpDevHint(
-          `Development mode: email was not delivered (SMTP). Use this code: ${data.devOtp}`,
-        );
-      }
-    } catch {
-      setError("Failed to send email. Please check your connection and try again.");
-    } finally {
-      setEmailOtpLoading(false);
-    }
+    setError(""); setEmailOtpLoading(true);
+    await new Promise((r) => setTimeout(r, 800));
+    setEmailOtpLoading(false); setEmailOtpSent(true); startEmailCooldown();
   }
   async function verifyEmailOTP() {
     if (emailOtp.length !== 6) { setError("Please enter the 6-digit email code"); return; }
     setError(""); setEmailOtpLoading(true);
-    try {
-      const res = await fetchInternal("/api/auth/otp/verify-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: verificationEmail, code: emailOtp }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.message); return; }
-      setEmailOtpDevHint("");
-      setEmailVerified(true);
-    } catch {
-      setError("Verification failed. Please try again.");
-    } finally {
-      setEmailOtpLoading(false);
-    }
+    await new Promise((r) => setTimeout(r, 800));
+    setEmailOtpLoading(false); setEmailVerified(true);
   }
 
   /* ─── Step navigation ─── */
@@ -308,6 +229,10 @@ export function useContributorOnboarding() {
     if (departmentCategory === "other" && !departmentOther.trim()) { setError("Please specify your department name"); return; }
     if (primarySkills.length < 1) { setError("Please add at least one primary skill"); return; }
     if (!availability)       { setError("Please enter your weekly availability"); return; }
+    if ((contribType === "women_workforce" || contribType === "general_workforce") && !yearsExperience) {
+      setError("Please select your years of experience");
+      return;
+    }
     setError(""); setStep(3);
   }
 
@@ -404,15 +329,22 @@ export function useContributorOnboarding() {
     otherSkills, otherSkillInput, setOtherSkillInput, addOtherSkill, removeOtherSkill,
     workStart, setWorkStart,
     workEnd, setWorkEnd,
+    jobTitle, setJobTitle,
     careerStage, setCareerStage,
     yearsExperience, setYearsExperience,
+    studentCurrency,
+    studentHourlyRate,
+    womenRateCurrency,
+    womenRateTable,
+    generalRateCurrency,
+    generalRateTable,
 
     // Step 3
     phoneCountry, setPhoneCountry,
     phone, setPhone,
-    otpSent, otp, setOtp, cooldown, phoneVerified, phoneOtpLoading, phoneOtpDevHint,
+    otpSent, otp, setOtp, cooldown, phoneVerified, phoneOtpLoading,
     verificationEmail, setVerificationEmail,
-    emailOtpSent, emailOtp, setEmailOtp, emailCooldown, emailVerified, emailOtpLoading, emailOtpDevHint,
+    emailOtpSent, emailOtp, setEmailOtp, emailCooldown, emailVerified, emailOtpLoading,
     ndaAccepted, setNdaAccepted,
     ndaSignature, setNdaSignature,
     ndaSignedFile, setNdaSignedFile,

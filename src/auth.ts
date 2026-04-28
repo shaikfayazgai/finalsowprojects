@@ -2,10 +2,52 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
-import { authApi } from "@/lib/api/auth";
+import { cookies } from "next/headers";
+import { authApi, isMfaPending, isMfaVerifyPending } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
+import path from "path";
+import fs from "fs";
+import dotenv from "dotenv";
 
-export type UserRole = "contributor" | "enterprise" | "admin" | "reviewer" | "mentor";
+export type UserRole = "contributor" | "enterprise" | "admin" | "super_admin" | "reviewer" | "mentor";
+
+function loadBackendEnvFallback(): Record<string, string> {
+  const backendEnvPath = path.resolve(process.cwd(), "..", "backend", ".env");
+  if (!fs.existsSync(backendEnvPath)) return {};
+  try {
+    const parsed = dotenv.parse(fs.readFileSync(backendEnvPath));
+    return parsed as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+const backendEnv = loadBackendEnvFallback();
+const googleClientId =
+  process.env.GOOGLE_CLIENT_ID ??
+  process.env.AUTH_GOOGLE_ID ??
+  backendEnv.GOOGLE_CLIENT_ID ??
+  "";
+const googleClientSecret =
+  process.env.GOOGLE_CLIENT_SECRET ??
+  process.env.AUTH_GOOGLE_SECRET ??
+  backendEnv.GOOGLE_CLIENT_SECRET ??
+  "";
+const microsoftClientId =
+  process.env.MICROSOFT_CLIENT_ID ??
+  process.env.AUTH_MICROSOFT_ENTRA_ID_ID ??
+  backendEnv.MICROSOFT_CLIENT_ID ??
+  "";
+const microsoftClientSecret =
+  process.env.MICROSOFT_CLIENT_SECRET ??
+  process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET ??
+  backendEnv.MICROSOFT_CLIENT_SECRET ??
+  "";
+const microsoftTenantId =
+  process.env.MICROSOFT_TENANT_ID ??
+  process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID ??
+  backendEnv.MICROSOFT_TENANT_ID ??
+  "common";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Make the secret explicit to avoid env-resolution issues across runtimes/bundlers.
@@ -36,15 +78,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         provider:     {},
       },
       async authorize(credentials) {
-        if (!credentials?.accessToken) return null;
         const role = ((credentials.role as string) || "enterprise") as UserRole;
+        const userId = (credentials.userId as string) || "";
+        const email = (credentials.email as string) || "";
+        if (!userId || !email) return null;
         return {
-          id:           credentials.userId as string,
+          id:           userId,
           name:         `${credentials.firstName} ${credentials.lastName}`,
-          email:        credentials.email as string,
+          email,
           role,
-          accessToken:  credentials.accessToken as string,
-          refreshToken: credentials.refreshToken as string,
+          ...(credentials.accessToken ? { accessToken: credentials.accessToken as string } : {}),
+          ...(credentials.refreshToken ? { refreshToken: credentials.refreshToken as string } : {}),
           expiresIn:    Number(credentials.expiresIn) || 3600,
           provider:     (credentials.provider as string) || "google",
         };
@@ -58,8 +102,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
      * callback is locked to glimmora-api.onrender.com).
      */
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
       authorization: {
         params: { prompt: "consent", access_type: "offline", response_type: "code" },
       },
@@ -68,6 +112,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientId: process.env.MICROSOFT_CLIENT_ID,
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
       issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID ?? "common"}/v2.0`,
+      authorization: {
+        // response_mode=query makes the IdP redirect back via a top-level GET
+        // instead of a cross-site POST. SameSite=Lax cookies (PKCE/state/nonce)
+        // survive top-level GETs in all browsers; cross-site POSTs drop them in
+        // Safari and Firefox, which is why SSO worked only in Chrome.
+        params: { prompt: "select_account", response_mode: "query" },
+      },
     }),
     Credentials({
       name: "credentials",
@@ -83,35 +134,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           if (!email || !password) return null;
 
-          // Dev-only hardcoded admin bypass
-          if (email === "admin@glimmora.dev" && password === "Admin@1234") {
-            return {
-              id: "dev-admin-001",
-              name: "Glimmora Admin",
-              email: "admin@glimmora.dev",
-              role: "admin" as UserRole,
-            };
-          }
-
           const response = await authApi.login(email, password);
-          const status = (response as { status?: string }).status;
-          const mfaFlow = (response as { mfa_flow?: string }).mfa_flow;
 
-          // TOTP verification required — block NextAuth session until user completes MFA on login page.
-          if (status === "mfa_pending" && mfaFlow !== "setup") {
+          // MFA verify (existing TOTP) — handled on login page before signIn; do not mint a session here.
+          if (isMfaVerifyPending(response)) {
             return null;
           }
 
-          // MFA enrollment (mfa_setup_required) or setup-phase mfa_pending — allow constrained session.
-          // The API may still include tokens alongside the MFA payload; pass them through when present.
-          if (status === "mfa_setup_required" || status === "mfa_pending") {
+          // MFA setup required — allow a session without full API tokens until setup completes.
+          if (isMfaPending(response)) {
             const u = (response as { user?: Record<string, string> }).user ?? {};
-            const r = response as Record<string, unknown>;
+            const r = response as unknown as Record<string, unknown>;
             return {
-              id: (u.id as string) ?? "",
-              name: `${(u.firstName as string) ?? ""} ${(u.lastName as string) ?? ""}`.trim(),
-              email: (u.email as string) ?? email,
-              role: ((u.role as string) ?? "enterprise") as UserRole,
+              id: u.id ?? "",
+              name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim(),
+              email: u.email ?? email,
+              role: (u.role ?? "enterprise") as UserRole,
               ...(typeof r.access_token === "string" ? { accessToken: r.access_token } : {}),
               ...(typeof r.refresh_token === "string" ? { refreshToken: r.refresh_token } : {}),
               ...(typeof r.expires_in === "number" ? { expiresIn: r.expires_in } : {}),
@@ -140,11 +178,35 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
+  // Cross-browser OAuth cookie hardening.
+  // In production (HTTPS), force SameSite=None on the short-lived OAuth cookies
+  // so they're sent back when the IdP redirects (including cross-site POSTs).
+  // Without this, Safari and Firefox drop these cookies and NextAuth rejects
+  // the callback with "State cookie was missing" / "PKCE code_verifier missing".
+  // Locally (http), we fall back to SameSite=Lax since Secure cookies require HTTPS.
+  cookies: (() => {
+    const isProd = process.env.NODE_ENV === "production";
+    const crossSite = {
+      httpOnly: true,
+      sameSite: (isProd ? "none" : "lax") as "none" | "lax",
+      secure: isProd,
+      path: "/",
+    };
+    return {
+      pkceCodeVerifier: { name: "next-auth.pkce.code_verifier", options: crossSite },
+      state:            { name: "next-auth.state",              options: crossSite },
+      nonce:            { name: "next-auth.nonce",              options: crossSite },
+    };
+  })(),
   callbacks: {
     async jwt({ token, user, account }) {
       // Initial sign-in — user object only present on first call
       if (user) {
         token.id = user.id;
+        // Ensure standard JWT `sub` so getToken / route guards recognize the session after partial sign-in (e.g. MFA setup).
+        if (user.id) {
+          token.sub = user.id;
+        }
         // For Google/Microsoft OAuth, default to contributor role
         // The role can be updated later during onboarding
         token.role = ((user as { role?: string }).role || "contributor") as UserRole;
@@ -160,6 +222,49 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       if (account) {
         token.provider = account.provider;
+
+        /**
+         * Notion-style SSO verification:
+         * Exchange the provider id_token with the Glimmora backend.
+         *
+         *  ✅ User found in DB  → store real tokens + real role, isNewSsoUser = false
+         *  🆕 User not in DB   → isNewSsoUser = true, role = "contributor" (default)
+         *                         /auth/redirect will send them to onboarding
+         */
+        if (
+          (account.provider === "google" || account.provider === "microsoft-entra-id") &&
+          account.id_token
+        ) {
+          const providerName = account.provider === "microsoft-entra-id" ? "microsoft" : "google";
+          try {
+            const response = await authApi.exchangeOAuthCode(providerName, account.id_token);
+            if (!isMfaPending(response)) {
+              token.role                 = (response.user.role ?? "contributor") as UserRole;
+              token.glimmoraAccessToken  = response.access_token;
+              token.glimmoraRefreshToken = response.refresh_token;
+              token.glimmoraExpiresAt    = Math.floor(Date.now() / 1000) + response.expires_in;
+              if (response.user.id) token.id = response.user.id;
+              const fullName = `${response.user.firstName} ${response.user.lastName}`.trim();
+              if (fullName) token.name = fullName;
+              token.isNewSsoUser = false;
+            }
+          } catch {
+            // User not found in Glimmora DB — treat as new user.
+            // If this came from a registration page, use the intended role from the cookie.
+            let registrationRole: UserRole = "contributor";
+            try {
+              const cookieStore = await cookies();
+              const ssoRegisterRole = cookieStore.get("sso_register_role")?.value;
+              if (ssoRegisterRole === "enterprise" || ssoRegisterRole === "contributor") {
+                registrationRole = ssoRegisterRole;
+              }
+            } catch {
+              // cookies() unavailable — default to contributor
+            }
+            token.isNewSsoUser = true;
+            token.role = registrationRole;
+          }
+        }
       }
 
       // Proactive token refresh — refresh if within 60 seconds of expiry
@@ -187,42 +292,77 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as UserRole;
-        session.user.provider = token.provider;
-        session.user.accessToken = token.glimmoraAccessToken;
+        session.user.id           = token.id as string;
+        session.user.role         = token.role as UserRole;
+        session.user.provider     = token.provider;
+        session.user.accessToken  = token.glimmoraAccessToken;
+        session.user.isNewSsoUser = token.isNewSsoUser;
       }
       return session;
     },
     async signIn({ user, account }) {
-      // For Google/Microsoft SSO, verify the email is already registered in Glimmora.
-      // We probe the login endpoint with a dummy password — the error message tells us
-      // whether the account exists ("wrong password") or not ("not found / no account").
+      // For Google and Microsoft, verify the email exists in the Glimmora DB.
+      // Probe with a dummy password — the backend response tells us whether the
+      // account exists (401 "wrong password") or not (404 "not found").
+      // FAIL-CLOSED: only allow on an explicit "wrong password" / 401 response.
       if (account?.provider === "google" || account?.provider === "microsoft-entra-id") {
-        if (!user.email) return "/auth/login?error=SsoNotRegistered";
+        // Registration flow: if the sso_register_role cookie is set, the user
+        // clicked "Continue with Microsoft/Google" on a *registration* page.
+        // Allow new emails through — account creation happens after OAuth.
         try {
-          await authApi.login(user.email, "__sso_registration_check__");
-          // Unexpected success (shouldn't happen with dummy password) — allow through
+          const cookieStore = await cookies();
+          const ssoRegisterRole = cookieStore.get("sso_register_role")?.value;
+          if (ssoRegisterRole) {
+            return true;
+          }
+        } catch {
+          // cookies() unavailable — fall through to the normal login check
+        }
+
+        try {
+          if (!user.email) return "/auth/login?error=SsoNotRegistered";
+
+          const email = user.email.toLowerCase();
+          await authApi.login(email, "__sso_registration_check__");
+          // Unexpected success with dummy password — account exists, allow.
+          return true;
         } catch (err) {
           if (err instanceof ApiError) {
             const msg = err.message.toLowerCase();
-            const notRegistered =
+
+            // Explicitly "not found" → account does not exist → block
+            const notFound =
               err.status === 404 ||
               msg.includes("not found") ||
               msg.includes("no account") ||
-              msg.includes("does not exist");
-            if (notRegistered) {
-              return "/auth/login?error=SsoNotRegistered";
+              msg.includes("no user") ||
+              msg.includes("does not exist") ||
+              msg.includes("not registered") ||
+              msg.includes("user not exist");
+
+            if (notFound) {
+              const encodedEmail = encodeURIComponent((user.email ?? "").toLowerCase());
+              return `/auth/login?error=SsoNotRegistered&email=${encodedEmail}`;
             }
-            // "Wrong password" or similar → account exists → allow through
+
+            // Specifically "wrong password" → account EXISTS, just wrong dummy password → allow
+            const wrongPassword =
+              msg.includes("wrong password") ||
+              msg.includes("incorrect password") ||
+              msg.includes("password incorrect") ||
+              msg.includes("password does not match") ||
+              msg.includes("invalid password");
+
+            if (wrongPassword) return true;
+
+            // Everything else (including ambiguous 401) → block.
+            // The Glimmora backend returns 401 for BOTH "wrong password" and "user not found"
+            // so we cannot safely allow on 401 alone — fall through to block.
           }
-          // Network / unknown error → fail open so legitimate users aren't blocked
+          // Network error, unexpected response, or unrecognised error → block
+          const encodedEmail = encodeURIComponent((user.email ?? "").toLowerCase());
+          return `/auth/login?error=SsoNotRegistered&email=${encodedEmail}`;
         }
-        return true;
-      }
-      // Credentials (email/password) and Glimmora OAuth callback
-      if (account?.provider === "credentials" || account?.provider === "glimmora-oauth") {
-        return true;
       }
       return true;
     },

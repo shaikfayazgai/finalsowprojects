@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { useGapItems } from "@/lib/hooks/use-manual-sow";
+import { useGapItems, useUpdateGapItem } from "@/lib/hooks/use-manual-sow";
 import type { GapItem, GapSeverity } from "@/types/enterprise";
 import { Skeleton } from "@/components/ui";
 
@@ -320,6 +320,7 @@ export default function GapAnalysisPage() {
   const store = useSOWUploadStore();
   const sowId = store.uploadedSowId;
   const { data: gapRes, isLoading: gapsLoading } = useGapItems(sowId);
+  const updateGapItem = useUpdateGapItem(sowId);
 
   /* Map API data */
   const apiGaps: GapItem[] = React.useMemo(() => {
@@ -380,7 +381,12 @@ export default function GapAnalysisPage() {
 
   /* ── Gap actions ── */
   const resolveGap     = React.useCallback((id: string) => setGaps((p) => p.map((g) => g.id === id ? { ...g, isResolved: true } : g)), []);
-  const acknowledgeGap = React.useCallback((id: string) => setGaps((p) => p.map((g) => g.id === id ? { ...g, isAcknowledged: !g.isAcknowledged } : g)), []);
+  const acknowledgeGap = React.useCallback((id: string) => {
+    setGaps((p) => p.map((g) => g.id === id ? { ...g, isAcknowledged: !g.isAcknowledged } : g));
+    if (sowId) {
+      updateGapItem.mutate({ gapId: id, data: { status: "acknowledged" } });
+    }
+  }, [sowId, updateGapItem]);
   const dismissGap     = React.useCallback((id: string) => setGaps((p) => p.map((g) => g.id === id ? { ...g, isDismissed: true } : g)), []);
   const resetGap       = React.useCallback((id: string) => setGaps((p) => p.map((g) => g.id === id ? { ...g, isResolved: false, isAcknowledged: false, isDismissed: false } : g)), []);
 

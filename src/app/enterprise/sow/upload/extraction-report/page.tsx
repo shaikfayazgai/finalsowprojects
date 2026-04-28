@@ -34,23 +34,12 @@ interface ExtractedSection {
 }
 
 const MOCK_EXTRACTION = {
-  documentName: "MedFirst_Patient_Portal_SOW_2026.pdf",
-  overallConfidence: 87,
-  gapScore: 72,
-  ambiguities: 5,
-  estimatedReviewTime: "~12 Minutes",
-  sections: [
-    { id: "sec-1",  title: "Project Overview",         confidence: 94, status: "complete"  },
-    { id: "sec-2",  title: "Scope & Deliverables",     confidence: 91, status: "complete"  },
-    { id: "sec-3",  title: "Technical Architecture",   confidence: 87, status: "partial",   gaps: ["Frontend version not specified", "Missing CDN/monitoring details"] },
-    { id: "sec-4",  title: "Timeline & Milestones",    confidence: 92, status: "complete"  },
-    { id: "sec-5",  title: "Budget",                   confidence: 76, status: "ambiguous", gaps: ["Budget breakdown percentages inferred", "Contingency buffer not specified"] },
-    { id: "sec-6",  title: "Team Structure",           confidence: 88, status: "partial",   gaps: ["Seniority levels not specified"] },
-    { id: "sec-7",  title: "Security & Compliance",    confidence: 95, status: "complete"  },
-    { id: "sec-8",  title: "Quality Standards",        confidence: 90, status: "complete"  },
-    { id: "sec-9",  title: "Risk Management",          confidence: 0,  status: "missing"   },
-    { id: "sec-10", title: "Intellectual Property",    confidence: 0,  status: "missing"   },
-  ] as ExtractedSection[],
+  documentName: "",
+  overallConfidence: 0,
+  gapScore: 0,
+  ambiguities: 0,
+  estimatedReviewTime: "—",
+  sections: [] as ExtractedSection[],
 };
 
 /* ═══════════════════════════════════════════════════════════

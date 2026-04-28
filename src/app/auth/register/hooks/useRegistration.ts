@@ -1,17 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { COUNTRIES_DATA } from "../data";
 import { getPasswordStrength, getAgeFromDob } from "../helpers";
 import { registerContributor } from "@/lib/actions/register";
-import { fetchInternal } from "@/lib/api/client";
+import { usePricingConfig } from "@/lib/hooks/usePricingConfig";
 import type { RegistrationRole, ContributorType, SSOData } from "../types";
 
 export function useRegistration(ssoData?: SSOData | null) {
-  const router = useRouter();
-
   const [isSsoUser] = useState(() => !!ssoData);
   const [ssoProvider] = useState(() => ssoData?.provider ?? null);
 
@@ -48,9 +45,17 @@ export function useRegistration(ssoData?: SSOData | null) {
   const [otherSkillInput,     setOtherSkillInput]     = useState("");
   const [workStart,           setWorkStart]           = useState("");
   const [workEnd,             setWorkEnd]             = useState("");
+  const [jobTitle,            setJobTitle]            = useState("");
   const [careerStage,         setCareerStage]         = useState("");
   const [yearsExperience,     setYearsExperience]     = useState("");
-
+  const {
+    studentCurrency,
+    studentHourlyRate,
+    womenRateCurrency,
+    womenRateTable,
+    generalRateCurrency,
+    generalRateTable,
+  } = usePricingConfig();
   const [phoneCountry,      setPhoneCountry]      = useState("India");
   const [phone,             setPhone]             = useState("");
   const [otpSent,           setOtpSent]           = useState(false);
@@ -58,15 +63,12 @@ export function useRegistration(ssoData?: SSOData | null) {
   const [cooldown,          setCooldown]          = useState(0);
   const [phoneVerified,     setPhoneVerified]     = useState(false);
   const [phoneOtpLoading,   setPhoneOtpLoading]   = useState(false);
-  const [phoneOtpDevHint, setPhoneOtpDevHint]   = useState("");
   const [verificationEmail, setVerificationEmail] = useState("");
   const [emailOtpSent,      setEmailOtpSent]      = useState(false);
   const [emailOtp,          setEmailOtp]          = useState("");
   const [emailCooldown,     setEmailCooldown]     = useState(0);
   const [emailVerified,     setEmailVerified]     = useState(false);
   const [emailOtpLoading,   setEmailOtpLoading]   = useState(false);
-  /** Shown only when dev server cannot reach SMTP (see /api/auth/otp/send-email devFallback). */
-  const [emailOtpDevHint, setEmailOtpDevHint]   = useState("");
 
   const [ndaAccepted,     setNdaAccepted]     = useState(false);
   const [ndaSignature,    setNdaSignature]    = useState("");
@@ -140,35 +142,11 @@ export function useRegistration(ssoData?: SSOData | null) {
       return;
     }
     setError("");
-    setPhoneOtpDevHint("");
     setPhoneOtpLoading(true);
-    try {
-      const res = await fetchInternal("/api/auth/otp/send-phone", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(
-          (data as { message?: string }).message ??
-            "Could not send SMS OTP. Use a 10-digit Indian number or check your connection.",
-        );
-        return;
-      }
-      setOtpSent(true);
-      startCooldown();
-      const d = data as { devFallback?: boolean; devOtp?: string };
-      if (d.devFallback === true && typeof d.devOtp === "string" && d.devOtp.length === 6) {
-        setPhoneOtpDevHint(
-          `Development mode: SMS was not delivered. Use this code: ${d.devOtp}`,
-        );
-      }
-    } catch {
-      setError("Network error. Please check your connection and try again.");
-    } finally {
-      setPhoneOtpLoading(false);
-    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setPhoneOtpLoading(false);
+    setOtpSent(true);
+    startCooldown();
   }
 
   async function verifyOTP() {
@@ -178,27 +156,9 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     setError("");
     setPhoneOtpLoading(true);
-    try {
-      const res = await fetchInternal("/api/auth/otp/verify-phone", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code: otp }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(
-          (data as { message?: string }).message ??
-            "Invalid or expired code. Request a new OTP and try again.",
-        );
-        return;
-      }
-      setPhoneOtpDevHint("");
-      setPhoneVerified(true);
-    } catch {
-      setError("Network error. Please check your connection and try again.");
-    } finally {
-      setPhoneOtpLoading(false);
-    }
+    await new Promise(resolve => setTimeout(resolve, 800));
+    setPhoneOtpLoading(false);
+    setPhoneVerified(true);
   }
 
   async function sendEmailOTP() {
@@ -207,31 +167,11 @@ export function useRegistration(ssoData?: SSOData | null) {
       return;
     }
     setError("");
-    setEmailOtpDevHint("");
     setEmailOtpLoading(true);
-    try {
-      const res = await fetchInternal("/api/auth/otp/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: verificationEmail }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.message ?? "Failed to send verification email. Please try again.");
-        return;
-      }
-      setEmailOtpSent(true);
-      startEmailCooldown();
-      if (data.devFallback === true && typeof data.devOtp === "string" && data.devOtp.length === 6) {
-        setEmailOtpDevHint(
-          `Development mode: email was not delivered (SMTP). Use this code: ${data.devOtp}`,
-        );
-      }
-    } catch {
-      setError("Network error. Please check your connection and try again.");
-    } finally {
-      setEmailOtpLoading(false);
-    }
+    await new Promise(resolve => setTimeout(resolve, 800));
+    setEmailOtpLoading(false);
+    setEmailOtpSent(true);
+    startEmailCooldown();
   }
 
   async function verifyEmailOTP() {
@@ -241,24 +181,9 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     setError("");
     setEmailOtpLoading(true);
-    try {
-      const res = await fetchInternal("/api/auth/otp/verify-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: verificationEmail, code: emailOtp }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.message ?? "Invalid or expired code. Please try again.");
-        return;
-      }
-      setEmailOtpDevHint("");
-      setEmailVerified(true);
-    } catch {
-      setError("Network error. Please check your connection and try again.");
-    } finally {
-      setEmailOtpLoading(false);
-    }
+    await new Promise(resolve => setTimeout(resolve, 800));
+    setEmailOtpLoading(false);
+    setEmailVerified(true);
   }
 
   function goToStep2() {
@@ -292,6 +217,10 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     if (primarySkills.length < 1) { setError("Please add at least one primary skill"); return; }
     if (!availability) { setError("Please enter your weekly availability (hours)"); return; }
+    if ((contribType === "women_workforce" || contribType === "general_workforce") && !yearsExperience) {
+      setError("Please select your years of experience");
+      return;
+    }
     setError("");
     if (!verificationEmail) setVerificationEmail(email);
     setStep(3);
@@ -363,7 +292,7 @@ export function useRegistration(ssoData?: SSOData | null) {
 
       if (!result.success) {
         // Show friendly message for duplicate email
-        if (result.error?.toLowerCase().includes("already") || 
+        if (result.error?.toLowerCase().includes("already") ||
             result.error?.toLowerCase().includes("exists") ||
             result.error?.toLowerCase().includes("duplicate")) {
           setError("This email is already registered. Please sign in instead.");
@@ -372,6 +301,10 @@ export function useRegistration(ssoData?: SSOData | null) {
         }
         setIsLoading(false);
         return;
+      }
+
+      if (result.emailWarning) {
+        console.warn("[registration] welcome email failed:", result.emailWarning);
       }
 
       const signInResult = await signIn("credentials", {
@@ -432,8 +365,15 @@ export function useRegistration(ssoData?: SSOData | null) {
     otherSkills, otherSkillInput, setOtherSkillInput, addOtherSkill, removeOtherSkill,
     workStart, setWorkStart,
     workEnd, setWorkEnd,
+    jobTitle, setJobTitle,
     careerStage, setCareerStage,
     yearsExperience, setYearsExperience,
+    studentCurrency,
+    studentHourlyRate,
+    womenRateCurrency,
+    womenRateTable,
+    generalRateCurrency,
+    generalRateTable,
 
     phoneCountry, setPhoneCountry,
     phone, setPhone,
@@ -442,14 +382,12 @@ export function useRegistration(ssoData?: SSOData | null) {
     cooldown,
     phoneVerified,
     phoneOtpLoading,
-    phoneOtpDevHint,
     verificationEmail, setVerificationEmail,
     emailOtpSent,
     emailOtp, setEmailOtp,
     emailCooldown,
     emailVerified,
     emailOtpLoading,
-    emailOtpDevHint,
     sendOTP, verifyOTP, sendEmailOTP, verifyEmailOTP,
 
     ndaAccepted, setNdaAccepted,

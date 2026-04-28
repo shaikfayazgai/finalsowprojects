@@ -42,94 +42,11 @@ interface Gap {
   remediation?: string;
 }
 
-const INITIAL_GAPS: Gap[] = [
-  // Critical
-  {
-    id: "crit-1",
-    severity: "critical",
-    title: "Missing Acceptance Criteria",
-    description:
-      "No formal acceptance criteria defined for 4 of 6 major deliverables. This creates ambiguity around project completion and may lead to scope disputes.",
-    affectedSection: "Feature/Module Deliverables",
-    status: "unresolved",
-  },
-  {
-    id: "crit-2",
-    severity: "critical",
-    title: "Undefined Data Migration Strategy",
-    description:
-      "The SOW references legacy data migration from 3 systems but provides no specification for data mapping, transformation rules, or rollback procedures.",
-    affectedSection: "Technical Requirements",
-    status: "unresolved",
-  },
+const INITIAL_GAPS: Gap[] = [];
 
-  // Important
-  {
-    id: "imp-1",
-    severity: "important",
-    title: "Ambiguous SLA Definitions",
-    description:
-      "Uptime SLA mentioned as '99.9%' but measurement window (monthly vs. annual) and exclusion periods are not specified.",
-    affectedSection: "Compliance Requirements",
-    status: "unresolved",
-  },
-  {
-    id: "imp-2",
-    severity: "important",
-    title: "Vague Change Request Process",
-    description:
-      "Change management is referenced but lacks detail on pricing adjustments, approval timeline, and scope impact assessment methodology.",
-    affectedSection: "Assumptions & Constraints",
-    status: "unresolved",
-  },
-  {
-    id: "imp-3",
-    severity: "important",
-    title: "Incomplete Risk Mitigation Plans",
-    description:
-      "Two identified risks lack corresponding mitigation strategies and fallback plans.",
-    affectedSection: "Risk Factors",
-    status: "unresolved",
-  },
+const MOCK_REMEDIATIONS: Record<string, string> = {};
 
-  // Optional
-  {
-    id: "opt-1",
-    severity: "optional",
-    title: "Training Materials Not Specified",
-    description:
-      "No mention of end-user training documentation, video tutorials, or knowledge base articles as deliverables.",
-    affectedSection: "Feature/Module Deliverables",
-    status: "unresolved",
-  },
-  {
-    id: "opt-2",
-    severity: "optional",
-    title: "Warranty Period Undefined",
-    description:
-      "Post-launch warranty/support period not explicitly defined. Industry standard is 60-90 days.",
-    affectedSection: "Budget & Commercial Terms",
-    status: "unresolved",
-  },
-  {
-    id: "opt-3",
-    severity: "optional",
-    title: "Performance Benchmarks Missing",
-    description:
-      "No specific performance benchmarks for page load times, API response times, or concurrent user capacity.",
-    affectedSection: "Technical Requirements",
-    status: "unresolved",
-  },
-];
-
-const MOCK_REMEDIATIONS: Record<string, string> = {
-  "crit-1":
-    "Suggested acceptance criteria: Each deliverable should include (1) functional requirements checklist, (2) performance benchmarks, (3) user sign-off from designated stakeholder, and (4) automated test coverage minimum of 80%.",
-  "crit-2":
-    "Recommended data migration approach: Implement a phased ETL pipeline with (1) source system audit and data profiling, (2) mapping document approved by both parties, (3) staged migration with validation checkpoints, and (4) rollback window of 48 hours post-migration.",
-};
-
-const UNREVIEWED_EXTRACTIONS_COUNT = 5;
+const UNREVIEWED_EXTRACTIONS_COUNT = 0;
 
 /* ────────────────────────────────────────────────────────────
    Helpers
@@ -682,7 +599,7 @@ export default function GapAnalysisPage() {
             )}
           </div>
           <Link
-            href={allCriticalResolved ? "/enterprise/sow/upload/commercial-details" : "#"}
+            href={allCriticalResolved ? "/enterprise/sow/upload/details" : "#"}
             className={cn(!allCriticalResolved && "pointer-events-none")}
           >
             <Button

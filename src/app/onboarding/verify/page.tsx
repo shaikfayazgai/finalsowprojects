@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
+import { useContributorPhonePrefill } from "@/lib/stores/contributor-phone-store";
 
 const countryCodes = [
   { code: "+1", label: "US +1" },
@@ -42,6 +43,20 @@ export default function OnboardingVerifyPage() {
   const [phoneCodeSent, setPhoneCodeSent] = React.useState(false);
   const [phoneCode, setPhoneCode] = React.useState("");
   const [phoneVerified, setPhoneVerified] = React.useState(false);
+
+  /* One-time hydrate from contributor registration (localStorage via zustand) */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    const { phone: stored } = useContributorPhonePrefill.getState();
+    if (!stored || stored.replace(/\D/g, "").length < 7) return;
+    const m = stored.trim().match(/^(\+\d{1,4})\s*(.*)$/);
+    if (!m) return;
+    const dial = m[1];
+    const localDigits = m[2].replace(/\D/g, "");
+    if (localDigits.length < 7) return;
+    if (countryCodes.some((c) => c.code === dial)) setCountryCode(dial);
+    setPhone((prev) => (prev.replace(/\D/g, "").length >= 7 ? prev : localDigits));
+  }, []);
 
   /* ID upload state */
   const [idFile, setIdFile] = React.useState<File | null>(null);

@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
   Sparkles, ArrowRight, Globe, Shield, Zap, BarChart3, Users,
@@ -85,8 +87,24 @@ const TESTIMONIALS = [
 ];
 
 export default function HomePage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const isLoggedIn = !!session?.user;
+
+  // Authenticated users should never see the marketing page — send them
+  // straight to their portal as soon as the session is confirmed.
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const role = (session?.user as { role?: string })?.role;
+    const dest =
+      role === "admin"       ? "/admin/dashboard" :
+      role === "super_admin" ? "/admin/dashboard" :
+      role === "reviewer"    ? "/enterprise/reviewer" :
+      role === "contributor" ? "/contributor/dashboard" :
+      role === "enterprise"  ? "/enterprise/dashboard" :
+      null;
+    if (dest) router.replace(dest);
+  }, [status, session, router]);
 
   return (
     <MeshBackground variant="warm" className="min-h-screen">
@@ -115,9 +133,12 @@ export default function HomePage() {
               <>
                 <Link
                   href={
+                    session?.user?.role === "admin"       ? "/admin/dashboard" :
+                    session?.user?.role === "super_admin" ? "/admin/dashboard" :
+                    session?.user?.role === "reviewer"    ? "/enterprise/reviewer" :
                     session?.user?.role === "contributor" ? "/contributor/dashboard" :
-                    session?.user?.role === "mentor"      ? "/mentor/dashboard" :
-                                                            "/enterprise/dashboard"
+                    session?.user?.role === "enterprise"  ? "/enterprise/dashboard" :
+                                                            "/auth/login"
                   }
                   className="hidden sm:block text-sm font-medium text-beige-600 hover:text-brown-900 transition-colors"
                 >
@@ -188,7 +209,7 @@ export default function HomePage() {
       </section>
 
       {/* ── Features Edge ───────────────────────────────── */}
-      <section id="features" className="max-w-6xl mx-auto px-6 py-20 border-t border-beige-200/50">
+      <section id="features" className="scroll-mt-24 max-w-6xl mx-auto px-6 py-20 border-t border-beige-200/50">
         <div className="text-center mb-16">
           <Badge variant="teal" className="mb-4">Why GlimmoraTeam</Badge>
           <h2 className="font-heading text-3xl font-bold text-brown-950 mb-4">
@@ -212,7 +233,7 @@ export default function HomePage() {
       </section>
 
       {/* ── Role Cards ──────────────────────────────────── */}
-      <section id="roles" className="max-w-6xl mx-auto px-6 py-20">
+      <section id="roles" className="scroll-mt-24 max-w-6xl mx-auto px-6 py-20">
         <div className="text-center mb-12">
           <h2 className="font-heading text-3xl font-bold text-brown-950 mb-3">
             Built for Every Role

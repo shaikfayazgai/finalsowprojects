@@ -3,14 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Save } from "lucide-react";
+import { Save, AlertTriangle } from "lucide-react";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { SectionNavigator } from "@/components/enterprise/sow/SectionNavigator";
 import { StatusBanner } from "@/components/enterprise/sow/StatusBanner";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import type { CommercialSectionKey } from "@/types/enterprise";
-import { mockPrePopulatedDetails, mockPrePopulatedSectionStatus } from "@/mocks/data/sow-upload-flow";
 import {
   useCommercialDetails,
   useSaveCommercialSection,
@@ -58,10 +57,10 @@ export default function CommercialDetailsPage() {
 
   const activeSection = store.activeCommercialSection;
   const setActiveSection = store.setActiveCommercialSection;
-  /* Initialize with pre-populated data on first visit */
+  /* Initialize with API data on first visit */
+  const [dataLoadError, setDataLoadError] = React.useState<string>("");
   React.useEffect(() => {
     if (store.commercialSectionStatus.businessContext === "not_started") {
-      /* Prefer API data; fall back to mock pre-populated data */
       const res = commercialRes as unknown as Record<string, unknown> | null | undefined;
       const payload = (res?.data !== undefined && res?.data !== null ? res.data : res) as Record<string, unknown> | null;
       // API may nest details under .details, .commercial_details, .sections, or directly
@@ -85,19 +84,10 @@ export default function CommercialDetailsPage() {
             store.markSectionInProgress(key);
           }
         });
+        setDataLoadError("");
       } else {
-        /* Fall back to mocks */
-        if (mockPrePopulatedDetails.businessContext) {
-          store.updateCommercialSection("businessContext", mockPrePopulatedDetails.businessContext);
-        }
-        if (mockPrePopulatedDetails.techIntegrations) {
-          store.updateCommercialSection("techIntegrations", mockPrePopulatedDetails.techIntegrations);
-        }
-        Object.entries(mockPrePopulatedSectionStatus).forEach(([key, status]) => {
-          if (status === "pre_populated") {
-            store.markSectionInProgress(key as CommercialSectionKey);
-          }
-        });
+        /* Show error message instead of falling back to mocks */
+        setDataLoadError("Unable to load details. Please try refreshing the page or contact support if the problem persists.");
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -194,6 +184,19 @@ export default function CommercialDetailsPage() {
           <span className="text-[11px] font-medium text-gray-500">{completedCount}/7 complete</span>
         </div>
       </motion.div>
+
+      {/* Error banner */}
+      {dataLoadError && (
+        <motion.div variants={fadeUp} className="rounded-xl bg-amber-50 border border-amber-200 px-5 py-4 mb-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[13px] font-medium text-amber-900">Unable to load document details</p>
+              <p className="text-[12px] text-amber-700 mt-1">{dataLoadError}</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Two-column layout */}
       <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 items-start">

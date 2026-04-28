@@ -42,40 +42,27 @@ interface DiscussionReply {
   timeAgo: string;
 }
 
-const discussionReplies: Record<string, DiscussionReply[]> = {
-  "disc-001": [
-    { id: "r1", author: "MA", name: "Maria A.", text: "I recommend using OpenAPI spec with auto-generated docs. It keeps everything in sync.", timeAgo: "1h ago" },
-    { id: "r2", author: "JL", name: "James L.", text: "Swagger is great but Redoc gives a nicer reading experience for stakeholders.", timeAgo: "45m ago" },
-    { id: "r3", author: "SP", name: "Sara P.", text: "Don't forget to version your API docs alongside the code. Docusaurus works well for this.", timeAgo: "20m ago" },
-  ],
-  "disc-002": [
-    { id: "r1", author: "RK", name: "Ravi K.", text: "Mock the timezone in your test setup. Use a library like timezone-mock for Node.js.", timeAgo: "3h ago" },
-    { id: "r2", author: "MA", name: "Maria A.", text: "We freeze time using jest.useFakeTimers and set it to UTC for all tests.", timeAgo: "2h ago" },
-  ],
-  "disc-003": [
-    { id: "r1", author: "JL", name: "James L.", text: "Start with small tasks labelled 'good first issue' to get comfortable with the workflow.", timeAgo: "18h ago" },
-    { id: "r2", author: "RK", name: "Ravi K.", text: "Read the contribution guidelines carefully. Each project has different standards.", timeAgo: "12h ago" },
-    { id: "r3", author: "SP", name: "Sara P.", text: "Ask questions early! The mentors here are very supportive.", timeAgo: "6h ago" },
-  ],
-  "disc-004": [
-    { id: "r1", author: "MA", name: "Maria A.", text: "Multi-stage builds cut our image size by 60%. Definitely worth the effort.", timeAgo: "1d ago" },
-    { id: "r2", author: "RK", name: "Ravi K.", text: "Cache your dependencies layer and only copy source code after. Big speed improvement.", timeAgo: "1d ago" },
-  ],
-};
+const discussionReplies: Record<string, DiscussionReply[]> = {};
 
-const discussions = [
-  { id: "disc-001", title: "Best practices for API documentation", replies: 12, timeAgo: "2h ago", author: "RK" },
-  { id: "disc-002", title: "How to handle timezone-dependent tests", replies: 8, timeAgo: "5h ago", author: "SP" },
-  { id: "disc-003", title: "Tips for first-time contributors", replies: 23, timeAgo: "1d ago", author: "MA" },
-  { id: "disc-004", title: "Docker optimization for CI pipelines", replies: 6, timeAgo: "2d ago", author: "JL" },
-];
+interface Discussion {
+  id: string;
+  title: string;
+  replies: number;
+  timeAgo: string;
+  author: string;
+}
 
-const mentors = [
-  { id: "mentor-001", name: "Mentor R-3K", skills: ["React", "TypeScript"], rating: 4.9, availability: "Available" as const },
-  { id: "mentor-002", name: "Mentor P-8J", skills: ["Python", "Data Science"], rating: 4.7, availability: "Limited" as const },
-  { id: "mentor-003", name: "Mentor S-2L", skills: ["Node.js", "DevOps"], rating: 4.8, availability: "Available" as const },
-  { id: "mentor-004", name: "Mentor K-5M", skills: ["Mobile", "Flutter"], rating: 4.6, availability: "Offline" as const },
-];
+const discussions: Discussion[] = [];
+
+interface Mentor {
+  id: string;
+  name: string;
+  skills: string[];
+  rating: number;
+  availability: "Available" | "Limited" | "Offline";
+}
+
+const mentors: Mentor[] = [];
 
 const mentorAvailabilityBadge: Record<string, string> = {
   Available: "forest",
@@ -97,38 +84,17 @@ interface PathwayStep {
   status: "completed" | "in-progress" | "locked";
 }
 
-const pathwaySteps: Record<string, PathwayStep[]> = {
-  "path-001": [
-    { step: 1, title: "Build a REST API with Express", hours: 20, status: "completed" },
-    { step: 2, title: "Add Authentication & Authorization", hours: 22, status: "completed" },
-    { step: 3, title: "Frontend with React & TypeScript", hours: 24, status: "in-progress" },
-    { step: 4, title: "Database Design & ORM Integration", hours: 18, status: "locked" },
-    { step: 5, title: "Testing & CI/CD Pipeline", hours: 16, status: "locked" },
-    { step: 6, title: "Deploy & Monitor in Production", hours: 20, status: "locked" },
-  ],
-  "path-002": [
-    { step: 1, title: "Linux Fundamentals & Shell Scripting", hours: 18, status: "in-progress" },
-    { step: 2, title: "Docker & Container Orchestration", hours: 22, status: "locked" },
-    { step: 3, title: "CI/CD with GitHub Actions", hours: 20, status: "locked" },
-    { step: 4, title: "Infrastructure as Code with Terraform", hours: 22, status: "locked" },
-    { step: 5, title: "Monitoring, Logging & Alerting", hours: 18, status: "locked" },
-  ],
-  "path-003": [
-    { step: 1, title: "SQL Mastery & Query Optimization", hours: 20, status: "completed" },
-    { step: 2, title: "ETL Pipelines with Python", hours: 22, status: "in-progress" },
-    { step: 3, title: "Data Warehousing Concepts", hours: 18, status: "locked" },
-    { step: 4, title: "Stream Processing with Kafka", hours: 22, status: "locked" },
-    { step: 5, title: "Data Quality & Governance", hours: 20, status: "locked" },
-    { step: 6, title: "Cloud Data Services (AWS/GCP)", hours: 18, status: "locked" },
-    { step: 7, title: "Building a Complete Data Platform", hours: 20, status: "locked" },
-  ],
-};
+const pathwaySteps: Record<string, PathwayStep[]> = {};
 
-const pathways = [
-  { id: "path-001", title: "Full-Stack Developer", steps: 6, hours: 120, completed: 2 },
-  { id: "path-002", title: "DevOps Engineer", steps: 5, hours: 100, completed: 0 },
-  { id: "path-003", title: "Data Engineer", steps: 7, hours: 140, completed: 1 },
-];
+interface Pathway {
+  id: string;
+  title: string;
+  steps: number;
+  hours: number;
+  completed: number;
+}
+
+const pathways: Pathway[] = [];
 
 /* === PAGE === */
 
@@ -183,10 +149,10 @@ export default function CommunityPage() {
       {/* === KPI ROW === */}
       <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "Active Discussions", value: "12", icon: MessageSquare, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600", sub: "3 new today" },
-          { label: "Mentors Available", value: "8", icon: Users, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600", sub: "2 in your area" },
-          { label: "Learning Pathways", value: "5", icon: Compass, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600", sub: "1 in progress" },
-          { label: "Community Members", value: "342", icon: Users, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600", sub: "+18 this week" },
+          { label: "Active Discussions", value: String(discussions.length), icon: MessageSquare, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600", sub: "—" },
+          { label: "Mentors Available", value: String(mentors.length), icon: Users, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600", sub: "—" },
+          { label: "Learning Pathways", value: String(pathways.length), icon: Compass, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600", sub: "—" },
+          { label: "Community Members", value: "—", icon: Users, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600", sub: "—" },
         ].map((kpi) => {
           const KpiIcon = kpi.icon;
           return (
@@ -215,6 +181,9 @@ export default function CommunityPage() {
               View all <ArrowRight className="w-3 h-3" />
             </span>
           </div>
+          {discussions.length === 0 ? (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No discussions yet</p></div>
+          ) : (
           <div className="py-2">
             {discussions.map((disc, i) => {
               const isExpanded = expandedDiscussion === disc.id;
@@ -299,6 +268,7 @@ export default function CommunityPage() {
               );
             })}
           </div>
+          )}
         </div>
 
         {/* -- Column 2: Mentor Directory -- */}
@@ -309,6 +279,9 @@ export default function CommunityPage() {
               All mentors <ArrowRight className="w-3 h-3" />
             </span>
           </div>
+          {mentors.length === 0 ? (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No mentors available</p></div>
+          ) : (
           <div className="py-2">
             {mentors.map((mentor, i) => {
               const badgeVariant = mentorAvailabilityBadge[mentor.availability] || "beige";
@@ -427,6 +400,7 @@ export default function CommunityPage() {
               );
             })}
           </div>
+          )}
         </div>
 
         {/* -- Column 3: Career Pathways -- */}
@@ -437,6 +411,9 @@ export default function CommunityPage() {
               Browse all <ArrowRight className="w-3 h-3" />
             </span>
           </div>
+          {pathways.length === 0 ? (
+            <div className="px-5 py-8 text-center"><p className="text-[12px] text-gray-400">No pathways available</p></div>
+          ) : (
           <div className="py-2">
             {pathways.map((path, i) => {
               const progressPct = path.steps > 0 ? Math.round((path.completed / path.steps) * 100) : 0;
@@ -544,6 +521,7 @@ export default function CommunityPage() {
               );
             })}
           </div>
+          )}
         </div>
       </motion.div>
 

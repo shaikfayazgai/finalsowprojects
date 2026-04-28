@@ -1,3 +1,5 @@
+import { resolveContributorMock } from "@/mocks/api/contributor";
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -9,6 +11,19 @@ export class ApiError extends Error {
 }
 
 const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds — covers Render cold-start delays
+const FORCE_CONTRIBUTOR_MOCKS =
+  process.env.NEXT_PUBLIC_USE_CONTRIBUTOR_MOCKS === "true" ||
+  (process.env.NEXT_PUBLIC_USE_CONTRIBUTOR_MOCKS !== "false" && process.env.NODE_ENV !== "production");
+
+function mockResponseIfAvailable(path: string, options?: RequestInit): Response | null {
+  if (!FORCE_CONTRIBUTOR_MOCKS) return null;
+  const mock = resolveContributorMock(path, options?.method ?? "GET");
+  if (!mock) return null;
+  return new Response(JSON.stringify(mock.body), {
+    status: mock.status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 /**
  * Wrapper around fetch() for internal Next.js API routes (/api/...).
@@ -19,6 +34,8 @@ export async function fetchInternal(
   path: string,
   options?: RequestInit & { timeoutMs?: number },
 ): Promise<Response> {
+  const mockRes = mockResponseIfAvailable(path, options);
+  if (mockRes) return mockRes;
   const { timeoutMs, signal: externalSignal, ...rest } = options ?? {};
   const timeoutSignal = AbortSignal.timeout(timeoutMs ?? REQUEST_TIMEOUT_MS);
   const signal = externalSignal
@@ -40,6 +57,11 @@ export async function apiCall<T>(
   path: string,
   options?: ApiCallOptions,
 ): Promise<T> {
+  const mockRes = mockResponseIfAvailable(path, options);
+  if (mockRes) {
+    if (mockRes.status === 204) return {} as T;
+    return (await mockRes.json()) as T;
+  }
   const { token, headers: extraHeaders, timeoutMs, signal: externalSignal, ...rest } = options ?? {};
 
   // Combine caller's signal (if any) with the timeout signal
