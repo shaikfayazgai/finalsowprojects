@@ -2,11 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
   FileText, Search, Clock, CheckCircle2, AlertTriangle,
   DollarSign, ShieldAlert, ArrowUp, ArrowDown, ChevronRight,
-  Building2, Eye, TrendingUp, ArrowUpDown, Sparkles, Upload,
+  Building2, Eye, TrendingUp, ArrowUpDown, Sparkles, Upload, Lock, RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
@@ -310,6 +311,13 @@ export default function AdminSOWOversightPage() {
   const [sortDir, setSortDir]     = React.useState<SortDir>("desc");
   const searchRef = React.useRef<HTMLInputElement>(null);
 
+  // ── Session & Role Check ──
+  const { data: session, status } = useSession();
+  const userRole = (session?.user as { role?: string })?.role;
+  const isAdmin = userRole === "admin" || userRole === "super_admin";
+  const isSessionLoading = status === "loading";
+  const isAuthenticated = status === "authenticated";
+
   /* ── API: manual + AI SOW lists (admin scope — enterprise service token) ── */
   const { data: manualSowListRes, isLoading: manualLoading, isError: manualError } = useAdminManualSOWList();
   const { data: aiSowListRes,     isLoading: aiLoading, isError: aiError     } = useAdminSowList();
@@ -389,7 +397,36 @@ export default function AdminSOWOversightPage() {
   const avgRisk    = sows.length
     ? Math.round(sows.reduce((a, s) => a + s.riskScore.overall, 0) / sows.length) : 0;
 
-  if (!mounted || isLoading) return <PageSkeleton />;
+  // Show loading skeleton during session hydration
+  if (!mounted || isSessionLoading) return <PageSkeleton />;
+
+  // Check access control — show error if not authenticated or not admin
+  if (!isAuthenticated || !isAdmin) {
+    return (
+      <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
+        <motion.div variants={fadeUp} className="flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gold-600 mb-1.5">Platform Admin</p>
+            <h1 className="font-heading text-[28px] font-bold text-brown-950 leading-tight">SOW Oversight</h1>
+          </div>
+        </motion.div>
+        <motion.div variants={fadeUp} className="rounded-2xl bg-red-50 border border-red-200 px-6 py-8 text-center">
+          <Lock className="w-12 h-12 text-red-600 mx-auto mb-4" />
+          <p className="text-lg font-semibold text-red-900 mb-2">Access Denied</p>
+          <p className="text-red-700 text-sm mb-4">You do not have permission to access this page. Only admin users can view the SOW oversight dashboard.</p>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-colors"
+          >
+            Go to Home
+          </Link>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  // Show loading state while fetching data
+  if (isLoading) return <PageSkeleton />;
 
   // Show error message if API failed
   if (hasError) {
