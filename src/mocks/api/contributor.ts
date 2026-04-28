@@ -7,7 +7,6 @@ import {
   mockEarningsSummary,
   mockCredentials,
   mockLearningRecommendations,
-  mockSupportTickets,
   mockNotifications,
   mockDigitalTwin,
   mockWorkroomData,
@@ -57,7 +56,7 @@ function listFromQuery<T>(items: T[], query: URLSearchParams) {
   };
 }
 
-export function resolveContributorMock(path: string, method: string): MockResult | null {
+export function resolveContributorMock(path: string, method: string, _body?: string): MockResult | null {
   if (!path.includes("/api/contributor") && !path.includes("/api/public/credentials")) return null;
   const url = new URL(path, "http://localhost");
   const p = url.pathname;
@@ -365,7 +364,7 @@ export function resolveContributorMock(path: string, method: string): MockResult
         participants: [{ id: "u-reviewer", name: t.participantName, role: "reviewer", avatar: "https://i.pravatar.cc/100?img=22" }],
         project_name: "Contributor Program",
         task_id: "task-504",
-        messages: t.messages.map((m1) => ({
+        messages: t.messages.map((m1: Record<string, any>) => ({
           id: m1.id,
           sender_id: m1.sender === "contributor" ? "contrib-1001" : "u-reviewer",
           sender_name: m1.sender === "contributor" ? mockContributorProfile.displayName : t.participantName,
@@ -381,13 +380,13 @@ export function resolveContributorMock(path: string, method: string): MockResult
   if (p.match(/^\/api\/contributor\/messages\/threads\/[^/]+\/read$/) && m === "POST") return { status: 204, body: {} };
   if (p.match(/^\/api\/contributor\/messages\/[^/]+\/rating$/) && m === "POST") return { status: 204, body: {} };
 
-  if (p === "/api/contributor/support/tickets" && m === "GET") return { status: 200, body: listFromQuery(mockSupportTickets.map((t) => ({ ...t, created_at: t.createdAt, updated_at: t.updatedAt })), q) };
-  if (p === "/api/contributor/support/tickets" && m === "POST") return { status: 200, body: { id: "sup-new", subject: "Mock Ticket", category: "general", priority: "medium", status: "open", description: "Created in mock mode", attachment_ids: [], related_task_id: null, related_project_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), messages: [] } };
-  if (p.match(/^\/api\/contributor\/support\/tickets\/[^/]+$/) && m === "GET") return { status: 200, body: { id: "sup-7001", subject: "Task 504 deadline clarification", category: "task_support", priority: "high", status: "open", description: "Please confirm extension policy.", attachment_ids: [], related_task_id: "task-504", related_project_id: null, created_at: "2026-04-24T09:25:00.000Z", updated_at: "2026-04-24T10:00:00.000Z", messages: [{ id: "tm-1", author: "contributor", message: "Need due date confirmation", attachment_ids: [], created_at: "2026-04-24T09:25:00.000Z" }] } };
-  if (p.match(/^\/api\/contributor\/support\/tickets\/[^/]+\/messages$/) && m === "POST") return { status: 200, body: { id: "tm-new", author: "contributor", message: "Mock response", attachment_ids: [], created_at: new Date().toISOString() } };
-  if (p === "/api/contributor/support/grievances" && m === "GET") return { status: 200, body: { items: [{ id: "gr-1", category: "process", subject: "Review delay", status: "open", created_at: "2026-04-18T10:00:00.000Z", anonymous: false }], total: 1 } };
-  if (p === "/api/contributor/support/grievances" && m === "POST") return { status: 200, body: { id: "gr-new", category: "process", subject: "Mock grievance", description: "Created in mock mode", related_reference: null, anonymous: false, attachment_ids: [], status: "open", created_at: new Date().toISOString(), updated_at: new Date().toISOString() } };
-  if (p.match(/^\/api\/contributor\/support\/grievances\/[^/]+$/) && m === "GET") return { status: 200, body: { id: "gr-1", category: "process", subject: "Review delay", description: "Waiting on review for 4 days.", related_reference: null, anonymous: false, attachment_ids: [], status: "open", created_at: "2026-04-18T10:00:00.000Z", updated_at: "2026-04-23T10:00:00.000Z" } };
+  // Support tickets: always hit the real backend (no mock interception).
+  if (p === "/api/contributor/support/tickets") return null;
+  if (p.match(/^\/api\/contributor\/support\/tickets\/[^/]+$/)) return null;
+  if (p.match(/^\/api\/contributor\/support\/tickets\/[^/]+\/messages$/)) return null;
+  // Support grievances: always hit the real backend (no mock interception).
+  if (p === "/api/contributor/support/grievances") return null;
+  if (p.match(/^\/api\/contributor\/support\/grievances\/[^/]+$/)) return null;
   if (p === "/api/contributor/support/faqs" && m === "GET") return { status: 200, body: { items: [{ id: "faq-1", category: "payout", question: "When are payouts processed?", answer: "Payouts are processed every week." }, { id: "faq-2", category: "tasks", question: "How to request extension?", answer: "Open task details and use request extension." }], total: 2 } };
   if (p === "/api/contributor/support/safety-reports" && m === "POST") return { status: 200, body: { id: "sr-1", category: "security", description: "Mock report", related_reference: null, attachment_ids: [], status: "submitted", created_at: new Date().toISOString() } };
 
