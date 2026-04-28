@@ -19,6 +19,7 @@ import {
   type LearningRecommendationsParams,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 import { ApiError } from "@/lib/api/client";
 import { toast } from "@/lib/stores/toast-store";
 
@@ -120,7 +121,7 @@ export default function LearningPage() {
 
   /* Keep a ref so callbacks always have the latest token without re-creating them */
   const tokenRef = React.useRef<string>("");
-  if (session?.user?.accessToken) tokenRef.current = session.user.accessToken as string;
+  tokenRef.current = getContributorAccessToken(session);
 
   /* filters */
   const [filterType,     setFilterType]     = React.useState("");
@@ -148,8 +149,8 @@ export default function LearningPage() {
   }, []);
 
   React.useEffect(() => {
-    if (sessionStatus === "authenticated" && session?.user?.accessToken) {
-      load(session.user.accessToken as string);
+    if (sessionStatus === "authenticated") {
+      load(getContributorAccessToken(session));
     } else if (sessionStatus === "unauthenticated") {
       setLoading(false);
       setError("Not authenticated. Please log in.");

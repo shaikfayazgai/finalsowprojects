@@ -17,7 +17,9 @@ const FORCE_CONTRIBUTOR_MOCKS =
 
 function mockResponseIfAvailable(path: string, options?: RequestInit): Response | null {
   if (!FORCE_CONTRIBUTOR_MOCKS) return null;
-  const mock = resolveContributorMock(path, options?.method ?? "GET");
+  const rawBody = options?.body;
+  const bodyStr = typeof rawBody === "string" ? rawBody : undefined;
+  const mock = resolveContributorMock(path, options?.method ?? "GET", bodyStr);
   if (!mock) return null;
   return new Response(JSON.stringify(mock.body), {
     status: mock.status,

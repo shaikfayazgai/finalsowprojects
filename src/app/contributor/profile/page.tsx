@@ -18,6 +18,7 @@ import {
   type ProfileUiState,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Badge ═══ */
 
@@ -84,7 +85,7 @@ function emptyProfileState(
 
 export default function ProfilePage() {
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
   const contributorId = session?.user?.id ?? "";
 
   const sessionName = session?.user?.name ?? "";

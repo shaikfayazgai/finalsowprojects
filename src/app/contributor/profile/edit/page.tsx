@@ -19,6 +19,7 @@ import {
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { useContributorPhonePrefill } from "@/lib/stores/contributor-phone-store";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Badge ═══ */
 
@@ -151,7 +152,7 @@ function normalizeProficiency(p?: string) {
 
 export default function ProfileEditPage() {
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
   const contributorId = session?.user?.id ?? "";
 
   const [displayName, setDisplayName] = React.useState("");

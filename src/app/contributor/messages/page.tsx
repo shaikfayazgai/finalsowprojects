@@ -6,11 +6,11 @@ import { motion } from "framer-motion";
 import {
   MessageSquare, Search, Send, Users, Bot, User,
   ThumbsUp, ThumbsDown, ExternalLink, ArrowRight, Loader2,
+  Paperclip, X, FileText, Check, CheckCheck, Image as ImageIcon, Download,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
 import {
   fetchMessageThreads,
   fetchMessageThread,
@@ -23,8 +23,17 @@ import {
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { ApiError } from "@/lib/api/client";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Internal UI types ═══ */
+
+interface UIAttachment {
+  id: string;
+  name: string;
+  url: string;
+  type: string;
+  size: number;
+}
 
 interface UIMessage {
   id: string;
@@ -33,6 +42,8 @@ interface UIMessage {
   content: string;
   timestamp: string;
   isAI?: boolean;
+  attachments?: UIAttachment[];
+  pending?: boolean;
 }
 
 interface UIThread {
@@ -132,12 +143,20 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const isImageMime = (type: string) => type.startsWith("image/");
+
 /* ═══ PAGE ═══ */
 
 export default function MessagesPage() {
   const { data: session, status: sessionStatus } = useSession();
   const tokenRef = React.useRef<string | null>(null);
-  if (session?.user?.accessToken) tokenRef.current = session.user.accessToken as string;
+  tokenRef.current = getContributorAccessToken(session);
 
   /* ── State ── */
   const [allThreads,     setAllThreads]     = React.useState<UIThread[]>([]);
@@ -148,11 +167,44 @@ export default function MessagesPage() {
   const [loadingDetail, setLoadingDetail] = React.useState(false);
 
   const [search,     setSearch]     = React.useState("");
-  const [roleFilter, setRoleFilter] = React.useState("all");
   const [replyText,  setReplyText]  = React.useState("");
   const [sending,    setSending]    = React.useState(false);
 
   const [ratedMessages, setRatedMessages] = React.useState<Record<string, "up" | "down">>({});
+
+  /* Attachments staged in the reply composer (per active thread) */
+  const [pendingAttachments, setPendingAttachments] = React.useState<UIAttachment[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  React.useEffect(() => {
+    /* Reset composer state when the active thread changes */
+    setPendingAttachments((prev) => {
+      prev.forEach((a) => URL.revokeObjectURL(a.url));
+      return [];
+    });
+  }, [selectedId]);
+
+  function handlePickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    const next: UIAttachment[] = files.map((f) => ({
+      id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: f.name,
+      url: URL.createObjectURL(f),
+      type: f.type || "application/octet-stream",
+      size: f.size,
+    }));
+    setPendingAttachments((prev) => [...prev, ...next]);
+    e.currentTarget.value = "";
+  }
+
+  function removePendingAttachment(id: string) {
+    setPendingAttachments((prev) => {
+      const target = prev.find((a) => a.id === id);
+      if (target) URL.revokeObjectURL(target.url);
+      return prev.filter((a) => a.id !== id);
+    });
+  }
 
   /* ── Load thread list ── */
   const loadThreads = React.useCallback(async (token: string) => {
@@ -172,8 +224,8 @@ export default function MessagesPage() {
   }, []);
 
   React.useEffect(() => {
-    if (sessionStatus === "authenticated" && session?.user?.accessToken) {
-      loadThreads(session.user.accessToken as string);
+    if (sessionStatus === "authenticated") {
+      loadThreads(getContributorAccessToken(session));
     } else if (sessionStatus === "unauthenticated") {
       setLoadingThreads(false);
       setThreadsError("Not authenticated.");
@@ -183,7 +235,6 @@ export default function MessagesPage() {
   /* ── Filter + search (client-side, same behaviour as before) ── */
   const filtered = React.useMemo(() => {
     let list = [...allThreads];
-    if (roleFilter !== "all") list = list.filter((t) => t.senderRole === roleFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((t) =>
@@ -195,11 +246,11 @@ export default function MessagesPage() {
     }
     list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     return list;
-  }, [allThreads, roleFilter, search]);
+  }, [allThreads, search]);
 
   const selected       = filtered.find((t) => t.id === selectedId) || null;
   const unreadTotal    = allThreads.reduce((s, t) => s + t.unreadCount, 0);
-  const activeFilterCount = [roleFilter].filter((v) => v !== "all").length + (search.trim() ? 1 : 0);
+  const activeFilterCount = search.trim() ? 1 : 0;
 
   /* ── Select thread → fetch detail + mark read ── */
   async function handleSelectThread(threadId: string) {
@@ -263,26 +314,33 @@ export default function MessagesPage() {
 
   /* ── Send reply ── */
   async function handleSend() {
-    if (!replyText.trim() || !selectedId || sending) return;
+    if ((!replyText.trim() && pendingAttachments.length === 0) || !selectedId || sending) return;
     const token = tokenRef.current;
     if (!token) return;
 
     const content = replyText.trim();
+    const attachmentsForSend = pendingAttachments;
     setReplyText("");
+    setPendingAttachments([]);
     setSending(true);
     try {
-      const msg   = await postMessageToThread(token, selectedId, content);
-      const uiMsg = mapMessage(msg);
+      const msg   = await postMessageToThread(token, selectedId, content, attachmentsForSend.map((a) => a.id));
+      const uiMsg: UIMessage = {
+        ...mapMessage(msg),
+        attachments: attachmentsForSend.length > 0 ? attachmentsForSend : undefined,
+      };
+      const lastMessageSummary = content || (attachmentsForSend.length > 0 ? `📎 ${attachmentsForSend.length} attachment${attachmentsForSend.length !== 1 ? "s" : ""}` : "");
       setAllThreads((prev) =>
         prev.map((t) =>
           t.id === selectedId
-            ? { ...t, messages: [...t.messages, uiMsg], lastMessage: content, timestamp: uiMsg.timestamp }
+            ? { ...t, messages: [...t.messages, uiMsg], lastMessage: lastMessageSummary, timestamp: uiMsg.timestamp }
             : t,
         ),
       );
     } catch (err) {
       console.error("Failed to send message:", err);
       setReplyText(content); /* restore on error */
+      setPendingAttachments(attachmentsForSend);
     } finally {
       setSending(false);
     }
@@ -343,18 +401,7 @@ export default function MessagesPage() {
                   style={{ paddingLeft: 32 }}
                 />
               </div>
-              <div className="flex items-center justify-between">
-                <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger className="h-7 rounded-lg bg-white border border-gray-200 px-2.5 text-[11px] text-gray-600 hover:border-gray-300 focus:ring-2 focus:ring-brown-100 focus:border-brown-300 transition-all" style={{ minWidth: 110 }}>
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Messages</SelectItem>
-                    <SelectItem value="ai_assistant">AI Assistants</SelectItem>
-                    <SelectItem value="project_team">Project Teams</SelectItem>
-                    <SelectItem value="mentor">Mentors</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex items-center justify-end">
                 <span className="text-[10px] text-gray-400">
                   {filtered.length} thread{filtered.length !== 1 ? "s" : ""}
                   {unreadTotal > 0 ? ` · ${unreadTotal} unread` : ""}
@@ -499,10 +546,16 @@ export default function MessagesPage() {
                   </div>
                 ) : (
                   <>
-                    {selected.messages.map((msg) => {
+                    {selected.messages.map((msg, idx) => {
                       const isUser = msg.sender === "user";
                       const isAI   = msg.isAI;
                       const rated  = ratedMessages[msg.id];
+                      /* Read receipt: a user-sent message is considered "read" once
+                         any later message in the thread is from another participant. */
+                      const hasLaterExternal = isUser
+                        ? selected.messages.slice(idx + 1).some((m) => m.sender !== "user")
+                        : false;
+                      const readStatus: "sent" | "read" = hasLaterExternal ? "read" : "sent";
                       return (
                         <div key={msg.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
                           <div className={cn("max-w-[75%]", isUser ? "items-end" : "items-start")}>
@@ -517,8 +570,46 @@ export default function MessagesPage() {
                                 <span className="text-[9px] text-gray-400">{formatTime(msg.timestamp)}</span>
                                 {isAI && <Badge variant="gold">AI</Badge>}
                               </div>
-                              <p className="text-[12px] text-gray-700 leading-relaxed">{msg.content}</p>
+                              {msg.content && (
+                                <p className="text-[12px] text-gray-700 leading-relaxed">{msg.content}</p>
+                              )}
+                              {msg.attachments && msg.attachments.length > 0 && (
+                                <div className={cn("flex flex-wrap gap-2", msg.content ? "mt-2" : "")}>
+                                  {msg.attachments.map((a) => (
+                                    isImageMime(a.type) ? (
+                                      <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-gray-100 max-w-[200px]">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={a.url} alt={a.name} className="block max-h-40 object-cover" />
+                                      </a>
+                                    ) : (
+                                      <a key={a.id} href={a.url} download={a.name} className="flex items-center gap-2 max-w-[220px] px-2.5 py-2 rounded-lg bg-white/70 border border-gray-200 hover:border-brown-200 transition-colors">
+                                        <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-[11px] font-medium text-gray-700 truncate">{a.name}</p>
+                                          <p className="text-[9px] text-gray-400">{formatBytes(a.size)}</p>
+                                        </div>
+                                        <Download className="w-3 h-3 text-gray-300 shrink-0" />
+                                      </a>
+                                    )
+                                  ))}
+                                </div>
+                              )}
                             </div>
+                            {isUser && (
+                              <div className="flex items-center gap-1 mt-1 mr-1 justify-end">
+                                {readStatus === "read" ? (
+                                  <>
+                                    <CheckCheck className="w-3 h-3 text-teal-500" />
+                                    <span className="text-[9px] text-teal-600 font-medium">Read</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="w-3 h-3 text-gray-400" />
+                                    <span className="text-[9px] text-gray-400">Sent</span>
+                                  </>
+                                )}
+                              </div>
+                            )}
 
                             {/* Rate AI response */}
                             {isAI && !isUser && (
@@ -569,8 +660,47 @@ export default function MessagesPage() {
               </div>
 
               {/* Reply input */}
-              <div className="px-5 py-3 shrink-0" style={{ borderTop: "1px solid var(--border-hair)" }}>
+              <div className="px-5 py-3 shrink-0 space-y-2" style={{ borderTop: "1px solid var(--border-hair)" }}>
+                {pendingAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {pendingAttachments.map((a) => (
+                      <div key={a.id} className="flex items-center gap-2 max-w-[220px] px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
+                        {isImageMime(a.type) ? (
+                          <ImageIcon className="w-3.5 h-3.5 text-teal-500 shrink-0" />
+                        ) : (
+                          <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-medium text-gray-700 truncate">{a.name}</p>
+                          <p className="text-[9px] text-gray-400">{formatBytes(a.size)}</p>
+                        </div>
+                        <button
+                          onClick={() => removePendingAttachment(a.id)}
+                          className="text-gray-300 hover:text-red-500 transition-colors shrink-0"
+                          aria-label={`Remove ${a.name}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    onChange={handlePickFiles}
+                    className="hidden"
+                    aria-hidden
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-brown-500 hover:bg-brown-50 transition-all shrink-0"
+                    aria-label="Attach files"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
                   <input
                     type="text"
                     placeholder="Type a reply..."
@@ -581,10 +711,10 @@ export default function MessagesPage() {
                   />
                   <button
                     onClick={handleSend}
-                    disabled={!replyText.trim() || sending}
+                    disabled={(!replyText.trim() && pendingAttachments.length === 0) || sending}
                     className={cn(
                       "w-9 h-9 rounded-xl flex items-center justify-center text-white transition-all shrink-0",
-                      replyText.trim() && !sending
+                      (replyText.trim() || pendingAttachments.length > 0) && !sending
                         ? "bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700"
                         : "bg-gray-200 cursor-not-allowed",
                     )}

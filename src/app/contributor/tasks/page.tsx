@@ -20,6 +20,7 @@ import {
   type TasksSummary, type DiscoverySummary, type TaskItem,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ══════════════════════════════════════════ Pill helper ══════════════════════════════════════════ */
 
@@ -113,7 +114,7 @@ export default function ContributorTasksPage() {
   const { heldProjects } = useProjectHoldStore();
   const { setSelectedTask } = useTaskStore();
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
 
   /* ── Tasks summary (KPI row) ── */
   const [summary, setSummary] = React.useState<TasksSummary | null>(null);

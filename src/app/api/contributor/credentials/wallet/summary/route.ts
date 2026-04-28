@@ -36,3 +36,52 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+/* ── POST /api/contributor/credentials/wallet/summary ──────────────────────── */
+
+export async function POST(req: NextRequest) {
+  const headers = { "Content-Type": "application/json", ...authHeader(req) };
+  const url = `${BACKEND}/api/contributor/credentials/wallet/summary`;
+
+  try {
+    // Parse request body for custom data
+    const body = await req.json().catch(() => null);
+
+    if (!body) {
+      return NextResponse.json(
+        { detail: "Invalid request body. Expected JSON data." },
+        { status: 400 },
+      );
+    }
+
+    // Validate required fields
+    if (!body.category) {
+      return NextResponse.json(
+        { detail: "Category field is required." },
+        { status: 422 },
+      );
+    }
+
+    const backendRes = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+
+    if (backendRes.ok) {
+      const data = await backendRes.json().catch(() => ({}));
+      return NextResponse.json(data, { status: 201 });
+    }
+
+    const errBody = await backendRes.json().catch(() => ({
+      detail: `Backend error ${backendRes.status}`,
+    }));
+    return NextResponse.json(errBody, { status: backendRes.status });
+  } catch {
+    return NextResponse.json(
+      { detail: "Failed to reach credentials service." },
+      { status: 502 },
+    );
+  }
+}

@@ -24,6 +24,7 @@ import {
   type CredentialDateFilter,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Badge ═══ */
 
@@ -123,7 +124,7 @@ const DATE_FILTER_MAP: Record<string, CredentialDateFilter | undefined> = {
 
 export default function CredentialsPage() {
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
 
   /* ── Filter state (drive the API call) ── */
   const [skillFilter, setSkillFilter] = React.useState("all");
