@@ -22,6 +22,7 @@ import {
   KeyRound,
   Info,
   Pencil,
+  Briefcase,
 } from "lucide-react";
 import {
   GlassCard,
@@ -109,9 +110,24 @@ export default function ProfilePage() {
   const [email] = useState(session?.user?.email ?? "");
   const [jobTitle, setJobTitle] = useState("");
   const [phone, setPhone] = useState("");
+  const [adminDept, setAdminDept] = useState("");
+  const [adminDeptOther, setAdminDeptOther] = useState("");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [displayNameCustomized, setDisplayNameCustomized] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  /* ── Organisation State ── */
+  const [orgName, setOrgName] = useState("");
+  const [orgType, setOrgType] = useState("");
+  const [orgTypeOther, setOrgTypeOther] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [industryOther, setIndustryOther] = useState("");
+  const [companySize, setCompanySize] = useState("");
+  const [website, setWebsite] = useState("");
+  const [incorporationCountry, setIncorporationCountry] = useState("");
+  const [incorporationFile, setIncorporationFile] = useState<File | null>(null);
+  const incorporationFileInputRef = useRef<HTMLInputElement>(null);
+  const [isEditingOrg, setIsEditingOrg] = useState(false);
   const [personalErrors, setPersonalErrors] = useState<Record<string, string>>(
     {},
   );
@@ -244,6 +260,28 @@ export default function ProfilePage() {
     }
     return false;
   }, [validatePersonalInfo]);
+
+  const handleSaveOrgDetails = useCallback((): boolean => {
+    toast.success("Organisation details updated.");
+    return true;
+  }, []);
+
+  const handleIncorporationFile = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.type !== "application/pdf") {
+        toast.error("Invalid file type", "Please upload a PDF document.");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("File too large", "Maximum file size is 10MB.");
+        return;
+      }
+      setIncorporationFile(file);
+    },
+    [],
+  );
 
   const handleUpdatePassword = useCallback(() => {
     const errors: Record<string, string> = {};
@@ -512,6 +550,343 @@ export default function ProfilePage() {
               ) : (
                 <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
                   {phone || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Admin Department — editable */}
+            <div className="space-y-1.5">
+              <Label htmlFor="adminDept">Department</Label>
+              {isEditing ? (
+                <Select value={adminDept} onValueChange={setAdminDept}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Chief Executive Officer (CEO)">CEO</SelectItem>
+                    <SelectItem value="Chief Technology Officer (CTO)">CTO</SelectItem>
+                    <SelectItem value="Chief Operating Officer (COO)">COO</SelectItem>
+                    <SelectItem value="Chief Financial Officer (CFO)">CFO</SelectItem>
+                    <SelectItem value="Founder / Co-Founder">Founder / Co-Founder</SelectItem>
+                    <SelectItem value="Engineering">Engineering</SelectItem>
+                    <SelectItem value="IT & Infrastructure">IT & Infrastructure</SelectItem>
+                    <SelectItem value="Data & Analytics">Data & Analytics</SelectItem>
+                    <SelectItem value="Cybersecurity">Cybersecurity</SelectItem>
+                    <SelectItem value="Product Management">Product Management</SelectItem>
+                    <SelectItem value="Strategy & Operations">Strategy & Operations</SelectItem>
+                    <SelectItem value="Business Development">Business Development</SelectItem>
+                    <SelectItem value="Finance & Accounting">Finance & Accounting</SelectItem>
+                    <SelectItem value="Legal & Compliance">Legal & Compliance</SelectItem>
+                    <SelectItem value="Marketing & Growth">Marketing & Growth</SelectItem>
+                    <SelectItem value="Human Resources">Human Resources</SelectItem>
+                    <SelectItem value="Talent Acquisition">Talent Acquisition</SelectItem>
+                    <SelectItem value="Customer Success">Customer Success</SelectItem>
+                    <SelectItem value="Administration">Administration</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {adminDept || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Department (Other) — editable, conditional */}
+            {adminDept === "Other" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="adminDeptOther">Department (Other)</Label>
+                {isEditing ? (
+                  <Input
+                    id="adminDeptOther"
+                    value={adminDeptOther}
+                    onChange={(e) => setAdminDeptOther(e.target.value)}
+                    placeholder="Specify your department"
+                    maxLength={80}
+                  />
+                ) : (
+                  <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                    {adminDeptOther || "—"}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </GlassCardContent>
+      </GlassCard>
+
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/*  Section 1b: Organisation Details                          */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+
+      <GlassCard variant="heavy" padding="lg">
+        <GlassCardContent>
+          <div className="flex items-start justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brown-100 text-brown-600">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg font-semibold text-brown-950">
+                  Organisation Details
+                </h2>
+                <p className="text-sm text-beige-600">
+                  Company information captured during registration.
+                </p>
+              </div>
+            </div>
+            {!isEditingOrg ? (
+              <Button variant="outline" size="sm" onClick={() => setIsEditingOrg(true)}>
+                <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 shrink-0">
+                <Button variant="outline" size="sm" onClick={() => setIsEditingOrg(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    if (handleSaveOrgDetails()) setIsEditingOrg(false);
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-5">
+            {/* Organisation Name */}
+            <div className="space-y-1.5">
+              <Label htmlFor="orgName">Organisation Name</Label>
+              {isEditingOrg ? (
+                <Input
+                  id="orgName"
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  placeholder="Legal name of your organisation"
+                  maxLength={120}
+                />
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {orgName || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Organisation Type */}
+            <div className="space-y-1.5">
+              <Label>Organisation Type</Label>
+              {isEditingOrg ? (
+                <Select value={orgType} onValueChange={setOrgType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select organisation type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="startup">Startup</SelectItem>
+                    <SelectItem value="sme">SME</SelectItem>
+                    <SelectItem value="large-enterprise">Enterprise</SelectItem>
+                    <SelectItem value="mnc">MNC</SelectItem>
+                    <SelectItem value="ngo">NGO / Non-profit</SelectItem>
+                    <SelectItem value="government">Government</SelectItem>
+                    <SelectItem value="educational">Educational</SelectItem>
+                    <SelectItem value="agency">Agency</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {orgType || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Organisation Type — Other */}
+            {orgType === "other" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="orgTypeOther">Organisation Type (Other)</Label>
+                {isEditingOrg ? (
+                  <Input
+                    id="orgTypeOther"
+                    value={orgTypeOther}
+                    onChange={(e) => setOrgTypeOther(e.target.value)}
+                    placeholder="Specify your organisation type"
+                    maxLength={80}
+                  />
+                ) : (
+                  <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                    {orgTypeOther || "—"}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Industry */}
+            <div className="space-y-1.5">
+              <Label>Industry / Sector</Label>
+              {isEditingOrg ? (
+                <Select value={industry} onValueChange={setIndustry}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your industry" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="software-saas">Software & SaaS</SelectItem>
+                    <SelectItem value="it-services">IT Services & Consulting</SelectItem>
+                    <SelectItem value="cybersecurity">Cybersecurity</SelectItem>
+                    <SelectItem value="ai-data">AI, Data Science & Analytics</SelectItem>
+                    <SelectItem value="hardware">Hardware & Electronics</SelectItem>
+                    <SelectItem value="telecom">Telecommunications</SelectItem>
+                    <SelectItem value="banking">Banking & Financial Services</SelectItem>
+                    <SelectItem value="investment">Investment & Asset Management</SelectItem>
+                    <SelectItem value="insurance">Insurance</SelectItem>
+                    <SelectItem value="accounting">Accounting & Audit</SelectItem>
+                    <SelectItem value="consulting">Management Consulting</SelectItem>
+                    <SelectItem value="healthcare">Hospitals & Healthcare</SelectItem>
+                    <SelectItem value="pharma">Pharmaceuticals & Biotech</SelectItem>
+                    <SelectItem value="medtech">Medical Devices & HealthTech</SelectItem>
+                    <SelectItem value="advertising">Advertising & Marketing</SelectItem>
+                    <SelectItem value="media">Media & Entertainment</SelectItem>
+                    <SelectItem value="publishing">Publishing & Content</SelectItem>
+                    <SelectItem value="design-creative">Design & Creative Services</SelectItem>
+                    <SelectItem value="automotive">Automotive & Transportation</SelectItem>
+                    <SelectItem value="aerospace">Aerospace & Defence</SelectItem>
+                    <SelectItem value="construction">Construction & Real Estate</SelectItem>
+                    <SelectItem value="energy">Energy & Utilities</SelectItem>
+                    <SelectItem value="fmcg">FMCG & Consumer Goods</SelectItem>
+                    <SelectItem value="logistics">Logistics & Supply Chain</SelectItem>
+                    <SelectItem value="edtech">Education & e-Learning</SelectItem>
+                    <SelectItem value="research">Research & Development</SelectItem>
+                    <SelectItem value="nonprofit">Non-profit & NGO</SelectItem>
+                    <SelectItem value="public-admin">Government & Public Administration</SelectItem>
+                    <SelectItem value="legal">Legal Services & Compliance</SelectItem>
+                    <SelectItem value="staffing">Staffing & Recruitment</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {industry || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Industry — Other */}
+            {industry === "other" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="industryOther">Industry (Other)</Label>
+                {isEditingOrg ? (
+                  <Input
+                    id="industryOther"
+                    value={industryOther}
+                    onChange={(e) => setIndustryOther(e.target.value)}
+                    placeholder="Specify your industry or sector"
+                    maxLength={80}
+                  />
+                ) : (
+                  <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                    {industryOther || "—"}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Company Size */}
+            <div className="space-y-1.5">
+              <Label>Company Size</Label>
+              {isEditingOrg ? (
+                <Select value={companySize} onValueChange={setCompanySize}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select company size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1-10">1 – 10 (Solo / micro team)</SelectItem>
+                    <SelectItem value="11-50">11 – 50 (Small team)</SelectItem>
+                    <SelectItem value="51-200">51 – 200 (Growing team)</SelectItem>
+                    <SelectItem value="201-1000">201 – 1,000 (Mid-size)</SelectItem>
+                    <SelectItem value="1001-5000">1,001 – 5,000 (Large)</SelectItem>
+                    <SelectItem value="5001-10000">5,001 – 10,000 (Very large)</SelectItem>
+                    <SelectItem value="10000+">10,000+ (Global enterprise)</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {companySize || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Website */}
+            <div className="space-y-1.5">
+              <Label htmlFor="website">Website URL</Label>
+              {isEditingOrg ? (
+                <Input
+                  id="website"
+                  type="url"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="www.company.com"
+                />
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {website || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Country of Incorporation */}
+            <div className="space-y-1.5">
+              <Label htmlFor="incorporationCountry">Country of Incorporation</Label>
+              {isEditingOrg ? (
+                <Input
+                  id="incorporationCountry"
+                  value={incorporationCountry}
+                  onChange={(e) => setIncorporationCountry(e.target.value)}
+                  placeholder="e.g. India, United Kingdom"
+                  maxLength={80}
+                />
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {incorporationCountry || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Certification of Incorporation */}
+            <div className="space-y-1.5">
+              <Label>Certification of Incorporation</Label>
+              {isEditingOrg ? (
+                <div>
+                  <input
+                    ref={incorporationFileInputRef}
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={handleIncorporationFile}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => incorporationFileInputRef.current?.click()}
+                    className="w-full flex items-center gap-3 rounded-xl border-2 border-dashed border-beige-300 hover:border-beige-400 bg-white px-4 py-3 transition-colors"
+                  >
+                    {incorporationFile ? (
+                      <>
+                        <Check className="w-4 h-4 text-teal-500 shrink-0" />
+                        <span className="text-xs font-medium text-teal-700 truncate">
+                          {incorporationFile.name}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-brown-700">
+                        Click to upload PDF (max 10MB)
+                      </span>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {incorporationFile?.name || "—"}
                 </div>
               )}
             </div>
