@@ -36,6 +36,7 @@ interface Props {
   cooldown: number;
   phoneVerified: boolean;
   phoneOtpLoading: boolean;
+  phoneOtpDevHint?: string;
   adminEmail: string;
   setAdminEmail: (v: string) => void;
   initialAdminEmail: string;
@@ -45,6 +46,7 @@ interface Props {
   emailCooldown: number;
   emailVerified: boolean;
   emailOtpLoading: boolean;
+  emailOtpDevHint?: string;
   error: string;
   onSendOTP: () => void;
   onVerifyOTP: () => void;
@@ -69,6 +71,7 @@ export function Step3Security({
   cooldown,
   phoneVerified,
   phoneOtpLoading,
+  phoneOtpDevHint = "",
   adminEmail,
   setAdminEmail,
   initialAdminEmail,
@@ -78,6 +81,7 @@ export function Step3Security({
   emailCooldown,
   emailVerified,
   emailOtpLoading,
+  emailOtpDevHint = "",
   error,
   onSendOTP,
   onVerifyOTP,
@@ -295,10 +299,17 @@ export function Step3Security({
 
             {otpSent && !phoneVerified && (
               <div className="space-y-3 p-3 rounded-xl bg-teal-50/60 border border-teal-100">
-                <p className="text-xs text-teal-700">
-                  A 6-digit code was sent to <strong>{phone}</strong>. Valid for
-                  5 minutes.
-                </p>
+                {phoneOtpDevHint ? (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-900 leading-relaxed font-medium">{phoneOtpDevHint}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-teal-700">
+                    A 6-digit code was sent to <strong>{phone}</strong>. Valid for
+                    5 minutes.
+                  </p>
+                )}
                 <div className="flex gap-2 items-center">
                   <Input
                     id="enterprise-otp"
@@ -412,10 +423,17 @@ export function Step3Security({
 
             {emailOtpSent && !emailVerified && (
               <div className="space-y-3 p-3 rounded-xl bg-teal-50/60 border border-teal-100">
-                <p className="text-xs text-teal-700">
-                  A 6-digit code was sent to <strong>{adminEmail}</strong>.
-                  Valid for 5 minutes.
-                </p>
+                {emailOtpDevHint ? (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-900 leading-relaxed font-medium">{emailOtpDevHint}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-teal-700">
+                    A 6-digit code was sent to <strong>{adminEmail}</strong>.
+                    Valid for 5 minutes.
+                  </p>
+                )}
                 <div className="flex gap-2 items-center">
                   <Input
                     id="enterprise-email-otp"

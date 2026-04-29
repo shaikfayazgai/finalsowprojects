@@ -82,11 +82,14 @@ interface Props {
   otp: string;           setOtp: (v: string) => void;
   cooldown: number;
   phoneVerified: boolean; phoneOtpLoading: boolean;
+  /** Local dev only: shown when SMS gateway is skipped or fails. */
+  phoneOtpDevHint?: string;
   verificationEmail: string; setVerificationEmail: (v: string) => void;
   emailOtpSent: boolean;
   emailOtp: string;      setEmailOtp: (v: string) => void;
   emailCooldown: number;
   emailVerified: boolean; emailOtpLoading: boolean;
+  emailOtpDevHint?: string;
   ndaAccepted: boolean;  setNdaAccepted: (v: boolean) => void;
   ndaSignature: string;  setNdaSignature: (v: string) => void;
   ndaSignedFile: File | null; setNdaSignedFile: (v: File | null) => void;
@@ -101,9 +104,12 @@ export function Step3Verification({
   registrationEmail, setEmail,
   phoneCountry, setPhoneCountry, phone, setPhone,
   otpSent, otp, setOtp, cooldown, phoneVerified, phoneOtpLoading,
+  phoneOtpDevHint = "",
   verificationEmail, setVerificationEmail,
   emailOtpSent, emailOtp, setEmailOtp, emailCooldown, emailVerified, emailOtpLoading,
+  emailOtpDevHint = "",
   ndaAccepted, setNdaAccepted,
+  ndaSignature, setNdaSignature,
   ndaSignedFile, setNdaSignedFile,
   error,
   onSendOTP, onVerifyOTP, onSendEmailOTP, onVerifyEmailOTP,
@@ -278,7 +284,14 @@ export function Step3Verification({
 
             {otpSent && !phoneVerified && (
               <div className="p-3 rounded-lg bg-teal-50 border border-teal-100 space-y-2.5">
-                <p className="text-xs text-teal-700">Code sent to <strong>{phone}</strong> · valid 5 min</p>
+                {phoneOtpDevHint ? (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-900 leading-relaxed font-medium">{phoneOtpDevHint}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-teal-700">Code sent to <strong>{phone}</strong> · valid 5 min</p>
+                )}
                 <div className="flex gap-2">
                   <Input id="phone-otp" type="text" inputMode="numeric" maxLength={6} placeholder="6-digit code"
                     className="text-center tracking-[0.5em] font-mono flex-1" value={otp}
@@ -335,7 +348,14 @@ export function Step3Verification({
 
             {emailOtpSent && !emailVerified && (
               <div className="p-3 rounded-lg bg-teal-50 border border-teal-100 space-y-2.5">
-                <p className="text-xs text-teal-700">Code sent to <strong>{verificationEmail}</strong> · valid 5 min</p>
+                {emailOtpDevHint ? (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-900 leading-relaxed font-medium">{emailOtpDevHint}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-teal-700">Code sent to <strong>{verificationEmail}</strong> · valid 5 min</p>
+                )}
                 <div className="flex gap-2">
                   <Input id="email-otp" type="text" inputMode="numeric" maxLength={6} placeholder="6-digit code"
                     className="text-center tracking-[0.5em] font-mono flex-1" value={emailOtp}

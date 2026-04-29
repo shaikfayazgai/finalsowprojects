@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import type { ModuleConfig } from "@/lib/config/navigation";
 import { mockPlans, mockTeams } from "@/mocks/data/enterprise-projects";
 import { mockSOWs } from "@/mocks/data/enterprise-sow";
@@ -103,6 +103,20 @@ export function TopBar({ config }: TopBarProps) {
       .join("")
       .slice(0, 2)
       .toUpperCase();
+
+  const [profilePhoto, setProfilePhoto] = React.useState<string | null>(null);
+
+React.useEffect(() => {
+  const loadPhoto = () => {
+    const saved = localStorage.getItem("profilePhoto");
+    if (saved) setProfilePhoto(saved);
+  };
+
+  loadPhoto();
+
+  window.addEventListener("profilePhotoUpdated", loadPhoto);
+  return () => window.removeEventListener("profilePhotoUpdated", loadPhoto);
+}, []);
 
   const breadcrumbs = React.useMemo(() => {
     const allSegments = pathname.split("/").filter(Boolean);
@@ -191,44 +205,69 @@ export function TopBar({ config }: TopBarProps) {
 
 
           {/* Avatar */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button suppressHydrationWarning className="rounded-full focus:outline-none focus:ring-2 focus:ring-gold-200/40 focus:ring-offset-1">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer text-white text-xs font-semibold transition-shadow"
-                  style={{
-                    background: "linear-gradient(135deg, #A67763, #D0B060)",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-                  }}
-                >
-                  {userInitials}
-                </div>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-84" style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.08)" }}>
-              <DropdownMenuLabel>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-semibold"
-                    style={{ background: "linear-gradient(135deg, #5B9BA2, #4D5741)" }}>{userInitials}</div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{userName}</p>
-                    <p className="text-xs text-gray-500 lowercase">{userEmail}</p>
-                  </div>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push(config.basePath + "/settings")}><Settings className="w-4 h-4" /> <span>Settings</span></DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-[var(--danger)] focus:text-[var(--danger-hover)] focus:bg-[var(--danger-light)]"
-                onClick={() => signOut({ callbackUrl: "/auth/login" })}
-              >
-                <LogOut className="w-4 h-4" /> <span>Log out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+{/* Avatar */}
+<DropdownMenu>
+  <DropdownMenuTrigger asChild>
+    <button
+      suppressHydrationWarning
+      className="rounded-full focus:outline-none focus:ring-2 focus:ring-gold-200/40 focus:ring-offset-1"
+    >
+      <Avatar size="sm">
+        <AvatarImage src={profilePhoto || ""} alt="User avatar" />
+        <AvatarFallback>
+          {userInitials}
+        </AvatarFallback>
+      </Avatar>
+    </button>
+  </DropdownMenuTrigger>
+
+  <DropdownMenuContent
+    align="end"
+    className="w-84"
+    style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.08)" }}
+  >
+    <DropdownMenuLabel>
+      <div className="flex items-center gap-3">
+        <Avatar size="md">
+          <AvatarImage src={profilePhoto || ""} alt="User avatar" />
+          <AvatarFallback>
+            {userInitials}
+          </AvatarFallback>
+        </Avatar>
+
+        <div>
+          <p className="text-sm font-semibold text-gray-900">
+            {userName}
+          </p>
+          <p className="text-xs text-gray-500 lowercase">
+            {userEmail}
+          </p>
         </div>
       </div>
+    </DropdownMenuLabel>
+
+    <DropdownMenuSeparator />
+
+    <DropdownMenuItem
+      onClick={() => router.push(config.basePath + "/settings")}
+    >
+      <Settings className="w-4 h-4" />
+      <span>Settings</span>
+    </DropdownMenuItem>
+
+    <DropdownMenuSeparator />
+
+    <DropdownMenuItem
+      className="text-[var(--danger)] focus:text-[var(--danger-hover)] focus:bg-[var(--danger-light)]"
+      onClick={() => signOut({ callbackUrl: "/auth/login" })}
+    >
+      <LogOut className="w-4 h-4" />
+      <span>Log out</span>
+    </DropdownMenuItem>
+  </DropdownMenuContent>
+</DropdownMenu>
+        </div> {/* right section */}
+      </div> {/* main container */}
     </header>
   );
 }

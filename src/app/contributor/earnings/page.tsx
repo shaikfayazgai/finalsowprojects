@@ -26,6 +26,7 @@ import {
   type EarningsSummary, type ChartPeriod, type EarningsListParams, type PayoutPreferences,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Helpers ═══ */
 
@@ -135,7 +136,7 @@ function buildFallbackChartData(): ChartPoint[] {
 
 function EarningsChart() {
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
   const [period, setPeriod] = React.useState<"3m" | "6m" | "1y">("6m");
   const [retryCount, setRetryCount] = React.useState(0);
   const [hoveredIdx, setHoveredIdx] = React.useState<number | null>(null);
@@ -331,7 +332,7 @@ const SUMMARY_FALLBACK: EarningsSummary = {
 
 export default function EarningsPage() {
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
 
   const [summary, setSummary] = React.useState<EarningsSummary>(SUMMARY_FALLBACK);
   const [summaryLoading, setSummaryLoading] = React.useState(true);

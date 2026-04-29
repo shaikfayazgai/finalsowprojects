@@ -50,25 +50,49 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Backend now signals first-login force-change via user.requiresPasswordChange === true
+    // (no longer a 403). Frontend will then call /auth/login to get a token and redirect to
+    // the change-password page.
+    const requiresPasswordChange =
+      userObj.requiresPasswordChange === true ||
+      (userObj as { requires_password_change?: boolean }).requires_password_change === true;
+    if (requiresPasswordChange) {
+      return NextResponse.json({
+        ok: true,
+        passwordChangeRequired: true,
+        redirectTo: "/auth/change-password",
+      });
+    }
+
     return NextResponse.json({ ok: true, role });
   } catch (err) {
     if (err instanceof ApiError) {
-      // Backend gates login on phone-based SMS 2FA with a 403 carrying a
-      // JSON body like {"code":"MOBILE_2FA_REQUIRED","message":"…"}. Parse it
-      // and surface a dedicated code so the login page can route the user
-      // to phone verification instead of showing a generic 500.
+      // Backend signals special 403s with a structured detail body
+      // (e.g. MOBILE_2FA_REQUIRED or ACCOUNT_DISABLED). Surface the code
+      // so the login page can route appropriately.
       if (err.status === 403) {
-        let code = "FORBIDDEN";
-        let message = err.message;
-        try {
-          const parsed = JSON.parse(err.message);
-          if (typeof parsed?.code === "string") code = parsed.code;
-          if (typeof parsed?.message === "string") message = parsed.message;
-        } catch {
-          /* message wasn't JSON — fall back to the raw string */
+        let detail: { code?: string; message?: string } | undefined;
+        const bodyDetail = (err.body as { detail?: typeof detail } | undefined)?.detail;
+        if (bodyDetail) {
+          detail = bodyDetail;
+        } else {
+          try {
+            const parsed = JSON.parse(err.message);
+            if (parsed && typeof parsed === "object") {
+              detail = {
+                code: typeof parsed.code === "string" ? parsed.code : undefined,
+                message: typeof parsed.message === "string" ? parsed.message : undefined,
+              };
+            }
+          } catch {
+            /* not JSON — leave detail undefined */
+          }
         }
+        const code = detail?.code ?? "FORBIDDEN";
+        const message = detail?.message ?? err.message;
         return NextResponse.json({ ok: false, error: code, message });
       }
+
 
       if (err.status === 401 || err.status === 404) {
         const isNotFound =

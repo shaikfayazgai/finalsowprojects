@@ -1770,6 +1770,23 @@ export async function fetchSupportTicketDetail(
   );
 }
 
+export type SupportTicketStatus = "open" | "in_progress" | "resolved" | "closed";
+
+export async function updateSupportTicketStatus(
+  token: string,
+  ticketId: string,
+  status: SupportTicketStatus,
+): Promise<SupportTicketDetail> {
+  return apiCall<SupportTicketDetail>(
+    `/api/contributor/support/tickets/${encodeURIComponent(ticketId)}`,
+    {
+      method: "PATCH",
+      token,
+      body: JSON.stringify({ status }),
+    },
+  );
+}
+
 export interface PostTicketMessagePayload {
   message: string;
   attachment_ids?: string[];

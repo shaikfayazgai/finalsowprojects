@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -15,6 +16,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils/cn";
 import { useSidebarStore } from "@/lib/stores/sidebar-store";
 import { useSowBadges, useSowAlerts, type SOWAlert } from "@/lib/hooks/use-sow-badges";
@@ -48,6 +50,22 @@ export function Sidebar({ config }: SidebarProps) {
   const userEmail = session?.user?.email || "";
   const userInitials = (session?.user as any)?.initials || userName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
   const dynamicBadges = useSowBadges();
+
+  const [profilePhoto, setProfilePhoto] = React.useState<string | null>(null);
+
+React.useEffect(() => {
+  const loadPhoto = () => {
+    const saved = localStorage.getItem("profilePhoto");
+    if (saved) setProfilePhoto(saved);
+  };
+
+  loadPhoto();
+  window.addEventListener("profilePhotoUpdated", loadPhoto);
+
+  return () => {
+    window.removeEventListener("profilePhotoUpdated", loadPhoto);
+  };
+}, []);
 
   const alertMap = useSowAlerts();
   const [openAlertHref, setOpenAlertHref] = React.useState<string | null>(null);
@@ -397,12 +415,14 @@ export function Sidebar({ config }: SidebarProps) {
                       isCollapsed && "justify-center px-0"
                     )}
                   >
-                    <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white text-[10px] font-semibold"
-                      style={{ background: "linear-gradient(135deg, #A67763, #D0B060)" }}
-                    >
-                      {userInitials}
-                    </div>
+                    <Avatar className="w-7 h-7">
+  {profilePhoto && (
+    <AvatarImage src={profilePhoto} alt="User avatar" />
+  )}
+  <AvatarFallback>
+    {userInitials}
+  </AvatarFallback>
+</Avatar>
                     <AnimatePresence>
                       {!isCollapsed && (
                         <motion.div
@@ -456,12 +476,14 @@ export function Sidebar({ config }: SidebarProps) {
               <DropdownMenuSeparator />
               <DropdownMenuLabel>
                 <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-semibold"
-                    style={{ background: "linear-gradient(135deg, #A67763, #D0B060)" }}
-                  >
-                    {userInitials}
-                  </div>
+                  <Avatar className="w-10 h-10">
+  {profilePhoto && (
+    <AvatarImage src={profilePhoto} alt="User avatar" />
+  )}
+  <AvatarFallback>
+    {userInitials}
+  </AvatarFallback>
+</Avatar>
                   <div>
                     <p className="text-sm font-semibold text-gray-800">{userName}</p>
                     <p className="text-xs text-gray-400 lowercase">{userEmail}</p>

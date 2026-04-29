@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const tpl = DEFAULT_TEMPLATES.otp_email;
 
     console.log(`[send-email OTP] Sending code to: ${email}`);
-    const { success } = await sendEmail({
+    const sendResult = await sendEmail({
       to: email,
       subject: tpl.subject,
       html: buildEmailHtml({
@@ -44,15 +44,21 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    if (!success) {
+    if (!sendResult.success) {
       // Local/dev fallback: still allow verification flow to proceed when SMTP
       // is unavailable on the machine.
       if (process.env.NODE_ENV !== "production") {
+        if (sendResult.error) {
+          console.warn(`[send-email OTP] SMTP failed (${sendResult.error}). Dev fallback for ${email}.`);
+        }
         console.warn(`[send-email OTP] SMTP unavailable. Using local fallback code for ${email}: ${code}`);
         const devRes = NextResponse.json({
           ok: true,
-          message: "Email service unavailable locally. Use OTP from server logs.",
+          message:
+            "Email could not be sent (SMTP). Use the code shown below in development, or check server logs.",
           devFallback: true,
+          /** Development only — never returned in production. */
+          devOtp: code,
         });
         devRes.cookies.set("email_otp_token", token, {
           httpOnly: true,

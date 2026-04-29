@@ -39,6 +39,7 @@ import {
   SelectItem,
 } from "@/components/ui";
 import { toast } from "@/lib/stores/toast-store";
+import { useCurrentUser } from "@/lib/hooks/use-auth";
 
 /* ─────────────────────── Password Strength ─────────────────────── */
 
@@ -100,6 +101,7 @@ const MOCK_RECOVERY_CODES = [
 export default function ProfilePage() {
   /* ── Personal Information State ── */
   const { data: session } = useSession();
+  const { data: currentUser, isLoading: isUserLoading } = useCurrentUser();
   const [firstName, setFirstName] = useState(
     session?.user?.name?.split(" ")[0] ?? "",
   );
@@ -107,11 +109,45 @@ export default function ProfilePage() {
     session?.user?.name?.split(" ")[1] ?? "",
   );
   const [displayName, setDisplayName] = useState(session?.user?.name ?? "");
-  const [email] = useState(session?.user?.email ?? "");
   const [jobTitle, setJobTitle] = useState("");
   const [phone, setPhone] = useState("");
   const [adminDept, setAdminDept] = useState("");
   const [adminDeptOther, setAdminDeptOther] = useState("");
+
+  // Derive email from API first, then session (avoids the useState-async-session trap)
+  const email = currentUser?.email ?? session?.user?.email ?? "";
+
+  // Populate fields from API response
+  useEffect(() => {
+    if (currentUser) {
+      setFirstName(currentUser.firstName ?? "");
+      setLastName(currentUser.lastName ?? "");
+      setDisplayName(`${currentUser.firstName ?? ""} ${currentUser.lastName ?? ""}`.trim());
+      setJobTitle(currentUser.role ?? "");
+      setPhone(currentUser.phone ?? "");
+    } else if (!isUserLoading && session?.user?.name) {
+      const parts = session.user.name.split(" ");
+      setFirstName(parts[0] ?? "");
+      setLastName(parts.slice(1).join(" ") ?? "");
+      setDisplayName(session.user.name);
+    }
+  }, [currentUser, isUserLoading, session?.user?.name]);
+
+  useEffect(() => {
+    const loadPhoto = () => {
+      const saved = localStorage.getItem("profilePhoto");
+      if (saved) setProfilePhoto(saved);
+    };
+
+    loadPhoto();
+
+    window.addEventListener("profilePhotoUpdated", loadPhoto);
+
+    return () => {
+      window.removeEventListener("profilePhotoUpdated", loadPhoto);
+    };
+  }, []);
+
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [displayNameCustomized, setDisplayNameCustomized] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -169,36 +205,56 @@ export default function ProfilePage() {
   /* ── Handlers ── */
 
   const handlePhotoUpload = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+  (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      if (!["image/png", "image/jpeg"].includes(file.type)) {
-        toast.error("Invalid file type", "Please upload a PNG or JPG image.");
-        return;
-      }
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error("File too large", "Maximum file size is 2MB.");
-        return;
-      }
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      toast.error("Invalid file type", "Please upload a PNG or JPG image.");
+      return;
+    }
 
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        if (img.width < 100 || img.height < 100) {
-          toast.error(
-            "Image too small",
-            "Minimum dimensions are 100x100 pixels.",
-          );
-          URL.revokeObjectURL(url);
-          return;
-        }
-        setProfilePhoto(url);
-      };
-      img.src = url;
-    },
-    [],
-  );
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("File too large", "Maximum file size is 2MB.");
+      return;
+    }
+
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      img.src = reader.result as string;
+    };
+
+    img.onload = () => {
+      const size = Math.min(img.width, img.height); // square crop
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) return;
+
+      canvas.width = 256;
+      canvas.height = 256;
+
+      // center crop
+      const sx = (img.width - size) / 2;
+      const sy = (img.height - size) / 2;
+
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, 256, 256);
+
+      const base64 = canvas.toDataURL("image/jpeg", 0.9);
+
+      setProfilePhoto(base64);
+
+      // optional persistence (safe)
+      localStorage.setItem("profilePhoto", base64);
+      window.dispatchEvent(new Event("profilePhotoUpdated"));
+    };
+
+    reader.readAsDataURL(file);
+  },
+  []
+);
 
   const handleFirstNameChange = useCallback(
     (value: string) => {

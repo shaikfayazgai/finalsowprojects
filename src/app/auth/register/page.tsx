@@ -540,7 +540,9 @@ function ContributorRegisterContent() {
       // signIn callback blocks the unregistered email and shows an error.
     }
 
-    // Map provider names to NextAuth provider IDs
+    // Map provider names to NextAuth provider IDs. NextAuth's flow redirects
+    // back to /auth/redirect (set as callbackUrl), where /auth/redirect routes
+    // new SSO users to onboarding.
     const authProvider = provider === "microsoft" ? "microsoft-entra-id" : "google";
     signIn(authProvider, { callbackUrl: "/auth/redirect" });
   };

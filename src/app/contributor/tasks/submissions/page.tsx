@@ -18,6 +18,7 @@ import {
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { ApiError } from "@/lib/api/client";
 import { toast } from "@/lib/stores/toast-store";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Badge ═══ */
 
@@ -100,7 +101,7 @@ export default function SubmissionsPage() {
   const [submitError, setSubmitError] = React.useState<string | null>(null);
 
   const tokenRef = React.useRef<string | null>(null);
-  if (session?.user?.accessToken) tokenRef.current = session.user.accessToken as string;
+  tokenRef.current = getContributorAccessToken(session);
 
   const loadRevision = React.useRef(0);
 
@@ -141,13 +142,13 @@ export default function SubmissionsPage() {
   }, []);
 
   React.useEffect(() => {
-    if (sessionStatus === "authenticated" && session?.user?.accessToken) {
-      load(session.user.accessToken as string);
+    if (sessionStatus === "authenticated") {
+      load(getContributorAccessToken(session));
     } else if (sessionStatus === "unauthenticated") {
       setLoading(false);
       setError("Not authenticated.");
     }
-  }, [sessionStatus, session?.user?.accessToken, load]);
+  }, [sessionStatus, session, load]);
 
   /* Open / reset drawer */
   function openDrawer() {
