@@ -292,14 +292,19 @@ function EarningsChart() {
                   <circle cx={p.x} cy={p.y} r={isCurrent ? 6 : hoveredIdx === i ? 5 : 3.5}
                     fill="white" stroke={isCurrent ? "var(--color-brown-500)" : hoveredIdx === i ? "var(--color-brown-400)" : "var(--color-gray-300)"}
                     strokeWidth={isCurrent ? 2.5 : 2} />
-                  {(hoveredIdx === i || isCurrent) && p.value > 0 && (
+                  {(hoveredIdx === i || isCurrent) && p.value > 0 && (() => {
+                    const tooltipAbove = p.y - 30 >= PT;
+                    const rectY = tooltipAbove ? p.y - 30 : p.y + 8;
+                    const textY = tooltipAbove ? p.y - 15.5 : p.y + 23.5;
+                    return (
                     <>
-                      <rect x={p.x - 32} y={p.y - 30} width={64} height={22} rx={6} fill={isCurrent ? "var(--color-brown-600)" : "var(--color-gray-700)"} />
-                      <text x={p.x} y={p.y - 15.5} textAnchor="middle" fill="white" style={{ fontSize: 11, fontWeight: 600, fontFamily: "var(--font-mono, monospace)" }}>
+                      <rect x={p.x - 32} y={rectY} width={64} height={22} rx={6} fill={isCurrent ? "var(--color-brown-600)" : "var(--color-gray-700)"} />
+                      <text x={p.x} y={textY} textAnchor="middle" fill="white" style={{ fontSize: 11, fontWeight: 600, fontFamily: "var(--font-mono, monospace)" }}>
                         ${p.value.toLocaleString()}
                       </text>
                     </>
-                  )}
+                    );
+                  })()}
                   <text x={p.x} y={H - 10} textAnchor="middle" className={isCurrent ? "fill-brown-600" : "fill-gray-400"} style={{ fontSize: 11, fontWeight: isCurrent ? 600 : 500 }}>
                     {p.label}
                   </text>

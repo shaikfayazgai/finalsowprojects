@@ -55,13 +55,21 @@ function getFriendlyLabel(segment: string, _prev: string[]): string | null {
 
 function NotificationBell() {
   const { notifications } = useNotificationStore();
+  const { data: session } = useSession();
   const unread = notifications.filter((n) => !n.read);
   const hasHigh = unread.some((n) => n.severity === "high");
   const badgeColor = hasHigh ? "bg-red-500" : "bg-gold-500";
 
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const notificationsHref =
+    role === "contributor" ? "/contributor/notifications"
+    : role === "mentor"     ? "/mentor/notifications"
+    : role === "admin"      ? "/admin/notifications"
+    : "/enterprise/notifications";
+
   return (
     <Link
-      href="/enterprise/notifications"
+      href={notificationsHref}
       className="relative flex items-center justify-center w-8 h-8 rounded-full text-gray-500 bg-white/50 border border-white/30 hover:bg-white/70 transition-all"
       aria-label={`Notifications, ${unread.length} unread`}
       suppressHydrationWarning
