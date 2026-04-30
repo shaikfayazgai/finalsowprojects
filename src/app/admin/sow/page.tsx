@@ -6,12 +6,11 @@ import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
   FileText, Search, Clock, CheckCircle2, AlertTriangle,
-  DollarSign, ShieldAlert, ArrowUp, ArrowDown, ChevronRight,
-  Building2, Eye, TrendingUp, ArrowUpDown, Sparkles, Upload, Lock, RefreshCw,
+  ShieldAlert, ArrowUp, ArrowDown, ChevronRight, ChevronLeft,
+  Building2, Eye, ArrowUpDown, Sparkles, Upload, Lock, RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
-import { useAdminManualSOWList } from "@/lib/hooks/use-manual-sow";
 import { useAdminSowList } from "@/lib/hooks/use-sow-wizard";
 import type { SOW, SOWApprovalStage } from "@/types/enterprise";
 
@@ -101,12 +100,6 @@ function normaliseToSOW(item: Record<string, unknown>, mode: "ai_generated" | "m
 
 /* ════════════════════════ Helpers ════════════════════════ */
 
-function fmtBudget(n: number) {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)     return `$${Math.round(n / 1_000)}K`;
-  return n > 0 ? `$${n}` : "—";
-}
-
 function fmtDate(iso: string) {
   const d = new Date(iso);
   const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -155,7 +148,7 @@ const STATUS: Record<string, { label: string; bg: string; text: string; dot: str
 
 const STAGE_LABELS = ["Business", "Commercial", "Legal", "Security", "Final"];
 
-type SortField = "title" | "client" | "budget" | "updated" | "risk" | "status";
+type SortField = "title" | "client" | "updated" | "risk" | "status";
 type SortDir   = "asc" | "desc";
 type TabId     = "all" | "approval" | "approved" | "changes" | "draft";
 
@@ -304,11 +297,13 @@ function StatCard({
 /* ════════════════════════ Page ════════════════════════ */
 
 export default function AdminSOWOversightPage() {
+  const PAGE_SIZE = 10;
   const [mounted, setMounted]     = React.useState(false);
   const [tab, setTab]             = React.useState<TabId>("all");
   const [search, setSearch]       = React.useState("");
   const [sortField, setSortField] = React.useState<SortField>("updated");
   const [sortDir, setSortDir]     = React.useState<SortDir>("desc");
+  const [page, setPage]           = React.useState(1);
   const searchRef = React.useRef<HTMLInputElement>(null);
 
   // ── Session & Role Check ──
@@ -318,24 +313,18 @@ export default function AdminSOWOversightPage() {
   const isSessionLoading = status === "loading";
   const isAuthenticated = status === "authenticated";
 
-  /* ── API: manual + AI SOW lists (admin scope — enterprise service token) ── */
-  const { data: manualSowListRes, isLoading: manualLoading, isError: manualError } = useAdminManualSOWList();
-  const { data: aiSowListRes,     isLoading: aiLoading, isError: aiError     } = useAdminSowList();
-  const isLoading = manualLoading || aiLoading;
-  const hasError = manualError || aiError;
+  /* ── API: all enterprise SOWs via admin endpoint ── */
+  const { data: sowListRes, isLoading, isError: hasError } = useAdminSowList();
 
-  const manualSows = React.useMemo(
-    () => extractList(manualSowListRes).map((item) => normaliseToSOW(item, "manual_upload")),
-    [manualSowListRes],
+  const sows: SOW[] = React.useMemo(
+    () => extractList(sowListRes).map((item) => {
+      const mode = item.intake_mode === "manual_upload" || item.intakeMode === "manual_upload"
+        ? "manual_upload" as const
+        : "ai_generated" as const;
+      return normaliseToSOW(item, mode);
+    }),
+    [sowListRes],
   );
-  const aiSows = React.useMemo(
-    () => extractList(aiSowListRes).map((item) => normaliseToSOW(item, "ai_generated")),
-    [aiSowListRes],
-  );
-
-  /* Merge AI + manual SOWs from API (no mock fallback) */
-  const apiCombined = React.useMemo(() => [...aiSows, ...manualSows], [aiSows, manualSows]);
-  const sows: SOW[] = apiCombined;
 
   React.useEffect(() => {
     setMounted(true);
@@ -349,6 +338,7 @@ export default function AdminSOWOversightPage() {
   function toggleSort(f: SortField) {
     if (sortField === f) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortField(f); setSortDir("desc"); }
+    setPage(1);
   }
 
   /* ── Derived lists ── */
@@ -359,6 +349,7 @@ export default function AdminSOWOversightPage() {
   const pendingComm  = sows.filter(needsCommercialReview);
 
   const base = React.useMemo(() => {
+    setPage(1);
     if (tab === "approval") return approvalList;
     if (tab === "approved") return approvedList;
     if (tab === "changes")  return changesList;
@@ -381,19 +372,20 @@ export default function AdminSOWOversightPage() {
     let cmp = 0;
     if (sortField === "title")   cmp = a.title.localeCompare(b.title);
     if (sortField === "client")  cmp = a.client.localeCompare(b.client);
-    if (sortField === "budget")  cmp = a.estimatedBudget - b.estimatedBudget;
     if (sortField === "updated") cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
     if (sortField === "risk")    cmp = a.riskScore.overall - b.riskScore.overall;
     if (sortField === "status")  cmp = a.status.localeCompare(b.status);
     return sortDir === "asc" ? cmp : -cmp;
   }), [filtered, sortField, sortDir]);
 
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const paginated  = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const tabCounts: Record<TabId, number> = {
     all: sows.length, approval: approvalList.length,
     approved: approvedList.length, changes: changesList.length, draft: draftList.length,
   };
 
-  const totalValue = approvedList.reduce((a, s) => a + s.estimatedBudget, 0);
   const avgRisk    = sows.length
     ? Math.round(sows.reduce((a, s) => a + s.riskScore.overall, 0) / sows.length) : 0;
 
@@ -503,7 +495,7 @@ export default function AdminSOWOversightPage() {
         <StatCard
           label="Approved"
           value={String(approvedList.length)}
-          sub={`${fmtBudget(totalValue)} total contract value`}
+          sub={`${approvedList.length} of ${sows.length} SOWs approved`}
           icon={CheckCircle2}
           iconBg="bg-forest-50"
           iconColor="text-forest-600"
@@ -577,22 +569,19 @@ export default function AdminSOWOversightPage() {
         {/* Table body */}
         {sorted.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1080px]">
+            <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="border-b border-beige-50 bg-beige-50/40">
-                  <th className="text-left px-5 py-3 w-[30%]">
+                  <th className="text-left px-5 py-3 w-[32%]">
                     <SortHeader field="title"   label="Statement of Work" current={sortField} dir={sortDir} onSort={toggleSort} />
                   </th>
-                  <th className="text-left px-4 py-3 w-[13%]">
+                  <th className="text-left px-4 py-3 w-[15%]">
                     <SortHeader field="client"  label="Client"            current={sortField} dir={sortDir} onSort={toggleSort} />
                   </th>
-                  <th className="text-left px-4 py-3 w-[13%]">
+                  <th className="text-left px-4 py-3 w-[15%]">
                     <SortHeader field="status"  label="Status"            current={sortField} dir={sortDir} onSort={toggleSort} />
                   </th>
-                  <th className="text-left px-4 py-3 w-[10%]">
-                    <SortHeader field="budget"  label="Value"             current={sortField} dir={sortDir} onSort={toggleSort} />
-                  </th>
-                  <th className="text-left px-4 py-3 w-[10%]">
+                  <th className="text-left px-4 py-3 w-[12%]">
                     <SortHeader field="updated" label="Updated"           current={sortField} dir={sortDir} onSort={toggleSort} />
                   </th>
                   <th className="text-left px-4 py-3 w-[13%]">
@@ -601,11 +590,11 @@ export default function AdminSOWOversightPage() {
                   <th className="text-left px-4 py-3 w-[8%]">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-beige-400">Stage</span>
                   </th>
-                  <th className="px-4 py-3 w-[9%]" />
+                  <th className="px-4 py-3 w-[5%]" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-beige-50">
-                {sorted.map((sow) => {
+                {paginated.map((sow) => {
                   const sc       = STATUS[sow.status] ?? STATUS.draft;
                   const isComm   = needsCommercialReview(sow);
                   const allDone  = sow.approvalStages.every(s => s.status === "approved");
@@ -701,19 +690,6 @@ export default function AdminSOWOversightPage() {
                         )}
                       </td>
 
-                      {/* Budget */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1">
-                          <DollarSign className="w-3 h-3 text-beige-300 shrink-0" />
-                          <span className="text-[13px] font-bold text-brown-950 tabular-nums">
-                            {fmtBudget(sow.estimatedBudget)}
-                          </span>
-                        </div>
-                        {sow.estimatedDuration && (
-                          <p className="text-[10px] text-beige-400 mt-0.5 pl-4">{sow.estimatedDuration}</p>
-                        )}
-                      </td>
-
                       {/* Updated */}
                       <td className="px-4 py-4">
                         <p className="text-[12px] text-brown-700">{fmtDate(sow.updatedAt)}</p>
@@ -782,40 +758,42 @@ export default function AdminSOWOversightPage() {
           </div>
         )}
 
-        {/* Footer */}
+        {/* Pagination */}
         {sorted.length > 0 && (
-          <div className="flex items-center gap-4 px-5 py-2.5 border-t border-beige-100 bg-beige-50/40">
-            {/* Count */}
-            <div className="flex items-center gap-1.5 text-[11px] text-beige-500 shrink-0">
-              <TrendingUp className="w-3 h-3 shrink-0" />
-              <span className="tabular-nums font-semibold text-brown-700">{sorted.length}</span>
-              <span>SOW{sorted.length !== 1 ? "s" : ""}{search.trim().length >= 2 ? ` matching "${search}"` : ""}</span>
-            </div>
-
-            {/* Dividers + tab breakdown */}
-            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto">
-              {([
-                { label: "In Approval", count: approvalList.length, color: "text-gold-600 bg-gold-50 border-gold-100" },
-                { label: "Approved",    count: approvedList.length, color: "text-forest-700 bg-forest-50 border-forest-100" },
-                { label: "Changes",     count: changesList.length,  color: "text-amber-700 bg-amber-50 border-amber-100" },
-                { label: "Draft",       count: draftList.length,    color: "text-gray-500 bg-gray-100 border-gray-200" },
-              ] as const).filter(item => item.count > 0).map(item => (
-                <span key={item.label} className={cn("inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md border whitespace-nowrap shrink-0", item.color)}>
-                  {item.label} <span className="tabular-nums">{item.count}</span>
-                </span>
-              ))}
-            </div>
-
-            {/* Pending action */}
-            {pendingComm.length > 0 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-beige-100 bg-beige-50/40">
+            <p className="text-[11px] text-beige-500">
+              Showing <span className="font-semibold text-brown-700">{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)}</span> of <span className="font-semibold text-brown-700">{sorted.length}</span> SOWs
+            </p>
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => setTab("approval")}
-                className="shrink-0 flex items-center gap-1.5 text-[11px] font-semibold text-gold-700 bg-gold-50 hover:bg-gold-100 border border-gold-200 px-3 py-1 rounded-lg transition-all"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border border-beige-200 text-brown-600 hover:bg-beige-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                <Clock className="w-3 h-3" />
-                {pendingComm.length} pending sign-off
+                <ChevronLeft className="w-3 h-3" /> Prev
               </button>
-            )}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={cn(
+                    "w-7 h-7 text-[11px] font-semibold rounded-lg transition-colors",
+                    p === page
+                      ? "bg-brown-950 text-white"
+                      : "text-brown-600 hover:bg-beige-100 border border-beige-200",
+                  )}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border border-beige-200 text-brown-600 hover:bg-beige-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         )}
       </motion.div>
