@@ -9,6 +9,7 @@ import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { SectionNavigator } from "@/components/enterprise/sow/SectionNavigator";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import type { CommercialSectionKey } from "@/types/enterprise";
+import { validateSection as validateSectionData } from "@/lib/validations/sow-upload-details";
 import {
   useSaveCommercialSection,
   useValidateCommercialSection,
@@ -73,9 +74,9 @@ function normalizeSectionData(
   if (section === "governance") {
     return {
       ...data,
-      nonDiscriminationConfirmed: Boolean(data.nonDiscriminationConfirmed),
-      dataSensitivityLevel: String(data.dataSensitivityLevel ?? ""),
-      personalDataInvolved: boolToYesNo(data.personalDataInvolved),
+      nonDiscriminationConfirmed: data.nonDiscriminationConfirmed === true,
+      dataSensitivityLevel: data.dataSensitivityLevel ?? "",
+      personalDataInvolved: data.personalDataInvolved === true ? "yes" : (data.personalDataInvolved ?? ""),
     };
   }
   if (section === "commercialLegal") {
@@ -85,6 +86,13 @@ function normalizeSectionData(
       sourceCodeOwnership:   allowedOrUndefined(data.sourceCodeOwnership,   ["client_hosts", "glimmora_hosts_transfer", "client_provides_day_one"]),
       thirdPartyCosts:       allowedOrUndefined(data.thirdPartyCosts,       ["client_pays", "glimmora_absorbs", "split"]),
       changeRequestProcess:  allowedOrUndefined(data.changeRequestProcess,  ["formal_cr", "threshold_cr", "time_and_materials"]),
+    };
+  }
+  if (section === "budgetRisk") {
+    return {
+      ...data,
+      budgetMinimum: Number(data.budgetMinimum) || 0,
+      budgetMaximum: Number(data.budgetMaximum) || 0,
     };
   }
   return data;
@@ -152,20 +160,74 @@ export default function CommercialDetailsPage() {
     if (sowId) {
       const rawLegal = store.commercialDetails.commercialLegal as unknown as Record<string, unknown>;
       const sectionData = normalizeSectionData("commercialLegal", rawLegal);
-      saveSection.mutate({ section: "commercialLegal", data: sectionData });
+
+      // Validate all locally-complete sections before touching the backend.
+      // The user may have navigated back and edited a section without re-completing it,
+      // leaving invalid data in the store while the section remains "complete" locally.
+      const completedSections = SECTION_ORDER.filter(
+        (k) => k !== "commercialLegal" && store.commercialSectionStatus[k] === "complete",
+      );
+      for (const k of completedSections) {
+        const raw = store.commercialDetails[k] as unknown as Record<string, unknown>;
+        const errs = validateSectionData(k, raw);
+        if (Object.keys(errs).length > 0) {
+          const sectionLabel: Record<CommercialSectionKey, string> = {
+            businessContext: "Business Context",
+            deliveryScope: "Delivery Scope",
+            techIntegrations: "Tech & Integrations",
+            timelineTeam: "Timeline & Team",
+            budgetRisk: "Budget & Risk",
+            governance: "Governance & Compliance",
+            commercialLegal: "Commercial & Legal",
+          };
+          setGenerateError(
+            `Section "${sectionLabel[k]}" has incomplete or invalid data. Please go back and correct it before generating.`,
+          );
+          store.markSectionInProgress(k);
+          setActiveSection(k);
+          return;
+        }
+      }
+
+      // Re-save and re-mark all completed sections to recover from any silent
+      // failures during the section-by-section flow.
+      for (const k of completedSections) {
+        try {
+          const raw = store.commercialDetails[k] as unknown as Record<string, unknown>;
+          const data = normalizeSectionData(k, raw);
+          await saveSection.mutateAsync({ section: k, data });
+          await markSectionComplete.mutateAsync(k);
+        } catch {
+          // Non-fatal per section — backend may already have it marked.
+        }
+      }
+
+      // Save and mark the last section complete.
+      try {
+        await saveSection.mutateAsync({ section: "commercialLegal", data: sectionData });
+        await markSectionComplete.mutateAsync("commercialLegal");
+      } catch {
+        setGenerateError("Failed to save section. Please try again.");
+        return;
+      }
+
       validateSection.mutate({ section: "commercialLegal", data: sectionData });
-      markSectionComplete.mutate("commercialLegal");
 
       const auth = store.approvalAuthorities;
-      setApprovalAuthorities.mutate({
-        business_owner_approver: auth.businessOwnerApprover,
-        final_approver: auth.finalApprover,
-        legal_compliance_reviewer: auth.legalComplianceReviewer ?? "",
-        ...(auth.sowSubmitter ? { sow_submitter: auth.sowSubmitter } : {}),
-      });
+      try {
+        await setApprovalAuthorities.mutateAsync({
+          business_owner_approver: auth.businessOwnerApprover,
+          final_approver: auth.finalApprover,
+          ...(auth.legalComplianceReviewer ? { legal_compliance_reviewer: auth.legalComplianceReviewer } : {}),
+          ...(auth.sowSubmitter ? { sow_submitter: auth.sowSubmitter } : {}),
+        });
+      } catch {
+        setGenerateError("Failed to set approval authorities. Please try again.");
+        return;
+      }
 
       try {
-        await generateSOW.mutateAsync({ include_extracted_sections: true });
+        await generateSOW.mutateAsync();
       } catch {
         setGenerateError("Failed to generate SOW. Please try again.");
         return;

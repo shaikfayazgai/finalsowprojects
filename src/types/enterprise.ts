@@ -100,6 +100,7 @@ export interface RiskScoreBreakdown {
   compliance: number;
   patternMatch: number;
   overall: number;
+  riskLevel?: string;
 }
 
 export interface HallucinationFlag {
@@ -134,6 +135,7 @@ export interface SOW {
   riskScore: RiskScoreBreakdown;
   tags: string[];
   estimatedBudget: number;
+  estimatedBudgetMax?: number;
   estimatedDuration: string;
   planId?: string;
   stakeholders: string[];

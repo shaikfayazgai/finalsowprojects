@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils/cn";
 import { Checkbox, Textarea } from "@/components/ui";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { getSOWWizardRecord } from "@/mocks/data/sow-wizard-data";
-import { useSOWDetail, useApprovalStages, useRecordApprovalDecision } from "@/lib/hooks/use-manual-sow";
+import { useAdminSOWDetail, useApprovalStages, useRecordApprovalDecision } from "@/lib/hooks/use-manual-sow";
 import type { SOW, SOWApprovalStage, ApprovalStage, ApprovalStageStatus } from "@/types/enterprise";
 
 /* ─── Approval pipeline stage mapping (5-stage per FSD §7.7) ─── */
@@ -48,8 +48,11 @@ function normalisePipelineStages(stagesRes: unknown): SOWApprovalStage[] | null 
   if (rawStagesArr.length === 0) return null;
 
   const apiStages: SOWApprovalStage[] = rawStagesArr.map((s) => {
-    const stageNum = Number(s.stage_number ?? s.stage);
-    const stageKey: ApprovalStage = STAGE_NUM_TO_KEY[stageNum] ?? STAGE_KEYS[stageNum - 1] ?? "business";
+    const rawStageVal = s.stage ?? s.stage_number;
+    const stageKey: ApprovalStage =
+      typeof rawStageVal === "string" && (STAGE_KEYS as string[]).includes(rawStageVal)
+        ? rawStageVal as ApprovalStage
+        : STAGE_NUM_TO_KEY[Number(rawStageVal)] ?? "business";
     const rawStatus = String(s.status ?? "pending").toLowerCase();
     const status: ApprovalStageStatus =
       rawStatus === "approved" ? "approved" :
@@ -80,67 +83,167 @@ function normalisePipelineStages(stagesRes: unknown): SOWApprovalStage[] | null 
   );
 }
 
+/* ─── Recursive risk finder ──────────────────────────────────── */
+
+function findRiskInResponse(obj: unknown, depth = 0): Record<string, unknown> | null {
+  if (depth > 5 || !obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+  const o = obj as Record<string, unknown>;
+  if ("risk_score" in o && "risk_level" in o) return o;
+  if ("risk" in o && o.risk && typeof o.risk === "object" && !Array.isArray(o.risk)) {
+    const r = o.risk as Record<string, unknown>;
+    if ("risk_score" in r) return r;
+  }
+  for (const key of Object.keys(o)) {
+    if (key === "breakdown") continue;
+    const val = o[key];
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      const found = findRiskInResponse(val, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/* ─── Recursive section finder ────────────────────────────────── */
+
+function findSectionsInResponse(obj: unknown, depth = 0): Array<Record<string, unknown>> {
+  if (depth > 5 || !obj || typeof obj !== "object" || Array.isArray(obj)) return [];
+  const o = obj as Record<string, unknown>;
+  for (const key of ["sections", "parsed_sections", "sow_sections", "document_sections", "content_sections"]) {
+    const val = o[key];
+    if (Array.isArray(val) && val.length > 0) {
+      const first = val[0] as Record<string, unknown>;
+      if (first && typeof first === "object" && ("section_id" in first || "title" in first || "content" in first)) {
+        return val as Array<Record<string, unknown>>;
+      }
+    }
+  }
+  for (const key of Object.keys(o)) {
+    const val = o[key];
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      const found = findSectionsInResponse(val, depth + 1);
+      if (found.length > 0) return found;
+    }
+  }
+  return [];
+}
+
 /* ─── API normalisation (matches enterprise SOW repository) ─── */
 
-function normaliseDetailToSOW(item: Record<string, unknown>, mode: "ai_generated" | "manual_upload"): SOW {
+function normaliseDetailToSOW(item: Record<string, unknown>): SOW {
   const updatedAt = String(item.updated_at ?? item.updatedAt ?? item.created_at ?? item.createdAt ?? new Date().toISOString());
-  const gc = mode === "ai_generated" ? ((item.generated_content ?? {}) as Record<string, unknown>) : {};
 
-  const title = String(gc.document_title ?? item.title ?? item.project_title ?? item.document_title ?? "Untitled SOW");
+  /* Determine intake mode from API field */
+  const intakeModeRaw = String(item.intake_mode ?? item.intakeMode ?? "");
+  const intakeMode: "ai_generated" | "manual_upload" =
+    intakeModeRaw === "manual_upload" ? "manual_upload" : "ai_generated";
 
-  let client = String(item.client ?? item.client_organisation ?? item.clientOrganisation ?? gc.client_name ?? gc.client ?? "");
-  if (!client && mode === "ai_generated") {
-    const bizOwner = String(item.business_owner_approver_id ?? "");
-    if (bizOwner.includes(", ")) client = bizOwner.split(", ").pop()?.trim() ?? "";
+  /* Content lives under generated.content for AI flow, or top-level for manual */
+  const generated = (item.generated ?? {}) as Record<string, unknown>;
+  const genContent = (generated.content ?? item.generated_content ?? {}) as Record<string, unknown>;
+
+  const title = String(
+    genContent.document_title ?? item.title ?? item.project_title ?? item.document_title ?? "Untitled SOW"
+  );
+
+  /* Commercial details — budget lives here */
+  const cd = (item.commercial_details ?? {}) as Record<string, unknown>;
+  const budgetRisk = (cd.budgetRisk ?? cd.budget_risk ?? {}) as Record<string, unknown>;
+  const estimatedBudget = Number(
+    item.estimated_budget ?? item.estimatedBudget ??
+    budgetRisk.budgetMinimum ?? budgetRisk.budget_minimum ??
+    cd.total_budget ?? cd.totalBudget ?? 0
+  );
+  const estimatedBudgetMax = Number(
+    budgetRisk.budgetMaximum ?? budgetRisk.budget_maximum ??
+    item.estimated_budget_max ?? 0
+  ) || undefined;
+
+  /* Timeline */
+  const timelineTeam = (cd.timelineTeam ?? cd.timeline_team ?? {}) as Record<string, unknown>;
+  const fmtIso = (iso: unknown) => {
+    const d = new Date(String(iso));
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+  const estimatedDuration = (() => {
+    if (item.estimated_duration ?? item.estimatedDuration) {
+      return String(item.estimated_duration ?? item.estimatedDuration);
+    }
+    const start = timelineTeam.startDate ?? timelineTeam.start_date;
+    const end   = timelineTeam.targetEndDate ?? timelineTeam.target_end_date ?? timelineTeam.endDate;
+    if (start && end) {
+      const yr = new Date(String(end)).getFullYear();
+      return `${fmtIso(start)} – ${fmtIso(end)}, ${yr}`;
+    }
+    return "";
+  })();
+
+  /* Approval authorities — submitter and approvers */
+  const approvalAuth = (item.approval_authorities ?? {}) as Record<string, unknown>;
+  const createdBy = String(
+    item.created_by ?? item.createdBy ??
+    approvalAuth.sow_submitter ?? approvalAuth.sowSubmitter ?? ""
+  );
+
+  let client = String(
+    item.client ?? item.client_organisation ?? item.clientOrganisation ??
+    genContent.client_name ?? genContent.client ?? ""
+  );
+  if (!client) {
+    const bizOwner = String(approvalAuth.business_owner_approver ?? item.business_owner_approver_id ?? "");
+    if (bizOwner) client = bizOwner;
   }
 
   const qm = (item.quality_metrics ?? item.qualityMetrics ?? {}) as Record<string, unknown>;
-  const riskRaw = item.risk_score ?? item.riskScore ?? qm.risk_score ?? qm.riskScore;
-  let riskOverall = 0;
-  if (typeof riskRaw === "number") {
-    riskOverall = riskRaw;
-  } else if (riskRaw && typeof riskRaw === "object") {
-    riskOverall = Number((riskRaw as Record<string, unknown>).overall ?? 0);
-  } else if (mode === "ai_generated") {
-    const conf = Number(qm.overall_confidence ?? item.confidence_score ?? item.confidenceScore ?? 0);
-    riskOverall = conf > 0 ? Math.round(100 - conf) : 0;
-  }
-  riskOverall = Math.round(riskOverall);
+
+  /* Risk — read exclusively from item.risk { risk_score, risk_level, breakdown } */
+  const riskObj = (
+    item.risk && typeof item.risk === "object" && !Array.isArray(item.risk)
+      ? item.risk : {}
+  ) as Record<string, unknown>;
+  const breakdown = (
+    riskObj.breakdown && typeof riskObj.breakdown === "object"
+      ? riskObj.breakdown : {}
+  ) as Record<string, unknown>;
+
+  const riskOverall  = Math.round(Number(riskObj.risk_score ?? 0));
+  const riskLevel    = String(riskObj.risk_level ?? "");
+
+  const riskCompleteness = Math.round(Number(breakdown.completeness ?? 0));
+  const riskCompliance   = Math.round(Number(breakdown.compliance   ?? 0));
+  const riskPatternMatch = Math.round(Number(breakdown.pattern_match ?? 0));
 
   const aiConfidence = Number(qm.overall_confidence ?? item.confidence_score ?? item.confidenceScore ?? item.ai_confidence ?? 0);
 
-  /* Quality-metrics → risk breakdown (API: overall_confidence, risk_score, completeness_pct, hallucination_flags) */
-  const qmCompleteness = Math.round(Number(qm.completeness_pct ?? qm.completeness ?? 0));
-  const qmConfidence   = Math.round(Number(qm.overall_confidence ?? 0));
-  const qmHallucinationFlags = Math.max(0, Math.round(Number(qm.hallucination_flags ?? 0)));
-
-  /* Build stakeholders from approver fields + any explicit list */
+  /* Stakeholders from approval_authorities */
   const rawStakeholders = Array.isArray(item.stakeholders) ? (item.stakeholders as string[]) : [];
   const approverFields = [
-    item.business_owner_approver_id,
-    item.final_approver_id,
-    item.legal_compliance_reviewer_id,
-    item.security_reviewer_id,
+    approvalAuth.business_owner_approver ?? item.business_owner_approver_id,
+    approvalAuth.final_approver ?? item.final_approver_id,
+    approvalAuth.legal_compliance_reviewer ?? item.legal_compliance_reviewer_id,
+    approvalAuth.security_reviewer ?? item.security_reviewer_id,
   ]
     .map(v => (typeof v === "string" ? v.trim() : ""))
     .filter(Boolean);
   const stakeholders = Array.from(new Set([...approverFields, ...rawStakeholders]));
 
   return {
-    id:               String(item.id ?? item._id ?? item.sow_id ?? item.wizard_id ?? ""),
+    id:               String(item.public_id ?? item.id ?? item._id ?? item.sow_id ?? item.wizard_id ?? ""),
     title,
     client,
     status:           (String(item.status ?? "draft") as SOW["status"]),
-    intakeMode:       mode,
+    intakeMode,
     confidentiality:  (String(item.confidentiality ?? item.data_sensitivity ?? item.dataSensitivity ?? "internal") as SOW["confidentiality"]),
     dataSensitivity:  (String(item.data_sensitivity ?? item.dataSensitivity ?? "internal") as SOW["dataSensitivity"]),
-    riskScore:        { overall: riskOverall, completeness: qmCompleteness, confidence: qmConfidence, compliance: 0, patternMatch: qmHallucinationFlags },
+    riskScore:        { overall: riskOverall, riskLevel, completeness: riskCompleteness, confidence: Math.round(aiConfidence), compliance: riskCompliance, patternMatch: riskPatternMatch },
     version:          Number(item.version ?? 1),
     updatedAt,
     createdAt:        String(item.created_at ?? item.createdAt ?? updatedAt),
-    estimatedBudget:  Number(item.estimated_budget ?? item.estimatedBudget ?? 0),
-    estimatedDuration:String(item.estimated_duration ?? item.estimatedDuration ?? ""),
-    createdBy:        String(item.created_by ?? item.createdBy ?? ""),
+    estimatedBudget,
+    estimatedBudgetMax,
+    estimatedDuration,
+    createdBy,
     approvedBy:       String(item.approved_by ?? item.approvedBy ?? ""),
     approvalStages:   ((item.approval_stages ?? item.approvalStages ?? []) as SOWApprovalStage[]),
     parsedSections:   Number(item.parsed_sections ?? item.parsedSections ?? 0),
@@ -150,7 +253,7 @@ function normaliseDetailToSOW(item: Record<string, unknown>, mode: "ai_generated
     aiConfidence,
     tags:             ((item.tags ?? []) as string[]),
     stakeholders,
-    industry:         String(item.industry ?? gc.industry ?? ""),
+    industry:         String(item.industry ?? genContent.industry ?? ""),
   };
 }
 
@@ -204,11 +307,12 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function riskMeta(score: number) {
-  if (score <= 25) return { bar: "var(--color-forest-500)", text: "text-forest-700", bg: "bg-forest-50", label: "Low Risk" };
-  if (score <= 50) return { bar: "var(--color-gold-500)",   text: "text-gold-700",   bg: "bg-gold-50",   label: "Medium Risk" };
-  if (score <= 75) return { bar: "#e67e22",                 text: "text-orange-700", bg: "bg-orange-50", label: "High Risk" };
-  return           { bar: "var(--danger)",                  text: "text-red-700",    bg: "bg-red-50",    label: "Critical Risk" };
+function riskMeta(score: number, apiRiskLevel?: string) {
+  const lvl = apiRiskLevel?.toLowerCase() ?? "";
+  if (lvl === "low"      || score <= 25) return { bar: "var(--color-forest-500)", text: "text-forest-700", bg: "bg-forest-50", label: apiRiskLevel ? `${apiRiskLevel} Risk` : "Low Risk" };
+  if (lvl === "medium"   || score <= 50) return { bar: "var(--color-gold-500)",   text: "text-gold-700",   bg: "bg-gold-50",   label: apiRiskLevel ? `${apiRiskLevel} Risk` : "Medium Risk" };
+  if (lvl === "high"     || score <= 75) return { bar: "#e67e22",                 text: "text-orange-700", bg: "bg-orange-50", label: apiRiskLevel ? `${apiRiskLevel} Risk` : "High Risk" };
+  return                                        { bar: "var(--danger)",            text: "text-red-700",    bg: "bg-red-50",    label: apiRiskLevel ? `${apiRiskLevel} Risk` : "Critical Risk" };
 }
 
 const sensitivityStyle: Record<string, string> = {
@@ -491,19 +595,55 @@ export default function AdminSOWApprovePage() {
   const router = useRouter();
   const sowId  = params.sowId as string;
 
-  /* ── API: SOW detail (tries manual + AI endpoints in parallel) ── */
-  const { data: detailData, isLoading: detailLoading, flow } = useSOWDetail(sowId);
+  /* ── API: SOW detail (tries enterprise → manual → AI endpoints in priority order) ── */
+  const { data: detailData, isLoading: detailLoading } = useAdminSOWDetail(sowId);
   const apiSow = React.useMemo(
-    () => (detailData ? normaliseDetailToSOW(detailData, flow === "ai" ? "ai_generated" : "manual_upload") : null),
-    [detailData, flow],
+    () => (detailData ? normaliseDetailToSOW(detailData) : null),
+    [detailData],
   );
 
   /* ── API: Approval pipeline (polled every 15 s so new decisions appear automatically) ── */
   const { data: stagesRes } = useApprovalStages(sowId, 15000);
-  const apiApprovalStages = React.useMemo(() => normalisePipelineStages(stagesRes), [stagesRes]);
+  const apiApprovalStages = React.useMemo(() => {
+    const fromPipeline = normalisePipelineStages(stagesRes);
+    if (fromPipeline) return fromPipeline;
+    /* Fall back to approval_stages embedded in the enterprise SOW response */
+    if (detailData && Array.isArray(detailData.approval_stages)) {
+      return normalisePipelineStages({ data: detailData.approval_stages });
+    }
+    return null;
+  }, [stagesRes, detailData]);
 
   /* Record approval decision — admin approves/rejects glimmora_commercial (stage 2) */
   const recordDecision = useRecordApprovalDecision(sowId);
+
+  /* Risk — read from detailData.risk { risk_score, risk_level, breakdown } */
+  const apiRisk = React.useMemo(() => {
+    if (!detailData) return null;
+
+    /* Walk possible paths where the risk object may live */
+    const candidates: unknown[] = [
+      detailData.risk,
+      (detailData.data as Record<string, unknown> | null)?.risk,
+      (detailData.generated as Record<string, unknown> | null)?.risk,
+      (detailData.sow as Record<string, unknown> | null)?.risk,
+    ];
+
+    for (const c of candidates) {
+      if (!c || typeof c !== "object" || Array.isArray(c)) continue;
+      const r = c as Record<string, unknown>;
+      if (!("risk_score" in r)) continue;
+      const bd = (r.breakdown && typeof r.breakdown === "object" ? r.breakdown : {}) as Record<string, unknown>;
+      return {
+        score:        Math.round(Number(r.risk_score ?? 0)),
+        level:        String(r.risk_level ?? ""),
+        completeness: Math.round(Number(bd.completeness ?? 0)),
+        compliance:   Math.round(Number(bd.compliance   ?? 0)),
+        patternMatch: Math.round(Number(bd.pattern_match ?? 0)),
+      };
+    }
+    return null;
+  }, [detailData]);
 
   /* Prefer API data; fall back to mockSOWs */
   const baseSow    = apiSow ?? mockSOWs.find(s => s.id === sowId) ?? null;
@@ -511,29 +651,20 @@ export default function AdminSOWApprovePage() {
     ? { ...baseSow, approvalStages: apiApprovalStages }
     : baseSow;
 
-  /* Sections from API — check generated_content.sections (AI) and top-level sections (manual) */
+  /* Sections — recursive search through the full enterprise API response */
   const sections = React.useMemo(() => {
-    const d  = (detailData ?? {}) as Record<string, unknown>;
-    const gc = (d.generated_content ?? {}) as Record<string, unknown>;
-    const raw = (
-      (Array.isArray(gc.sections) && gc.sections) ||
-      (Array.isArray(d.sections) && d.sections) ||
-      (Array.isArray(d.parsed_sections) && d.parsed_sections) ||
-      []
-    ) as Array<Record<string, unknown>>;
-
-    if (raw.length > 0) {
-      return raw.map((sec, i) => ({
-        id:         String(sec.section_id ?? sec.id ?? `S${i + 1}`),
-        sowId:      sowId,
-        title:      String(sec.title ?? ""),
-        content:    String(sec.content ?? ""),
-        confidence: Number(sec.confidence ?? 0),
-        order:      i,
-        aiSuggestion: typeof sec.ai_suggestion === "string" ? sec.ai_suggestion : undefined,
-      }));
-    }
-    return mockSOWSections.filter(s => s.sowId === sowId).sort((a, b) => a.order - b.order);
+    if (!detailData) return [];
+    const raw = findSectionsInResponse(detailData);
+    if (raw.length === 0) return [];
+    return raw.map((sec, i) => ({
+      id:           String(sec.section_id ?? sec.id ?? `S${i + 1}`),
+      sowId:        sowId,
+      title:        String(sec.title ?? ""),
+      content:      String(sec.content ?? ""),
+      confidence:   Number(sec.confidence ?? 0),
+      order:        i,
+      aiSuggestion: typeof sec.ai_suggestion === "string" ? sec.ai_suggestion : undefined,
+    }));
   }, [detailData, sowId]);
 
   const wizardRec  = sow ? getSOWWizardRecord(sow.id, sow.intakeMode) : null;
@@ -601,9 +732,10 @@ export default function AdminSOWApprovePage() {
   }
 
   const glimmoraStage      = sow.approvalStages.find(s => s.stage === "glimmora_commercial");
+  const isGlimmoraApproved = glimmoraStage?.status === "approved";
   const isChangesRequested = glimmoraStage?.status === "rejected";
   const isFollowUp         = isChangesRequested && !!glimmoraStage?.enterpriseReply;
-  const risk               = riskMeta(sow.riskScore.overall);
+  const risk               = riskMeta(apiRisk?.score ?? sow.riskScore.overall, apiRisk?.level || sow.riskScore.riskLevel);
 
   function handleApprove() {
     /* Stage 2 = glimmora_commercial. Server advances pipeline to stage 3 on success. */
@@ -726,15 +858,23 @@ export default function AdminSOWApprovePage() {
                   <span
                     className={cn(
                       "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border",
-                      isChangesRequested
+                      isGlimmoraApproved
+                        ? "bg-forest-50 text-forest-700 border-forest-200"
+                        : isChangesRequested
                         ? "bg-amber-50 text-amber-700 border-amber-200"
                         : "bg-gold-50 text-gold-700 border-gold-200",
                     )}
                   >
-                    <Clock className="w-2.5 h-2.5" />
-                    {isChangesRequested ? "Changes Requested" : "Awaiting Commercial Review"}
+                    {isGlimmoraApproved
+                      ? <CheckCircle2 className="w-2.5 h-2.5" />
+                      : <Clock className="w-2.5 h-2.5" />}
+                    {isGlimmoraApproved
+                      ? "Commercial Approved"
+                      : isChangesRequested
+                      ? "Changes Requested"
+                      : "Awaiting Commercial Review"}
                   </span>
-                  {sow.riskScore.overall > 0 && (
+                  {(sow.riskScore.overall > 0 || !!sow.riskScore.riskLevel) && (
                     <span
                       className={cn(
                         "inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border",
@@ -748,7 +888,7 @@ export default function AdminSOWApprovePage() {
                       )}
                     >
                       <Shield className="w-2.5 h-2.5" />
-                      {risk.label}
+                      Risk {sow.riskScore.overall} · {risk.label}
                     </span>
                   )}
                   <span
@@ -802,39 +942,46 @@ export default function AdminSOWApprovePage() {
 
             {/* Right: stat tiles */}
             <div className="flex items-center gap-2 shrink-0">
-              {[
-                {
-                  icon: DollarSign,
-                  label: "Contract Value",
-                  value: formatBudget(sow.estimatedBudget),
-                  iconBg: "bg-gradient-to-br from-gold-400 to-gold-600",
-                },
-                {
-                  icon: Calendar,
-                  label: "Duration",
-                  value: sow.estimatedDuration,
-                  iconBg: "bg-gradient-to-br from-brown-400 to-brown-600",
-                },
-                {
-                  icon: Gauge,
-                  label: "AI Confidence",
-                  value: `${sow.aiConfidence}%`,
-                  iconBg: "bg-gradient-to-br from-forest-400 to-forest-600",
-                },
-              ].map(({ icon: Icon, label, value, iconBg }) => (
-                <div
-                  key={label}
-                  className="flex flex-col items-center px-4 py-3 rounded-xl bg-white/90 backdrop-blur-sm border border-beige-100 shadow-sm min-w-[96px] transition-all hover:shadow-md hover:-translate-y-0.5"
-                >
-                  <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center mb-1.5 shadow-sm", iconBg)}>
-                    <Icon className="w-3 h-3 text-white" />
-                  </div>
-                  <p className="text-[14px] font-bold text-brown-950 leading-none tabular-nums">{value || "—"}</p>
-                  <p className="text-[9px] font-bold uppercase tracking-wide text-beige-400 mt-1 text-center leading-tight">
-                    {label}
-                  </p>
+              {/* Contract Value tile */}
+              <div className="flex flex-col items-center px-4 py-3 rounded-xl bg-white/90 backdrop-blur-sm border border-beige-100 shadow-sm min-w-[100px] transition-all hover:shadow-md hover:-translate-y-0.5">
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center mb-1.5 shadow-sm bg-gradient-to-br from-gold-400 to-gold-600">
+                  <DollarSign className="w-3 h-3 text-white" />
                 </div>
-              ))}
+                {sow.estimatedBudgetMax && sow.estimatedBudgetMax !== sow.estimatedBudget ? (
+                  <p className="text-[13px] font-bold text-brown-950 leading-none tabular-nums text-center">
+                    {formatBudget(sow.estimatedBudget)}&nbsp;–&nbsp;{formatBudget(sow.estimatedBudgetMax)}
+                  </p>
+                ) : (
+                  <p className="text-[14px] font-bold text-brown-950 leading-none tabular-nums">
+                    {formatBudget(sow.estimatedBudget) || "—"}
+                  </p>
+                )}
+                <p className="text-[9px] font-bold uppercase tracking-wide text-beige-400 mt-1 text-center leading-tight">Contract Value</p>
+              </div>
+
+              {/* Duration tile */}
+              <div className="flex flex-col items-center px-4 py-3 rounded-xl bg-white/90 backdrop-blur-sm border border-beige-100 shadow-sm min-w-[96px] transition-all hover:shadow-md hover:-translate-y-0.5">
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center mb-1.5 shadow-sm bg-gradient-to-br from-brown-400 to-brown-600">
+                  <Calendar className="w-3 h-3 text-white" />
+                </div>
+                {sow.estimatedDuration ? (
+                  <p className="text-[12px] font-bold text-brown-950 leading-snug tabular-nums text-center">
+                    {sow.estimatedDuration}
+                  </p>
+                ) : (
+                  <p className="text-[13px] font-bold text-brown-950">—</p>
+                )}
+                <p className="text-[9px] font-bold uppercase tracking-wide text-beige-400 mt-1 text-center leading-tight">Duration</p>
+              </div>
+
+              {/* AI Confidence tile */}
+              <div className="flex flex-col items-center px-4 py-3 rounded-xl bg-white/90 backdrop-blur-sm border border-beige-100 shadow-sm min-w-[96px] transition-all hover:shadow-md hover:-translate-y-0.5">
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center mb-1.5 shadow-sm bg-gradient-to-br from-forest-400 to-forest-600">
+                  <Gauge className="w-3 h-3 text-white" />
+                </div>
+                <p className="text-[14px] font-bold text-brown-950 leading-none tabular-nums">{sow.aiConfidence ? `${sow.aiConfidence}%` : "—"}</p>
+                <p className="text-[9px] font-bold uppercase tracking-wide text-beige-400 mt-1 text-center leading-tight">AI Confidence</p>
+              </div>
             </div>
           </div>
         </div>
@@ -958,38 +1105,38 @@ export default function AdminSOWApprovePage() {
                   </div>
                 </div>
 
-                {/* Risk Breakdown — backed by quality_metrics from API */}
-                {sow.riskScore.overall > 0 && (
-                  <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
+                {/* Risk Score Breakdown */}
+                {apiRisk && (
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Risk Score Breakdown</p>
-                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-md", risk.bg, risk.text)}>
-                        {sow.riskScore.overall}/100 · {risk.label}
+                      <span className={cn("text-[11px] font-semibold", risk.text)}>
+                        {apiRisk.score}/100 · {risk.label}
                       </span>
                     </div>
-                    <div className="px-5 py-4 space-y-3.5">
+                    <div className="px-5 py-4 space-y-4">
                       {[
-                        { label: "Overall Confidence", value: sow.riskScore.confidence,    suffix: "%" as const },
-                        { label: "Risk Score",         value: sow.riskScore.overall,       suffix: "%" as const },
-                        { label: "Completeness",       value: sow.riskScore.completeness,  suffix: "%" as const },
-                        { label: "Hallucination Flags", value: sow.riskScore.patternMatch, suffix: ""  as const, isCount: true },
-                      ]
-                        .filter(({ value, isCount }) => (isCount ? true : value > 0))
-                        .map(({ label, value, suffix, isCount }) => {
-                          const barPct = isCount ? Math.min(100, value * 20) : value;
-                          const c = riskMeta(isCount ? Math.min(100, value * 20) : value);
-                          return (
-                            <div key={label} className="flex items-center gap-4">
-                              <span className="text-[11px] text-gray-500 w-36 shrink-0">{label}</span>
-                              <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                                <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: c.bar }} />
-                              </div>
-                              <span className="font-mono text-[11px] font-semibold w-10 text-right" style={{ color: c.bar }}>
-                                {value}{suffix}
-                              </span>
+                        { label: "Risk Score",    value: apiRisk.score,        suffix: "" },
+                        { label: "Completeness",  value: apiRisk.completeness, suffix: "%" },
+                        { label: "Compliance",    value: apiRisk.compliance,   suffix: "%" },
+                        { label: "Pattern Match", value: apiRisk.patternMatch, suffix: "%" },
+                      ].map(({ label, value, suffix }) => {
+                        const c = riskMeta(value);
+                        return (
+                          <div key={label} className="flex items-center gap-4">
+                            <span className="text-[12px] text-gray-500 w-32 shrink-0">{label}</span>
+                            <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{ width: `${Math.min(value, 100)}%`, background: c.bar }}
+                              />
                             </div>
-                          );
-                        })}
+                            <span className="font-mono text-[12px] font-semibold w-10 text-right" style={{ color: c.bar }}>
+                              {value}{suffix}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1414,28 +1561,26 @@ export default function AdminSOWApprovePage() {
                             <ReadOnlyField label="Regulatory Frameworks" wide value={<Chips items={wd.regulatoryFrameworks} color="teal" />} />
                             <ReadOnlyField label="Privacy Laws" wide value={<Chips items={wd.privacyLaws} color="blue" />} />
                             {/* Risk scores */}
-                            {sow.riskScore.overall > 0 && (
-                              <div className="space-y-3 pt-2">
+                            {apiRisk && (
+                              <div className="space-y-3 pt-2 border-t border-gray-50">
                                 <div className="flex items-center justify-between">
                                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Risk Score Breakdown</p>
-                                  <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-md", risk.bg, risk.text)}>
-                                    {sow.riskScore.overall}/100 · {risk.label}
-                                  </span>
+                                  <span className={cn("text-[11px] font-semibold", risk.text)}>{apiRisk.score}/100 · {risk.label}</span>
                                 </div>
                                 {[
-                                  { label: "Completeness", value: sow.riskScore.completeness },
-                                  { label: "Confidence", value: sow.riskScore.confidence },
-                                  { label: "Compliance", value: sow.riskScore.compliance },
-                                  { label: "Pattern Match", value: sow.riskScore.patternMatch },
-                                ].map(({ label, value }) => {
+                                  { label: "Risk Score",    value: apiRisk.score,        suffix: "" },
+                                  { label: "Completeness",  value: apiRisk.completeness, suffix: "%" },
+                                  { label: "Compliance",    value: apiRisk.compliance,   suffix: "%" },
+                                  { label: "Pattern Match", value: apiRisk.patternMatch, suffix: "%" },
+                                ].map(({ label, value, suffix }) => {
                                   const c = riskMeta(value);
                                   return (
                                     <div key={label} className="flex items-center gap-4">
                                       <span className="text-[11px] text-gray-500 w-28 shrink-0">{label}</span>
-                                      <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                                        <motion.div className="h-full rounded-full" style={{ background: c.bar }} initial={{ width: 0 }} animate={{ width: `${value}%` }} transition={{ duration: 0.5 }} />
+                                      <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                                        <motion.div className="h-full rounded-full" style={{ background: c.bar }} initial={{ width: 0 }} animate={{ width: `${Math.min(value, 100)}%` }} transition={{ duration: 0.5 }} />
                                       </div>
-                                      <span className="font-mono text-[11px] font-semibold w-7 text-right" style={{ color: c.bar }}>{value}</span>
+                                      <span className="font-mono text-[11px] font-semibold w-10 text-right" style={{ color: c.bar }}>{value}{suffix}</span>
                                     </div>
                                   );
                                 })}
@@ -1525,26 +1670,26 @@ export default function AdminSOWApprovePage() {
                                 } />
                               </div>
                               {/* Risk score */}
-                              {sow.riskScore.overall > 0 && (
+                              {apiRisk && (
                                 <div className="space-y-3 pt-1">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[10.5px] text-gray-500">Risk Score Breakdown</span>
-                                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-md", risk.bg, risk.text)}>{sow.riskScore.overall}/100 · {risk.label}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Risk Score Breakdown</span>
+                                    <span className={cn("text-[11px] font-semibold", risk.text)}>{apiRisk.score}/100 · {risk.label}</span>
                                   </div>
                                   {[
-                                    { label: "Completeness", value: sow.riskScore.completeness },
-                                    { label: "Confidence", value: sow.riskScore.confidence },
-                                    { label: "Compliance", value: sow.riskScore.compliance },
-                                    { label: "Pattern Match", value: sow.riskScore.patternMatch },
-                                  ].map(({ label, value }) => {
+                                    { label: "Risk Score",    value: apiRisk.score,        suffix: "" },
+                                    { label: "Completeness",  value: apiRisk.completeness, suffix: "%" },
+                                    { label: "Compliance",    value: apiRisk.compliance,   suffix: "%" },
+                                    { label: "Pattern Match", value: apiRisk.patternMatch, suffix: "%" },
+                                  ].map(({ label, value, suffix }) => {
                                     const c = riskMeta(value);
                                     return (
                                       <div key={label} className="flex items-center gap-4">
                                         <span className="text-[11px] text-gray-500 w-28 shrink-0">{label}</span>
-                                        <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                                          <motion.div className="h-full rounded-full" style={{ background: c.bar }} initial={{ width: 0 }} animate={{ width: `${value}%` }} transition={{ duration: 0.5 }} />
+                                        <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                                          <motion.div className="h-full rounded-full" style={{ background: c.bar }} initial={{ width: 0 }} animate={{ width: `${Math.min(value, 100)}%` }} transition={{ duration: 0.5 }} />
                                         </div>
-                                        <span className="font-mono text-[11px] font-semibold w-7 text-right" style={{ color: c.bar }}>{value}</span>
+                                        <span className="font-mono text-[11px] font-semibold w-10 text-right" style={{ color: c.bar }}>{value}{suffix}</span>
                                       </div>
                                     );
                                   })}
@@ -1717,7 +1862,24 @@ export default function AdminSOWApprovePage() {
         </div>
 
         {/* ══ STICKY BOTTOM ACTION BAR — Sections tab only ══ */}
-        {tab === "sections" && <div className="shrink-0 bg-white border-t border-gray-100 shadow-[0_-1px_12px_rgba(0,0,0,0.05)]">
+        {tab === "sections" && isGlimmoraApproved && (
+          <div className="shrink-0 bg-forest-50 border-t border-forest-100 shadow-[0_-1px_12px_rgba(0,0,0,0.05)]">
+            <div className="px-6 py-4 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-forest-500 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-semibold text-forest-800 leading-tight">Commercial Stage Approved</p>
+                <p className="text-[11px] text-forest-600 leading-tight mt-0.5">
+                  This SOW has passed the GlimmoraTeam commercial review
+                  {glimmoraStage?.reviewer ? ` · Approved by ${glimmoraStage.reviewer}` : ""}
+                  {glimmoraStage?.reviewedAt ? ` on ${formatDate(glimmoraStage.reviewedAt)}` : ""}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        {tab === "sections" && !isGlimmoraApproved && <div className="shrink-0 bg-white border-t border-gray-100 shadow-[0_-1px_12px_rgba(0,0,0,0.05)]">
 
           {/* ── Request Changes composer — slides up above the bar ── */}
           <AnimatePresence>

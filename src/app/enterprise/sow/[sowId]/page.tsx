@@ -2090,8 +2090,7 @@ export default function SOWDetailPage() {
                   {
                     stage: activeApprovalIdx + 1,
                     decision: "approve",
-                    comments: signatureText,
-                    reviewer: signatureText.trim(), // also sent as decided_by
+                    reviewer: signatureText.trim(),
                   },
                   {
                     onSuccess: doLocalApprove,
@@ -2122,7 +2121,7 @@ export default function SOWDetailPage() {
                     stage: activeApprovalIdx + 1,
                     decision: "request_changes",
                     comments: `[${requestSection}] ${noteText}`,
-                    reviewer: sow.createdBy || "Enterprise Admin",
+                    reviewer: signatureText.trim() || sow.createdBy || "Enterprise Admin",
                   },
                   {
                     onError: (err) => console.error("[Approval] request_changes POST failed:", err),
@@ -2182,7 +2181,7 @@ export default function SOWDetailPage() {
                     stage: activeApprovalIdx + 1,
                     decision: "comment" as any,
                     comments: commentText,
-                    reviewer: sow.createdBy || "Enterprise Admin",
+                    reviewer: signatureText.trim() || sow.createdBy || "Enterprise Admin",
                   },
                   {
                     onSuccess: () => {
@@ -2214,15 +2213,31 @@ export default function SOWDetailPage() {
                     if (typeof sVal === "string") return stageNumLookup[sVal] === targetNum || Number(sVal) === targetNum;
                     return false;
                   });
-                  const raw = stage?.decisions ?? stage?.comments ?? [];
-                  if (!Array.isArray(raw)) return [];
-                  return raw.map((d: any) => ({
-                    decision: String(d.decision ?? d.type ?? "comment"),
-                    comments: String(d.comments ?? d.message ?? d.text ?? ""),
-                    decided_at: String(d.decided_at ?? d.created_at ?? d.timestamp ?? ""),
-                    decided_by: String(d.decided_by?.name ?? d.decided_by?.email ?? d.author ?? d.reviewer ?? "Admin"),
-                    reply: d.reply ? String(d.reply) : undefined,
-                  }));
+                  if (!stage) return [];
+                  const raw = stage?.decisions ?? [];
+                  const entries: Array<{ decision: string; comments: string; decided_at: string; decided_by: string; reply?: string }> = [];
+                  // Stage-level comment string (from approve/reject action)
+                  if (typeof stage.comments === "string" && stage.comments.trim()) {
+                    entries.push({
+                      decision: String(stage.status ?? "comment"),
+                      comments: stage.comments,
+                      decided_at: String(stage.decided_at ?? stage.updated_at ?? ""),
+                      decided_by: String(stage.reviewer_name ?? stage.reviewer ?? ""),
+                    });
+                  }
+                  // Individual decision entries
+                  if (Array.isArray(raw)) {
+                    raw.forEach((d: any) => {
+                      entries.push({
+                        decision: String(d.decision ?? d.type ?? "comment"),
+                        comments: String(d.comments ?? d.message ?? d.text ?? ""),
+                        decided_at: String(d.decided_at ?? d.created_at ?? d.timestamp ?? ""),
+                        decided_by: String(d.decided_by?.name ?? d.decided_by?.email ?? d.author ?? d.reviewer ?? ""),
+                        reply: d.reply ? String(d.reply) : undefined,
+                      });
+                    });
+                  }
+                  return entries;
                 })();
 
               const isChangesRequested = changesRequestedStageIdx >= 0;

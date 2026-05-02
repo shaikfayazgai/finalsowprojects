@@ -322,10 +322,11 @@ export default function SOWListPage() {
 
     const rawApprovalStages = ((item.approval_stages ?? item.approvalStages ?? []) as import("@/types/enterprise").SOWApprovalStage[]);
     const rawStatus = String(item.status ?? "draft");
-    // Normalise API status values that aren't in statusConfig to a known key
+    // Normalise API status values that aren't in statusConfig to a known key.
+    // Only remap statuses that don't already appear in statusConfig — all the
+    // *_review / *_approval variants are already handled there and must NOT be
+    // collapsed to "review" or they'll be treated as pre-submission and hidden.
     const STATUS_MAP: Record<string, string> = {
-      submitted: "review", in_review: "review", under_review: "review",
-      pending_review: "review", pending_approval: "review",
       generated: "review", complete: "review", completed: "review",
     };
     const normalisedStatus = STATUS_MAP[rawStatus] ?? rawStatus;
@@ -358,17 +359,17 @@ export default function SOWListPage() {
   /* Merge AI + manual SOWs from API; fall back to Zustand store if no API */
   const apiCombined = [...aiSows, ...manualSows];
 
-  // Manual SOWs: only show after confirmAndSubmit (exclude upload-pipeline statuses)
-  const MANUAL_EXCLUDED = ["draft", "uploading", "processing", "extracting", "extraction", "uploaded", "created", "new"];
-  // AI SOWs: show everything except plain draft
-  const AI_EXCLUDED = ["draft"];
+  // Only show SOWs that have been submitted for approval.
+  // "review" covers AI SOWs that are generated but not yet submitted, and
+  // manual SOWs still in the upload pipeline — both should be hidden.
+  const PRE_SUBMISSION_STATUSES = new Set([
+    "draft", "review",
+    "uploading", "processing", "extracting", "extraction",
+    "uploaded", "created", "new",
+  ]);
 
   const allSows = (apiCombined.length > 0 ? apiCombined : storeSows)
-    .filter((s) =>
-      s.intakeMode === "ai_generated"
-        ? !AI_EXCLUDED.includes(s.status)
-        : !MANUAL_EXCLUDED.includes(s.status)
-    );
+    .filter((s) => !PRE_SUBMISSION_STATUSES.has(s.status));
 
 
   const [sortField, setSortField] = React.useState<SortField>("modified");
