@@ -18,6 +18,7 @@ import { Checkbox, Textarea } from "@/components/ui";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { getSOWWizardRecord } from "@/mocks/data/sow-wizard-data";
 import { useAdminSOWDetail, useApprovalStages, useRecordApprovalDecision } from "@/lib/hooks/use-manual-sow";
+import { useSOWPipelineStore } from "@/lib/stores/sow-pipeline-store";
 import type { SOW, SOWApprovalStage, ApprovalStage, ApprovalStageStatus } from "@/types/enterprise";
 
 /* ─── Approval pipeline stage mapping (5-stage per FSD §7.7) ─── */
@@ -53,11 +54,14 @@ function normalisePipelineStages(stagesRes: unknown): SOWApprovalStage[] | null 
       typeof rawStageVal === "string" && (STAGE_KEYS as string[]).includes(rawStageVal)
         ? rawStageVal as ApprovalStage
         : STAGE_NUM_TO_KEY[Number(rawStageVal)] ?? "business";
-    const rawStatus = String(s.status ?? "pending").toLowerCase();
+    const rawDecision = String(s.decision ?? s.result ?? s.action ?? "").toLowerCase();
+    const rawStatus   = String(s.status ?? s.state ?? "pending").toLowerCase();
+    // Prefer the recorded decision over status when it indicates changes were requested
+    const effectiveRaw = (rawDecision === "request_changes" || rawDecision === "changes_requested" || rawDecision === "rejected") ? rawDecision : rawStatus;
     const status: ApprovalStageStatus =
-      rawStatus === "approved" ? "approved" :
-      rawStatus === "rejected" || rawStatus === "changes_requested" ? "rejected" :
-      rawStatus === "in_review" || rawStatus === "active" ? "in_review" :
+      effectiveRaw === "approved" ? "approved" :
+      effectiveRaw === "rejected" || effectiveRaw === "request_changes" || effectiveRaw === "changes_requested" ? "rejected" :
+      effectiveRaw === "in_review" || effectiveRaw === "active" ? "in_review" :
       "pending";
     return {
       stage:      stageKey,
@@ -616,6 +620,7 @@ export default function AdminSOWApprovePage() {
 
   /* Record approval decision — admin approves/rejects glimmora_commercial (stage 2) */
   const recordDecision = useRecordApprovalDecision(sowId);
+  const { updateSOW: updatePipelineSOW, addSOW: addPipelineSOW, sows: pipelineSOWs } = useSOWPipelineStore();
 
   /* Risk — read from detailData.risk { risk_score, risk_level, breakdown } */
   const apiRisk = React.useMemo(() => {
@@ -643,6 +648,21 @@ export default function AdminSOWApprovePage() {
       };
     }
     return null;
+  }, [detailData]);
+
+  /* Quality metrics — from detailData.quality_metrics (AI SOWs only) */
+  const apiQualityMetrics = React.useMemo(() => {
+    if (!detailData) return null;
+    const qm = (detailData.quality_metrics ?? detailData.qualityMetrics) as Record<string, unknown> | undefined;
+    if (!qm || typeof qm !== "object") return null;
+    return {
+      overallConfidence: Number(qm.overall_confidence ?? 0),
+      riskScore:         Number(qm.risk_score ?? 0),
+      riskLevel:         String(qm.risk_level ?? ""),
+      hallucinationFlags: Number(qm.hallucination_flags ?? 0),
+      completenessPct:   Number(qm.completeness_pct ?? 0),
+      completenessStatus: String(qm.completeness_status ?? ""),
+    };
   }, [detailData]);
 
   /* Prefer API data; fall back to mockSOWs */
@@ -757,7 +777,6 @@ export default function AdminSOWApprovePage() {
   }
 
   function handleReject() {
-    if (!isFollowUp && !rejectionReason.trim() && composerFiles.length === 0) return;
     setComposerFiles([]);
     if (isFollowUp) {
       setFollowUpSent(true);
@@ -774,6 +793,16 @@ export default function AdminSOWApprovePage() {
       },
       {
         onSuccess: () => {
+          // Persist changes-requested state locally so the list page reflects it
+          // immediately regardless of backend propagation delay.
+          if (sowId) {
+            const exists = pipelineSOWs.some(s => s.id === sowId);
+            if (exists) {
+              updatePipelineSOW(sowId, { changesRequested: true, changeRequestedAt: new Date().toISOString() });
+            } else {
+              addPipelineSOW({ id: sowId, title: sow?.title ?? "", client: sow?.client ?? "", currentStage: 2, stageApprover: reviewerName.trim() || "Admin", slaStatus: "at-risk", submittedDate: new Date().toISOString(), totalValue: "", completedStages: [1], changesRequested: true, changeRequestedAt: new Date().toISOString() });
+            }
+          }
           setRejectionSubmitted(true);
           setPanelMode("checklist");
           setTimeout(() => router.push("/admin/sow"), 2500);
@@ -1137,6 +1166,68 @@ export default function AdminSOWApprovePage() {
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Quality Metrics */}
+                {sow.intakeMode === "ai_generated" && apiQualityMetrics && (
+                  <div className="rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+                      <div className="flex items-center gap-1.5">
+                        <Bot className="w-3.5 h-3.5 text-teal-500" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">AI Quality Metrics</span>
+                      </div>
+                      <span className={cn(
+                        "text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full",
+                        apiQualityMetrics.completenessStatus === "Complete"
+                          ? "bg-forest-50 text-forest-700 border border-forest-100"
+                          : "bg-amber-50 text-amber-700 border border-amber-100",
+                      )}>
+                        {apiQualityMetrics.completenessStatus || "—"}
+                      </span>
+                    </div>
+                    <div className="px-5 py-4 space-y-4">
+                      {[
+                        {
+                          label: "Overall Confidence",
+                          value: apiQualityMetrics.overallConfidence,
+                          suffix: "%",
+                          bar: apiQualityMetrics.overallConfidence >= 80 ? "#16a34a" : apiQualityMetrics.overallConfidence >= 50 ? "#d97706" : "#dc2626",
+                        },
+                        {
+                          label: "Completeness",
+                          value: apiQualityMetrics.completenessPct,
+                          suffix: "%",
+                          bar: apiQualityMetrics.completenessPct >= 80 ? "#16a34a" : apiQualityMetrics.completenessPct >= 50 ? "#d97706" : "#dc2626",
+                        },
+                        {
+                          label: "Risk Score",
+                          value: apiQualityMetrics.riskScore,
+                          suffix: ` · ${apiQualityMetrics.riskLevel}`,
+                          bar: apiQualityMetrics.riskScore <= 25 ? "#16a34a" : apiQualityMetrics.riskScore <= 50 ? "#d97706" : "#dc2626",
+                        },
+                        {
+                          label: "Hallucination Flags",
+                          value: apiQualityMetrics.hallucinationFlags,
+                          suffix: " flags",
+                          bar: apiQualityMetrics.hallucinationFlags === 0 ? "#16a34a" : apiQualityMetrics.hallucinationFlags <= 2 ? "#d97706" : "#dc2626",
+                          maxValue: 10,
+                        },
+                      ].map(({ label, value, suffix, bar, maxValue }) => (
+                        <div key={label} className="flex items-center gap-4">
+                          <span className="text-[12px] text-gray-500 w-36 shrink-0">{label}</span>
+                          <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min((value / (maxValue ?? 100)) * 100, 100)}%`, background: bar }}
+                            />
+                          </div>
+                          <span className="font-mono text-[12px] font-semibold w-20 text-right" style={{ color: bar }}>
+                            {label === "Risk Score" ? value : value}{suffix}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1996,22 +2087,17 @@ export default function AdminSOWApprovePage() {
                           Cancel
                         </button>
                         <button
-                          disabled={
-                            recordDecision.isPending ||
-                            !reviewerName.trim() ||
-                            (!isFollowUp && !rejectionReason.trim() && composerFiles.length === 0)
-                          }
+                          disabled={recordDecision.isPending}
                           onClick={handleReject}
-                          title={!reviewerName.trim() ? "Enter reviewer name to send" : undefined}
                           className={cn(
                             "inline-flex items-center gap-1.5 text-[11.5px] font-semibold px-3 py-1.5 rounded-lg transition-all",
-                            !recordDecision.isPending && reviewerName.trim() && (isFollowUp || rejectionReason.trim() || composerFiles.length > 0)
+                            !recordDecision.isPending
                               ? "text-white bg-brown-500 hover:bg-brown-600 shadow-sm"
                               : "text-beige-400 bg-beige-100 cursor-not-allowed",
                           )}
                         >
                           <Send className="w-3 h-3" />
-                          {recordDecision.isPending ? "Sending…" : !reviewerName.trim() ? "Add name" : "Send"}
+                          {recordDecision.isPending ? "Sending…" : "Send"}
                         </button>
                       </div>
                     </div>

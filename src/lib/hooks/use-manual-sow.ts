@@ -569,17 +569,22 @@ export function useRecordApprovalDecision(sowId: string | null) {
       return sowApi.recordApprovalDecision(sowId, stage, {
         decision,
         comments,
-        // Always send decided_by so the backend can record who made the decision
-        ...(reviewer ? { reviewer, decided_by: reviewer } : {}),
+        reviewer_name: reviewer ?? "",
+        reviewer: reviewer ?? "",
+        decided_by: reviewer ?? "",
       });
     },
     onSuccess: () => {
       if (sowId) {
         qc.invalidateQueries({ queryKey: approvalKeys.pipeline(sowId) });
+        qc.invalidateQueries({ queryKey: ["admin-approval-pipeline", sowId] });
         qc.invalidateQueries({ queryKey: manualSowKeys.approvalStages(sowId) });
         qc.invalidateQueries({ queryKey: manualSowKeys.sow(sowId) });
         qc.invalidateQueries({ queryKey: manualSowKeys.list() });
-        qc.invalidateQueries({ queryKey: ["sow", "sows"] });
+        // Use exact match so we don't cascade-invalidate the admin SOW list
+        // (["sow", "sows", "admin"]). That list stays intact; per-SOW pipeline
+        // invalidations above are enough to update each row's displayed status.
+        qc.invalidateQueries({ queryKey: ["sow", "sows"], exact: true });
       }
     },
   });

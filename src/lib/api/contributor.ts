@@ -2342,6 +2342,15 @@ export interface ContributorProfileResponse {
   country?: string;
   city?: string;
   skills?: ContributorProfileSkillApi[];
+  // Signup-time fields (returned by backend, surfaced in Personal Details).
+  date_of_birth?: string | null;
+  department_category?: string | null;
+  department_other?: string | null;
+  degree?: string | null;
+  linkedin?: string | null;
+  primary_skills?: string[] | null;
+  secondary_skills?: string[] | null;
+  other_skills?: string[] | null;
   [key: string]: unknown;
 }
 
@@ -2393,6 +2402,17 @@ export type ProfileUiState = {
   weeklyHours: number;
   availability: string;
   skills: ProfileUiSkill[];
+  // Signup-time fields surfaced in Personal Details.
+  country?: string;
+  phone?: string;
+  dob?: string | null;
+  departmentCategory?: string | null;
+  departmentOther?: string | null;
+  degree?: string | null;
+  linkedin?: string | null;
+  primarySkills: string[];
+  secondarySkills: string[];
+  otherSkills: string[];
 };
 
 export function mapContributorProfileToUi(
@@ -2429,6 +2449,16 @@ export function mapContributorProfileToUi(
       evidenceCount: Number(sk.evidence_count ?? 0),
       lastValidatedAt: sk.last_validated_at,
     })),
+    country: raw.country,
+    phone: raw.phone,
+    dob: raw.date_of_birth,
+    departmentCategory: raw.department_category,
+    departmentOther: raw.department_other,
+    degree: raw.degree,
+    linkedin: raw.linkedin,
+    primarySkills: raw.primary_skills ?? [],
+    secondarySkills: raw.secondary_skills ?? [],
+    otherSkills: raw.other_skills ?? [],
   };
 }
 
