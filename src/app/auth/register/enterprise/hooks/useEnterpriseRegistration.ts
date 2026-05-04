@@ -372,11 +372,14 @@ export function useEnterpriseRegistration() {
         console.warn("[enterprise-registration] welcome email failed:", result.emailWarning);
       }
 
-      // Save registration data for onboarding wizard
+      // Save registration data for onboarding wizard + settings page seeding
       setRegistrationData({
         companyName: orgName,
         countryOfIncorporation: incorporationCountry,
         adminEmail: adminEmail,
+        companySize,
+        industry: industry === "other" ? industryOther : industry,
+        website: website || undefined,
       });
 
       const signInResult = await signIn("credentials", {

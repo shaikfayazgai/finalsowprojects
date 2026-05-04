@@ -5,6 +5,9 @@ interface RegistrationData {
   companyName: string;
   countryOfIncorporation: string;
   adminEmail: string;
+  companySize?: string;
+  industry?: string;
+  website?: string;
 }
 
 interface OnboardingProgress {
