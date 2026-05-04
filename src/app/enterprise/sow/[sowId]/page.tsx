@@ -3,7 +3,8 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -48,6 +49,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { sowApi } from "@/lib/api/sow";
+import { createEnterpriseDecompositionPlan } from "@/lib/api/decomposition-plans";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/stores/toast-store";
 import { useNotificationStore } from "@/lib/stores/notification-store";
 import { useSowMessagesStore } from "@/lib/stores/sow-messages-store";
@@ -296,6 +299,10 @@ export default function SOWDetailPage() {
   const backHref = pathname.includes("/approval/") ? "/enterprise/sow/approval" : "/enterprise/sow";
   const backLabel = pathname.includes("/approval/") ? "Approval Pipeline" : "SOW Repository";
   const sowId = params.sowId as string;
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const [isDecomposing, setIsDecomposing] = React.useState(false);
   const allSows = useSowStore((s) => s.sows);
   const addSow = useSowStore((s) => s.addSow);
   const updateSow = useSowStore((s) => s.updateSow);
@@ -492,6 +499,33 @@ export default function SOWDetailPage() {
 
     return { ...SOW_DEFAULTS, id: sowId } as import("@/types/enterprise").SOW;
   }, [apiSowData, apiFlow, allSows, pipelineSows, sowId]);
+
+  const handleStartDecomposition = React.useCallback(async () => {
+    if (isDecomposing) return;
+    setIsDecomposing(true);
+    try {
+      const raw = apiSowData as Record<string, unknown> | null;
+      const payload = {
+        wizard_id:     String(raw?.wizard_id ?? raw?.id ?? sowId),
+        enterprise_id: String(raw?.enterprise_id ?? (session?.user as { id?: string })?.id ?? ""),
+        sow_reference: sow.id,
+        project_name:  sow.title,
+      };
+      const res = await createEnterpriseDecompositionPlan(payload);
+      const planId = String(
+        (res.data as Record<string, unknown> | null)?.id ??
+        (res.data as Record<string, unknown> | null)?.plan_id ?? ""
+      );
+      await queryClient.invalidateQueries({ queryKey: ["enterprise", "decomposition", "plans"] });
+      router.push(planId ? `/enterprise/decomposition/${planId}` : "/enterprise/decomposition");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to start decomposition";
+      toast.error("Decomposition failed", msg);
+    } finally {
+      setIsDecomposing(false);
+    }
+  }, [isDecomposing, apiSowData, sowId, session, sow, router, queryClient]);
+
   const linkedProject = sow ? mockProjects.find((p) => p.sowId === sow.id) : undefined;
 
   const { data: sectionsApiData, isLoading: sectionsLoading } = useSOWSections(sowId);
@@ -1103,13 +1137,6 @@ export default function SOWDetailPage() {
                       <Link href={`/enterprise/decomposition/${sow.planId}`}>
                         <Button variant="outline" size="sm">
                           <ExternalLink className="w-3.5 h-3.5" /> View Plan
-                        </Button>
-                      </Link>
-                    )}
-                    {status === "approved" && !sow.planId && (
-                      <Link href={`/enterprise/decomposition?sowId=${sow.id}`}>
-                        <Button variant="gradient-primary" size="sm">
-                          <Layers className="w-3.5 h-3.5" /> Start Decomposition
                         </Button>
                       </Link>
                     )}
@@ -2090,8 +2117,7 @@ export default function SOWDetailPage() {
                   {
                     stage: activeApprovalIdx + 1,
                     decision: "approve",
-                    comments: signatureText,
-                    reviewer: signatureText.trim(), // also sent as decided_by
+                    reviewer: signatureText.trim(),
                   },
                   {
                     onSuccess: doLocalApprove,
@@ -2122,7 +2148,7 @@ export default function SOWDetailPage() {
                     stage: activeApprovalIdx + 1,
                     decision: "request_changes",
                     comments: `[${requestSection}] ${noteText}`,
-                    reviewer: sow.createdBy || "Enterprise Admin",
+                    reviewer: signatureText.trim() || sow.createdBy || "Enterprise Admin",
                   },
                   {
                     onError: (err) => console.error("[Approval] request_changes POST failed:", err),
@@ -2182,7 +2208,7 @@ export default function SOWDetailPage() {
                     stage: activeApprovalIdx + 1,
                     decision: "comment" as any,
                     comments: commentText,
-                    reviewer: sow.createdBy || "Enterprise Admin",
+                    reviewer: signatureText.trim() || sow.createdBy || "Enterprise Admin",
                   },
                   {
                     onSuccess: () => {
@@ -2214,15 +2240,31 @@ export default function SOWDetailPage() {
                     if (typeof sVal === "string") return stageNumLookup[sVal] === targetNum || Number(sVal) === targetNum;
                     return false;
                   });
-                  const raw = stage?.decisions ?? stage?.comments ?? [];
-                  if (!Array.isArray(raw)) return [];
-                  return raw.map((d: any) => ({
-                    decision: String(d.decision ?? d.type ?? "comment"),
-                    comments: String(d.comments ?? d.message ?? d.text ?? ""),
-                    decided_at: String(d.decided_at ?? d.created_at ?? d.timestamp ?? ""),
-                    decided_by: String(d.decided_by?.name ?? d.decided_by?.email ?? d.author ?? d.reviewer ?? "Admin"),
-                    reply: d.reply ? String(d.reply) : undefined,
-                  }));
+                  if (!stage) return [];
+                  const raw = stage?.decisions ?? [];
+                  const entries: Array<{ decision: string; comments: string; decided_at: string; decided_by: string; reply?: string }> = [];
+                  // Stage-level comment string (from approve/reject action)
+                  if (typeof stage.comments === "string" && stage.comments.trim()) {
+                    entries.push({
+                      decision: String(stage.status ?? "comment"),
+                      comments: stage.comments,
+                      decided_at: String(stage.decided_at ?? stage.updated_at ?? ""),
+                      decided_by: String(stage.reviewer_name ?? stage.reviewer ?? ""),
+                    });
+                  }
+                  // Individual decision entries
+                  if (Array.isArray(raw)) {
+                    raw.forEach((d: any) => {
+                      entries.push({
+                        decision: String(d.decision ?? d.type ?? "comment"),
+                        comments: String(d.comments ?? d.message ?? d.text ?? ""),
+                        decided_at: String(d.decided_at ?? d.created_at ?? d.timestamp ?? ""),
+                        decided_by: String(d.decided_by?.name ?? d.decided_by?.email ?? d.author ?? d.reviewer ?? ""),
+                        reply: d.reply ? String(d.reply) : undefined,
+                      });
+                    });
+                  }
+                  return entries;
                 })();
 
               const isChangesRequested = changesRequestedStageIdx >= 0;
@@ -2268,14 +2310,35 @@ export default function SOWDetailPage() {
                         <CheckCircle2 className="w-4 h-4 text-forest-600 shrink-0" />
                         <p className="text-[13px] text-forest-800 font-medium">All stages approved — SOW is fully signed off.</p>
                       </div>
-                      <Link
-                        href={sow.planId ? `/enterprise/decomposition/${sow.planId}` : `/enterprise/decomposition?sowId=${sow.id}`}
-                        className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all"
-                        style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
-                      >
-                        <GitBranch className="w-3.5 h-3.5" />
-                        {sow.planId ? "View Plan" : "Start Decomposition"}
-                      </Link>
+                      {sow.planId ? (
+                        <Link
+                          href={`/enterprise/decomposition/${sow.planId}`}
+                          className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all"
+                          style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
+                        >
+                          <GitBranch className="w-3.5 h-3.5" />
+                          View Plan
+                        </Link>
+                      ) : sow.intakeMode === "ai_generated" ? (
+                        <button
+                          onClick={handleStartDecomposition}
+                          disabled={isDecomposing}
+                          className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                          style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
+                        >
+                          <GitBranch className="w-3.5 h-3.5" />
+                          {isDecomposing ? "Starting…" : "Start Decomposition"}
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/enterprise/decomposition?sowId=${sow.id}`}
+                          className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all"
+                          style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
+                        >
+                          <GitBranch className="w-3.5 h-3.5" />
+                          Start Decomposition
+                        </Link>
+                      )}
                     </div>
                   )}
 

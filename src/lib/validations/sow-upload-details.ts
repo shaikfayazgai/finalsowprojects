@@ -72,6 +72,8 @@ const section4Schema = z
 // Section 5 — Budget & Risk
 // ---------------------------------------------------------------------------
 
+const PRICING_MODELS = ["fixed_price", "time_and_materials", "outcome_based", "hybrid"] as const;
+
 const section5Schema = z
   .object({
     budgetMinimum: z.coerce
@@ -80,7 +82,7 @@ const section5Schema = z
     budgetMaximum: z.coerce
       .number()
       .refine((n) => n > 0, { message: "Maximum budget must be greater than 0" }),
-    pricingModel: nonEmptyString("Select a pricing model"),
+    pricingModel: z.enum(PRICING_MODELS, { message: "Select a valid pricing model" }),
   })
   .refine((d) => d.budgetMaximum >= d.budgetMinimum, {
     message: "Maximum budget must be greater than or equal to minimum",
@@ -91,12 +93,18 @@ const section5Schema = z
 // Section 6 — Governance & Compliance
 // ---------------------------------------------------------------------------
 
+const DATA_SENSITIVITY_LEVELS = ["public", "internal", "confidential", "restricted"] as const;
+
 const section6Schema = z.object({
   nonDiscriminationConfirmed: z.literal(true, {
     error: "Non-discrimination confirmation is required",
   }),
-  dataSensitivityLevel: nonEmptyString("Select a data sensitivity level"),
-  personalDataInvolved: nonEmptyString("Indicate whether personal data is involved"),
+  dataSensitivityLevel: z.enum(DATA_SENSITIVITY_LEVELS, {
+    message: "Select a valid data sensitivity level",
+  }),
+  personalDataInvolved: z.enum(["yes", "no"], {
+    message: "Indicate whether personal data is involved",
+  }),
 });
 
 // ---------------------------------------------------------------------------
@@ -110,6 +118,7 @@ const section7Schema = z.object({
   changeRequestProcess: nonEmptyString("Select change request process"),
   thirdPartyCosts: nonEmptyString("Select third-party licensing costs model"),
   businessOwnerApprover: nonEmptyString("Business owner approver is required"),
+  finalApprover: nonEmptyString("Final approver is required"),
 });
 
 // ---------------------------------------------------------------------------

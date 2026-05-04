@@ -2,7 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { sowApi } from "@/lib/api/sow";
+import { adminSowApi } from "@/lib/api/admin-sow";
 import { sowKeys } from "./use-sow-wizard";
+import { toast } from "@/lib/stores/toast-store";
 
 // ── Query keys ────────────────────────────────────────────────────────────
 
@@ -83,6 +85,57 @@ const aiSowKeys = {
   sow: (id: string) => ["ai-sow", id] as const,
 };
 
+const adminSowKeys = {
+  sow: (id: string) => ["admin-enterprise-sow", id] as const,
+  pipeline: (id: string) => ["admin-approval-pipeline", id] as const,
+};
+
+function extractInner(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const inner = r.data ?? r.result ?? r.sow ?? r;
+  if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+    return inner as Record<string, unknown>;
+  }
+  return null;
+}
+
+
+export function useAdminSOWDetail(sowId: string | null): {
+  data: Record<string, unknown> | null;
+  isLoading: boolean;
+  flow: "manual" | "ai";
+  refetch: () => void;
+} {
+  const query = useQuery({
+    queryKey: adminSowKeys.sow(sowId ?? ""),
+    queryFn: () => adminSowApi.getEnterpriseSOWById(sowId!),
+    enabled: !!sowId,
+    retry: 1,
+  });
+
+  const raw = (query.data ?? null) as unknown as Record<string, unknown> | null;
+  const data = extractInner(raw) ?? raw;
+  const intakeMode = String((data as Record<string, unknown> | null)?.intake_mode ?? "");
+  const flow: "manual" | "ai" = intakeMode === "manual_upload" ? "manual" : "ai";
+
+  return {
+    data,
+    isLoading: query.isLoading,
+    flow,
+    refetch: () => query.refetch(),
+  };
+}
+
+export function useApprovalPipeline(sowId: string | null) {
+  return useQuery({
+    queryKey: adminSowKeys.pipeline(sowId ?? ""),
+    queryFn: () => adminSowApi.getApprovalPipeline(sowId!),
+    enabled: !!sowId,
+    staleTime: 30_000,
+  });
+}
+
 export function useSOWDetail(sowId: string | null): {
   data: Record<string, unknown> | null;
   isLoading: boolean;
@@ -103,8 +156,10 @@ export function useSOWDetail(sowId: string | null): {
     retry: 1,
   });
 
-  const manualData = (manualQuery.data?.data ?? null) as Record<string, unknown> | null;
-  const aiData     = (aiQuery.data?.data ?? null) as Record<string, unknown> | null;
+  const manualRaw  = (manualQuery.data ?? null) as unknown as Record<string, unknown> | null;
+  const aiRaw      = (aiQuery.data ?? null) as unknown as Record<string, unknown> | null;
+  const manualData = ((manualRaw?.data as Record<string, unknown> | null) ?? manualRaw) as Record<string, unknown> | null;
+  const aiData     = ((aiRaw?.data as Record<string, unknown> | null) ?? aiRaw) as Record<string, unknown> | null;
 
   // Manual takes priority; fall back to AI
   const data = manualData ?? aiData;
@@ -176,10 +231,11 @@ export function useDeleteSOW() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: manualSowKeys.list() });
       qc.invalidateQueries({ queryKey: ["sow", "sows"] });
+      toast.success("SOW deleted successfully");
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : "Failed to delete SOW";
-      console.error("[DeleteSOW]", msg);
+      toast.error("Failed to delete SOW", msg);
     },
   });
 }
@@ -358,6 +414,7 @@ export function useSetApprovalAuthorities(sowId: string | null) {
       final_approver: string;
       legal_compliance_reviewer?: string;
       security_reviewer?: string;
+      sow_submitter?: string;
     }) => {
       if (!sowId) throw new Error("No SOW id");
       return sowApi.setApprovalAuthorities(sowId, data);
@@ -389,9 +446,9 @@ export function useGenerateManualSOW(sowId: string | null) {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (opts?: { include_extracted_sections?: boolean }) => {
+    mutationFn: () => {
       if (!sowId) throw new Error("No SOW id");
-      return sowApi.generateManualSOW(sowId, opts);
+      return sowApi.generateManualSOW(sowId);
     },
     onSuccess: () => {
       if (sowId) {
@@ -512,17 +569,22 @@ export function useRecordApprovalDecision(sowId: string | null) {
       return sowApi.recordApprovalDecision(sowId, stage, {
         decision,
         comments,
-        // Always send decided_by so the backend can record who made the decision
-        ...(reviewer ? { reviewer, decided_by: reviewer } : {}),
+        reviewer_name: reviewer ?? "",
+        reviewer: reviewer ?? "",
+        decided_by: reviewer ?? "",
       });
     },
     onSuccess: () => {
       if (sowId) {
         qc.invalidateQueries({ queryKey: approvalKeys.pipeline(sowId) });
+        qc.invalidateQueries({ queryKey: ["admin-approval-pipeline", sowId] });
         qc.invalidateQueries({ queryKey: manualSowKeys.approvalStages(sowId) });
         qc.invalidateQueries({ queryKey: manualSowKeys.sow(sowId) });
         qc.invalidateQueries({ queryKey: manualSowKeys.list() });
-        qc.invalidateQueries({ queryKey: ["sow", "sows"] });
+        // Use exact match so we don't cascade-invalidate the admin SOW list
+        // (["sow", "sows", "admin"]). That list stays intact; per-SOW pipeline
+        // invalidations above are enough to update each row's displayed status.
+        qc.invalidateQueries({ queryKey: ["sow", "sows"], exact: true });
       }
     },
   });

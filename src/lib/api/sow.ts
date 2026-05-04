@@ -50,7 +50,8 @@ export interface SOWActionRequest {
 export interface ApprovalDecision {
   decision: string;
   comments?: string | null;
-  /** Reviewer identity — sent as both `reviewer` and `decided_by` for backend compatibility. */
+  /** Reviewer identity — sent as reviewer_name, reviewer, and decided_by for backend compatibility. */
+  reviewer_name?: string;
   reviewer?: string;
   decided_by?: string;
 }
@@ -242,6 +243,10 @@ export const sowApi = {
     return sowCall<BaseResponse>(`/api/v1/sows/${sowId}`);
   },
 
+  getEnterpriseSOWById(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sows/enterprise/${sowId}`);
+  },
+
   sowAction(sowId: string, payload: SOWActionRequest): Promise<BaseResponse> {
     return sowCall<BaseResponse>(`/api/v1/sows/${sowId}/action`, "POST", payload);
   },
@@ -266,7 +271,7 @@ export const sowApi = {
       "POST",
       payload,
       false,
-      true, // use enterprise token — approval is an enterprise-scoped action
+      false, // use personal token so backend identifies the logged-in user as reviewer
     );
   },
 
@@ -415,12 +420,13 @@ export const sowApi = {
     final_approver: string;
     legal_compliance_reviewer?: string;
     security_reviewer?: string;
+    sow_submitter?: string;
   }): Promise<BaseResponse> {
     return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/approval-authorities`, "PATCH", data);
   },
 
-  generateManualSOW(sowId: string, opts?: { include_extracted_sections?: boolean }): Promise<BaseResponse> {
-    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/generate`, "POST", opts ?? {});
+  generateManualSOW(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/generate`, "POST", {});
   },
 
   getGenerationStatus(sowId: string): Promise<BaseResponse> {
