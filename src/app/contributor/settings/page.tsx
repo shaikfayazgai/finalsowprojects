@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import {
   User, Mail, Phone, Bell, Globe, Clock, Shield, Key,
   AlertTriangle, ChevronRight, Languages, X, CheckCircle2,
+  Briefcase, MapPin, Link as LinkIcon, Award,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils/cn";
@@ -375,6 +376,7 @@ export default function SettingsPage() {
   }
 
   const account = settings?.account_summary;
+  const freelancer = settings?.freelancer_profile;
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
@@ -420,6 +422,105 @@ export default function SettingsPage() {
               </div>
             );
           })}
+        </div>
+      </motion.div>
+
+      {/* ═══ FREELANCER PROFILE (read-only — edit on /contributor/profile) ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-6">
+        <div
+          className="px-5 py-4 flex items-center justify-between gap-3"
+          style={{ borderBottom: "1px solid var(--border-soft)" }}
+        >
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-semibold text-gray-800">Freelancer Profile</span>
+          </div>
+          <a
+            href="/contributor/profile"
+            className="text-[11px] font-medium text-brown-600 hover:text-brown-700 hover:underline"
+          >
+            Edit on profile →
+          </a>
+        </div>
+        <div className="py-2">
+          {(() => {
+            const fmt = (v: string | number | null | undefined) =>
+              v === null || v === undefined || v === "" ? "—" : String(v);
+            const location =
+              freelancer?.city || freelancer?.country
+                ? [freelancer?.city, freelancer?.country].filter(Boolean).join(", ")
+                : "";
+            const rows: { label: string; value: string; icon: React.ElementType }[] = [
+              { label: "Full Name",        value: fmt(freelancer?.full_name),        icon: User    },
+              { label: "Experience Level", value: fmt(freelancer?.experience_level), icon: Award   },
+              { label: "Weekly Hours",     value: freelancer?.weekly_hours != null ? `${freelancer.weekly_hours} hrs/week` : "—", icon: Clock },
+              { label: "Availability",     value: fmt(freelancer?.availability),     icon: Clock   },
+              { label: "Location",         value: fmt(location),                     icon: MapPin  },
+              { label: "Portfolio",        value: fmt(freelancer?.portfolio_url),    icon: LinkIcon },
+              { label: "LinkedIn",         value: fmt(freelancer?.linkedin),         icon: LinkIcon },
+            ];
+            return (
+              <>
+                {rows.map((item, i) => {
+                  const ItemIcon = item.icon;
+                  const isUrl = (item.label === "Portfolio" || item.label === "LinkedIn") && /^https?:\/\//i.test(item.value);
+                  return (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between px-5 py-3.5"
+                      style={{ borderBottom: "1px solid var(--border-hair)" }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center shrink-0">
+                          <ItemIcon className="w-3.5 h-3.5 text-gray-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[11px] text-gray-400 block">{item.label}</span>
+                          {isUrl ? (
+                            <a
+                              href={item.value}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[13px] font-medium text-brown-700 hover:underline break-all"
+                            >
+                              {item.value}
+                            </a>
+                          ) : (
+                            <span className="text-[13px] font-medium text-gray-800 break-words">{item.value}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Skills row */}
+                <div className="px-5 py-3.5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center shrink-0">
+                      <Award className="w-3.5 h-3.5 text-gray-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[11px] text-gray-400 block mb-1.5">Skills</span>
+                      {freelancer?.skills && freelancer.skills.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {freelancer.skills.map(s => (
+                            <span
+                              key={s}
+                              className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-md bg-brown-50 text-brown-700 border border-brown-100"
+                            >
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[13px] font-medium text-gray-800">—</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </motion.div>
 
