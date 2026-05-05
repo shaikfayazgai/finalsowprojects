@@ -1056,6 +1056,7 @@ export interface PayoutPreferences {
   account_number: string | null;
   bank_name:      string | null;
   routing_code:   string | null;
+  ifsc_code:      string | null;
   country:        string | null;
   provider:       string | null;
   phone_number:   string | null;
