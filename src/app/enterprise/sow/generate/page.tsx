@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils/cn";
+import { isValidLanguageName, canonicalLanguageName, suggestLanguages } from "@/lib/utils/language-validation";
 
 const SOWAIDraftReviewPage = dynamic(() => import("../upload/generate/page"), { ssr: false });
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
@@ -943,20 +944,39 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
 
 function OtherLanguageTagInput({ languages, onChange }: { languages: string[]; onChange: (v: string[]) => void }) {
   const [inputValue, setInputValue] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const addLanguage = () => {
     const trimmed = inputValue.trim();
-    if (trimmed && !languages.includes(trimmed)) {
-      onChange([...languages, trimmed]);
-      setInputValue("");
+    if (!trimmed) { setError(null); return; }
+
+    if (!isValidLanguageName(trimmed)) {
+      const suggestions = suggestLanguages(trimmed);
+      setError(
+        suggestions.length > 0
+          ? `"${trimmed}" is not a recognised language. Did you mean ${suggestions.join(", ")}?`
+          : `"${trimmed}" is not a recognised language. Try English, Spanish, Mandarin, etc.`,
+      );
+      return;
     }
+
+    const canonical = canonicalLanguageName(trimmed);
+    if (languages.some((l) => l.toLowerCase() === canonical.toLowerCase())) {
+      setError(`${canonical} is already added.`);
+      return;
+    }
+
+    onChange([...languages, canonical]);
+    setInputValue("");
+    setError(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") { e.preventDefault(); addLanguage(); }
     if (e.key === "Backspace" && !inputValue && languages.length > 0) {
       onChange(languages.slice(0, -1));
+      setError(null);
     }
   };
 
@@ -965,7 +985,12 @@ function OtherLanguageTagInput({ languages, onChange }: { languages: string[]; o
       <label className="text-[12px] font-semibold text-gray-600 mb-1.5 block">Custom Languages</label>
       <div
         onClick={() => inputRef.current?.focus()}
-        className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 cursor-text transition-all duration-200 focus-within:border-brown-300 focus-within:ring-2 focus-within:ring-brown-100"
+        className={cn(
+          "flex flex-wrap items-center gap-1.5 rounded-xl border bg-white px-3 py-2 cursor-text transition-all duration-200",
+          error
+            ? "border-red-300 focus-within:border-red-400 focus-within:ring-2 focus-within:ring-red-100"
+            : "border-gray-200 focus-within:border-brown-300 focus-within:ring-2 focus-within:ring-brown-100",
+        )}
         style={{ minHeight: 40 }}
       >
         {languages.filter(l => l.trim()).map((lang, idx) => (
@@ -977,7 +1002,7 @@ function OtherLanguageTagInput({ languages, onChange }: { languages: string[]; o
             {lang}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onChange(languages.filter((_, i) => i !== idx)); }}
+              onClick={(e) => { e.stopPropagation(); onChange(languages.filter((_, i) => i !== idx)); setError(null); }}
               className="hover:text-red-500 transition-colors"
               style={{ lineHeight: 0 }}
             >
@@ -988,7 +1013,7 @@ function OtherLanguageTagInput({ languages, onChange }: { languages: string[]; o
         <input
           ref={inputRef}
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => { setInputValue(e.target.value); if (error) setError(null); }}
           onKeyDown={handleKeyDown}
           onBlur={addLanguage}
           placeholder={languages.filter(l => l.trim()).length === 0 ? "Type a language and press Enter..." : ""}
@@ -996,6 +1021,9 @@ function OtherLanguageTagInput({ languages, onChange }: { languages: string[]; o
           style={{ padding: 0 }}
         />
       </div>
+      {error && (
+        <p className="mt-1.5 text-[11px] text-red-600">{error}</p>
+      )}
     </div>
   );
 }
@@ -1285,6 +1313,18 @@ function SOWGenerateWizardPageInner() {
   React.useEffect(() => {
     saveDraft(formData, currentStep, skippedSteps);
   }, [formData, currentStep, skippedSteps]);
+
+  // Business rule: Deployment = Not in Scope → auto-reset and hide Go-Live / Hypercare
+  React.useEffect(() => {
+    if (formData.deploymentScope === "not_in_scope") {
+      setFormData((prev) => ({
+        ...prev,
+        goLiveScope: "not_in_scope",
+        hypercareDuration: "",
+        hypercareSupport: "",
+      }));
+    }
+  }, [formData.deploymentScope]);
 
   const updateField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
     // Compute next state outside the setter so we can also update errors
@@ -2530,8 +2570,6 @@ function Step1ProjectScope({ formData, updateField, addListItem, removeListItem,
               { value: "mobile_hybrid", label: "Mobile Hybrid" },
               { value: "desktop", label: "Desktop" },
               { value: "api_backend", label: "API / Backend" },
-              { value: "data_platform", label: "Data Platform" },
-              { value: "full_stack", label: "Full-Stack" },
               { value: "other", label: "Other" },
             ].map(({ value, label }) => {
               const selected = (formData.platformType as string[]).includes(value);
@@ -2843,7 +2881,7 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
           onChange={(v) => updateField("uiuxDesignScope", v)}
           options={[
             { value: "not_in_scope", label: "Not in Scope" },
-            { value: "in_scope", label: "In Scope" },
+            // { value: "in_scope", label: "In Scope" }, // TODO: PM to define workflow before re-enabling
             { value: "client_provides", label: "Client Provides" },
           ]}
         />
@@ -3109,7 +3147,8 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
         </div>
       )}
 
-      {/* Go-Live Scope */}
+      {/* Go-Live Scope — hidden when Deployment = Not in Scope (auto-set to not_in_scope) */}
+      {formData.deploymentScope !== "not_in_scope" && (
       <div data-field="goLiveScope">
         <FieldLabel required>Go-Live Scope</FieldLabel>
         <RadioGroup
@@ -3123,7 +3162,8 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
         />
         <FieldError error={errors.goLiveScope} field="goLiveScope" />
       </div>
-      {formData.goLiveScope === "go_live_hypercare" && (
+      )}
+      {formData.deploymentScope !== "not_in_scope" && formData.goLiveScope === "go_live_hypercare" && (
         <div className="rounded-xl p-5 space-y-5" style={{ background: "rgba(166,119,99,0.04)", border: "1px solid rgba(166,119,99,0.12)" }}>
           <label className="block" style={{ fontSize: 11, fontWeight: 700, color: '#A67763', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
             Hypercare Details
@@ -3936,8 +3976,8 @@ function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeLi
             <div className="space-y-2 mt-2">
               {[
                 { value: "unit_testing", label: "Unit Testing" },
-                { value: "integration_testing", label: "Integration Testing" },
-                { value: "uat_testing", label: "Uat Testing" },
+                { value: "integration_testing", label: "System Integration Testing (SIT)" },
+                { value: "uat_testing", label: "User Acceptance Testing (UAT)" },
                 { value: "security_testing", label: "Security Testing" },
                 { value: "performance_testing", label: "Performance Testing" },
               ].map((opt) => (
@@ -4284,80 +4324,8 @@ function Step6QualityStandards({ formData, updateField, errors = {}, blurField }
         Define coding standards, quality gates, and support expectations. These become enforceable checkpoints in the generated SOW.
       </p>
 
-      {/* ── SECTION A — Quality Assurance Standards ── */}
-      <SectionHeading>Section A — Quality Assurance Standards</SectionHeading>
-
-      {/* Coding Standards & Documentation Level */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <FieldLabel required>Coding Standards</FieldLabel>
-          <Select value={formData.codingStandards} onValueChange={(v) => updateField("codingStandards", v)}>
-            <SelectTrigger><SelectValue placeholder="Select coding standards" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="clean_code_solid">Clean Code / SOLID</SelectItem>
-              <SelectItem value="google_style">Google Style Guide</SelectItem>
-              <SelectItem value="airbnb_style">Airbnb Style Guide</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <FieldLabel required>Documentation Level</FieldLabel>
-          <Select value={formData.documentationLevel} onValueChange={(v) => updateField("documentationLevel", v)}>
-            <SelectTrigger><SelectValue placeholder="Select documentation level" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="high_technical_user">High (Technical + User)</SelectItem>
-              <SelectItem value="medium_technical">Medium (Technical Only)</SelectItem>
-              <SelectItem value="low_inline">Low (Inline Comments Only)</SelectItem>
-              <SelectItem value="minimal">Minimal</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Test Coverage & Security Testing */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <FieldLabel>Test Coverage Target (%)</FieldLabel>
-          <Select value={formData.testCoverageTarget} onValueChange={(v) => updateField("testCoverageTarget", v)}>
-            <SelectTrigger><SelectValue placeholder="Select coverage target" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="80">80%</SelectItem>
-              <SelectItem value="85">85%</SelectItem>
-              <SelectItem value="90">90%</SelectItem>
-              <SelectItem value="95">95%</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <FieldLabel>Security Testing Requirements</FieldLabel>
-          <Select value={formData.securityTestingRequirements} onValueChange={(v) => updateField("securityTestingRequirements", v)}>
-            <SelectTrigger><SelectValue placeholder="Select security testing" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="owasp_top10">OWASP Top 10 Compliance</SelectItem>
-              <SelectItem value="penetration_testing">Penetration Testing</SelectItem>
-              <SelectItem value="sast_dast">SAST + DAST</SelectItem>
-              <SelectItem value="basic">Basic Security Review</SelectItem>
-              <SelectItem value="none">None</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Code Review Process */}
-      <div>
-        <FieldLabel>Code Review Process</FieldLabel>
-        <Textarea
-          placeholder="Describe the peer review process, required approvals, etc..."
-          value={formData.codeReviewProcess}
-          onChange={(e) => updateField("codeReviewProcess", e.target.value)}
-          className="min-h-[100px]"
-        />
-      </div>
-
       {/* ── SECTION B — Performance & Accessibility ── */}
-      <SectionHeading>Section B — Performance &amp; Accessibility</SectionHeading>
+      <SectionHeading>Section A — Performance &amp; Accessibility</SectionHeading>
 
       {/* Performance KPIs */}
       <div>
@@ -4400,21 +4368,6 @@ function Step6QualityStandards({ formData, updateField, errors = {}, blurField }
             </label>
           ))}
         </div>
-      </div>
-
-      {/* Accessibility Standard */}
-      <div>
-        <FieldLabel>Accessibility Standard</FieldLabel>
-        <Select value={formData.accessibilityStandard} onValueChange={(v) => updateField("accessibilityStandard", v)}>
-          <SelectTrigger><SelectValue placeholder="Select accessibility standard" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="wcag_21_aa">WCAG 2.1 AA</SelectItem>
-            <SelectItem value="wcag_21_aaa">WCAG 2.1 AAA</SelectItem>
-            <SelectItem value="wcag_22_aa">WCAG 2.2 AA</SelectItem>
-            <SelectItem value="section_508">Section 508</SelectItem>
-            <SelectItem value="none">None</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {/* QA Responsibility & Defect Management Tool */}
@@ -4514,11 +4467,8 @@ function Step7GovernanceCompliance({ formData, updateField, errors = {}, blurFie
           <Select value={formData.communicationChannels} onValueChange={(v) => updateField("communicationChannels", v)}>
             <SelectTrigger><SelectValue placeholder="Select channels" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="slack_email">Slack/Email</SelectItem>
-              <SelectItem value="teams">Microsoft Teams</SelectItem>
-              <SelectItem value="slack">Slack Only</SelectItem>
-              <SelectItem value="email">Email Only</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
+              <SelectItem value="email">Email</SelectItem>
+              <SelectItem value="glimmora_platform">GlimmoraTeam Platform</SelectItem>
             </SelectContent>
           </Select>
           <FieldError error={errors.communicationChannels} field="communicationChannels" />
