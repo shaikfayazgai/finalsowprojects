@@ -56,7 +56,7 @@ function listFromQuery<T>(items: T[], query: URLSearchParams) {
   };
 }
 
-export function resolveContributorMock(path: string, method: string, _body?: string): MockResult | null {
+export function resolveContributorMock(path: string, method: string, body?: string): MockResult | null {
   if (!path.includes("/api/contributor") && !path.includes("/api/public/credentials")) return null;
   const url = new URL(path, "http://localhost");
   const p = url.pathname;
@@ -189,7 +189,13 @@ export function resolveContributorMock(path: string, method: string, _body?: str
 
   if (p === "/api/contributor/tasks" && m === "GET") {
     const statusFilter = q.get("status");
-    const filtered = statusFilter && statusFilter !== "all" ? mockContributorTasks.filter((t) => t.status === statusFilter) : mockContributorTasks;
+    const priorityFilter = q.get("priority");
+    let filtered = statusFilter && statusFilter !== "all"
+      ? mockContributorTasks.filter((t) => t.status === statusFilter)
+      : mockContributorTasks;
+    if (priorityFilter && priorityFilter !== "all") {
+      filtered = filtered.filter((t) => t.priority === priorityFilter);
+    }
     return {
       status: 200,
       body: listFromQuery(
@@ -301,12 +307,26 @@ export function resolveContributorMock(path: string, method: string, _body?: str
 
   if (p === "/api/contributor/earnings/summary" && m === "GET") return { status: 200, body: { total_earned: mockEarningsSummary.totalEarned, eligible: mockEarningsSummary.eligible, pending: mockEarningsSummary.pending, processing: mockEarningsSummary.processing, paid_out: mockEarningsSummary.paidOut, currency: mockEarningsSummary.currency, current_month: mockEarningsSummary.currentMonth, previous_month: mockEarningsSummary.previousMonth, lifetime_tasks_completed: mockEarningsSummary.lifetimeTasksCompleted, average_per_task: mockEarningsSummary.averagePerTask } };
   if (p === "/api/contributor/earnings/overview" && m === "GET") return { status: 200, body: JSON.stringify({ note: "Mock overview enabled" }) };
-  if (p === "/api/contributor/earnings" && m === "GET") return { status: 200, body: JSON.stringify(listFromQuery(mockEarnings, q)) };
-  if (p.match(/^\/api\/contributor\/earnings\/[^/]+$/) && m === "GET") return { status: 200, body: JSON.stringify(mockEarnings[0]) };
+  if (p === "/api/contributor/earnings" && m === "GET") {
+    const statusFilter = q.get("status");
+    const filtered = statusFilter && statusFilter !== "all"
+      ? mockEarnings.filter((e) => e.status === statusFilter)
+      : mockEarnings;
+    return { status: 200, body: JSON.stringify(listFromQuery(filtered, q)) };
+  }
+  if (p.match(/^\/api\/contributor\/earnings\/[^/]+$/) && m === "GET") {
+    const id = decodeURIComponent(p.split("/").pop() ?? "");
+    const found = mockEarnings.find((x) => x.id === id) ?? mockEarnings[0];
+    return { status: 200, body: JSON.stringify(found) };
+  }
   if (p === "/api/contributor/earnings/kyc/status" && m === "GET") return { status: 200, body: JSON.stringify({ status: "verified" }) };
   if (p === "/api/contributor/earnings/kyc/start" && m === "POST") return { status: 200, body: JSON.stringify({ status: "in_progress" }) };
   if (p === "/api/contributor/payouts" && m === "GET") return { status: 200, body: JSON.stringify(listFromQuery(mockPayouts, q)) };
-  if (p.match(/^\/api\/contributor\/payouts\/[^/]+$/) && m === "GET") return { status: 200, body: JSON.stringify(mockPayouts[0]) };
+  if (p.match(/^\/api\/contributor\/payouts\/[^/]+$/) && m === "GET") {
+    const id = decodeURIComponent(p.split("/").pop() ?? "");
+    const found = mockPayouts.find((x) => x.id === id || x.reference === id) ?? mockPayouts[0];
+    return { status: 200, body: JSON.stringify(found) };
+  }
   if (p.match(/^\/api\/contributor\/payouts\/[^/]+\/receipt$/) && m === "GET") return { status: 200, body: JSON.stringify("https://example.com/receipt/mock.pdf") };
   if (p === "/api/contributor/payout-preferences" && m === "GET") return { status: 200, body: { preferred_method: "upi", minimum_payout_amount: "25", auto_payout: true, account_name: null, account_number: null, bank_name: null, routing_code: null, country: "IN", provider: null, phone_number: null, paypal_email: null, upi_id: "chirag@upi", wallet_address: null, network: null, token: null } };
   if (p === "/api/contributor/payout-preferences" && m === "PUT") return resolveContributorMock("/api/contributor/payout-preferences", "GET");
@@ -376,7 +396,28 @@ export function resolveContributorMock(path: string, method: string, _body?: str
       },
     };
   }
-  if (p.match(/^\/api\/contributor\/messages\/threads\/[^/]+\/messages$/) && m === "POST") return { status: 200, body: { id: "msg-new", sender_id: "contrib-1001", sender_name: mockContributorProfile.displayName, sender_role: "contributor", content: "Mock sent message", timestamp: new Date().toISOString(), rating: null } };
+  if (p.match(/^\/api\/contributor\/messages\/threads\/[^/]+\/messages$/) && m === "POST") {
+    let content = "";
+    let attachmentIds: string[] = [];
+    try {
+      const parsed = body ? JSON.parse(body) : {};
+      content = typeof parsed.content === "string" ? parsed.content : "";
+      attachmentIds = Array.isArray(parsed.attachment_ids) ? parsed.attachment_ids : [];
+    } catch { /* ignore parse error, fall back to empty content */ }
+    return {
+      status: 200,
+      body: {
+        id: `msg-${Date.now()}`,
+        sender_id: "contrib-1001",
+        sender_name: mockContributorProfile.displayName,
+        sender_role: "contributor",
+        content,
+        attachment_ids: attachmentIds,
+        timestamp: new Date().toISOString(),
+        rating: null,
+      },
+    };
+  }
   if (p.match(/^\/api\/contributor\/messages\/threads\/[^/]+\/read$/) && m === "POST") return { status: 204, body: {} };
   if (p.match(/^\/api\/contributor\/messages\/[^/]+\/rating$/) && m === "POST") return { status: 204, body: {} };
 

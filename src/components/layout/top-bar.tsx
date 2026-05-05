@@ -10,9 +10,15 @@ import {
   Bell,
   LogOut,
   Settings,
+  Loader2,
+  FileText,
+  GraduationCap,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useSidebarStore } from "@/lib/stores/sidebar-store";
+import { searchContributor, type ContributorSearchResult } from "@/lib/api/contributor";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -102,6 +108,80 @@ export function TopBar({ config }: TopBarProps) {
   const { data: session } = useSession();
   const { openMobile } = useSidebarStore();
   const [searchFocused, setSearchFocused] = React.useState(false);
+
+  // Universal search — currently only contributor backend supports it. Limit to
+  // contributor pages so other roles don't see a broken dropdown.
+  const isContributor = pathname.startsWith("/contributor");
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [searchResults, setSearchResults] = React.useState<ContributorSearchResult[] | null>(null);
+  const [searchLoading, setSearchLoading] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const searchAbortRef = React.useRef<AbortController | null>(null);
+  const searchContainerRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Debounced fetch
+  React.useEffect(() => {
+    if (!isContributor) { setSearchResults(null); return; }
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      // Cancel any in-flight request when the user clears the input.
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
+      return;
+    }
+    const token = getContributorAccessToken(session);
+    const contributorId = (session?.user as { id?: string } | undefined)?.id ?? "";
+    if (!token || !contributorId) return;
+
+    const handle = setTimeout(() => {
+      // Cancel any prior in-flight request before firing a new one.
+      searchAbortRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+      setSearchLoading(true);
+      searchContributor(token, contributorId, q, { limit: 20, signal: controller.signal })
+        .then(res => {
+          if (controller.signal.aborted) return;
+          setSearchResults(res.results);
+        })
+        .catch(err => {
+          if (controller.signal.aborted) return;
+          if ((err as { name?: string })?.name === "AbortError") return;
+          setSearchResults([]);
+        })
+        .finally(() => {
+          if (controller.signal.aborted) return;
+          setSearchLoading(false);
+        });
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [searchQuery, isContributor, session]);
+
+  // Close dropdown on outside click
+  React.useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (!searchContainerRef.current) return;
+      if (!searchContainerRef.current.contains(e.target as Node)) setSearchOpen(false);
+    }
+    if (searchOpen) document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [searchOpen]);
+
+  function handleResultClick(r: ContributorSearchResult) {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSearchResults(null);
+    if (r.url) router.push(r.url);
+  }
+
+  const ResultIcon = (type: ContributorSearchResult["type"]) => {
+    if (type === "task") return ClipboardCheck;
+    if (type === "learning") return GraduationCap;
+    return FileText; // submission
+  };
 
   const uuidSegment = React.useMemo(() => {
     const segments = pathname.split("/").filter(Boolean);
@@ -225,8 +305,12 @@ React.useEffect(() => {
           >
             <Search className="w-[13px] h-[13px] shrink-0 text-gray-400" />
             <input
-              type="text"
+              type="search"
+              name="global-search"
               placeholder="Search everything…"
+              autoComplete="off"
+              data-1p-ignore="true"
+              data-lpignore="true"
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
               className="border-none outline-none bg-transparent w-full text-[13px] text-gray-700 placeholder:text-gray-400"

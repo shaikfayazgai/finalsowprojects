@@ -37,6 +37,7 @@ import {
 import { useSession } from "next-auth/react";
 import { sowApi } from "@/lib/api/sow";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { useEnterpriseCompanyStore } from "@/lib/stores/enterprise-company-store";
 import { authApi } from "@/lib/api/auth";
 import { ApiError, fetchInternal } from "@/lib/api/client";
 import { toast } from "@/lib/stores/toast-store";
@@ -161,24 +162,26 @@ export default function SettingsPage() {
   /* ── Session + store data (backend API) ── */
   const { data: session } = useSession();
   const { registrationData, onboardingProgress } = useAuthStore();
+  const storedCompany = useEnterpriseCompanyStore((s) => s.company);
+  const setCompanyInStore = useEnterpriseCompanyStore((s) => s.setCompany);
   const accessToken = (session as any)?.user?.accessToken ?? "";
   console.log("FULL SESSION:", session);
 
-  /* ── Company Profile state — seeded from API / onboarding store ── */
-  const [companyName, setCompanyName] = useState(registrationData?.companyName || "");
+  /* ── Company Profile state — seeded from local store first, then registration/onboarding ── */
+  const [companyName, setCompanyName] = useState(storedCompany.companyName || registrationData?.companyName || "");
   const [logo, setLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [industryType, setIndustryType] = useState("Technology");
-  const [companySize, setCompanySize] = useState("51-200");
-  const [addressLine1, setAddressLine1] = useState(onboardingProgress?.step1?.addressLine1 || "");
-  const [addressLine2, setAddressLine2] = useState(onboardingProgress?.step1?.addressLine2 || "");
-  const [city, setCity] = useState(onboardingProgress?.step1?.city || "");
-  const [addrState, setAddrState] = useState(onboardingProgress?.step1?.stateProvince || "");
-  const [postalCode, setPostalCode] = useState(onboardingProgress?.step1?.postalCode || "");
-  const [country, setCountry] = useState(registrationData?.countryOfIncorporation || "");
-  const [website, setWebsite] = useState("");
-  const [primaryEmail, setPrimaryEmail] = useState(registrationData?.adminEmail || "");
-  const [taxId, setTaxId] = useState(onboardingProgress?.step1?.taxId || "");
+  const [industryType, setIndustryType] = useState(storedCompany.industryType || registrationData?.industry || "Technology");
+  const [companySize, setCompanySize] = useState(storedCompany.companySize || registrationData?.companySize || "51-200");
+  const [addressLine1, setAddressLine1] = useState(storedCompany.addressLine1 || onboardingProgress?.step1?.addressLine1 || "");
+  const [addressLine2, setAddressLine2] = useState(storedCompany.addressLine2 || onboardingProgress?.step1?.addressLine2 || "");
+  const [city, setCity] = useState(storedCompany.city || onboardingProgress?.step1?.city || "");
+  const [addrState, setAddrState] = useState(storedCompany.addrState || onboardingProgress?.step1?.stateProvince || "");
+  const [postalCode, setPostalCode] = useState(storedCompany.postalCode || onboardingProgress?.step1?.postalCode || "");
+  const [country, setCountry] = useState(storedCompany.country || registrationData?.countryOfIncorporation || "");
+  const [website, setWebsite] = useState(storedCompany.website || registrationData?.website || "");
+  const [primaryEmail, setPrimaryEmail] = useState(storedCompany.primaryEmail || registrationData?.adminEmail || "");
+  const [taxId, setTaxId] = useState(storedCompany.taxId || onboardingProgress?.step1?.taxId || "");
   const [verificationStatus] = useState<"verified" | "pending" | "rejected">("verified");
   const [isEditingCompany, setIsEditingCompany] = useState(false);
 
@@ -467,26 +470,22 @@ export default function SettingsPage() {
                         Cancel
                       </Button>
                       <Button variant="primary" size="sm"
-                        onClick={async () => {
-                          try {
-                            await sowApi.updateProfile({
-                              company_name: companyName,
-                              industry: industryType,
-                              company_size: companySize,
-                              address_line1: addressLine1,
-                              address_line2: addressLine2,
-                              city,
-                              state: addrState,
-                              postal_code: postalCode,
-                              country,
-                              website,
-                              email: primaryEmail,
-                            } as any);
-                            setIsEditingCompany(false);
-                            toast.success("Company profile saved successfully.");
-                          } catch {
-                            toast.error("Failed to save. Please try again.");
-                          }
+                        onClick={() => {
+                          setCompanyInStore({
+                            companyName,
+                            industryType,
+                            companySize,
+                            addressLine1,
+                            addressLine2,
+                            city,
+                            addrState,
+                            postalCode,
+                            country,
+                            website,
+                            primaryEmail,
+                          });
+                          setIsEditingCompany(false);
+                          toast.success("Company profile saved successfully.");
                         }}
                       >
                         Save
@@ -558,7 +557,7 @@ export default function SettingsPage() {
                         <Select value={companySize} onValueChange={setCompanySize}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {["1-50", "51-200", "201-1000", "1000+"].map((v) => (
+                            {["1-10", "11-50", "51-200", "201-1000", "1001-5000", "5001-10000", "10000+"].map((v) => (
                               <SelectItem key={v} value={v}>{v}</SelectItem>
                             ))}
                           </SelectContent>

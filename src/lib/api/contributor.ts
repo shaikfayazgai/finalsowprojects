@@ -179,6 +179,19 @@ export interface ContributorSettingsResponse {
   quiet_hours_start: string;
   quiet_hours_end: string;
   two_factor_enabled: boolean;
+  // Read-only freelancer summary surfaced on the settings page.
+  // Editing happens on /contributor/profile.
+  freelancer_profile?: {
+    full_name: string | null;
+    skills: string[];
+    experience_level: string | null;
+    portfolio_url: string | null;
+    linkedin: string | null;
+    weekly_hours: number | null;
+    availability: string | null;
+    country: string | null;
+    city: string | null;
+  };
 }
 
 export async function fetchContributorSettings(
@@ -2893,4 +2906,46 @@ export async function fetchPublicCredential(shareId: string): Promise<PublicCred
   }
 
   return res.json() as Promise<PublicCredential>;
+}
+
+// ── Contributor universal search ─────────────────────────────────────────────
+
+export type ContributorSearchResultType = "task" | "learning" | "submission";
+
+export interface ContributorSearchResult {
+  type: ContributorSearchResultType;
+  id: string;
+  title: string;
+  subtitle: string | null;
+  url: string | null;
+  score: number;
+}
+
+export interface ContributorSearchResponse {
+  query: string;
+  total: number;
+  results: ContributorSearchResult[];
+}
+
+export async function searchContributor(
+  token: string,
+  contributorId: string,
+  query: string,
+  options?: { limit?: number; signal?: AbortSignal },
+): Promise<ContributorSearchResponse> {
+  const limit = options?.limit ?? 20;
+  const path = `/api/contributor/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+  const res = await fetchInternal(path, {
+    method: "GET",
+    headers: profileHeaders(token, contributorId),
+    signal: options?.signal,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: `Error ${res.status}` }));
+    throw new ApiError(
+      res.status,
+      (body as { detail?: string })?.detail ?? `Search failed (${res.status})`,
+    );
+  }
+  return res.json() as Promise<ContributorSearchResponse>;
 }

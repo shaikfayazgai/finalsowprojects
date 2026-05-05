@@ -143,6 +143,13 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -225,7 +232,12 @@ export default function MessagesPage() {
 
   React.useEffect(() => {
     if (sessionStatus === "authenticated") {
-      loadThreads(getContributorAccessToken(session) ?? "");
+      const t = getContributorAccessToken(session);
+      if (t) loadThreads(t);
+      else {
+        setLoadingThreads(false);
+        setThreadsError("Not authenticated.");
+      }
     } else if (sessionStatus === "unauthenticated") {
       setLoadingThreads(false);
       setThreadsError("Not authenticated.");
@@ -446,7 +458,7 @@ export default function MessagesPage() {
                     style={{ borderBottom: "1px solid var(--border-hair)" }}
                   >
                     <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center text-white text-[10px] font-semibold shrink-0 bg-gradient-to-br", role.color)}>
-                      {thread.avatar}
+                      {initials(thread.senderName)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-0.5">
@@ -501,7 +513,7 @@ export default function MessagesPage() {
                 </button>
 
                 <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center text-white text-[10px] font-semibold shrink-0 bg-gradient-to-br", (roleConfig[selected.senderRole] ?? defaultRole).color)}>
-                  {selected.avatar}
+                  {initials(selected.senderName)}
                 </div>
 
                 <div className="flex-1 min-w-0">

@@ -40,14 +40,14 @@ function CountryDialPicker({ value, onChange, disabled }: { value: string; onCha
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1.5 w-60 rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden">
+        <div className="absolute left-0 bottom-full z-50 mb-1.5 w-60 rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
             <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
             <input ref={searchRef} type="text" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
               className="flex-1 text-sm text-gray-900 bg-transparent outline-none placeholder:text-gray-400" />
             {search && <button type="button" onClick={() => setSearch("")} className="text-gray-400 hover:text-gray-600"><X className="w-3.5 h-3.5" /></button>}
           </div>
-          <div className="max-h-52 overflow-y-auto overscroll-contain">
+          <div className="max-h-36 overflow-y-auto overscroll-contain">
             {filtered.length === 0 && <p className="px-4 py-3 text-sm text-gray-400 text-center">No results</p>}
             {filtered.map(c => (
               <button key={c.name} type="button" onClick={() => { onChange(c.name); setOpen(false); setSearch(""); }}

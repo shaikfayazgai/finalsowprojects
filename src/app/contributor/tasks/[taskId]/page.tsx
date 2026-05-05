@@ -1982,8 +1982,9 @@ export default function ContributorTaskDetailPage() {
                       });
                       setUploads((prev: any[]) => [...prev, {
                         id: result.id,
-                        fileName: result.filename,
-                        title: result.title || result.filename,
+                        fileName: result.filename || uploadFile.name,
+                        filename: result.filename || uploadFile.name,
+                        title: result.title || result.filename || uploadFile.name,
                         fileSize: uploadFile.size,
                         size_bytes: uploadFile.size,
                         uploadedAt: result.uploaded_at,
