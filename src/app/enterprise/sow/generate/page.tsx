@@ -1286,6 +1286,21 @@ function SOWGenerateWizardPageInner() {
     }
   }, [session?.user?.name]);
 
+  // AI-suggest tech stack on Section B — backend includes data.tech_stack.ai_suggestion.line
+  // in the existing GET /wizards/:id response once Step 1 (Scope) is complete. Pre-fill the
+  // textbox only when it's empty so we never overwrite user input.
+  React.useEffect(() => {
+    if (formData.techStack.trim().length > 0) return;
+    const wd = wizardQuery.data as { data?: Record<string, unknown> } | Record<string, unknown> | undefined;
+    const inner = (wd as { data?: Record<string, unknown> })?.data ?? wd;
+    const techStack = (inner as { tech_stack?: { ai_suggestion?: { line?: string } | null } } | undefined)?.tech_stack;
+    const suggestion = techStack?.ai_suggestion?.line;
+    if (typeof suggestion === "string" && suggestion.trim().length > 0) {
+      setFormData(prev => ({ ...prev, techStack: suggestion }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wizardQuery.data]);
+
   // Scroll to top on page load and step change
   React.useEffect(() => {
     if ("scrollRestoration" in history) {
