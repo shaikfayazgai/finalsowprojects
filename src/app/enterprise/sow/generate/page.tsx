@@ -246,6 +246,7 @@ interface FormData {
   projectMethodology: string;
   dataRetentionPolicy: string;
   complianceStandards: string[];
+  customComplianceStandards: string[];
   auditFrequency: string;
   securityAuditFrequency: string;
   dataPrivacyOfficer: string;
@@ -411,6 +412,7 @@ const initialFormData: FormData = {
   projectMethodology: "",
   dataRetentionPolicy: "",
   complianceStandards: [],
+  customComplianceStandards: [],
   auditFrequency: "",
   securityAuditFrequency: "",
   dataPrivacyOfficer: "",
@@ -650,6 +652,7 @@ const DUMMY_FORM_DATA: FormData = {
   projectMethodology: "agile_scrum",
   dataRetentionPolicy: "7_years",
   complianceStandards: ["gdpr", "soc2", "iso_27001"],
+  customComplianceStandards: [],
   auditFrequency: "quarterly",
   securityAuditFrequency: "bi_annually",
   dataPrivacyOfficer: "Priya Rao — privacy@northwindglobal.example",
@@ -1028,6 +1031,68 @@ function OtherLanguageTagInput({ languages, onChange }: { languages: string[]; o
   );
 }
 
+function CustomStandardTagInput({ standards, onChange }: { standards: string[]; onChange: (v: string[]) => void }) {
+  const [inputValue, setInputValue] = React.useState("");
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const addStandard = () => {
+    const trimmed = inputValue.trim();
+    if (!trimmed) return;
+    if (standards.some((s) => s.toLowerCase() === trimmed.toLowerCase())) {
+      setInputValue("");
+      return;
+    }
+    onChange([...standards, trimmed]);
+    setInputValue("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") { e.preventDefault(); addStandard(); }
+    if (e.key === "Backspace" && !inputValue && standards.length > 0) {
+      onChange(standards.slice(0, -1));
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <label className="text-[12px] font-semibold text-gray-600 mb-1.5 block">Custom Standards</label>
+      <div
+        onClick={() => inputRef.current?.focus()}
+        className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 cursor-text transition-all duration-200 focus-within:border-[#A67763] focus-within:ring-2 focus-within:ring-[rgba(166,119,99,0.15)]"
+        style={{ minHeight: 40 }}
+      >
+        {standards.map((s, idx) => (
+          <span
+            key={idx}
+            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium"
+            style={{ background: 'rgba(166,119,99,0.10)', color: '#A67763' }}
+          >
+            {s}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onChange(standards.filter((_, i) => i !== idx)); }}
+              className="hover:text-red-500 transition-colors"
+              style={{ lineHeight: 0 }}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={addStandard}
+          placeholder={standards.length === 0 ? "Type a standard and press Enter..." : ""}
+          className="flex-1 min-w-[160px] border-none outline-none bg-transparent text-[13px] text-gray-900 placeholder:text-gray-400"
+          style={{ padding: 0 }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function RadioGroup({ value, onChange, options }: {
   value: string;
   onChange: (v: string) => void;
@@ -1328,6 +1393,15 @@ function SOWGenerateWizardPageInner() {
   React.useEffect(() => {
     saveDraft(formData, currentStep, skippedSteps);
   }, [formData, currentStep, skippedSteps]);
+
+  // Clear custom compliance tags when "custom" checkbox is unchecked
+  React.useEffect(() => {
+    if (!(formData.complianceStandards ?? []).includes("custom")) {
+      if ((formData.customComplianceStandards ?? []).length > 0) {
+        setFormData((prev) => ({ ...prev, customComplianceStandards: [] }));
+      }
+    }
+  }, [formData.complianceStandards]);
 
   // Business rule: Deployment = Not in Scope → auto-reset and hide Go-Live / Hypercare
   React.useEffect(() => {
@@ -4107,15 +4181,11 @@ function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeLi
         </div>
         <div>
           <FieldLabel>Onboarding Process</FieldLabel>
-          <Select value={formData.onboardingProcess} onValueChange={(v) => updateField("onboardingProcess", v)}>
-            <SelectTrigger><SelectValue placeholder="Select onboarding process" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="standard_access">Standard (Access to Jira, Slack, Repo)</SelectItem>
-              <SelectItem value="extended">Extended (Includes training sessions)</SelectItem>
-              <SelectItem value="minimal">Minimal</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
-            </SelectContent>
-          </Select>
+          <Input
+            placeholder="Describe the onboarding process..."
+            value={formData.onboardingProcess}
+            onChange={(e) => updateField("onboardingProcess", e.target.value)}
+          />
         </div>
       </div>
 
@@ -4516,37 +4586,6 @@ function Step7GovernanceCompliance({ formData, updateField, errors = {}, blurFie
         </div>
       </div>
 
-      {/* Project Methodology & Data Retention */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <FieldLabel>Project Methodology</FieldLabel>
-          <Select value={formData.projectMethodology} onValueChange={(v) => updateField("projectMethodology", v)}>
-            <SelectTrigger><SelectValue placeholder="Select methodology" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="agile_scrum">Agile / Scrum</SelectItem>
-              <SelectItem value="agile_kanban">Agile / Kanban</SelectItem>
-              <SelectItem value="waterfall">Waterfall</SelectItem>
-              <SelectItem value="hybrid">Hybrid</SelectItem>
-              <SelectItem value="safe">SAFe</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <FieldLabel>Data Retention Policy</FieldLabel>
-          <Select value={formData.dataRetentionPolicy} onValueChange={(v) => updateField("dataRetentionPolicy", v)}>
-            <SelectTrigger><SelectValue placeholder="Select retention policy" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1_year">1 Year</SelectItem>
-              <SelectItem value="3_years">3 Years</SelectItem>
-              <SelectItem value="5_years">5 Years</SelectItem>
-              <SelectItem value="7_years">7 Years</SelectItem>
-              <SelectItem value="10_years">10 Years</SelectItem>
-              <SelectItem value="indefinite">Indefinite</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
       {/* ── SECTION B — Compliance & Audits ── */}
       <SectionHeading>Section B — Compliance &amp; Audits</SectionHeading>
 
@@ -4561,6 +4600,7 @@ function Step7GovernanceCompliance({ formData, updateField, errors = {}, blurFie
             { value: "soc2", label: "SOC2" },
             { value: "iso_27001", label: "ISO 27001" },
             { value: "local_data_laws", label: "Local Data Laws" },
+            { value: "custom", label: "Custom" },
           ].map((opt) => (
             <label key={opt.value} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 bg-white cursor-pointer hover:border-gray-200 transition-all">
               <input
@@ -4577,62 +4617,15 @@ function Step7GovernanceCompliance({ formData, updateField, errors = {}, blurFie
             </label>
           ))}
         </div>
+        {(formData.complianceStandards ?? []).includes("custom") && (
+          <CustomStandardTagInput
+            standards={formData.customComplianceStandards ?? []}
+            onChange={(v) => updateField("customComplianceStandards", v)}
+          />
+        )}
         <FieldError error={errors.complianceStandards} field="complianceStandards" />
       </div>
 
-      {/* Audit Frequency & Security Audit Frequency */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <FieldLabel>Audit Frequency</FieldLabel>
-          <Select value={formData.auditFrequency} onValueChange={(v) => updateField("auditFrequency", v)}>
-            <SelectTrigger><SelectValue placeholder="Select audit frequency" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="monthly">Monthly</SelectItem>
-              <SelectItem value="quarterly">Quarterly</SelectItem>
-              <SelectItem value="bi_annually">Bi-Annually</SelectItem>
-              <SelectItem value="annually">Annually</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <FieldLabel>Security Audit Frequency</FieldLabel>
-          <Select value={formData.securityAuditFrequency} onValueChange={(v) => updateField("securityAuditFrequency", v)}>
-            <SelectTrigger><SelectValue placeholder="Select security audit frequency" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="monthly">Monthly</SelectItem>
-              <SelectItem value="quarterly">Quarterly</SelectItem>
-              <SelectItem value="bi_annually">Bi-Annually</SelectItem>
-              <SelectItem value="annually">Annually</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Data Privacy Officer & DPA Required */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <FieldLabel>Data Privacy Officer (DPO)</FieldLabel>
-          <Input placeholder="Contact name or email" value={formData.dataPrivacyOfficer} onChange={(e) => updateField("dataPrivacyOfficer", e.target.value)} />
-        </div>
-        <div className="flex items-end">
-          <div className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 bg-gray-50/50 w-full">
-            <span className="text-[12px] font-semibold text-gray-600 uppercase tracking-wider">DPA Required?</span>
-            <button
-              type="button"
-              onClick={() => updateField("dpaRequired", !formData.dpaRequired)}
-              className="relative ml-auto w-11 h-6 rounded-full transition-all duration-200"
-              style={{
-                background: formData.dpaRequired ? '#4D5741' : '#d1d5db',
-              }}
-            >
-              <span
-                className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
-                style={{ transform: formData.dpaRequired ? 'translateX(20px)' : 'translateX(0)' }}
-              />
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* SLA Uptime Commitment */}
       <div>
@@ -4722,8 +4715,7 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
             <SelectTrigger><SelectValue placeholder="Select IP ownership" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="client">Client</SelectItem>
-              <SelectItem value="vendor">Vendor</SelectItem>
-              <SelectItem value="shared">Shared / Licensed</SelectItem>
+              <SelectItem value="glimmora_team">GlimmoraTeam</SelectItem>
             </SelectContent>
           </Select>
           <FieldError error={errors.ipOwnership} field="ipOwnership" />
@@ -4745,18 +4737,6 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <FieldLabel>Liability Cap</FieldLabel>
-          <Select value={formData.liabilityCap} onValueChange={(v) => updateField("liabilityCap", v)}>
-            <SelectTrigger><SelectValue placeholder="Select liability cap" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="100_percent_fees">100% of Fees</SelectItem>
-              <SelectItem value="200_percent_fees">200% of Fees</SelectItem>
-              <SelectItem value="fixed_amount">Fixed Amount</SelectItem>
-              <SelectItem value="unlimited">Unlimited</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
           <FieldLabel>Governing Law</FieldLabel>
           <Select value={formData.governingLaw} onValueChange={(v) => updateField("governingLaw", v)}>
             <SelectTrigger><SelectValue placeholder="Select governing law" /></SelectTrigger>
@@ -4773,58 +4753,11 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <FieldLabel>Dispute Resolution</FieldLabel>
-          <Select value={formData.disputeResolution} onValueChange={(v) => updateField("disputeResolution", v)}>
-            <SelectTrigger><SelectValue placeholder="Select dispute resolution" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="arbitration">Arbitration</SelectItem>
-              <SelectItem value="mediation">Mediation</SelectItem>
-              <SelectItem value="litigation">Litigation</SelectItem>
-              <SelectItem value="mediation_then_arbitration">Mediation then Arbitration</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <FieldLabel>Non-Solicitation Period</FieldLabel>
-          <Select value={formData.nonSolicitationPeriod} onValueChange={(v) => updateField("nonSolicitationPeriod", v)}>
-            <SelectTrigger><SelectValue placeholder="Select period" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="6_months">6 Months</SelectItem>
-              <SelectItem value="12_months">12 Months</SelectItem>
-              <SelectItem value="18_months">18 Months</SelectItem>
-              <SelectItem value="24_months">24 Months</SelectItem>
-              <SelectItem value="none">None</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <FieldLabel>Insurance Requirements</FieldLabel>
-          <Select value={formData.insuranceRequirements} onValueChange={(v) => updateField("insuranceRequirements", v)}>
-            <SelectTrigger><SelectValue placeholder="Select insurance" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="standard_pi">Standard Professional Indemnity</SelectItem>
-              <SelectItem value="enhanced_pi">Enhanced Professional Indemnity</SelectItem>
-              <SelectItem value="cyber_liability">Cyber Liability</SelectItem>
-              <SelectItem value="none">None Required</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <FieldLabel>Confidentiality Terms</FieldLabel>
-          <Select value={formData.confidentialityTerms} onValueChange={(v) => updateField("confidentialityTerms", v)}>
-            <SelectTrigger><SelectValue placeholder="Select confidentiality" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="standard_nda">Standard NDA applies</SelectItem>
-              <SelectItem value="mutual_nda">Mutual NDA</SelectItem>
-              <SelectItem value="custom_nda">Custom NDA</SelectItem>
-              <SelectItem value="none">None</SelectItem>
-            </SelectContent>
-          </Select>
+      <div>
+        <FieldLabel>Confidentiality / NDA</FieldLabel>
+        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-[13px] text-gray-700">
+          <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: '#4D5741' }} />
+          GlimmoraTeam Standard NDA
         </div>
       </div>
 
