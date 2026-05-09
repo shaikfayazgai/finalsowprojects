@@ -356,7 +356,7 @@ export const sowApi = {
   },
 
   deleteSOW(sowId: string): Promise<BaseResponse> {
-    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`, "DELETE");
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}`, "DELETE", undefined, false, true);
   },
 
   getUploadStatus(sowId: string): Promise<BaseResponse> {

@@ -9,10 +9,11 @@ import {
   ChevronRight, GitBranch, Layers, Zap, AlertTriangle, Target, X, Download,
   Sparkles, Brain, Milestone as MilestoneIcon, FileText, ExternalLink,
   FolderOpen, Circle, Lock, Link2, Pencil, LayoutList, GanttChartSquare,
-  ClipboardList, History, Package, RotateCcw, TrendingUp, CreditCard, Users, BarChart2,
+  ClipboardList, History, Package, TrendingUp, CreditCard, Users, BarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { fetchInternal, ApiError } from "@/lib/api/client";
+import { confirmEnterpriseDecompositionPlan } from "@/lib/api/decomposition-plans";
 import { Skeleton } from "@/components/ui";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import type {
@@ -457,7 +458,6 @@ export default function PlanDetailPage() {
   const { data: apiTasksRes } = useTasks(planId);
   const { data: apiMilestonesRes } = useMilestones(planId);
 
-
   // Map backend status to frontend PlanStatus
   const normalizeStatus = (s: string): PlanStatus => {
     const map: Record<string, PlanStatus> = {
@@ -630,6 +630,7 @@ export default function PlanDetailPage() {
   const [activeTab, setActiveTab] = React.useState(() => searchParams.get("tab") ?? "project_plan");
   const [aiGenerating, setAiGenerating] = React.useState(() => searchParams.get("ai") === "generating");
   const [checkedItems, setCheckedItems] = React.useState<Set<number>>(new Set());
+  const [confirmLoading, setConfirmLoading] = React.useState(false);
 
   // Expand first 2 milestones once data loads
   React.useEffect(() => {
@@ -811,6 +812,21 @@ export default function PlanDetailPage() {
     "I confirm the required skills and seniority levels match the project needs.",
   ];
   const toggleCheck = (i: number) => setCheckedItems((p) => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; });
+
+  const allChecked = checkedItems.size === checklistItems.length;
+
+  const handleConfirmPlan = async () => {
+    if (!allChecked || confirmLoading) return;
+    setConfirmLoading(true);
+    try {
+      await confirmEnterpriseDecompositionPlan(planId);
+      toast.success("Plan Confirmed", "The decomposition plan has been confirmed successfully.");
+    } catch (err) {
+      toast.error("Confirmation Failed", err instanceof Error ? err.message : "An error occurred.");
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
@@ -1009,8 +1025,10 @@ export default function PlanDetailPage() {
 
                   return (
                     <div key={milestone.id} className="card-parchment overflow-hidden">
-                      <button onClick={() => toggleMilestone(milestone.id)}
-                        className="w-full flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-black/[0.02]">
+                      <div
+                        className="w-full flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-black/[0.02] cursor-pointer"
+                        onClick={() => toggleMilestone(milestone.id)}
+                      >
                         <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
                           milestone.itemStatus === "accepted" ? "bg-gradient-to-br from-forest-400 to-forest-600" : "bg-gradient-to-br from-brown-300 to-brown-500"
                         )}>
@@ -1036,7 +1054,7 @@ export default function PlanDetailPage() {
                           <span className="text-[10px] font-mono text-gray-500 w-7 text-right">{msPct}%</span>
                           {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                         </div>
-                      </button>
+                      </div>
 
                       {isOpen && (
                         <div>
@@ -1172,6 +1190,34 @@ export default function PlanDetailPage() {
                     <span className={cn("text-[12px] leading-relaxed", checkedItems.has(i) ? "line-through text-gray-400" : "text-gray-600")}>{item}</span>
                   </div>
                 ))}
+                <div className="pt-1">
+                  <button
+                    onClick={handleConfirmPlan}
+                    disabled={!allChecked || confirmLoading}
+                    className={cn(
+                      "w-full flex items-center justify-center gap-2 text-[12px] font-semibold py-2.5 rounded-xl transition-all",
+                      allChecked && !confirmLoading
+                        ? "text-white bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 shadow-sm"
+                        : "text-gray-400 bg-gray-100 cursor-not-allowed"
+                    )}
+                  >
+                    {confirmLoading ? (
+                      <>
+                        <motion.span
+                          className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent"
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                        />
+                        Confirming…
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Confirm Plan
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 

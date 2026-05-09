@@ -76,9 +76,22 @@ import type {
   SkillTag,
   TaskDependency,
 } from "@/types/enterprise";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  useDecompositionPlan, useTasks, useMilestones, useIncreaseRevision,
+  useDecompositionPlan,
+  useTasks,
+  useMilestones,
+  useRequestRevision,
+  decompositionKeys,
 } from "@/lib/hooks/use-decomposition";
+import {
+  patchEnterpriseTask,
+  postEnterpriseTask,
+  deleteEnterpriseTask,
+  postEnterpriseSubtask,
+  patchEnterpriseSubtask,
+  deleteEnterpriseSubtask,
+} from "@/lib/api/decomposition-plans";
 
 /* ══════════════════════════════════════════════════════════════
    CONSTANTS
@@ -430,11 +443,12 @@ function EditableSubtaskCard({
         <Clock className="w-2.5 h-2.5 text-gray-400" />
         <Input
           type="number"
+          min={0}
           value={subtask.estimatedHours}
           onChange={(e) =>
             onUpdate({
               ...subtask,
-              estimatedHours: parseInt(e.target.value) || 0,
+              estimatedHours: Math.max(0, parseInt(e.target.value) || 0),
               isModified: true,
             })
           }
@@ -466,6 +480,25 @@ function EditableSubtaskCard({
    EDITABLE TASK CARD — C1 Step 3-4 + C2
    ══════════════════════════════════════════════════════════════ */
 
+const PRIORITY_DOT_COLOR: Record<string, string> = {
+  low: "bg-gray-300",
+  medium: "bg-teal-400",
+  high: "bg-gold-400",
+  critical: "bg-brown-500",
+};
+const PRIORITY_TEXT_COLOR: Record<string, string> = {
+  low: "text-gray-500",
+  medium: "text-teal-600",
+  high: "text-gold-600",
+  critical: "text-brown-600",
+};
+const PRIORITY_ACCENT: Record<string, string> = {
+  low: "border-l-gray-300",
+  medium: "border-l-teal-400",
+  high: "border-l-gold-400",
+  critical: "border-l-brown-500",
+};
+
 function EditableTaskCard({
   task,
   index,
@@ -479,7 +512,8 @@ function EditableTaskCard({
   onUpdate: (updated: EditableTask) => void;
   onDelete: () => void;
 }) {
-  const [expanded, setExpanded] = React.useState(false);
+  const [descOpen, setDescOpen] = React.useState(false);
+  const [criteriaOpen, setCriteriaOpen] = React.useState(false);
   const [subtasksOpen, setSubtasksOpen] = React.useState(false);
   const [newCriteria, setNewCriteria] = React.useState("");
 
@@ -490,386 +524,264 @@ function EditableTaskCard({
       isModified: true,
     });
   };
-
   const handleSkillRemove = (skillName: string) => {
-    onUpdate({
-      ...task,
-      skillsRequired: task.skillsRequired.filter((s) => s.name !== skillName),
-      isModified: true,
-    });
+    onUpdate({ ...task, skillsRequired: task.skillsRequired.filter((s) => s.name !== skillName), isModified: true });
   };
-
-  const handleSkillProficiency = (
-    skillName: string,
-    proficiency: SkillTag["proficiency"]
-  ) => {
-    onUpdate({
-      ...task,
-      skillsRequired: task.skillsRequired.map((s) =>
-        s.name === skillName ? { ...s, proficiency } : s
-      ),
-      isModified: true,
-    });
+  const handleSkillProficiency = (skillName: string, proficiency: SkillTag["proficiency"]) => {
+    onUpdate({ ...task, skillsRequired: task.skillsRequired.map((s) => s.name === skillName ? { ...s, proficiency } : s), isModified: true });
   };
-
   const handleSubtaskUpdate = (updated: EditableSubtask) => {
-    onUpdate({
-      ...task,
-      subtasks: task.subtasks.map((st) => (st.id === updated.id ? updated : st)),
-      isModified: true,
-    });
+    onUpdate({ ...task, subtasks: task.subtasks.map((st) => (st.id === updated.id ? updated : st)), isModified: true });
   };
-
   const handleSubtaskDelete = (subtaskId: string) => {
-    onUpdate({
-      ...task,
-      subtasks: task.subtasks.filter((st) => st.id !== subtaskId),
-      isModified: true,
-    });
+    onUpdate({ ...task, subtasks: task.subtasks.filter((st) => st.id !== subtaskId), isModified: true });
   };
-
   const handleAddSubtask = () => {
     const newSt: EditableSubtask = {
-      id: `st-new-${Date.now()}`,
-      taskId: task.id,
-      title: "",
-      estimatedHours: 8,
-      skillsRequired: [],
-      itemStatus: "proposed",
-      aiConfidence: 0,
-      isNew: true,
+      id: `st-new-${Date.now()}`, taskId: task.id, title: "", estimatedHours: 8,
+      skillsRequired: [], itemStatus: "proposed", aiConfidence: 0, isNew: true,
     };
-    onUpdate({
-      ...task,
-      subtasks: [...task.subtasks, newSt],
-      isModified: true,
-    });
+    onUpdate({ ...task, subtasks: [...task.subtasks, newSt], isModified: true });
     setSubtasksOpen(true);
   };
-
   const handleAddCriteria = () => {
     if (!newCriteria.trim()) return;
-    onUpdate({
-      ...task,
-      acceptanceCriteria: [...task.acceptanceCriteria, newCriteria.trim()],
-      isModified: true,
-    });
+    onUpdate({ ...task, acceptanceCriteria: [...task.acceptanceCriteria, newCriteria.trim()], isModified: true });
     setNewCriteria("");
   };
-
   const handleRemoveCriteria = (idx: number) => {
-    onUpdate({
-      ...task,
-      acceptanceCriteria: task.acceptanceCriteria.filter((_, i) => i !== idx),
-      isModified: true,
-    });
+    onUpdate({ ...task, acceptanceCriteria: task.acceptanceCriteria.filter((_, i) => i !== idx), isModified: true });
   };
+
+  const fieldLabel = (text: string) => (
+    <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 w-24 shrink-0">{text}</span>
+  );
 
   return (
     <motion.div
       layout
       variants={fadeUp}
       className={cn(
-        "group relative rounded-xl border bg-white overflow-hidden transition-all duration-300 hover:shadow-md border-l-[3px]",
-        priorityColors[task.priority],
-        task.isNew
-          ? "border-forest-200 ring-1 ring-forest-200/40"
-          : task.isModified
-            ? "border-gold-200/60 ring-1 ring-gold-200/30"
-            : "border-gray-200"
+        "group relative bg-white rounded-2xl border border-l-[3px] overflow-hidden transition-all duration-200 hover:shadow-lg",
+        PRIORITY_ACCENT[task.priority],
+        task.isNew ? "border-forest-200 ring-1 ring-forest-100" : task.isModified ? "border-gold-200 ring-1 ring-gold-100" : "border-gray-200",
       )}
     >
-      <div className="flex items-start gap-3 p-4">
-        {/* Drag handle */}
-        <div className="flex flex-col items-center gap-1 pt-1.5 shrink-0 cursor-grab active:cursor-grabbing">
+      {/* ── Card top bar ── */}
+      <div className="flex items-center gap-2 px-4 pt-3.5 pb-0">
+        <div className="flex items-center gap-2 shrink-0 cursor-grab active:cursor-grabbing">
           <GripVertical className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors" />
-          <span className="text-[9px] font-bold text-gray-400 font-mono">
-            #{index + 1}
+          <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
+            {index + 1}
           </span>
         </div>
+        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+          {task.isNew && <span className="text-[9px] font-semibold border border-forest-300 text-forest-600 bg-forest-50 px-2 py-0.5 rounded-full">New</span>}
+          {task.isModified && !task.isNew && <span className="text-[9px] font-semibold border border-gold-300 text-gold-600 bg-gold-50 px-2 py-0.5 rounded-full">Modified</span>}
+          <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
 
-        {/* Main content */}
-        <div className="flex-1 space-y-3 min-w-0">
-          {/* Title row */}
-          <div className="flex items-center gap-2">
+      {/* ── Labeled fields ── */}
+      <div className="px-4 pt-3 pb-4 space-y-0" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+
+        {/* Title */}
+        <div className="flex items-center gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+          {fieldLabel("Title")}
+          <Input
+            value={task.title}
+            onChange={(e) => onUpdate({ ...task, title: e.target.value, isModified: true })}
+            className="flex-1 h-8 text-[13px] font-semibold text-gray-900 border-gray-200 bg-gray-50 hover:bg-white focus:bg-white rounded-xl px-3"
+            placeholder="Task title…"
+          />
+        </div>
+
+        {/* Priority */}
+        <div className="flex items-center gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+          {fieldLabel("Priority")}
+          <Select value={task.priority} onValueChange={(v) => onUpdate({ ...task, priority: v as EditableTask["priority"], isModified: true })}>
+            <SelectTrigger className="h-8 w-[140px] text-[11px] rounded-xl border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-1.5">
+                <span className={cn("w-2 h-2 rounded-full shrink-0", PRIORITY_DOT_COLOR[task.priority])} />
+                <span className={cn("font-medium capitalize", PRIORITY_TEXT_COLOR[task.priority])}>{task.priority}</span>
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              {(["low","medium","high","critical"] as const).map(p => (
+                <SelectItem key={p} value={p}>
+                  <div className="flex items-center gap-2">
+                    <span className={cn("w-2 h-2 rounded-full", PRIORITY_DOT_COLOR[p])} />
+                    <span className="capitalize">{p}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Estimated Hours */}
+        <div className="flex items-center gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+          {fieldLabel("Est. Hours")}
+          <div className="flex items-center gap-1.5 h-8 px-3 rounded-xl border border-gray-200 bg-gray-50">
+            <Clock className="w-3 h-3 text-gray-400 shrink-0" />
             <Input
-              value={task.title}
-              onChange={(e) =>
-                onUpdate({ ...task, title: e.target.value, isModified: true })
-              }
-              className="flex-1 h-9 text-[13px] font-semibold border-transparent bg-transparent hover:bg-gray-50 focus:bg-white px-2 -mx-2 rounded-lg"
-              placeholder="Task title..."
+              type="number"
+              min={0}
+              value={task.estimatedHours}
+              onChange={(e) => onUpdate({ ...task, estimatedHours: Math.max(0, parseInt(e.target.value) || 0), isModified: true })}
+              className="h-6 w-14 text-[12px] font-medium text-center border-none bg-transparent p-0 focus:ring-0"
             />
-            {task.isNew && (
-              <span className="inline-flex items-center text-[9px] font-semibold h-5 border border-forest-300 text-forest-600 bg-forest-50 shrink-0 px-2 rounded-full">
-                New
-              </span>
-            )}
-            {task.isModified && !task.isNew && (
-              <span className="inline-flex items-center text-[9px] font-semibold h-5 border border-gold-300 text-gold-600 bg-gold-50 shrink-0 px-2 rounded-full">
-                Modified
-              </span>
-            )}
+            <span className="text-[10px] text-gray-400">hrs</span>
           </div>
+        </div>
 
-          {/* Description (collapsible) */}
-          <div>
+        {/* Skills */}
+        <div className="flex items-start gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 w-24 shrink-0 pt-1.5">Skills</span>
+          <div className="flex items-center gap-1.5 flex-wrap flex-1">
+            {task.skillsRequired.map((skill) => (
+              <span
+                key={skill.name}
+                className={cn(
+                  "inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-lg border",
+                  skill.source === "ai" ? "bg-gold-50 text-gold-700 border-gold-200" : "bg-gray-100 text-gray-600 border-gray-200",
+                )}
+              >
+                {skill.source === "ai" && <Sparkles className="w-2.5 h-2.5 text-gold-400" />}
+                {skill.name}
+                <SkillProficiencySelect skill={skill} onChangeProficiency={(p) => handleSkillProficiency(skill.name, p)} />
+                <button onClick={() => handleSkillRemove(skill.name)} className="ml-0.5 text-gray-400 hover:text-red-500 transition-colors">
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </span>
+            ))}
+            <SkillsPopover taskId={task.id} currentSkills={task.skillsRequired} onAdd={handleSkillAdd} />
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="flex items-start gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 w-24 shrink-0 pt-1">Description</span>
+          <div className="flex-1">
             <button
-              onClick={() => setExpanded(!expanded)}
-              className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 font-medium"
+              onClick={() => setDescOpen(!descOpen)}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 hover:text-gray-700 transition-colors mb-1"
             >
-              <PenLine className="w-3 h-3" />
-              {expanded ? "Hide description" : "Edit description"}
-              {expanded ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronRight className="w-3 h-3" />
-              )}
+              {descOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              {descOpen ? "Hide" : task.description ? "Edit" : "Add description"}
+              {task.description && !descOpen && <span className="w-1.5 h-1.5 rounded-full bg-teal-400 ml-1" />}
             </button>
             <AnimatePresence>
-              {expanded && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mt-2"
-                >
+              {descOpen && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                   <Textarea
                     value={task.description}
-                    onChange={(e) =>
-                      onUpdate({
-                        ...task,
-                        description: e.target.value,
-                        isModified: true,
-                      })
-                    }
-                    className="text-[12px] min-h-[60px] border-gray-200 bg-gray-50 rounded-lg resize-none"
-                    placeholder="Task description..."
+                    onChange={(e) => onUpdate({ ...task, description: e.target.value, isModified: true })}
+                    className="text-[12px] min-h-[72px] border-gray-200 bg-gray-50 rounded-xl resize-none"
+                    placeholder="Describe the task goals and context…"
                   />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
+        </div>
 
-          {/* Controls row */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Priority select */}
-            <div className="w-[120px]">
-              <Select
-                value={task.priority}
-                onValueChange={(v) =>
-                  onUpdate({
-                    ...task,
-                    priority: v as EditableTask["priority"],
-                    isModified: true,
-                  })
-                }
-              >
-                <SelectTrigger className="h-8 text-[11px] rounded-lg border-gray-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-beige-300" />
-                      Low
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="medium">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-teal-400" />
-                      Medium
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="high">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-gold-400" />
-                      High
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="critical">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-brown-500" />
-                      Critical
-                    </span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-           {/* Start Date picker */}
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-3 h-3 text-gray-400" />
-              <Input
-                type="date"
-                value={task.startDate ?? ""}
-                onChange={(e) =>
-                  onUpdate({
-                    ...task,
-                    startDate: e.target.value,
-                    isModified: true,
-                  })
-                }
-                className="h-8 w-36 text-[11px] px-2 rounded-lg border-gray-200"
-              />
-            </div>
-
-            {/* Dependencies indicator */}
-            {task.dependencies.length > 0 && (
-              <span className="flex items-center gap-1 text-[10px] text-teal-600 bg-teal-50 px-2 py-1 rounded-md font-medium">
-                <GitBranch className="w-3 h-3" />
-                {task.dependencies.length} dep
-                {task.dependencies.length > 1 ? "s" : ""}
-              </span>
-            )}
-
-            {/* AI confidence badge */}
-            {task.aiConfidence > 0 && (
-              <span className="flex items-center gap-1 text-[10px] text-gold-600 bg-gold-50 px-2 py-1 rounded-md font-medium">
-                <Sparkles className="w-3 h-3" />
-                {task.aiConfidence}% conf
-              </span>
-            )}
-          </div>
-
-          {/* Skills tags — C2: Skills Tagging */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Tag className="w-3 h-3 text-gray-400 shrink-0" />
-            {task.skillsRequired.map((skill) => (
-              <span
-                key={skill.name}
-                className={cn(
-                  "text-[9px] font-semibold px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors cursor-default",
-                  skill.source === "ai"
-                    ? "bg-gold-50 text-gold-700 border border-gold-200/40"
-                    : "bg-gray-100 text-gray-500"
-                )}
-              >
-                {skill.source === "ai" && (
-                  <Sparkles className="w-2.5 h-2.5 text-gold-400" />
-                )}
-                {skill.name}
-                <SkillProficiencySelect
-                  skill={skill}
-                  onChangeProficiency={(p) =>
-                    handleSkillProficiency(skill.name, p)
-                  }
-                />
-                <button
-                  onClick={() => handleSkillRemove(skill.name)}
-                  className="ml-0.5 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </span>
-            ))}
-            <SkillsPopover
-              taskId={task.id}
-              currentSkills={task.skillsRequired}
-              onAdd={handleSkillAdd}
-            />
-          </div>
-
-          {/* Acceptance Criteria */}
-          <div className="space-y-1.5">
+        {/* Acceptance Criteria */}
+        <div className="flex items-start gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 w-24 shrink-0 pt-1">Criteria</span>
+          <div className="flex-1">
             <button
-              onClick={() => {}}
-              className="text-[10px] text-gray-400 font-medium flex items-center gap-1"
+              onClick={() => setCriteriaOpen(!criteriaOpen)}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 hover:text-gray-700 transition-colors mb-1"
             >
-              <ListChecks className="w-3 h-3" />
-              Acceptance Criteria ({task.acceptanceCriteria.length})
-            </button>
-            <div className="space-y-1 pl-1">
-              {task.acceptanceCriteria.map((criteria, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-2 group/crit"
-                >
-                  <Check className="w-3 h-3 text-forest-400 shrink-0" />
-                  <span className="text-[11px] text-gray-700 flex-1">
-                    {criteria}
-                  </span>
-                  <button
-                    onClick={() => handleRemoveCriteria(idx)}
-                    className="opacity-0 group-hover/crit:opacity-100 p-0.5 text-gray-400 hover:text-red-500 transition-all"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-              <div className="flex items-center gap-2">
-                <Plus className="w-3 h-3 text-gray-300 shrink-0" />
-                <Input
-                  value={newCriteria}
-                  onChange={(e) => setNewCriteria(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddCriteria()}
-                  className="flex-1 h-7 text-[11px] border-transparent bg-transparent hover:bg-gray-50 focus:bg-white px-2 rounded-md"
-                  placeholder="Add acceptance criteria..."
-                />
-                {newCriteria && (
-                  <button
-                    onClick={handleAddCriteria}
-                    className="text-[10px] text-teal-600 hover:text-teal-700 font-medium"
-                  >
-                    Add
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Subtasks (collapsible) */}
-          <div className="pt-1">
-            <button
-              onClick={() => setSubtasksOpen(!subtasksOpen)}
-              className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 font-medium"
-            >
-              <Layers className="w-3 h-3" />
-              Subtasks ({task.subtasks.length})
-              {subtasksOpen ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronRight className="w-3 h-3" />
-              )}
+              {criteriaOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              {criteriaOpen ? "Hide" : "Acceptance Criteria"}
+              <span className="text-[9px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full font-semibold">{task.acceptanceCriteria.length}</span>
             </button>
             <AnimatePresence>
-              {subtasksOpen && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mt-2 space-y-1.5 pl-2 border-l-2 border-gray-200 ml-1.5"
-                >
-                  <AnimatePresence>
-                    {task.subtasks.map((st) => (
-                      <EditableSubtaskCard
-                        key={st.id}
-                        subtask={st}
-                        onUpdate={handleSubtaskUpdate}
-                        onDelete={() => handleSubtaskDelete(st.id)}
-                      />
+              {criteriaOpen && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                  <div className="space-y-1 bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+                    {task.acceptanceCriteria.map((criteria, idx) => (
+                      <div key={idx} className="flex items-center gap-2 group/crit py-1 border-b border-gray-100 last:border-0">
+                        <Check className="w-3 h-3 text-forest-400 shrink-0" />
+                        <span className="text-[11px] text-gray-700 flex-1">{criteria}</span>
+                        <button onClick={() => handleRemoveCriteria(idx)} className="opacity-0 group-hover/crit:opacity-100 p-0.5 text-gray-300 hover:text-red-400 transition-all">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                     ))}
-                  </AnimatePresence>
-                  <button
-                    onClick={handleAddSubtask}
-                    className="flex items-center gap-1.5 w-full py-2 px-3 rounded-lg border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all text-[10px] font-medium"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Add Subtask
-                  </button>
+                    <div className="flex items-center gap-2 pt-1">
+                      <Input
+                        value={newCriteria}
+                        onChange={(e) => setNewCriteria(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleAddCriteria()}
+                        className="flex-1 h-7 text-[11px] border-gray-200 bg-white rounded-lg px-2"
+                        placeholder="Add criteria and press Enter…"
+                      />
+                      {newCriteria && (
+                        <button onClick={handleAddCriteria} className="text-[10px] font-semibold text-teal-600 hover:text-teal-700 px-2 py-1 rounded-lg hover:bg-teal-50 transition-all">Add</button>
+                      )}
+                    </div>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        {/* Delete button */}
-        <button
-          onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all shrink-0"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        {/* Subtasks */}
+        <div className="flex items-start gap-3 py-2.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 w-24 shrink-0 pt-1">Subtasks</span>
+          <div className="flex-1">
+            <button
+              onClick={() => setSubtasksOpen(!subtasksOpen)}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 hover:text-gray-700 transition-colors mb-1"
+            >
+              {subtasksOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              {subtasksOpen ? "Hide" : "Subtasks"}
+              <span className="text-[9px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full font-semibold">{task.subtasks.length}</span>
+            </button>
+            <AnimatePresence>
+              {subtasksOpen && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                  <div className="space-y-1.5">
+                    <AnimatePresence>
+                      {task.subtasks.map((st) => (
+                        <EditableSubtaskCard key={st.id} subtask={st} onUpdate={handleSubtaskUpdate} onDelete={() => handleSubtaskDelete(st.id)} />
+                      ))}
+                    </AnimatePresence>
+                    <button
+                      onClick={handleAddSubtask}
+                      className="flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl border border-dashed border-gray-300 text-gray-400 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-all text-[10px] font-medium"
+                    >
+                      <Plus className="w-3 h-3" /> Add Subtask
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── Footer info row ── */}
+      <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap" style={{ background: "rgba(0,0,0,0.012)" }}>
+        {task.dependencies.length > 0 && (
+          <span className="flex items-center gap-1 text-[10px] font-medium text-teal-600 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-lg">
+            <GitBranch className="w-3 h-3" />
+            {task.dependencies.length} dep{task.dependencies.length > 1 ? "s" : ""}
+          </span>
+        )}
+        {task.aiConfidence > 0 && (
+          <span className="flex items-center gap-1 text-[10px] font-medium text-gold-600 bg-gold-50 border border-gold-200 px-2.5 py-1 rounded-lg">
+            <Sparkles className="w-3 h-3" />
+            AI {task.aiConfidence}% confidence
+          </span>
+        )}
       </div>
     </motion.div>
   );
@@ -1899,53 +1811,24 @@ function PlanSummarySidebar({
 }
 
 /* ══════════════════════════════════════════════════════════════
-   MAIN PAGE — EDIT DECOMPOSITION
+   EDIT PLAN CONTENT — receives mapped data as props
    ══════════════════════════════════════════════════════════════ */
 
-export default function EditDecompositionPage() {
-  const params = useParams();
+interface EditPlanContentProps {
+  plan: DecompositionPlan;
+  planId: string;
+  initialTasks: EditableTask[];
+  initialMilestones: EditableMilestone[];
+}
+
+function EditPlanContent({ plan, planId, initialTasks, initialMilestones }: EditPlanContentProps) {
   const router = useRouter();
-  const planId = params.planId as string;
+  const qc = useQueryClient();
+  const revisionMutation = useRequestRevision(planId);
 
-  // ── API data ──
-  const { data: apiPlanRes } = useDecompositionPlan(planId);
-  const { data: apiTasksRes } = useTasks(planId);
-  const { data: apiMilestonesRes } = useMilestones(planId);
-  const revisionMutation = useIncreaseRevision(planId);
-
-  const plan = React.useMemo(() => {
-    const raw = apiPlanRes?.data as Record<string, unknown> | null;
-    if (raw && (raw._id || raw.id)) {
-      return {
-        id: (raw._id ?? raw.id ?? planId) as string,
-        sowId: (raw.sow_id ?? raw.sowId ?? "") as string,
-        title: (raw.title ?? raw.project_name ?? "Untitled Plan") as string,
-        status: (raw.status ?? "draft") as PlanStatus,
-        createdAt: (raw.created_at ?? raw.createdAt ?? new Date().toISOString()) as string,
-        updatedAt: (raw.updated_at ?? raw.updatedAt ?? new Date().toISOString()) as string,
-        totalTasks: Number(raw.total_tasks ?? raw.totalTasks ?? 0),
-        totalSubtasks: Number(raw.total_subtasks ?? raw.totalSubtasks ?? 0),
-        totalMilestones: Number(raw.total_milestones ?? raw.totalMilestones ?? 0),
-        estimatedHours: Number(raw.estimated_hours ?? raw.estimatedHours ?? 0),
-        estimatedCost: Number(raw.estimated_cost ?? raw.estimatedCost ?? 0),
-        complexity: (raw.complexity ?? "medium") as "low" | "medium" | "high" | "critical",
-        version: Number(raw.version ?? 1),
-        teamId: (raw.team_id ?? raw.teamId) as string | undefined,
-        projectId: (raw.project_id ?? raw.projectId) as string | undefined,
-        aiConfidence: Number(raw.ai_confidence ?? raw.aiConfidence ?? 0),
-        criticalPathDuration: Number(raw.critical_path_duration ?? raw.criticalPathDuration ?? 0),
-        uniqueSkills: Number(raw.unique_skills ?? raw.uniqueSkills ?? 0),
-        dependencyCount: Number(raw.dependency_count ?? raw.dependencyCount ?? 0),
-      };
-    }
-    return null;
-  }, [apiPlanRes, planId]);
-
-  /* ── C6: Revision warning for approved plans ── */
-  const isApproved = plan?.status === "approved" || plan?.status === "completed" || plan?.status === "in_progress";
+  const isApproved = plan.status === "approved" || plan.status === "completed" || plan.status === "in_progress";
   const [showRevisionWarning, setShowRevisionWarning] = React.useState(isApproved);
 
-  /* ── AI Review overlay state ── */
   const [aiReviewOpen, setAiReviewOpen] = React.useState(false);
   const [aiReviewStage, setAiReviewStage] = React.useState(0);
   const aiReviewStages = [
@@ -1955,80 +1838,144 @@ export default function EditDecompositionPage() {
     { icon: FileText,    label: "Generating AI insights…" },
   ];
 
-  function handleSubmitAiReview() {
-    setAiReviewOpen(true);
-    setAiReviewStage(0);
-    let stage = 0;
-    const interval = setInterval(() => {
-      stage += 1;
-      setAiReviewStage(stage);
-      if (stage >= aiReviewStages.length) {
-        clearInterval(interval);
-        setTimeout(() => {
-          setAiReviewOpen(false);
-          router.push(`/enterprise/decomposition/${planId}`);
-        }, 600);
-      }
-    }, 900);
-  }
-
-  /* ── Initialize editable milestones from API or mock data ── */
-  const initialMilestones = React.useMemo((): EditableMilestone[] => {
-    const raw = apiMilestonesRes?.data;
-    const arr = (Array.isArray(raw) ? raw : (raw as Record<string, unknown> | null)?.milestones ?? null) as Record<string, unknown>[] | null;
-    if (arr && arr.length > 0) {
-      return arr.map((m) => ({
-        id: (m._id ?? m.id ?? "") as string,
-        planId: (m.plan_id ?? m.planId ?? planId) as string,
-        title: (m.title ?? "") as string,
-        description: (m.description ?? "") as string,
-        order: Number(m.order ?? 0),
-      }));
-    }
-    return [];
-  }, [apiMilestonesRes, plan?.id, planId]);
-
+  const [editableTasks, setEditableTasks] = React.useState<EditableTask[]>(initialTasks);
   const [editableMilestones, setEditableMilestones] = React.useState<EditableMilestone[]>(initialMilestones);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+
+  // Snapshot of initial tasks for diffing deletions on save
+  const initialTasksRef = React.useRef<EditableTask[]>(initialTasks);
+
+  React.useEffect(() => {
+    setEditableTasks(initialTasks);
+    initialTasksRef.current = initialTasks;
+  }, [initialTasks]);
   React.useEffect(() => { setEditableMilestones(initialMilestones); }, [initialMilestones]);
 
-  /* ── Initialize editable tasks from API or mock data ── */
-  const initialTasks = React.useMemo((): EditableTask[] => {
-    const raw = apiTasksRes?.data;
-    const arr = (Array.isArray(raw) ? raw : (raw as Record<string, unknown> | null)?.tasks ?? null) as Record<string, unknown>[] | null;
-    if (arr && arr.length > 0) {
-      return arr.map((t) => ({
-        id: (t._id ?? t.id ?? "") as string,
-        planId: (t.plan_id ?? t.planId ?? planId) as string,
-        milestoneId: (t.milestone_id ?? t.milestoneId ?? "") as string,
-        title: (t.title ?? "") as string,
-        description: (t.description ?? "") as string,
-        status: (t.status ?? "backlog") as DecompositionTask["status"],
-        priority: (t.priority ?? "medium") as DecompositionTask["priority"],
-        estimatedHours: Number(t.estimated_hours ?? t.estimatedHours ?? 0),
-        skillsRequired: (t.skills_required ?? t.skillsRequired ?? []) as SkillTag[],
-        dependencies: (t.dependencies ?? []) as TaskDependency[],
-        phase: Number(t.phase ?? 1),
-        order: Number(t.order ?? 0),
-        assigneeId: (t.assignee_id ?? t.assigneeId) as string | undefined,
-        acceptanceCriteria: (t.acceptance_criteria ?? t.acceptanceCriteria ?? []) as string[],
-        aiConfidence: Number(t.ai_confidence ?? t.aiConfidence ?? 0),
-        itemStatus: (t.item_status ?? t.itemStatus ?? "proposed") as DecompositionTask["itemStatus"],
-        subtasks: ((t.subtasks ?? []) as Subtask[]).map((st) => ({ ...st })),
-      }));
-    }
-    return [];
-  }, [apiTasksRes, plan?.id, planId]);
+  async function handleSaveDraft() {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const original = initialTasksRef.current;
+      const originalTaskIds = new Set(original.filter((t) => !t.isNew).map((t) => t.id));
+      const currentTaskIds = new Set(editableTasks.map((t) => t.id));
 
-  const [editableTasks, setEditableTasks] = React.useState<EditableTask[]>(initialTasks);
-  React.useEffect(() => { setEditableTasks(initialTasks); }, [initialTasks]);
+      // 1. Delete removed tasks (existed originally, no longer in current state)
+      const deletedTaskIds = [...originalTaskIds].filter((id) => !currentTaskIds.has(id));
+      await Promise.allSettled(deletedTaskIds.map((id) => deleteEnterpriseTask(planId, id)));
+
+      // 2. PATCH modified existing tasks in parallel
+      const modifiedTasks = editableTasks.filter((t) => t.isModified && !t.isNew);
+      await Promise.allSettled(
+        modifiedTasks.map((t) =>
+          patchEnterpriseTask(planId, t.id, {
+            title: t.title,
+            priority: t.priority,
+            effort: t.estimatedHours,
+            skills: t.skillsRequired.map((s) => s.name),
+            description: t.description,
+            acceptance_criteria: t.acceptanceCriteria,
+          })
+        )
+      );
+
+      // 3. POST new tasks sequentially (need returned ID for subtasks)
+      const newTasks = editableTasks.filter((t) => t.isNew);
+      for (const task of newTasks) {
+        const res = await postEnterpriseTask(planId, {
+          task_name: task.title,
+          milestone_id: task.milestoneId,
+          priority: task.priority,
+          effort: task.estimatedHours,
+          skills: task.skillsRequired.map((s) => s.name),
+          description: task.description,
+          acceptance_criteria: task.acceptanceCriteria,
+        });
+        // Extract the real task ID from the response to attach subtasks
+        const resData = res?.data as Record<string, unknown> | null | undefined;
+        const newTaskId = (resData?.task_id ?? resData?.id ?? resData?._id) as string | undefined;
+        if (newTaskId && task.subtasks.length > 0) {
+          await Promise.allSettled(
+            task.subtasks.map((st) =>
+              postEnterpriseSubtask(planId, newTaskId, {
+                title: st.title,
+                estimated_hours: st.estimatedHours,
+              })
+            )
+          );
+        }
+      }
+
+      // 4. Handle subtask changes on existing tasks
+      const originalMap = new Map(original.map((t) => [t.id, t]));
+      for (const task of editableTasks.filter((t) => !t.isNew)) {
+        const orig = originalMap.get(task.id);
+        if (!orig) continue;
+
+        const origSubtaskIds = new Set(orig.subtasks.map((st) => (st as { id: string }).id));
+        const curSubtaskIds = new Set(task.subtasks.map((st) => st.id));
+
+        const deletedSubtaskIds = [...origSubtaskIds].filter((id) => !curSubtaskIds.has(id));
+        const newSubtasks = task.subtasks.filter((st) => st.isNew);
+        const modifiedSubtasks = task.subtasks.filter((st) => st.isModified && !st.isNew);
+
+        await Promise.allSettled([
+          ...deletedSubtaskIds.map((stId) => deleteEnterpriseSubtask(planId, task.id, stId)),
+          ...newSubtasks.map((st) =>
+            postEnterpriseSubtask(planId, task.id, {
+              title: st.title,
+              estimated_hours: st.estimatedHours,
+            })
+          ),
+          ...modifiedSubtasks.map((st) =>
+            patchEnterpriseSubtask(planId, task.id, st.id, {
+              title: st.title,
+              estimated_hours: st.estimatedHours,
+            })
+          ),
+        ]);
+      }
+
+      // 5. Invalidate cache so the page reflects updated data
+      qc.invalidateQueries({ queryKey: decompositionKeys.tasks(planId) });
+      qc.invalidateQueries({ queryKey: decompositionKeys.plan(planId) });
+      qc.invalidateQueries({ queryKey: decompositionKeys.milestones(planId) });
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   const [activeTab, setActiveTab] = React.useState("tasks");
 
-  /* ── Task CRUD handlers ── */
+  function handleSubmitAiReview() {
+    setAiReviewOpen(true);
+    setAiReviewStage(0);
+
+    revisionMutation.mutate(undefined, {
+      onSuccess: () => {
+        let stage = 0;
+        const interval = setInterval(() => {
+          stage += 1;
+          setAiReviewStage(stage);
+          if (stage >= aiReviewStages.length) {
+            clearInterval(interval);
+            setTimeout(() => {
+              setAiReviewOpen(false);
+              router.push(`/enterprise/decomposition/${planId}?show_revision=1`);
+            }, 600);
+          }
+        }, 900);
+      },
+      onError: () => {
+        setAiReviewOpen(false);
+      },
+    });
+  }
+
   const handleUpdateTask = (updated: EditableTask) => {
-    setEditableTasks((prev) =>
-      prev.map((t) => (t.id === updated.id ? updated : t))
-    );
+    setEditableTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   };
 
   const handleDeleteTask = (taskId: string) => {
@@ -2036,15 +1983,11 @@ export default function EditDecompositionPage() {
   };
 
   const handleAddTask = (milestoneId: string) => {
-    const milestone = editableMilestones.find((m) => m.id === milestoneId);
     const msIdx = editableMilestones.findIndex((m) => m.id === milestoneId);
-    const existingTasks = editableTasks.filter(
-      (t) => t.milestoneId === milestoneId
-    );
-
+    const existingTasks = editableTasks.filter((t) => t.milestoneId === milestoneId);
     const newTask: EditableTask = {
       id: `task-new-${Date.now()}`,
-      planId: plan!.id,
+      planId: plan.id,
       milestoneId,
       title: "",
       description: "",
@@ -2067,7 +2010,7 @@ export default function EditDecompositionPage() {
   const handleAddMilestone = () => {
     const newMs: EditableMilestone = {
       id: `pm-new-${Date.now()}`,
-      planId: plan!.id,
+      planId: plan.id,
       title: "New Milestone",
       description: "",
       order: editableMilestones.length + 1,
@@ -2077,50 +2020,22 @@ export default function EditDecompositionPage() {
   };
 
   const handleUpdateMilestone = (updated: EditableMilestone) => {
-    setEditableMilestones((prev) =>
-      prev.map((m) => (m.id === updated.id ? updated : m))
-    );
+    setEditableMilestones((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
   };
 
-  /* ── Add dependency handler ── */
-  const handleAddDependency = (
-    sourceId: string,
-    targetId: string,
-    type: "blocks" | "related"
-  ) => {
+  const handleAddDependency = (sourceId: string, targetId: string, type: "blocks" | "related") => {
     setEditableTasks((prev) =>
       prev.map((t) =>
         t.id === targetId
-          ? {
-              ...t,
-              dependencies: [
-                ...t.dependencies,
-                { targetId: sourceId, type },
-              ],
-              isModified: true,
-            }
+          ? { ...t, dependencies: [...t.dependencies, { targetId: sourceId, type }], isModified: true }
           : t
       )
     );
   };
 
-  /* ── Calculate change summary ── */
   const newTasksCount = editableTasks.filter((t) => t.isNew).length;
-  const modifiedTasksCount = editableTasks.filter(
-    (t) => t.isModified && !t.isNew
-  ).length;
+  const modifiedTasksCount = editableTasks.filter((t) => t.isModified && !t.isNew).length;
   const totalChanges = newTasksCount + modifiedTasksCount;
-
-  if (!plan) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <Network className="w-10 h-10 text-gray-300 mb-4" />
-        <h2 className="text-lg font-semibold text-gray-800 mb-1">Plan not found</h2>
-        <p className="text-sm text-gray-500 mb-4">The decomposition plan could not be loaded.</p>
-        <Link href="/enterprise/decomposition" className="text-sm text-brown-500 hover:text-brown-600 font-medium">Back to plans</Link>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -2296,8 +2211,17 @@ export default function EditDecompositionPage() {
                   <X className="w-3 h-3" /> Cancel
                 </button>
               </Link>
-              <button className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all">
-                <Save className="w-3 h-3" /> Save Draft
+              <button
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+                className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Save className="w-3 h-3" />
+                )}
+                {isSaving ? "Saving…" : "Save Draft"}
               </button>
               <button
                 onClick={handleSubmitAiReview}
@@ -2308,6 +2232,17 @@ export default function EditDecompositionPage() {
             </div>
           </div>
         </motion.div>
+
+        {/* Save error banner */}
+        {saveError && (
+          <motion.div variants={fadeUp} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-[12px]">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span className="flex-1">{saveError}</span>
+            <button onClick={() => setSaveError(null)} className="shrink-0 text-red-400 hover:text-red-600">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
 
         {/* Tabs */}
         <motion.div variants={fadeUp}>
@@ -2411,5 +2346,201 @@ export default function EditDecompositionPage() {
         </motion.div>
       </motion.div>
     </>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MAIN PAGE — fetches data, maps it, passes as props
+   ══════════════════════════════════════════════════════════════ */
+
+export default function EditDecompositionPage() {
+  const params = useParams();
+  const planId = params.planId as string;
+
+  const { data: apiPlanRes, isLoading: planLoading } = useDecompositionPlan(planId);
+  const { data: apiTasksRes, isLoading: tasksLoading } = useTasks(planId);
+  const { data: apiMilestonesRes, isLoading: milestonesLoading } = useMilestones(planId);
+
+  const plan = React.useMemo(() => {
+    const resp = apiPlanRes as unknown as Record<string, unknown> | null;
+    if (!resp) return null;
+
+    // Unwrap: { data: { plan_id/id/_id } } OR { data: { plan: {...} } } OR plan directly
+    let raw: Record<string, unknown> | null = null;
+    if (resp.data && typeof resp.data === "object") {
+      const d = resp.data as Record<string, unknown>;
+      if (d.plan_id || d._id || d.id) {
+        raw = d;
+      } else if (d.plan && typeof d.plan === "object") {
+        raw = d.plan as Record<string, unknown>;
+      }
+    }
+    if (!raw && (resp.plan_id || resp._id || resp.id)) {
+      raw = resp;
+    }
+    if (!raw) return null;
+
+    return {
+      id: (raw.plan_id ?? raw._id ?? raw.id ?? planId) as string,
+      sowId: (raw.sow_id ?? raw.sowId ?? "") as string,
+      title: (raw.title ?? raw.project_name ?? "Untitled Plan") as string,
+      status: (raw.status ?? "draft") as PlanStatus,
+      createdAt: (raw.created_at ?? raw.createdAt ?? new Date().toISOString()) as string,
+      updatedAt: (raw.updated_at ?? raw.updatedAt ?? new Date().toISOString()) as string,
+      totalTasks: Number(raw.total_tasks ?? raw.totalTasks ?? 0),
+      totalSubtasks: Number(raw.total_subtasks ?? raw.totalSubtasks ?? 0),
+      totalMilestones: Number(raw.total_milestones ?? raw.totalMilestones ?? 0),
+      estimatedHours: Number(raw.estimated_hours ?? raw.estimatedHours ?? 0),
+      estimatedCost: Number(raw.estimated_cost ?? raw.estimatedCost ?? 0),
+      complexity: (raw.complexity ?? "medium") as "low" | "medium" | "high" | "critical",
+      version: Number(raw.version ?? 1),
+      teamId: (raw.team_id ?? raw.teamId) as string | undefined,
+      projectId: (raw.project_id ?? raw.projectId) as string | undefined,
+      aiConfidence: Number(raw.ai_confidence ?? raw.aiConfidence ?? 0),
+      criticalPathDuration: Number(raw.critical_path_duration ?? raw.criticalPathDuration ?? 0),
+      uniqueSkills: Number(raw.unique_skills ?? raw.uniqueSkills ?? 0),
+      dependencyCount: Number(raw.dependency_count ?? raw.dependencyCount ?? 0),
+    } as DecompositionPlan;
+  }, [apiPlanRes, planId]);
+
+  const initialTasks = React.useMemo((): EditableTask[] => {
+    const resp = apiTasksRes as unknown as Record<string, unknown> | null;
+    let arr: Record<string, unknown>[] | null = null;
+    if (Array.isArray(resp)) {
+      arr = resp;
+    } else if (resp) {
+      const d = resp.data;
+      if (Array.isArray(d)) arr = d;
+      else if (d && typeof d === "object") {
+        const inner = (d as Record<string, unknown>).tasks;
+        if (Array.isArray(inner)) arr = inner;
+      } else if (Array.isArray(resp.tasks)) {
+        arr = resp.tasks as Record<string, unknown>[];
+      }
+    }
+    if (!arr || arr.length === 0) return [];
+    return arr.map((t, idx) => {
+      const rawSkills = t.skills ?? t.skills_required ?? t.skillsRequired;
+      const skillsRequired: SkillTag[] = Array.isArray(rawSkills)
+        ? (rawSkills as string[]).map((s) => ({ name: s, source: "manual" as const }))
+        : rawSkills && typeof rawSkills === "string"
+          ? [{ name: rawSkills as string, source: "manual" as const }]
+          : [];
+      return {
+        id: String(t.task_id ?? t._id ?? t.id ?? idx),
+        planId: (t.plan_id ?? t.planId ?? planId) as string,
+        milestoneId: (t.milestone ?? t.milestone_id ?? t.milestoneId ?? "") as string,
+        title: (t.task_name ?? t.title ?? "") as string,
+        description: (t.description ?? "") as string,
+        status: (t.status ?? "backlog") as DecompositionTask["status"],
+        priority: (t.critical ? "high" : (t.priority ?? "medium")) as DecompositionTask["priority"],
+        estimatedHours: Number(t.effort ?? t.estimated_hours ?? t.estimatedHours ?? 0),
+        skillsRequired,
+        dependencies: (t.dependencies ?? []) as TaskDependency[],
+        phase: Number(t.phase ?? 1),
+        order: Number(t.order ?? idx),
+        assigneeId: (t.assignee_id ?? t.assigneeId) as string | undefined,
+        acceptanceCriteria: (t.acceptance_criteria ?? t.acceptanceCriteria ?? []) as string[],
+        aiConfidence: Number(t.ai_confidence ?? t.aiConfidence ?? 0),
+        itemStatus: (t.item_status ?? t.itemStatus ?? "proposed") as DecompositionTask["itemStatus"],
+        subtasks: ((t.subtasks ?? []) as Subtask[]).map((st) => ({ ...st })),
+      };
+    });
+  }, [apiTasksRes, planId]);
+
+  const initialMilestones = React.useMemo((): EditableMilestone[] => {
+    const resp = apiMilestonesRes as unknown as Record<string, unknown> | null;
+    if (!resp) return [];
+
+    // Locate the milestones value — could be under .data.milestones, .milestones, or .data
+    let milestonesValue: unknown =
+      (resp.data && typeof resp.data === "object"
+        ? (resp.data as Record<string, unknown>).milestones ?? resp.data
+        : null) ?? resp.milestones ?? null;
+
+    // Case 1: plain array  [{ id, title, ... }]
+    if (Array.isArray(milestonesValue)) {
+      return (milestonesValue as Record<string, unknown>[]).map((m, idx) => ({
+        id: (m.milestone_id ?? m._id ?? m.id ?? String(idx)) as string,
+        planId: (m.plan_id ?? m.planId ?? planId) as string,
+        title: (m.title ?? m.name ?? String(idx)) as string,
+        description: (m.description ?? "") as string,
+        order: Number(m.order ?? idx),
+      }));
+    }
+
+    // Case 2: dict keyed by milestone name  { "M1": [...], "M2": [...] }
+    if (milestonesValue && typeof milestonesValue === "object" && !Array.isArray(milestonesValue)) {
+      return Object.keys(milestonesValue as Record<string, unknown>).map((key, idx) => ({
+        id: key,
+        planId,
+        title: key,
+        description: "",
+        order: idx,
+      }));
+    }
+
+    return [];
+  }, [apiMilestonesRes, planId]);
+
+  const isLoading = planLoading || tasksLoading || milestonesLoading;
+
+  if (isLoading) {
+    return (
+      <div className="max-w-[1400px] mx-auto space-y-6 animate-pulse">
+        <div className="flex items-start justify-between gap-4 mb-2">
+          <div className="space-y-2 flex-1">
+            <div className="h-4 w-24 bg-gray-200 rounded-full" />
+            <div className="h-8 w-64 bg-gray-200 rounded-lg" />
+            <div className="h-3 w-48 bg-gray-100 rounded-full" />
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <div className="h-9 w-20 bg-gray-100 rounded-xl" />
+            <div className="h-9 w-24 bg-gray-100 rounded-xl" />
+            <div className="h-9 w-36 bg-gray-200 rounded-xl" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+          <div className="lg:col-span-3 space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                <div className="h-5 w-48 bg-gray-200 rounded-lg" />
+                <div className="h-3 w-full bg-gray-100 rounded" />
+                <div className="h-3 w-3/4 bg-gray-100 rounded" />
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4 h-fit">
+            <div className="h-4 w-28 bg-gray-200 rounded" />
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex justify-between border-b border-gray-100 pb-2">
+                <div className="h-3 w-20 bg-gray-100 rounded" />
+                <div className="h-3 w-10 bg-gray-200 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!plan) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <Network className="w-10 h-10 text-gray-300 mb-4" />
+        <h2 className="text-lg font-semibold text-gray-800 mb-1">Plan not found</h2>
+        <p className="text-sm text-gray-500 mb-4">The decomposition plan could not be loaded.</p>
+        <Link href="/enterprise/decomposition" className="text-sm text-brown-500 hover:text-brown-600 font-medium">Back to plans</Link>
+      </div>
+    );
+  }
+
+  return (
+    <EditPlanContent
+      plan={plan}
+      planId={planId}
+      initialTasks={initialTasks}
+      initialMilestones={initialMilestones}
+    />
   );
 }

@@ -3,6 +3,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { decompositionApi } from "@/lib/api/decomposition";
 import { ApiError } from "@/lib/api/client";
+import {
+  getEnterpriseDecompositionPlan,
+  getEnterpriseDecompositionPlanTasks,
+  getEnterpriseDecompositionPlanMilestones,
+  postEnterpriseRequestRevision,
+  getEnterpriseDecompositionPlanRevision,
+  patchEnterpriseTask,
+  postEnterpriseTask,
+  deleteEnterpriseTask,
+  postEnterpriseSubtask,
+  patchEnterpriseSubtask,
+  deleteEnterpriseSubtask,
+  type TaskPayload,
+  type SubtaskPayload,
+} from "@/lib/api/decomposition-plans";
 
 // Don't retry on auth errors or server-unavailable errors — these won't resolve on retry
 const shouldRetry = (failureCount: number, error: unknown) => {
@@ -54,7 +69,7 @@ export function useDecompositionPlans() {
 export function useDecompositionPlan(planId: string | null) {
   return useQuery({
     queryKey: decompositionKeys.plan(planId ?? ""),
-    queryFn: () => decompositionApi.getPlan(planId!),
+    queryFn: () => getEnterpriseDecompositionPlan(planId!),
     enabled: !!planId,
     retry: shouldRetry,
   });
@@ -109,11 +124,11 @@ export function useConfirmPlan(planId: string | null) {
 
 // ── Revision ────────────────────────────────────────────────────────────
 
-export function useRevision(planId: string | null) {
+export function useRevision(planId: string | null, enabled = true) {
   return useQuery({
     queryKey: decompositionKeys.revision(planId ?? ""),
-    queryFn: () => decompositionApi.getRevision(planId!),
-    enabled: !!planId,
+    queryFn: () => getEnterpriseDecompositionPlanRevision(planId!),
+    enabled: !!planId && enabled,
     retry: shouldRetry,
   });
 }
@@ -140,7 +155,7 @@ export function useRequestRevision(planId: string | null) {
   return useMutation({
     mutationFn: (payload?: unknown) => {
       if (!planId) throw new Error("No plan id");
-      return decompositionApi.requestRevision(planId, payload);
+      return postEnterpriseRequestRevision(planId, payload);
     },
     onSuccess: () => {
       if (planId) {
@@ -304,7 +319,7 @@ export function useReviewSummary(planId: string | null) {
 export function useTasks(planId: string | null) {
   return useQuery({
     queryKey: decompositionKeys.tasks(planId ?? ""),
-    queryFn: () => decompositionApi.getTasks(planId!),
+    queryFn: () => getEnterpriseDecompositionPlanTasks(planId!),
     enabled: !!planId,
     retry: shouldRetry,
   });
@@ -358,7 +373,7 @@ export function useFlagTask(planId: string | null) {
 export function useMilestones(planId: string | null) {
   return useQuery({
     queryKey: decompositionKeys.milestones(planId ?? ""),
-    queryFn: () => decompositionApi.getMilestones(planId!),
+    queryFn: () => getEnterpriseDecompositionPlanMilestones(planId!),
     enabled: !!planId,
     retry: shouldRetry,
   });
@@ -403,6 +418,95 @@ export function useCreatePlan() {
     mutationFn: (payload: unknown) => decompositionApi.createPlan(payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: decompositionKeys.plans() });
+    },
+  });
+}
+
+// ── Task Mutations ─────────────────────────────────────────────────────
+
+export function useUpdateTask(planId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, payload }: { taskId: string; payload: TaskPayload }) => {
+      if (!planId) throw new Error("No plan id");
+      return patchEnterpriseTask(planId, taskId, payload);
+    },
+    onSuccess: () => {
+      if (planId) {
+        qc.invalidateQueries({ queryKey: decompositionKeys.tasks(planId) });
+        qc.invalidateQueries({ queryKey: decompositionKeys.plan(planId) });
+      }
+    },
+  });
+}
+
+export function useAddTask(planId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: TaskPayload) => {
+      if (!planId) throw new Error("No plan id");
+      return postEnterpriseTask(planId, payload);
+    },
+    onSuccess: () => {
+      if (planId) {
+        qc.invalidateQueries({ queryKey: decompositionKeys.tasks(planId) });
+        qc.invalidateQueries({ queryKey: decompositionKeys.plan(planId) });
+      }
+    },
+  });
+}
+
+export function useDeleteTask(planId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) => {
+      if (!planId) throw new Error("No plan id");
+      return deleteEnterpriseTask(planId, taskId);
+    },
+    onSuccess: () => {
+      if (planId) {
+        qc.invalidateQueries({ queryKey: decompositionKeys.tasks(planId) });
+        qc.invalidateQueries({ queryKey: decompositionKeys.plan(planId) });
+      }
+    },
+  });
+}
+
+export function useAddSubtask(planId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, payload }: { taskId: string; payload: SubtaskPayload }) => {
+      if (!planId) throw new Error("No plan id");
+      return postEnterpriseSubtask(planId, taskId, payload);
+    },
+    onSuccess: () => {
+      if (planId) qc.invalidateQueries({ queryKey: decompositionKeys.tasks(planId) });
+    },
+  });
+}
+
+export function useUpdateSubtask(planId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, subtaskId, payload }: { taskId: string; subtaskId: string; payload: SubtaskPayload }) => {
+      if (!planId) throw new Error("No plan id");
+      return patchEnterpriseSubtask(planId, taskId, subtaskId, payload);
+    },
+    onSuccess: () => {
+      if (planId) qc.invalidateQueries({ queryKey: decompositionKeys.tasks(planId) });
+    },
+  });
+}
+
+export function useDeleteSubtask(planId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, subtaskId }: { taskId: string; subtaskId: string }) => {
+      if (!planId) throw new Error("No plan id");
+      return deleteEnterpriseSubtask(planId, taskId, subtaskId);
+    },
+    onSuccess: () => {
+      if (planId) qc.invalidateQueries({ queryKey: decompositionKeys.tasks(planId) });
     },
   });
 }

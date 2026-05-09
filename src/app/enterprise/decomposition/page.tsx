@@ -167,10 +167,7 @@ type SortDir = "asc" | "desc";
 
 const columns = [
   { field: "title" as SortField, label: "Project Name", align: "left" },
-  
   { field: "updated" as SortField, label: "SOW Reference", align: "left" },
-  { field: "confidence" as SortField, label: "Milestones", align: "center" },
-  { field: "tasks" as SortField, label: "Tasks", align: "center" },
   { field: "cost" as SortField, label: "Action", align: "center" },
 ];
 
@@ -230,11 +227,16 @@ export default function DecompositionPlansPage() {
       }
     }
 
-    if (!rawArr || rawArr.length === 0) return [];
+    if (!rawArr || rawArr.length === 0) {
+      console.log("[DecompositionPlans] rawArr empty. Full response:", JSON.stringify(resp, null, 2));
+      return [];
+    }
+
+    console.log("[DecompositionPlans] raw plan fields (first):", JSON.stringify(rawArr[0], null, 2));
 
     return rawArr.map((p) => ({
       id: (p.plan_id ?? p.id ?? p._id ?? "") as string,
-      sowId: (p.sow_id ?? p.sowId ?? p.sow_reference ?? "") as string,
+      sowId: (p.sow_id ?? p.sowId ?? p.wizard_id ?? p.sow_reference ?? "") as string,
       title: (p.title ?? p.project_name ?? "Untitled Plan") as string,
       status: normalizeStatus((p.status ?? "draft") as string),
       createdAt: (p.created_at ?? p.createdAt ?? new Date().toISOString()) as string,
@@ -360,21 +362,19 @@ export default function DecompositionPlansPage() {
             <Skeleton className="h-9 w-36 rounded-lg" />
           </div>
           {/* Table header */}
-          <div className="grid grid-cols-5 gap-4 px-6 py-3" style={{ borderBottom: "1px solid var(--border-soft)" }}>
-            {["w-28", "w-24", "w-16", "w-12", "w-16"].map((w, i) => (
+          <div className="grid grid-cols-3 gap-4 px-6 py-3" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+            {["w-28", "w-24", "w-16"].map((w, i) => (
               <Skeleton key={i} className={`h-2.5 ${w}`} />
             ))}
           </div>
           {/* Table rows */}
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="grid grid-cols-5 gap-4 px-6 py-5 items-center" style={{ borderBottom: "1px solid var(--border-hair)" }}>
+            <div key={i} className="grid grid-cols-3 gap-4 px-6 py-5 items-center" style={{ borderBottom: "1px solid var(--border-hair)" }}>
               <div className="space-y-1.5">
                 <Skeleton className="h-3.5 w-full" />
                 <Skeleton className="h-2.5 w-2/3" />
               </div>
               <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-3 w-8" />
-              <Skeleton className="h-3 w-8" />
               <Skeleton className="h-9 w-24 rounded-lg" />
             </div>
           ))}
@@ -531,7 +531,7 @@ export default function DecompositionPlansPage() {
 
                     {/* Project Name */}
                     <td style={{ padding: "13px 16px" }}>
-                      <div className="text-[13px] font-medium text-gray-800 truncate max-w-[280px]">{plan.title}</div>
+                      <div className="text-[13px] font-medium text-gray-800">{plan.title}</div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] text-gray-400">{sowVersion}</span>
                       </div>
@@ -541,22 +541,17 @@ export default function DecompositionPlansPage() {
 
                     {/* SOW Reference */}
                     <td style={{ padding: "13px 16px" }}>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-[12px] text-gray-700">{sowRef}</span>
-                        <Link href={`/enterprise/sow/${plan.sowId}`} onClick={(e) => e.stopPropagation()}>
-                          <ExternalLink className="w-3 h-3 text-gray-400 hover:text-brown-500 transition-colors" />
+                      {plan.sowId ? (
+                        <Link
+                          href={`/enterprise/sow/${plan.sowId}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-[12px] text-brown-500 hover:text-brown-700 hover:underline transition-colors"
+                        >
+                          {plan.sowId}
                         </Link>
-                      </div>
-                    </td>
-
-                    {/* Milestones */}
-                    <td style={{ padding: "13px 16px", textAlign: "center" }}>
-                      <span className="text-[12px] font-medium text-gray-700">{plan.totalMilestones}</span>
-                    </td>
-
-                    {/* Tasks */}
-                    <td style={{ padding: "13px 16px", textAlign: "center" }}>
-                      <span className="text-[12px] font-medium text-gray-700">{plan.totalTasks}</span>
+                      ) : (
+                        <span className="text-[12px] text-gray-400">—</span>
+                      )}
                     </td>
 
                     {/* Primary Action */}

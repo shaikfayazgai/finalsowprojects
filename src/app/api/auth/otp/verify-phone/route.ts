@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jwtVerify } from "jose";
+import { timingSafeEqual } from "node:crypto";
 
 export const runtime = "nodejs";
+
+function getSecret() {
+  const s = process.env.AUTH_SECRET;
+  if (!s) throw new Error("AUTH_SECRET not set");
+  return new TextEncoder().encode(s);
+}
+
+function normalizeIndianPhone(raw: string): { e164: string; local10: string } | null {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return { e164: `+91${digits}`, local10: digits };
+  }
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return { e164: `+${digits}`, local10: digits.slice(2) };
+  }
+  if (digits.length === 13 && digits.startsWith("091")) {
+    return { e164: `+91${digits.slice(3)}`, local10: digits.slice(3) };
+  }
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,23 +34,71 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const backendUrl = process.env.GLIMMORA_API_URL ?? process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
-
-    const backendRes = await fetch(`${backendUrl}/api/v1/auth/otp/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobile_number: phone, otp_code: String(code) }),
-      signal: AbortSignal.timeout(10000),
-    });
-
-    const data = await backendRes.json().catch(() => ({}));
-
-    if (!backendRes.ok) {
-      const message = data?.detail ?? data?.message ?? "Invalid or expired code. Please try again.";
-      return NextResponse.json({ error: "WRONG_CODE", message }, { status: backendRes.status });
+    const normalized = normalizeIndianPhone(String(phone));
+    if (!normalized) {
+      return NextResponse.json(
+        {
+          error: "INVALID_PHONE",
+          message:
+            "SMS OTP supports Indian mobile numbers only (10 digits, or +91…). Example: 9876543210.",
+        },
+        { status: 400 },
+      );
     }
 
-    return NextResponse.json({ ok: true, verified: true });
+    const cookieToken = req.cookies.get("phone_otp_token")?.value;
+    if (!cookieToken) {
+      return NextResponse.json(
+        { error: "NO_TOKEN", message: "No verification session found. Please request a new code." },
+        { status: 400 },
+      );
+    }
+
+    let payload: { phone: string; code: string; expiresAt: number };
+    try {
+      const { payload: p } = await jwtVerify(cookieToken, getSecret());
+      payload = p as typeof payload;
+    } catch {
+      const res = NextResponse.json(
+        { error: "EXPIRED", message: "Your verification code has expired. Please request a new one." },
+        { status: 400 },
+      );
+      res.cookies.delete("phone_otp_token");
+      return res;
+    }
+
+    if (payload.phone !== normalized.e164) {
+      return NextResponse.json(
+        { error: "PHONE_MISMATCH", message: "Phone number does not match. Please request a new code." },
+        { status: 400 },
+      );
+    }
+
+    if (Date.now() > payload.expiresAt) {
+      const res = NextResponse.json(
+        { error: "EXPIRED", message: "Your verification code has expired. Please request a new one." },
+        { status: 400 },
+      );
+      res.cookies.delete("phone_otp_token");
+      return res;
+    }
+
+    const expected = Buffer.from(payload.code);
+    const received = Buffer.from(String(code).padEnd(payload.code.length, " "));
+    const match =
+      expected.length === received.length &&
+      timingSafeEqual(expected, received);
+
+    if (!match) {
+      return NextResponse.json(
+        { error: "WRONG_CODE", message: "Incorrect code. Please check and try again." },
+        { status: 400 },
+      );
+    }
+
+    const res = NextResponse.json({ ok: true, verified: true });
+    res.cookies.delete("phone_otp_token");
+    return res;
   } catch (err) {
     console.error("[verify-phone OTP]", err);
     return NextResponse.json(

@@ -333,11 +333,11 @@ export default function SOWDetailPage() {
     const riskScore = Number(genRisk.risk_score ?? topRisk.risk_score ?? topRisk.riskScore ?? 0);
     const riskLevel = String(genRisk.risk_level ?? topRisk.risk_level ?? topRisk.riskLevel ?? "");
 
-    // budget: prefer commercial_details.budgetRisk (manual SOW embed), then flat fields
+    // budget: prefer commercial_details.budgetRisk (manual SOW embed), then AI SOW flat fields
     const cd = (typeof d.commercial_details === "object" && d.commercial_details !== null ? d.commercial_details : {}) as Record<string, unknown>;
     const br = (typeof cd.budgetRisk === "object" && cd.budgetRisk !== null ? cd.budgetRisk : {}) as Record<string, unknown>;
-    const budgetMin = Number(br.budgetMinimum ?? br.budget_minimum ?? d.budgetMinimum ?? d.budget_minimum ?? 0);
-    const budgetMax = Number(br.budgetMaximum ?? br.budget_maximum ?? d.budgetMaximum ?? d.budget_maximum ?? 0);
+    const budgetMin = Number(br.budgetMinimum ?? br.budget_minimum ?? d.budgetMinimum ?? d.budget_minimum ?? d.minimum_budget ?? 0);
+    const budgetMax = Number(br.budgetMaximum ?? br.budget_maximum ?? d.budgetMaximum ?? d.budget_maximum ?? d.maximum_budget ?? 0);
 
     // duration: prefer timelineTeam section, then flat fields
     const tt = (typeof cd.timelineTeam === "object" && cd.timelineTeam !== null ? cd.timelineTeam : {}) as Record<string, unknown>;
@@ -461,7 +461,7 @@ export default function SOWDetailPage() {
           patternMatch: Number((riskRaw as Record<string, unknown>)?.pattern_match ?? (riskRaw as Record<string, unknown>)?.patternMatch ?? 0),
         },
         tags: Array.isArray(raw.tags) ? (raw.tags as string[]) : [],
-        estimatedBudget: Number(raw.estimated_budget ?? raw.estimatedBudget ?? 0),
+        estimatedBudget: Number(raw.estimated_budget ?? raw.estimatedBudget ?? raw.minimum_budget ?? 0),
         estimatedDuration: String(raw.estimated_duration ?? raw.estimatedDuration ?? raw.timeline ?? ""),
         stakeholders: Array.isArray(raw.stakeholders) ? (raw.stakeholders as string[]) : [],
         slaCompliance: raw.sla_compliance ? Number(raw.sla_compliance) : raw.slaCompliance ? Number(raw.slaCompliance) : undefined,
@@ -1091,8 +1091,13 @@ export default function SOWDetailPage() {
             const createdBy = sow.createdBy;
             const isAI      = intake === "ai_generated";
 
-            const budgetText = (h?.budgetMin ?? 0) > 0 || (h?.budgetMax ?? 0) > 0
-              ? `$${(h!.budgetMin).toLocaleString()}–$${(h!.budgetMax).toLocaleString()}`
+            const apiRaw = apiSowData as Record<string, unknown> | null | undefined;
+            const apiBudgetMin = Number(apiRaw?.minimum_budget ?? apiRaw?.budget_minimum ?? 0);
+            const apiBudgetMax = Number(apiRaw?.maximum_budget ?? apiRaw?.budget_maximum ?? 0);
+            const resolvedBudgetMin = (h?.budgetMin ?? 0) > 0 ? h!.budgetMin : apiBudgetMin;
+            const resolvedBudgetMax = (h?.budgetMax ?? 0) > 0 ? h!.budgetMax : apiBudgetMax;
+            const budgetText = resolvedBudgetMin > 0 || resolvedBudgetMax > 0
+              ? `$${resolvedBudgetMin.toLocaleString()}–$${resolvedBudgetMax.toLocaleString()}`
               : (h?.estimatedBudget ?? sow.estimatedBudget) > 0
               ? `$${(h?.estimatedBudget ?? sow.estimatedBudget).toLocaleString()}`
               : "TBD";
@@ -1265,7 +1270,7 @@ export default function SOWDetailPage() {
                       { label: "Last Updated", value: formatDateTime(sow.updatedAt) },
                       { label: "File Size", value: sow.fileSize },
                       { label: "Pages", value: `${sow.pages} pages` },
-                      { label: "Estimated Budget", value: sow.estimatedBudget > 0 ? `$${sow.estimatedBudget.toLocaleString()}` : "TBD" },
+                      { label: "Estimated Budget", value: (() => { const ar = apiSowData as Record<string, unknown> | null | undefined; const mn = (headerData?.budgetMin ?? 0) > 0 ? headerData!.budgetMin : Number(ar?.minimum_budget ?? ar?.budget_minimum ?? 0); const mx = (headerData?.budgetMax ?? 0) > 0 ? headerData!.budgetMax : Number(ar?.maximum_budget ?? ar?.budget_maximum ?? 0); return mn > 0 || mx > 0 ? `$${mn.toLocaleString()}–$${mx.toLocaleString()}` : sow.estimatedBudget > 0 ? `$${sow.estimatedBudget.toLocaleString()}` : "TBD"; })() },
                       { label: "Estimated Duration", value: sow.estimatedDuration },
                       { label: "Version", value: `v${sow.version}` },
                       { label: "Approved By", value: sow.approvedBy || "--" },

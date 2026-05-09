@@ -15,7 +15,12 @@ import { useAdminSowList } from "@/lib/hooks/use-sow-wizard";
 import { useApprovalPipeline } from "@/lib/hooks/use-manual-sow";
 import { useQueries } from "@tanstack/react-query";
 import { adminSowApi } from "@/lib/api/admin-sow";
-import type { SOW, SOWApprovalStage } from "@/types/enterprise";
+import type {
+  SOW,
+  SOWApprovalStage,
+  AdminApprovalStageStatuses,
+  AdminApprovalStageStatus,
+} from "@/types/enterprise";
 
 /* ════════════════════════ API normalisation (matches enterprise SOW repository) ════════════════════════ */
 
@@ -41,6 +46,61 @@ function normaliseRawStatus(raw: string): SOW["status"] {
   if (s === "review") return "review";
   if (s === "draft" || s === "created") return "draft";
   return "draft";
+}
+
+type ApprovalStageKey = "business_owner" | "commercial" | "legal" | "security" | "final_approver";
+type ApprovalStageStatuses = Record<ApprovalStageKey, AdminApprovalStageStatus>;
+
+const DEFAULT_STAGE_STATUSES: ApprovalStageStatuses = {
+  business_owner: "pending",
+  commercial: "pending",
+  legal: "pending",
+  security: "pending",
+  final_approver: "pending",
+};
+
+function normaliseStageStatus(raw: unknown): AdminApprovalStageStatus {
+  const s = String(raw ?? "").trim().toLowerCase();
+  if (s === "approved" || s === "complete" || s === "completed" || s === "done") return "approved";
+  if (s === "rejected") return "rejected";
+  if (s === "not_required" || s === "not-required" || s === "na" || s === "n/a") return "not_required";
+  if (s === "in_review" || s === "in review" || s === "review" || s === "active") return "in_review";
+  return "pending";
+}
+
+function normaliseStageStatuses(item: Record<string, unknown>): ApprovalStageStatuses {
+  const fromNew = item.approval_stage_statuses;
+  if (fromNew && typeof fromNew === "object" && !Array.isArray(fromNew)) {
+    const src = fromNew as Partial<AdminApprovalStageStatuses>;
+    return {
+      business_owner: normaliseStageStatus(src.business_owner),
+      commercial: normaliseStageStatus(src.commercial),
+      legal: normaliseStageStatus(src.legal),
+      security: normaliseStageStatus(src.security),
+      final_approver: normaliseStageStatus(src.final_approver),
+    };
+  }
+
+  const byStage = new Map<string, AdminApprovalStageStatus>();
+  const arr = Array.isArray(item.approval_stages) ? (item.approval_stages as Record<string, unknown>[]) : [];
+  for (const stage of arr) {
+    const stageKey = String(stage.stage ?? stage.stage_key ?? "").toLowerCase();
+    const status = normaliseStageStatus(stage.status ?? stage.stage_status);
+    if (!stageKey) continue;
+    if (stageKey === "business") byStage.set("business_owner", status);
+    if (stageKey === "glimmora_commercial") byStage.set("commercial", status);
+    if (stageKey === "legal") byStage.set("legal", status);
+    if (stageKey === "security") byStage.set("security", status);
+    if (stageKey === "final") byStage.set("final_approver", status);
+  }
+
+  return {
+    business_owner: byStage.get("business_owner") ?? DEFAULT_STAGE_STATUSES.business_owner,
+    commercial: byStage.get("commercial") ?? DEFAULT_STAGE_STATUSES.commercial,
+    legal: byStage.get("legal") ?? DEFAULT_STAGE_STATUSES.legal,
+    security: byStage.get("security") ?? DEFAULT_STAGE_STATUSES.security,
+    final_approver: byStage.get("final_approver") ?? DEFAULT_STAGE_STATUSES.final_approver,
+  };
 }
 
 function isStageApproved(status: string): boolean {
@@ -125,6 +185,7 @@ function normaliseToSOW(item: Record<string, unknown>, mode: "ai_generated" | "m
   const aiConfidence = Number(qm.overall_confidence ?? item.confidence_score ?? item.confidenceScore ?? item.ai_confidence ?? 0);
 
   const rawApprovalStages = ((item.approval_stages ?? item.approvalStages ?? []) as SOWApprovalStage[]);
+  const approvalStageStatuses = normaliseStageStatuses(item);
   const rawStatus = normaliseRawStatus(String(item.status ?? "draft"));
   // Trust "approved" directly from the API — don't let stage derivation downgrade it
   const derivedStatus = rawStatus === "approved"
@@ -155,6 +216,7 @@ function normaliseToSOW(item: Record<string, unknown>, mode: "ai_generated" | "m
     createdBy:        String(item.created_by ?? item.createdBy ?? ""),
     approvedBy:       String(item.approved_by ?? item.approvedBy ?? ""),
     approvalStages:   rawApprovalStages,
+    approvalStageStatuses,
     parsedSections:   Number(item.parsed_sections ?? item.parsedSections ?? 0),
     totalSections:    Number(item.total_sections ?? item.totalSections ?? 0),
     pages:            Number(item.pages ?? 0),
@@ -341,6 +403,23 @@ function SowRow({ sow }: { sow: SOW }) {
             Needs sign-off
           </p>
         )}
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {([
+            ["BO", sow.approvalStageStatuses?.business_owner],
+            ["CO", sow.approvalStageStatuses?.commercial],
+            ["LE", sow.approvalStageStatuses?.legal],
+            ["SE", sow.approvalStageStatuses?.security],
+            ["FA", sow.approvalStageStatuses?.final_approver],
+          ] as const).map(([label, status]) => (
+            <span
+              key={label}
+              className="inline-flex items-center rounded-md border border-beige-200 bg-beige-50 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-beige-500"
+              title={`${label}: ${status ?? "pending"}`}
+            >
+              {label}:{status ?? "pending"}
+            </span>
+          ))}
+        </div>
       </td>
 
       {/* Updated */}
@@ -782,7 +861,7 @@ export default function AdminSOWOversightPage() {
                     <SortHeader field="updated" label="Updated"           current={sortField} dir={sortDir} onSort={toggleSort} />
                   </th>
                   <th className="text-left px-4 py-3 w-[13%]">
-                    <SortHeader field="risk"    label="Risk"              current={sortField} dir={sortDir} onSort={toggleSort} />
+                    <SortHeader field="risk"    label="Complexity"        current={sortField} dir={sortDir} onSort={toggleSort} />
                   </th>
                   <th className="px-4 py-3 w-[5%]" />
                 </tr>
@@ -858,4 +937,3 @@ export default function AdminSOWOversightPage() {
     </motion.div>
   );
 }
-

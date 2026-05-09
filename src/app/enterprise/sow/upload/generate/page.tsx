@@ -531,7 +531,7 @@ export default function GeneratePreviewPage({
                 {genReady ? (
                   <div className="mt-6">
                     <button
-                      onClick={() => setGenPhase("complete")}
+                      onClick={() => sowId ? router.push(`/enterprise/sow/${sowId}`) : setGenPhase("complete")}
                       className="w-full flex items-center justify-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-forest-500 to-teal-600 hover:from-forest-600 hover:to-teal-700 px-4 py-3 rounded-xl transition-all shadow-sm"
                       style={{ boxShadow: "0 8px 24px rgba(42,96,104,0.30)" }}
                     >
@@ -583,7 +583,7 @@ export default function GeneratePreviewPage({
           >
             {genReady ? (
               <button
-                onClick={() => setGenPhase("complete")}
+                onClick={() => sowId ? router.push(`/enterprise/sow/${sowId}`) : setGenPhase("complete")}
                 className="flex items-center gap-3 px-5 py-3 rounded-2xl text-white text-[12px] font-semibold shadow-xl transition-all hover:scale-[1.02]"
                 style={{ background: "linear-gradient(135deg, #2A6068 0%, #1a4049 100%)", boxShadow: "0 8px 32px rgba(42,96,104,0.35)" }}
               >
