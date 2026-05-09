@@ -3141,7 +3141,8 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
             On-Premise Deployment Details
           </label>
           <div className="space-y-3">
-            {["Server installation", "SSL certificates", "Monitoring & alerting", "Backup configuration"].map((svc) => {
+            {/* Previous options: ["Server installation", "SSL certificates", "Monitoring & alerting", "Backup configuration"] */}
+            {["SSL certificates"].map((svc) => {
               const checked = (formData.onPremiseServices ?? []).includes(svc);
               return (
                 <label key={svc} className="flex items-center gap-3 cursor-pointer">
