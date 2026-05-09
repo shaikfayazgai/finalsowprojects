@@ -9,6 +9,20 @@
 
 import { ApiError } from "./client";
 import type { BaseResponse } from "./sow";
+import type { AdminApprovalStageStatuses } from "@/types/enterprise";
+
+export interface AdminSowListItem {
+  id?: string;
+  _id?: string;
+  sow_id?: string;
+  wizard_id?: string;
+  approval_stage_statuses?: AdminApprovalStageStatuses;
+  [key: string]: unknown;
+}
+
+export interface AdminSowListResponse extends BaseResponse {
+  data?: AdminSowListItem[] | { [key: string]: unknown };
+}
 
 // ── Token cache ───────────────────────────────────────────────────────────
 
@@ -59,8 +73,8 @@ async function adminCall<T>(path: string, _retry = false): Promise<T> {
 
 export const adminSowApi = {
   /** GET /api/v1/sows/enterprise/all — list all enterprise SOWs */
-  listEnterpriseSOWs(): Promise<BaseResponse> {
-    return adminCall<BaseResponse>("/api/v1/sows/enterprise/all");
+  listEnterpriseSOWs(): Promise<AdminSowListResponse> {
+    return adminCall<AdminSowListResponse>("/api/v1/sows/enterprise/all");
   },
 
   /** GET /api/v1/sows/enterprise/{sow_id} — get one enterprise SOW by ID */

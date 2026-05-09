@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Sparkles, CheckCircle2, FileText, Target, Code2,
   Calendar, DollarSign, Users, ShieldCheck, Lock, AlertTriangle,
-  ClipboardCheck, Plus, X, Zap, Check, Loader2, SkipForward, Circle, Lightbulb,
+  ClipboardCheck, Plus, X, Zap, Check, Loader2, SkipForward, Circle, Lightbulb, Info,
   Link2, Scale, Gavel, Upload, Eye, Pencil,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -255,7 +255,6 @@ interface FormData {
 
   // Section 9: Commercial & Legal
   paymentTerms: string;
-  warrantyPeriod: string;
   invoicingSchedule: string;
   ipOwnership: string;
   terminationNoticePeriod: string;
@@ -358,7 +357,11 @@ const initialFormData: FormData = {
   startDate: "",
   endDate: "",
   phasingStrategy: "",
-  milestones: [{ name: "", targetDate: "", acceptanceCriteria: "" }],
+  milestones: [
+    { name: "M1: SOW Onboarding", targetDate: "", acceptanceCriteria: "" },
+    { name: "M2: Dev Milestone", targetDate: "", acceptanceCriteria: "" },
+    { name: "M3: UAT Sign-off", targetDate: "", acceptanceCriteria: "" },
+  ],
   clientDependencies: [""],
   teamSize: "",
   workModel: "",
@@ -383,8 +386,8 @@ const initialFormData: FormData = {
   budgetMin: "",
   budgetMax: "",
   currency: "USD",
-  pricingModel: "",
-  breakdownPreference: "",
+  pricingModel: "fixed_price",
+  breakdownPreference: "milestone",
   knownRisks: [""],
   projectConstraints: "",
   contingencyBudget: "",
@@ -420,8 +423,7 @@ const initialFormData: FormData = {
   slaUptimeCommitment: "",
 
   // Section 9: Commercial & Legal
-  paymentTerms: "",
-  warrantyPeriod: "",
+  paymentTerms: "immediately",
   invoicingSchedule: "",
   ipOwnership: "",
   terminationNoticePeriod: "",
@@ -661,7 +663,6 @@ const DUMMY_FORM_DATA: FormData = {
 
   // Section 9: Commercial & Legal
   paymentTerms: "net_30",
-  warrantyPeriod: "90_days",
   invoicingSchedule: "Invoices issued at milestone completion, payable Net 30.",
   ipOwnership: "client",
   terminationNoticePeriod: "30_days",
@@ -1166,7 +1167,7 @@ function CheckboxGroup({ values, onChange, options }: {
    ══════════════════════════════════════════ */
 const SOW_STORAGE_KEY = "sow-generator-draft";
 
-const SOW_DRAFT_VERSION = 8; // Increment when FormData structure changes
+const SOW_DRAFT_VERSION = 9; // Increment when FormData structure changes
 
 function loadDraft(): { formData: FormData; currentStep: number; skippedSteps: number[] } | null {
   if (typeof window === "undefined") return null;
@@ -1268,6 +1269,15 @@ function SOWGenerateWizardPageInner() {
   const [formData, setFormData] = React.useState<FormData>(() => {
     // Merge initialFormData as base to ensure all fields exist (handles HMR + draft migration)
     const merged = { ...initialFormData, ...draft.current?.formData };
+    // Keep milestone rows fixed to the required three defaults.
+    const milestones = Array.isArray((merged as Partial<FormData>).milestones) ? (merged as Partial<FormData>).milestones : [];
+    const requiredMilestones = initialFormData.milestones;
+    const hasExactRequiredMilestones =
+      milestones.length === 3
+      && milestones.every((m, i) => m?.name === requiredMilestones[i].name);
+    if (!hasExactRequiredMilestones) {
+      merged.milestones = requiredMilestones;
+    }
     // Ensure array fields that changed from string[] to object[] are properly typed
     if (merged.integrationPoints && typeof merged.integrationPoints[0] === "string") {
       merged.integrationPoints = initialFormData.integrationPoints;
@@ -1355,16 +1365,29 @@ function SOWGenerateWizardPageInner() {
   // in the existing GET /wizards/:id response once Step 1 (Scope) is complete. Pre-fill the
   // textbox only when it's empty so we never overwrite user input.
   React.useEffect(() => {
-    if (formData.techStack.trim().length > 0) return;
     const wd = wizardQuery.data as { data?: Record<string, unknown> } | Record<string, unknown> | undefined;
     const inner = (wd as { data?: Record<string, unknown> })?.data ?? wd;
-    const techStack = (inner as { tech_stack?: { ai_suggestion?: { line?: string } | null } } | undefined)?.tech_stack;
-    const suggestion = techStack?.ai_suggestion?.line;
+    const techStackBlock = (inner as { tech_stack?: { ai_suggestion?: { line?: string } | null } } | undefined)?.tech_stack;
+    const suggestion = techStackBlock?.ai_suggestion?.line;
+    // Diagnostic — remove once verified working in production
+    console.log("[wizard/tech_stack] effect fired", {
+      hasWizardData: !!wizardQuery.data,
+      formDataTechStack: formData.techStack,
+      formDataTechStackLen: formData.techStack.length,
+      techStackBlock,
+      suggestion,
+      currentStep,
+    });
+    if (formData.techStack.trim().length > 0) {
+      console.log("[wizard/tech_stack] skip — user already typed");
+      return;
+    }
     if (typeof suggestion === "string" && suggestion.trim().length > 0) {
+      console.log("[wizard/tech_stack] applying suggestion:", suggestion);
       setFormData(prev => ({ ...prev, techStack: suggestion }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wizardQuery.data]);
+  }, [wizardQuery.data, currentStep]);
 
   // Scroll to top on page load and step change
   React.useEffect(() => {
@@ -1502,6 +1525,14 @@ function SOWGenerateWizardPageInner() {
       formData.deploymentScope.length > 0,
       formData.goLiveScope.length > 0,
       formData.techStack.trim().length >= 10,
+      (
+        formData.dataMigrationScope !== "in_scope"
+        || (
+          formData.etlApproach.trim().length > 0
+          && formData.transformationComplexity.trim().length > 0
+          && formData.dataValidationMethod.trim().length > 0
+        )
+      ),
       /* Step 5 */
       parseFloat(formData.budgetMin) > 0,
       parseFloat(formData.budgetMax) >= parseFloat(formData.budgetMin),
@@ -1514,7 +1545,6 @@ function SOWGenerateWizardPageInner() {
       /* Step 8 */
       formData.paymentTerms.length > 0,
       formData.ipOwnership.length > 0,
-      formData.warrantyPeriod.length > 0,
       formData.terminationNoticePeriod.length > 0,
       /* Step 9 */
       formData.businessOwnerApprover.trim().length > 0,
@@ -1566,7 +1596,15 @@ function SOWGenerateWizardPageInner() {
             && formData.uiuxDesignScope.length > 0
             && formData.deploymentScope.length > 0
             && formData.goLiveScope.length > 0
-            && formData.techStack.trim().length >= 10;
+            && formData.techStack.trim().length >= 10
+            && (
+              formData.dataMigrationScope !== "in_scope"
+              || (
+                formData.etlApproach.trim().length > 0
+                && formData.transformationComplexity.trim().length > 0
+                && formData.dataValidationMethod.trim().length > 0
+              )
+            );
         case 3: // Integrations — skippable, complete if user has set at least one value
           return formData.ssoRequired.length > 0 || (formData.integrationPoints ?? []).some(x => x.name.trim().length > 0);
         case 4: // Timeline & Team — skippable, complete if dates are set
@@ -1585,7 +1623,6 @@ function SOWGenerateWizardPageInner() {
         case 8:
           return formData.paymentTerms.length > 0
             && formData.ipOwnership.length > 0
-            && formData.warrantyPeriod.length > 0
             && formData.terminationNoticePeriod.length > 0;
         case 9:
           return aiConfidence >= 60
@@ -1652,6 +1689,29 @@ function SOWGenerateWizardPageInner() {
      Hands off to SOWAIDraftReviewPage, which shows the shared manual-sow
      "GENERATING MODAL" on mount while the API call completes in the background. */
   const handleGenerate = () => {
+    if (
+      formData.dataMigrationScope === "in_scope" &&
+      (!formData.etlApproach.trim() || !formData.transformationComplexity.trim() || !formData.dataValidationMethod.trim())
+    ) {
+      const dmErrors: StepErrors = {
+        dataMigrationSection: "Data Migration details are mandatory because Data Migration is marked In Scope in Step 1.",
+      };
+      if (!formData.etlApproach.trim()) dmErrors.etlApproach = "ETL approach is required when data migration is in scope";
+      if (!formData.transformationComplexity.trim()) dmErrors.transformationComplexity = "Transformation complexity is required when data migration is in scope";
+      if (!formData.dataValidationMethod.trim()) dmErrors.dataValidationMethod = "Data validation method is required when data migration is in scope";
+      setStepErrors(dmErrors);
+      setTouchedFields((prev) => {
+        const next = new Set(prev);
+        next.add("etlApproach");
+        next.add("transformationComplexity");
+        next.add("dataValidationMethod");
+        next.add("dataMigrationSection");
+        return next;
+      });
+      setCurrentStep(2);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (formData.businessOwnerApprover.trim().length === 0) {
       setStepErrors({ businessOwnerApprover: "Business owner approver is required" });
       setTouchedFields((prev) => new Set(prev).add("businessOwnerApprover"));
@@ -1685,6 +1745,21 @@ function SOWGenerateWizardPageInner() {
     if (currentStep < STEPS.length - 1) {
       // Validate ALL fields in the current step at once
       const errors = validateStep(currentStep, formData);
+      const dmInScope = formData.dataMigrationScope === "in_scope";
+      if (currentStep === 2 && dmInScope) {
+        if (!formData.etlApproach.trim()) {
+          errors.etlApproach = "ETL approach is required when data migration is in scope";
+        }
+        if (!formData.transformationComplexity.trim()) {
+          errors.transformationComplexity = "Transformation complexity is required when data migration is in scope";
+        }
+        if (!formData.dataValidationMethod.trim()) {
+          errors.dataValidationMethod = "Data validation method is required when data migration is in scope";
+        }
+        if (errors.etlApproach || errors.transformationComplexity || errors.dataValidationMethod) {
+          errors.dataMigrationSection = "Data Migration details are mandatory because Data Migration is marked In Scope in Step 1.";
+        }
+      }
 
       if (Object.keys(errors).length > 0) {
         // Show ALL errors at once and mark ALL fields as touched
@@ -3329,9 +3404,14 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
       {formData.dataMigrationScope === "in_scope" && (
         <>
           <SectionHeading>Section C — Data Migration Technical Detail</SectionHeading>
+          {errors.dataMigrationSection && (
+            <div data-field="dataMigrationSection" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+              Data Migration details are mandatory because Data Migration is marked In Scope in Step 1.
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <FieldLabel>ETL Approach</FieldLabel>
+            <div data-field="etlApproach">
+              <FieldLabel required>ETL Approach</FieldLabel>
               <Select value={formData.etlApproach} onValueChange={(v) => updateField("etlApproach", v)}>
                 <SelectTrigger><SelectValue placeholder="Select approach" /></SelectTrigger>
                 <SelectContent>
@@ -3343,9 +3423,10 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
+              <FieldError error={errors.etlApproach} field="etlApproach" />
             </div>
-            <div>
-              <FieldLabel>Transformation Complexity</FieldLabel>
+            <div data-field="transformationComplexity">
+              <FieldLabel required>Transformation Complexity</FieldLabel>
               <Select value={formData.transformationComplexity} onValueChange={(v) => updateField("transformationComplexity", v)}>
                 <SelectTrigger><SelectValue placeholder="Select complexity" /></SelectTrigger>
                 <SelectContent>
@@ -3355,10 +3436,11 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
                   <SelectItem value="data_cleansing">Data Cleansing</SelectItem>
                 </SelectContent>
               </Select>
+              <FieldError error={errors.transformationComplexity} field="transformationComplexity" />
             </div>
           </div>
-          <div>
-            <FieldLabel>Data Validation Method</FieldLabel>
+          <div data-field="dataValidationMethod">
+            <FieldLabel required>Data Validation Method</FieldLabel>
             <RadioGroup
               value={formData.dataValidationMethod}
               onChange={(v) => updateField("dataValidationMethod", v)}
@@ -3368,6 +3450,7 @@ function Step2DeliveryTechnical({ formData, updateField, errors = {}, blurField 
                 { value: "both", label: "Both" },
               ]}
             />
+            <FieldError error={errors.dataValidationMethod} field="dataValidationMethod" />
           </div>
         </>
       )}
@@ -3923,26 +4006,34 @@ function Step4TimelineTeamTesting({ formData, updateField, addListItem, removeLi
       {/* Key Milestones — FSD: Name + Target Date + Acceptance Criteria (min 50 chars) */}
       <div data-field="milestones">
         <div className="flex items-center justify-between mb-3">
-          <label className="text-[13px] font-semibold text-gray-800">Key Milestones with Acceptance Criteria</label>
-          <button onClick={() => updateField("milestones", [...formData.milestones, { name: "", targetDate: "", acceptanceCriteria: "" }])}
-            className="inline-flex items-center gap-1 text-[12px] font-semibold text-brown-500 hover:text-brown-600 transition-colors">
-            <Plus className="w-3.5 h-3.5" /> Add Milestone
-          </button>
+          <div className="flex items-center gap-2">
+            <label className="text-[13px] font-semibold text-gray-800">Key Milestones with Acceptance Criteria</label>
+            <div className="relative group">
+              <button
+                type="button"
+                aria-label="Milestone definitions"
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-500 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-600 focus-visible:ring-offset-1"
+              >
+                <Info className="h-3.5 w-3.5" />
+              </button>
+              <div
+                role="tooltip"
+                className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md bg-gray-900 px-3 py-2 text-[11px] leading-5 text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+              >
+                <div>M1: SOW Onboarding</div>
+                <div>M2: Dev Milestone</div>
+                <div>M3: UAT Sign-off</div>
+              </div>
+            </div>
+          </div>
         </div>
         <div className="space-y-3">
           {formData.milestones.map((ms, idx) => (
             <div key={idx} className="relative p-4 rounded-lg border border-gray-100 bg-gray-50/50">
-              {formData.milestones.length > 1 && (
-                <button onClick={() => updateField("milestones", formData.milestones.filter((_, i) => i !== idx))}
-                  className="absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <FieldLabel>Milestone Name (max 100)</FieldLabel>
-                  <Input placeholder="e.g., Phase 1 Complete" value={ms.name ?? ""}
-                    onChange={(e) => updateField("milestones", formData.milestones.map((m, i) => i === idx ? { ...m, name: e.target.value.slice(0, 100) } : m))} />
+                  <Input placeholder="e.g., Phase 1 Complete" value={ms.name ?? ""} readOnly disabled />
                 </div>
                 <div>
                   <FieldLabel>Target Date</FieldLabel>
@@ -4339,9 +4430,6 @@ function Step5BudgetRisk({ formData, updateField, addListItem, removeListItem, u
           <SelectTrigger><SelectValue placeholder="Select breakdown preference" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="milestone">Milestone-based</SelectItem>
-            <SelectItem value="phase">Phase-based</SelectItem>
-            <SelectItem value="monthly">Monthly</SelectItem>
-            <SelectItem value="fixed_total">Fixed Total</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -4663,42 +4751,27 @@ function Step8CommercialLegal({ formData, updateField, errors = {}, blurField }:
       {/* ── SECTION A — Commercial Terms ── */}
       <SectionHeading>Section A — Commercial Terms</SectionHeading>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
         <div data-field="paymentTerms">
           <FieldLabel required>Payment Terms</FieldLabel>
           <Select value={formData.paymentTerms} onValueChange={(v) => updateField("paymentTerms", v)}>
             <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="immediately">Immediately</SelectItem>
               <SelectItem value="net_15">Net 15</SelectItem>
               <SelectItem value="net_30">Net 30</SelectItem>
               <SelectItem value="net_45">Net 45</SelectItem>
               <SelectItem value="net_60">Net 60</SelectItem>
-              <SelectItem value="upon_delivery">Upon Delivery</SelectItem>
-              <SelectItem value="milestone_based">Milestone-Based</SelectItem>
             </SelectContent>
           </Select>
           <FieldError error={errors.paymentTerms} field="paymentTerms" />
         </div>
-        <div data-field="warrantyPeriod">
-          <FieldLabel required>Warranty Period</FieldLabel>
-          <Select value={formData.warrantyPeriod} onValueChange={(v) => updateField("warrantyPeriod", v)}>
-            <SelectTrigger><SelectValue placeholder="Select warranty period" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="30_days">30 Days</SelectItem>
-              <SelectItem value="60_days">60 Days</SelectItem>
-              <SelectItem value="90_days">90 Days</SelectItem>
-              <SelectItem value="6_months">6 Months</SelectItem>
-              <SelectItem value="12_months">12 Months</SelectItem>
-            </SelectContent>
-          </Select>
-          <FieldError error={errors.warrantyPeriod} field="warrantyPeriod" />
-        </div>
       </div>
 
       <div>
-        <FieldLabel>Invoicing Schedule</FieldLabel>
+        <FieldLabel>Additional Comments</FieldLabel>
         <Textarea
-          placeholder="Describe when invoices will be issued (e.g. at the end of each milestone)..."
+          placeholder="Add any extra commercial/payment notes..."
           value={formData.invoicingSchedule}
           onChange={(e) => updateField("invoicingSchedule", e.target.value)}
           className="min-h-[100px]"
