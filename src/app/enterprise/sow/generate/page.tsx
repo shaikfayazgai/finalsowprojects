@@ -10,7 +10,7 @@ import {
   ArrowLeft, ArrowRight, Sparkles, CheckCircle2, FileText, Target, Code2,
   Calendar, DollarSign, Users, ShieldCheck, Lock, AlertTriangle,
   ClipboardCheck, Plus, X, Zap, Check, Loader2, SkipForward, Circle, Lightbulb, Info,
-  Link2, Scale, Gavel, Upload, Eye, Pencil,
+  Link2, Scale, Gavel, Upload, Eye, Pencil, Trash2, ChevronDown,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils/cn";
@@ -1090,6 +1090,263 @@ function CustomStandardTagInput({ standards, onChange }: { standards: string[]; 
           style={{ padding: 0 }}
         />
       </div>
+    </div>
+  );
+}
+
+const EMPTY_INTEGRATION = { name: "", direction: "", protocol: "", authentication: "", dataFormat: "", sandboxCredentials: "", testingResponsibility: "", errorHandlingSLA: "" };
+type IntegrationPoint = typeof EMPTY_INTEGRATION;
+
+function IntegrationForm({ draft, onChange, onSave, onCancel, canSave, isEdit }: {
+  draft: IntegrationPoint;
+  onChange: (v: IntegrationPoint) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  canSave: boolean;
+  isEdit: boolean;
+}) {
+  const set = (key: keyof IntegrationPoint, value: string) => onChange({ ...draft, [key]: value });
+  return (
+    <div className="p-4 space-y-4 border-t border-gray-100">
+      <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#A67763' }}>
+        {isEdit ? "Edit Integration" : "New Integration"}
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <FieldLabel required>Integration Name</FieldLabel>
+          <Input placeholder="e.g. Stripe Payment Gateway" value={draft.name} onChange={(e) => set("name", e.target.value.slice(0, 100))} />
+        </div>
+        <div>
+          <FieldLabel required>Direction</FieldLabel>
+          <Select value={draft.direction} onValueChange={(v) => set("direction", v)}>
+            <SelectTrigger><SelectValue placeholder="Select direction" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Inbound">Inbound</SelectItem>
+              <SelectItem value="Outbound">Outbound</SelectItem>
+              <SelectItem value="Bidirectional">Bidirectional</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel required>Protocol</FieldLabel>
+          <Select value={draft.protocol} onValueChange={(v) => set("protocol", v)}>
+            <SelectTrigger><SelectValue placeholder="Select protocol" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="REST">REST</SelectItem>
+              <SelectItem value="GraphQL">GraphQL</SelectItem>
+              <SelectItem value="SOAP">SOAP</SelectItem>
+              <SelectItem value="gRPC">gRPC</SelectItem>
+              <SelectItem value="Webhook">Webhook</SelectItem>
+              <SelectItem value="SFTP">SFTP</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel required>Authentication</FieldLabel>
+          <Select value={draft.authentication} onValueChange={(v) => set("authentication", v)}>
+            <SelectTrigger><SelectValue placeholder="Select authentication" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="OAuth 2.0">OAuth 2.0</SelectItem>
+              <SelectItem value="API Key">API Key</SelectItem>
+              <SelectItem value="Basic Auth">Basic Auth</SelectItem>
+              <SelectItem value="JWT">JWT</SelectItem>
+              <SelectItem value="HMAC">HMAC</SelectItem>
+              <SelectItem value="None">None</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Data Format</FieldLabel>
+          <Select value={draft.dataFormat} onValueChange={(v) => set("dataFormat", v)}>
+            <SelectTrigger><SelectValue placeholder="Select format" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="JSON">JSON</SelectItem>
+              <SelectItem value="XML">XML</SelectItem>
+              <SelectItem value="CSV">CSV</SelectItem>
+              <SelectItem value="Binary">Binary</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Sandbox Credentials Provided By</FieldLabel>
+          <Select value={draft.sandboxCredentials} onValueChange={(v) => set("sandboxCredentials", v)}>
+            <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Client">Client</SelectItem>
+              <SelectItem value="GlimmoraTeam">GlimmoraTeam</SelectItem>
+              <SelectItem value="Not Required">Not Required</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Testing Responsibility</FieldLabel>
+          <Select value={draft.testingResponsibility} onValueChange={(v) => set("testingResponsibility", v)}>
+            <SelectTrigger><SelectValue placeholder="Select responsibility" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Client">Client</SelectItem>
+              <SelectItem value="GlimmoraTeam">GlimmoraTeam</SelectItem>
+              <SelectItem value="Both">Both</SelectItem>
+              <SelectItem value="Third-party">Third-party</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel>Error Handling SLA</FieldLabel>
+          <Select value={draft.errorHandlingSLA} onValueChange={(v) => set("errorHandlingSLA", v)}>
+            <SelectTrigger><SelectValue placeholder="Select SLA" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Same-day">Same-day</SelectItem>
+              <SelectItem value="4-hour">4-hour</SelectItem>
+              <SelectItem value="1-hour">1-hour</SelectItem>
+              <SelectItem value="Custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <button type="button" onClick={onCancel}
+          className="px-4 py-2 rounded-lg text-[12px] font-semibold text-gray-600 hover:bg-gray-100 transition-all">
+          Cancel
+        </button>
+        <button type="button" onClick={onSave} disabled={!canSave}
+          className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white transition-all"
+          style={{ background: canSave ? '#A67763' : '#d1d5db', cursor: canSave ? 'pointer' : 'not-allowed' }}>
+          {isEdit ? "Save Changes" : "Add Integration"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function IntegrationTableSection({ integrations, onChange }: {
+  integrations: IntegrationPoint[];
+  onChange: (v: IntegrationPoint[]) => void;
+}) {
+  const [expandedIdx, setExpandedIdx] = React.useState<number | null>(null);
+  const [editingIdx, setEditingIdx] = React.useState<number | null>(null);
+  const [isAdding, setIsAdding] = React.useState(false);
+  const [draft, setDraft] = React.useState<IntegrationPoint>({ ...EMPTY_INTEGRATION });
+
+  const startAdd = () => { setDraft({ ...EMPTY_INTEGRATION }); setIsAdding(true); setEditingIdx(null); setExpandedIdx(null); };
+  const startEdit = (idx: number) => { setDraft({ ...integrations[idx] }); setEditingIdx(idx); setIsAdding(false); setExpandedIdx(null); };
+  const cancelForm = () => { setIsAdding(false); setEditingIdx(null); };
+  const canSave = !!(draft.name.trim() && draft.direction && draft.protocol && draft.authentication);
+
+  const saveForm = () => {
+    if (!canSave) return;
+    if (editingIdx !== null) {
+      onChange(integrations.map((item, i) => i === editingIdx ? draft : item));
+      setEditingIdx(null);
+    } else {
+      onChange([...integrations, draft]);
+      setIsAdding(false);
+    }
+    setDraft({ ...EMPTY_INTEGRATION });
+  };
+
+  const deleteRow = (idx: number) => {
+    onChange(integrations.filter((_, i) => i !== idx));
+    if (expandedIdx === idx) setExpandedIdx(null);
+    if (editingIdx === idx) setEditingIdx(null);
+  };
+
+  const toggleExpand = (idx: number) => { setExpandedIdx(expandedIdx === idx ? null : idx); setEditingIdx(null); };
+
+  const COL = '28px 1fr 100px 90px 120px 96px';
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <FieldLabel>Integration Points</FieldLabel>
+        <button type="button" onClick={startAdd}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all"
+          style={{ background: 'rgba(166,119,99,0.10)', color: '#A67763', border: '1px solid rgba(166,119,99,0.20)' }}>
+          <Plus className="w-3.5 h-3.5" /> Add Integration
+        </button>
+      </div>
+
+      {integrations.length > 0 && (
+        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-soft)' }}>
+          <div className="grid items-center px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider"
+            style={{ gridTemplateColumns: COL, background: 'rgba(77,87,65,0.06)', color: 'var(--ink-mid)' }}>
+            <span>#</span>
+            <span>Integration Name</span>
+            <span>Direction</span>
+            <span>Protocol</span>
+            <span>Authentication</span>
+            <span className="text-center">Actions</span>
+          </div>
+
+          {integrations.map((intg, idx) => (
+            <React.Fragment key={idx}>
+              <div className={cn("grid items-center px-4 py-3 text-[13px] border-t transition-colors", expandedIdx === idx || editingIdx === idx ? "bg-gray-50" : "hover:bg-gray-50/60")}
+                style={{ gridTemplateColumns: COL, borderColor: 'var(--border-soft)' }}>
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #A67763, #886151)' }}>{idx + 1}</span>
+                <span className="font-medium text-gray-800 truncate pr-2">
+                  {intg.name || <span className="text-gray-400 italic text-[12px]">Unnamed</span>}
+                </span>
+                <span className="text-gray-600 text-[12px]">{intg.direction || '—'}</span>
+                <span className="text-gray-600 text-[12px]">{intg.protocol || '—'}</span>
+                <span className="text-gray-600 text-[12px]">{intg.authentication || '—'}</span>
+                <div className="flex items-center justify-center gap-1">
+                  <button type="button" onClick={() => toggleExpand(idx)} title="View details"
+                    className="w-7 h-7 rounded-md flex items-center justify-center transition-all hover:bg-gray-100"
+                    style={{ color: expandedIdx === idx ? '#4D5741' : '#9CA3AF' }}>
+                    <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", expandedIdx === idx ? "rotate-180" : "")} />
+                  </button>
+                  <button type="button" onClick={() => startEdit(idx)} title="Edit"
+                    className="w-7 h-7 rounded-md flex items-center justify-center transition-all hover:bg-blue-50"
+                    style={{ color: editingIdx === idx ? '#3B82F6' : '#9CA3AF' }}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button type="button" onClick={() => deleteRow(idx)} title="Delete"
+                    className="w-7 h-7 rounded-md flex items-center justify-center transition-all hover:bg-red-50 hover:text-red-500"
+                    style={{ color: '#9CA3AF' }}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {expandedIdx === idx && editingIdx !== idx && (
+                <div className="px-6 py-4 border-t grid grid-cols-2 md:grid-cols-4 gap-4"
+                  style={{ borderColor: 'var(--border-soft)', background: 'rgba(77,87,65,0.03)' }}>
+                  {([
+                    { label: "Data Format", value: intg.dataFormat },
+                    { label: "Sandbox Credentials", value: intg.sandboxCredentials },
+                    { label: "Testing Responsibility", value: intg.testingResponsibility },
+                    { label: "Error Handling SLA", value: intg.errorHandlingSLA },
+                  ] as { label: string; value: string }[]).map(({ label, value }) => (
+                    <div key={label}>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--ink-mid)' }}>{label}</p>
+                      <p className="text-[13px] text-gray-700">{value || '—'}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {editingIdx === idx && (
+                <IntegrationForm draft={draft} onChange={setDraft} onSave={saveForm} onCancel={cancelForm} canSave={canSave} isEdit />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+
+      {integrations.length === 0 && !isAdding && (
+        <div className="rounded-xl border-2 border-dashed border-gray-200 py-10 text-center">
+          <p className="text-[13px] text-gray-400">No integrations added yet.</p>
+          <button type="button" onClick={startAdd} className="mt-2 text-[12px] font-semibold" style={{ color: '#A67763' }}>
+            + Add your first integration
+          </button>
+        </div>
+      )}
+
+      {isAdding && (
+        <div className="mt-3 rounded-xl" style={{ border: '1px solid var(--border-soft)', background: 'rgba(166,119,99,0.03)' }}>
+          <IntegrationForm draft={draft} onChange={setDraft} onSave={saveForm} onCancel={cancelForm} canSave={canSave} isEdit={false} />
+        </div>
+      )}
     </div>
   );
 }
@@ -3506,119 +3763,10 @@ function Step3IntegrationsUserMgmt({ formData, updateField, errors = {}, blurFie
       <SectionHeading>Section A — External Integrations</SectionHeading>
 
       <div data-field="integrationPoints">
-        <FieldLabel>Integration Points*</FieldLabel>
-        <div className="space-y-4">
-          {formData.integrationPoints.map((intg, idx) => (
-            <div key={idx} className="relative p-4 rounded-lg border border-gray-100 bg-gray-50/50">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white" style={{ background: 'linear-gradient(135deg, #A67763, #886151)' }}>{idx + 1}</span>
-                <span className="text-[13px] font-semibold text-gray-800">INTEGRATION #{idx + 1}</span>
-              </div>
-              {formData.integrationPoints.length > 1 && (
-                <button onClick={() => removeIntegration(idx)}
-                  className="absolute top-3 right-3 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <FieldLabel>Integration Name (Max 100 Chars)*</FieldLabel>
-                  <Input placeholder="e.g. Stripe Payment Gateway" value={intg.name} onChange={(e) => updateIntegration(idx, "name", e.target.value.slice(0, 100))} />
-                </div>
-                <div>
-                  <FieldLabel>Direction*</FieldLabel>
-                  <Select value={intg.direction} onValueChange={(v) => updateIntegration(idx, "direction", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select direction" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Inbound">Inbound</SelectItem>
-                      <SelectItem value="Outbound">Outbound</SelectItem>
-                      <SelectItem value="Bidirectional">Bidirectional</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <FieldLabel>Protocol*</FieldLabel>
-                  <Select value={intg.protocol} onValueChange={(v) => updateIntegration(idx, "protocol", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select protocol" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="REST">REST</SelectItem>
-                      <SelectItem value="GraphQL">GraphQL</SelectItem>
-                      <SelectItem value="SOAP">SOAP</SelectItem>
-                      <SelectItem value="gRPC">gRPC</SelectItem>
-                      <SelectItem value="Webhook">Webhook</SelectItem>
-                      <SelectItem value="SFTP">SFTP</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <FieldLabel>Authentication*</FieldLabel>
-                  <Select value={intg.authentication} onValueChange={(v) => updateIntegration(idx, "authentication", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select authentication" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="OAuth 2.0">OAuth 2.0</SelectItem>
-                      <SelectItem value="API Key">API Key</SelectItem>
-                      <SelectItem value="Basic Auth">Basic Auth</SelectItem>
-                      <SelectItem value="JWT">JWT</SelectItem>
-                      <SelectItem value="HMAC">HMAC</SelectItem>
-                      <SelectItem value="None">None</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <FieldLabel>Data Format*</FieldLabel>
-                  <Select value={intg.dataFormat} onValueChange={(v) => updateIntegration(idx, "dataFormat", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select format" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="JSON">JSON</SelectItem>
-                      <SelectItem value="XML">XML</SelectItem>
-                      <SelectItem value="CSV">CSV</SelectItem>
-                      <SelectItem value="Binary">Binary</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <FieldLabel>Sandbox Credentials Provided By*</FieldLabel>
-                  <Select value={intg.sandboxCredentials} onValueChange={(v) => updateIntegration(idx, "sandboxCredentials", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Client">Client</SelectItem>
-                      <SelectItem value="Vendor">Vendor</SelectItem>
-                      <SelectItem value="Not Required">Not Required</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <FieldLabel>Testing Responsibility*</FieldLabel>
-                  <Select value={intg.testingResponsibility} onValueChange={(v) => updateIntegration(idx, "testingResponsibility", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select responsibility" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Client">Client</SelectItem>
-                      <SelectItem value="GlimmoraTeam">GlimmoraTeam</SelectItem>
-                      <SelectItem value="Both">Both</SelectItem>
-                      <SelectItem value="Third-party">Third-party</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <FieldLabel>Error Handling SLA*</FieldLabel>
-                  <Select value={intg.errorHandlingSLA} onValueChange={(v) => updateIntegration(idx, "errorHandlingSLA", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select SLA" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Same-day">Same-day</SelectItem>
-                      <SelectItem value="4-hour">4-hour</SelectItem>
-                      <SelectItem value="1-hour">1-hour</SelectItem>
-                      <SelectItem value="Custom">Custom</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <button onClick={addIntegration}
-          className="mt-3 w-full py-2.5 rounded-lg border-2 border-dashed border-gray-200 text-[12px] font-semibold text-gray-500 hover:border-gray-300 hover:text-gray-600 transition-all flex items-center justify-center gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> ADD INTEGRATION
-        </button>
+        <IntegrationTableSection
+          integrations={formData.integrationPoints}
+          onChange={(v) => updateField("integrationPoints", v)}
+        />
       </div>
 
       {/* ── SECTION B — User Management Scope ── */}
