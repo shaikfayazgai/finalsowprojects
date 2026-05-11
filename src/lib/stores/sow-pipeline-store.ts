@@ -57,7 +57,7 @@ export const useSOWPipelineStore = create<SOWPipelineState>()(
     {
       name: "gt-sow-pipeline",
       /* version bump forces fresh empty list, clearing persisted dummy SOWs */
-      version: 5,
+      version: 6,
       migrate: () => ({ sows: INITIAL_SOWS }),
     }
   )

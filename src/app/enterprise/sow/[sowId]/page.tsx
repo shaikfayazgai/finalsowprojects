@@ -312,8 +312,8 @@ export default function SOWDetailPage() {
   const pipelineSows = useSOWPipelineStore((s) => s.sows);
   const { data: apiSowData, isLoading: apiSowLoading, flow: apiFlow } = useSOWDetail(sowId);
 
-  // Direct query for the header — handles both { success, data: {...} } and flat shapes
-  const manualSowQuery = useManualSOW(sowId);
+  // Direct query for the header — only for manual SOWs; AI SOWs use apiSowData from useSOWDetail
+  const manualSowQuery = useManualSOW(sowId, apiFlow === "manual");
   const headerData = React.useMemo(() => {
     const raw = manualSowQuery.data as Record<string, unknown> | null | undefined;
     if (!raw) return null;
@@ -506,11 +506,22 @@ export default function SOWDetailPage() {
     setIsDecomposing(true);
     try {
       const raw = apiSowData as Record<string, unknown> | null;
+      const cd = (typeof raw?.commercial_details === "object" && raw?.commercial_details !== null ? raw.commercial_details : {}) as Record<string, unknown>;
+      const br = (typeof cd.budgetRisk === "object" && cd.budgetRisk !== null ? cd.budgetRisk : {}) as Record<string, unknown>;
+      const tt = (typeof cd.timelineTeam === "object" && cd.timelineTeam !== null ? cd.timelineTeam : {}) as Record<string, unknown>;
+      const minBudget = Number(br.budgetMinimum ?? br.budget_minimum ?? raw?.budgetMinimum ?? raw?.budget_minimum ?? raw?.minimum_budget ?? 0);
+      const maxBudget = Number(br.budgetMaximum ?? br.budget_maximum ?? raw?.budgetMaximum ?? raw?.budget_maximum ?? raw?.maximum_budget ?? 0);
+      const startDate = String(tt.startDate ?? raw?.start_date ?? "");
+      const endDate = String(tt.targetEndDate ?? raw?.end_date ?? "");
       const payload = {
         wizard_id:     String(raw?.wizard_id ?? raw?.id ?? sowId),
         enterprise_id: String(raw?.enterprise_id ?? (session?.user as { id?: string })?.id ?? ""),
         sow_reference: sow.id,
         project_name:  sow.title,
+        ...(minBudget > 0 ? { minimum_budget: minBudget } : {}),
+        ...(maxBudget > 0 ? { maximum_budget: maxBudget } : {}),
+        ...(startDate ? { start_date: startDate } : {}),
+        ...(endDate ? { end_date: endDate } : {}),
       };
       const res = await createEnterpriseDecompositionPlan(payload);
       const planId = String(
@@ -530,7 +541,7 @@ export default function SOWDetailPage() {
 
   const linkedProject = sow ? mockProjects.find((p) => p.sowId === sow.id) : undefined;
 
-  const { data: sectionsApiData, isLoading: sectionsLoading } = useSOWSections(sowId);
+  const { data: sectionsApiData, isLoading: sectionsLoading } = useSOWSections(sowId, apiFlow === "manual");
 
   const sections = React.useMemo(() => {
     type SectionItem = { section_id: string; title: string; confidence: number; content: string };

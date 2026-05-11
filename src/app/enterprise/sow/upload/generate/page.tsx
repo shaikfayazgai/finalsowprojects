@@ -234,8 +234,6 @@ export default function GeneratePreviewPage({
     });
     setTimeout(() => {
       setGenReady(true);
-      setGenPhase("complete");
-      store.setGenerationState("complete");
     }, (GEN_STAGES.length + 1) * 800);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -244,9 +242,6 @@ export default function GeneratePreviewPage({
   React.useEffect(() => {
     if (generationStatusValue === "completed" || generationStatusValue === "complete") {
       setGenReady(true);
-      setGenPhase("complete");
-      store.setGenerationState("complete");
-      store.setPreviewState({ qualityMetrics: reviewData.metrics, isStaleDocument: false, hardBlocks: [] });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generationStatusValue]);
@@ -305,9 +300,6 @@ export default function GeneratePreviewPage({
     GEN_STAGES.forEach((_, i) => { setTimeout(() => setGenStageIdx(i), (i + 1) * 800); });
     setTimeout(() => {
       setGenReady(true);
-      setGenPhase("complete");
-      store.setGenerationState("complete");
-      store.setPreviewState({ qualityMetrics: reviewData.metrics, isStaleDocument: false, hardBlocks: [] });
     }, (GEN_STAGES.length + 1) * 800);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -531,12 +523,12 @@ export default function GeneratePreviewPage({
                 {genReady ? (
                   <div className="mt-6">
                     <button
-                      onClick={() => sowId ? router.push(`/enterprise/sow/${sowId}`) : setGenPhase("complete")}
+                      onClick={() => { store.setGenerationState("complete"); store.setPreviewState({ qualityMetrics: reviewData.metrics, isStaleDocument: false, hardBlocks: [] }); setGenPhase("complete"); }}
                       className="w-full flex items-center justify-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-forest-500 to-teal-600 hover:from-forest-600 hover:to-teal-700 px-4 py-3 rounded-xl transition-all shadow-sm"
                       style={{ boxShadow: "0 8px 24px rgba(42,96,104,0.30)" }}
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      Continue to Review
+                      Continue — Review &amp; Submit SOW
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                     <p className="text-center text-[10px] text-forest-700 mt-3 font-medium">
@@ -545,24 +537,34 @@ export default function GeneratePreviewPage({
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-3 mt-6">
+                    <div className="flex flex-col gap-2 mt-6">
                       <button
-                        onClick={() => setGenMinimized(true)}
-                        className="flex-1 flex items-center justify-center gap-2 text-[12px] font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 px-4 py-2.5 rounded-xl transition-all"
+                        onClick={() => { store.setGenerationState("complete"); store.setPreviewState({ qualityMetrics: reviewData.metrics, isStaleDocument: false, hardBlocks: [] }); setGenPhase("complete"); setGenReady(true); }}
+                        className="w-full flex items-center justify-center gap-2 text-[13px] font-semibold text-white bg-gradient-to-r from-forest-500 to-teal-600 hover:from-forest-600 hover:to-teal-700 px-4 py-3 rounded-xl transition-all shadow-sm"
+                        style={{ boxShadow: "0 8px 24px rgba(42,96,104,0.30)" }}
                       >
-                        <ArrowLeft className="w-3.5 h-3.5" />
-                        Wait — Keep Generating
+                        <ArrowRight className="w-4 h-4" />
+                        Continue — Review &amp; Submit SOW
                       </button>
-                      <button
-                        onClick={() => { setGenPhase("idle"); setGenStageIdx(-1); store.setGenerationState("idle"); }}
-                        className="flex items-center justify-center gap-2 text-[12px] font-semibold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 px-4 py-2.5 rounded-xl transition-all"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                        Cancel
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setGenMinimized(true)}
+                          className="flex-1 flex items-center justify-center gap-2 text-[12px] font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 px-4 py-2.5 rounded-xl transition-all"
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5" />
+                          Wait — Keep Generating
+                        </button>
+                        <button
+                          onClick={() => { setGenPhase("idle"); setGenStageIdx(-1); store.setGenerationState("idle"); }}
+                          className="flex items-center justify-center gap-2 text-[12px] font-semibold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 px-4 py-2.5 rounded-xl transition-all"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                     <p className="text-center text-[10px] text-gray-400 mt-3">
-                      You can browse the page while generation runs in the background.
+                      You can continue to review or wait for generation to complete.
                     </p>
                   </>
                 )}

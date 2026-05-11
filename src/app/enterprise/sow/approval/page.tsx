@@ -19,6 +19,7 @@ import {
   useRecordApprovalDecision,
 } from "@/lib/hooks/use-manual-sow";
 import { useSowList } from "@/lib/hooks/use-sow-wizard";
+import { useSOWPipelineStore } from "@/lib/stores/sow-pipeline-store";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -487,6 +488,7 @@ export default function SOWApprovalPipelinePage() {
   const [resolveText, setResolveText]   = React.useState("");
   const [resolvingSowId, setResolvingSowId] = React.useState<string | null>(null);
   const resolveMutation = useRecordApprovalDecision(resolvingSowId);
+  const updatePipelineSOW = useSOWPipelineStore((s) => s.updateSOW);
 
   const openResolve = (row: ChangeRequestRow) => {
     setResolveRowId(row.id);
@@ -504,6 +506,7 @@ export default function SOWApprovalPipelinePage() {
       {
         onSuccess: () => {
           toast.success("Change request resolved", "Your response has been sent to Glimmora admin for review.");
+          if (resolvingSowId) updatePipelineSOW(resolvingSowId, { changesRequested: false });
           closeResolve();
         },
         onError: (err) => {

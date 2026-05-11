@@ -24,6 +24,7 @@ import {
   SelectItem, SelectValue,
 } from "@/components/ui";
 import { useCreateWizard, useSaveStep, useSkipStep, useGenerateSOW, useReviewSummary, useWizard } from "@/lib/hooks/use-sow-wizard";
+import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 
 /* ══════════════════════════════════════════ Steps ══════════════════════════════════════════ */
 
@@ -1296,6 +1297,8 @@ function SOWGenerateWizardPageInner() {
   const [cameFromReview, setCameFromReview] = React.useState(false);
   const [generationComplete, setGenerationComplete] = React.useState(false);
   const [generatedSowId, setGeneratedSowId] = React.useState<string | null>(null);
+  const [showGenerateConfirm, setShowGenerateConfirm] = React.useState(false);
+  const uploadStore = useSOWUploadStore();
   // ── API integration (wizard session + step mutations) ──
   const [wizardId, setWizardId] = React.useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -1685,9 +1688,7 @@ function SOWGenerateWizardPageInner() {
     }
   };
 
-  /* ── Generate handler with validation + API ──
-     Hands off to SOWAIDraftReviewPage, which shows the shared manual-sow
-     "GENERATING MODAL" on mount while the API call completes in the background. */
+  /* ── Generate handler — validates then shows confirmation modal ── */
   const handleGenerate = () => {
     if (
       formData.dataMigrationScope === "in_scope" &&
@@ -1719,7 +1720,14 @@ function SOWGenerateWizardPageInner() {
       return;
     }
 
+    setShowGenerateConfirm(true);
+  };
+
+  /* ── Confirm handler — called when user clicks Continue in the modal ── */
+  const confirmGenerate = () => {
+    setShowGenerateConfirm(false);
     setApiError("");
+    uploadStore.setGenerationState("idle");
 
     if (wizardId) {
       generateMutation.mutate(
@@ -1847,6 +1855,64 @@ function SOWGenerateWizardPageInner() {
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
+
+      {/* ═══ GENERATE CONFIRMATION MODAL ═══ */}
+      <AnimatePresence>
+        {showGenerateConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+            style={{ background: "rgba(15,10,6,0.65)", backdropFilter: "blur(10px)" }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 12 }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              className="relative w-full max-w-md overflow-hidden rounded-2xl"
+              style={{
+                background: "linear-gradient(160deg, #FFFFFF 0%, #FAF7F4 100%)",
+                boxShadow: "0 32px 64px -16px rgba(0,0,0,0.35), 0 8px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(229,221,212,0.9)",
+              }}
+            >
+              <div className="absolute top-0 left-0 right-0 h-[3px]"
+                style={{ background: "linear-gradient(90deg, transparent 0%, #A67763 25%, #2A6068 50%, #A67763 75%, transparent 100%)" }} />
+              <div style={{ padding: "28px 28px 24px" }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center justify-center rounded-xl"
+                    style={{ width: 40, height: 40, background: "linear-gradient(135deg, rgba(166,119,99,0.12), rgba(166,119,99,0.06))", border: "1px solid rgba(166,119,99,0.2)" }}>
+                    <Sparkles style={{ width: 18, height: 18, color: "#A67763" }} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink-rich)", margin: 0 }}>Generate SOW with AI</h3>
+                    <p style={{ fontSize: 12, color: "var(--ink-muted)", margin: 0, marginTop: 2 }}>Review your inputs before proceeding</p>
+                  </div>
+                </div>
+                <p style={{ fontSize: 13, color: "var(--ink-base)", lineHeight: 1.6, marginBottom: 20 }}>
+                  Your form data will be sent to the AI to generate a fully structured Statement of Work. This may take a few moments.
+                </p>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => setShowGenerateConfirm(false)}
+                    style={{ padding: "8px 16px", fontSize: 12, fontWeight: 500, borderRadius: 8, border: "1px solid var(--border-soft)", background: "transparent", color: "var(--ink-muted)", cursor: "pointer" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmGenerate}
+                    className="flex items-center gap-1.5"
+                    style={{ padding: "8px 20px", fontSize: 12, fontWeight: 600, borderRadius: 8, background: "linear-gradient(135deg, #A67763, #886151)", color: "#FFFFFF", border: "1px solid rgba(166,119,99,0.30)", boxShadow: "0 2px 10px rgba(166,119,99,0.25)", cursor: "pointer" }}
+                  >
+                    <Sparkles style={{ width: 13, height: 13 }} /> Continue
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ═══════════════════════════════════
           BACK LINK
@@ -2130,22 +2196,25 @@ function SOWGenerateWizardPageInner() {
                         ) : (
                           <button
                             onClick={handleGenerate}
-                            disabled={!canGenerate()}
+                            disabled={!canGenerate() || generateMutation.isPending}
                             className="flex items-center gap-1.5 rounded-lg transition-all duration-200"
                             style={{
                               padding: '8px 20px',
-                              background: canGenerate() ? 'linear-gradient(135deg, #A67763, #886151)' : 'rgba(166,119,99,0.15)',
-                              color: canGenerate() ? '#FFFFFF' : 'var(--ink-faint)',
+                              background: canGenerate() && !generateMutation.isPending ? 'linear-gradient(135deg, #A67763, #886151)' : 'rgba(166,119,99,0.15)',
+                              color: canGenerate() && !generateMutation.isPending ? '#FFFFFF' : 'var(--ink-faint)',
                               fontSize: 12, fontWeight: 600,
-                              border: `1px solid ${canGenerate() ? 'rgba(166,119,99,0.30)' : 'var(--border-soft)'}`,
-                              boxShadow: canGenerate() ? '0 2px 10px rgba(166,119,99,0.25), inset 0 1px 0 rgba(255,255,255,0.15)' : 'none',
-                              cursor: canGenerate() ? 'pointer' : 'not-allowed',
-                              opacity: canGenerate() ? 1 : 0.6,
+                              border: `1px solid ${canGenerate() && !generateMutation.isPending ? 'rgba(166,119,99,0.30)' : 'var(--border-soft)'}`,
+                              boxShadow: canGenerate() && !generateMutation.isPending ? '0 2px 10px rgba(166,119,99,0.25), inset 0 1px 0 rgba(255,255,255,0.15)' : 'none',
+                              cursor: canGenerate() && !generateMutation.isPending ? 'pointer' : 'not-allowed',
+                              opacity: canGenerate() && !generateMutation.isPending ? 1 : 0.6,
                             }}
-                            onMouseEnter={(e) => { if (canGenerate()) { e.currentTarget.style.boxShadow = '0 4px 16px rgba(166,119,99,0.35), inset 0 1px 0 rgba(255,255,255,0.2)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
-                            onMouseLeave={(e) => { if (canGenerate()) { e.currentTarget.style.boxShadow = '0 2px 10px rgba(166,119,99,0.25), inset 0 1px 0 rgba(255,255,255,0.15)'; e.currentTarget.style.transform = ''; } }}
+                            onMouseEnter={(e) => { if (canGenerate() && !generateMutation.isPending) { e.currentTarget.style.boxShadow = '0 4px 16px rgba(166,119,99,0.35), inset 0 1px 0 rgba(255,255,255,0.2)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                            onMouseLeave={(e) => { if (canGenerate() && !generateMutation.isPending) { e.currentTarget.style.boxShadow = '0 2px 10px rgba(166,119,99,0.25), inset 0 1px 0 rgba(255,255,255,0.15)'; e.currentTarget.style.transform = ''; } }}
                           >
-                            <Sparkles style={{ width: 13, height: 13 }} /> Generate SOW with AI
+                            {generateMutation.isPending
+                              ? <><Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> Generating...</>
+                              : <><Sparkles style={{ width: 13, height: 13 }} /> Generate SOW with AI</>
+                            }
                           </button>
                         )}
                       </div>
