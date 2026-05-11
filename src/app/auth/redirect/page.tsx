@@ -14,9 +14,11 @@ export default async function AuthRedirectPage() {
     provider?: string;
   };
 
-  // New SSO user (not yet in Glimmora DB) — route by intended role
+  // New SSO user (just registered via SSO, not yet onboarded) — route to the
+  // role's onboarding wizard. Previously, enterprise new-SSO users were sent
+  // to the dashboard, skipping onboarding entirely.
   if (user.isNewSsoUser) {
-    if (user.role === "enterprise") redirect("/enterprise/dashboard");
+    if (user.role === "enterprise") redirect("/enterprise/onboarding");
     redirect("/contributor/onboarding");
   }
 

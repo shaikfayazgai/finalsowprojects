@@ -445,9 +445,20 @@ function LoginPageContent() {
     setError("");
     setErrorCode("");
     setSsoLoading(provider);
+    // Route through the Glimmora OAuth flow (NOT NextAuth-native), so the
+    // backend's oauth_primary_auth_result owns the response and never returns
+    // an MFA-pending shape (SSO is the sole auth factor for SSO users). Going
+    // through NextAuth-native instead can land users on the inline mfa-prompt
+    // step on /auth/login when the JWT callback's exchangeOAuthCode path
+    // misbehaves in production.
     const redirectAfter = callbackUrl || "/auth/redirect";
-    const providerId = provider === "microsoft" ? "microsoft-entra-id" : "google";
-    signIn(providerId, { callbackUrl: redirectAfter });
+    const params = new URLSearchParams({
+      provider,
+      redirectAfter,
+      role: userRole || "enterprise",
+      intent: "login",
+    });
+    window.location.href = `/api/auth/oauth/authorize?${params.toString()}`;
   };
 
   const resetToCredentials = () => {

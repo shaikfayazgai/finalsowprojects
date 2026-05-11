@@ -105,7 +105,41 @@ export async function POST(req: NextRequest) {
     });
     const loginData = await loginRes.json().catch(() => ({}));
 
-    // Already authenticated (no MFA required)
+    // Already fully authenticated. If the user came here to *enroll* MFA
+    // (action=init), use the full access token to start enrollment — backend's
+    // /auth/mfa/setup/init accepts both mfa_pending and full access tokens
+    // (see app/core/security.py:get_mfa_setup_principal). Without this, brand
+    // new non-reviewer accounts would get phase=done and the QR would never
+    // render.
+    if (loginData.access_token && action === "init") {
+      const initRes = await fetch(`${GLIMMORA_API}/api/v1/auth/mfa/setup/init`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${loginData.access_token}`,
+        },
+      });
+      const initData = await initRes.json().catch(() => ({}));
+      if (!initRes.ok) {
+        // WRONG_MFA_PHASE here means MFA is already enrolled — fall through to verify.
+        if (initData.code === "WRONG_MFA_PHASE" || (initData.detail && String(initData.detail).includes("WRONG_MFA_PHASE"))) {
+          return NextResponse.json({ phase: "verify", mfa_pending_token: loginData.access_token });
+        }
+        return NextResponse.json(initData, { status: initRes.status });
+      }
+      const secret = initData.secret || initData.secret_base32 || initData.secretBase32 || initData.totp_secret || "";
+      const qrUri = await normalizeQrUri(initData as Record<string, unknown>);
+      return NextResponse.json({
+        phase: "setup",
+        qr_uri: qrUri,
+        secret,
+        // Pass the full access token back as the "pending" token so the
+        // confirm-step Authorization header authenticates correctly.
+        mfa_pending_token: loginData.access_token,
+      });
+    }
+
+    // Already authenticated and not enrolling — original done path.
     if (loginData.access_token) {
       return NextResponse.json({
         phase: "done",

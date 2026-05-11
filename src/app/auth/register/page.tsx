@@ -527,8 +527,8 @@ function ContributorRegisterContent() {
       setPendingOnboarding(true);
     }
 
-    // Signal to the NextAuth signIn callback that this is a *registration* flow
-    // so new emails (not yet in the Glimmora DB) are allowed through.
+    // Keep the sso-intent cookie write for any code paths that still rely on
+    // it (e.g. NextAuth-native fallback during diagnostics). Harmless if unused.
     try {
       await fetch("/api/auth/sso-intent", {
         method: "POST",
@@ -536,15 +536,20 @@ function ContributorRegisterContent() {
         body: JSON.stringify({ role }),
       });
     } catch {
-      // If the intent cookie can't be set, continue anyway — worst case the
-      // signIn callback blocks the unregistered email and shows an error.
+      /* non-fatal */
     }
 
-    // Map provider names to NextAuth provider IDs. NextAuth's flow redirects
-    // back to /auth/redirect (set as callbackUrl), where /auth/redirect routes
-    // new SSO users to onboarding.
-    const authProvider = provider === "microsoft" ? "microsoft-entra-id" : "google";
-    signIn(authProvider, { callbackUrl: "/auth/redirect" });
+    // Route through the Glimmora OAuth flow with intent=register so the
+    // backend can return OAUTH_ALREADY_REGISTERED for existing emails (and
+    // create a new account otherwise). The OAuth callback page lands the user
+    // on /auth/redirect, which routes new SSO users to the onboarding wizard.
+    const params = new URLSearchParams({
+      provider,
+      redirectAfter: "/auth/redirect",
+      role,
+      intent: "register",
+    });
+    window.location.href = `/api/auth/oauth/authorize?${params.toString()}`;
   };
 
   const handleManual = () => {

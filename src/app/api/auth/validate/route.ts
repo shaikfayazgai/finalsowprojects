@@ -64,6 +64,73 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // The backend's /auth/validate endpoint currently only verifies password —
+    // it never returns mfa_pending. So the checks above (which look for an
+    // mfa-pending shape from /validate) never fire, and MFA-enabled users get
+    // routed to the inline mfa-prompt step on the login page instead of the
+    // TOTP entry step. To detect MFA state we *probe* /auth/login here. The
+    // login response is read once for its `status` field; tokens are NOT
+    // forwarded to the client (the actual session is still minted later by
+    // the credentials signIn flow).
+    try {
+      const apiBase =
+        process.env.GLIMMORA_API_URL ?? process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? "";
+      if (apiBase) {
+        const loginRes = await fetch(`${apiBase}/api/v1/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: (email as string).trim().toLowerCase(),
+            password,
+          }),
+          signal: AbortSignal.timeout(8000),
+        });
+        const loginData = (await loginRes.json().catch(() => ({}))) as Record<
+          string,
+          unknown
+        >;
+        const loginStatus = loginData.status as string | undefined;
+        const loginPendingToken = loginData.mfa_pending_token as string | undefined;
+        const loginUser =
+          (loginData.user as Record<string, unknown> | undefined) ?? {};
+        const loginRole =
+          (loginUser.role as string | undefined) ?? role ?? null;
+
+        if (loginStatus === "mfa_required" && loginPendingToken) {
+          return NextResponse.json({
+            ok: true,
+            mfaRequired: true,
+            mfaPendingToken: loginPendingToken,
+            user: {
+              id: loginUser.id ?? "",
+              email: loginUser.email ?? email,
+              firstName: loginUser.firstName ?? "",
+              lastName: loginUser.lastName ?? "",
+              role: loginRole,
+            },
+          });
+        }
+
+        if (loginStatus === "mfa_setup_required" && loginPendingToken) {
+          return NextResponse.json({
+            ok: true,
+            mfaSetupRequired: true,
+            mfaSetupPendingToken: loginPendingToken,
+            role: loginRole,
+            user: {
+              id: loginUser.id ?? "",
+              email: loginUser.email ?? email,
+              firstName: loginUser.firstName ?? "",
+              lastName: loginUser.lastName ?? "",
+              role: loginRole,
+            },
+          });
+        }
+      }
+    } catch {
+      /* probe failure is non-fatal — fall through to the original ok: true response */
+    }
+
     return NextResponse.json({ ok: true, role });
   } catch (err) {
     if (err instanceof ApiError) {
