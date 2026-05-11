@@ -17,10 +17,9 @@ import {
   Hash,
   Download,
   Archive,
-  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { toast } from "@/lib/stores/toast-store";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Badge, Button, Input } from "@/components/ui";
 import { mockAuditLog } from "@/mocks/data/enterprise-analytics";
@@ -129,7 +128,7 @@ function FilterChip({
   );
 }
 
-/* ── Mock CSV export ── */
+/* ── CSV export ── */
 function exportCSV(entries: AuditEntry[]) {
   const headers = ["Timestamp", "Actor", "Role", "Action", "Resource", "Resource Type", "Details", "IP Address"];
   const rows = entries.map((e) => [
@@ -148,6 +147,107 @@ function exportCSV(entries: AuditEntry[]) {
   const a = document.createElement("a");
   a.href = url;
   a.download = `audit-log-${new Date().toISOString().split("T")[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ── PDF export ── */
+async function exportPDF(entries: AuditEntry[]) {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const pageWidth = 841.89;  // A4 landscape
+  const pageHeight = 595.28;
+  const margin = 40;
+  const rowHeight = 18;
+  const headerHeight = 24;
+  const colWidths = [110, 90, 65, 70, 110, 60, 160, 76];
+  const cols = ["Timestamp", "Actor", "Role", "Action", "Resource", "Type", "Details", "IP Address"];
+
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  const drawHeader = (p: ReturnType<typeof pdfDoc.addPage>) => {
+    // Title
+    p.drawText("Audit Trail", {
+      x: margin, y: y - 4,
+      size: 16, font: boldFont, color: rgb(0.18, 0.12, 0.08),
+    });
+    p.drawText(`Exported ${new Date().toLocaleString()}`, {
+      x: margin, y: y - 20,
+      size: 7, font, color: rgb(0.55, 0.50, 0.45),
+    });
+    y -= 44;
+
+    // Column headers background
+    p.drawRectangle({
+      x: margin, y: y - headerHeight + 6,
+      width: pageWidth - margin * 2, height: headerHeight,
+      color: rgb(0.55, 0.33, 0.20),
+    });
+
+    let cx = margin + 4;
+    cols.forEach((col, i) => {
+      p.drawText(col.toUpperCase(), {
+        x: cx, y: y - 10,
+        size: 6.5, font: boldFont, color: rgb(1, 1, 1),
+        maxWidth: colWidths[i] - 4,
+      });
+      cx += colWidths[i];
+    });
+    y -= headerHeight;
+  };
+
+  drawHeader(page);
+
+  entries.forEach((entry, idx) => {
+    // Add a new page when we're near the bottom
+    if (y < margin + rowHeight + 10) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      y = pageHeight - margin;
+      drawHeader(page);
+    }
+
+    // Alternating row background
+    if (idx % 2 === 0) {
+      page.drawRectangle({
+        x: margin, y: y - rowHeight + 4,
+        width: pageWidth - margin * 2, height: rowHeight,
+        color: rgb(0.97, 0.95, 0.92),
+      });
+    }
+
+    const ts = new Date(entry.timestamp);
+    const tsStr = `${ts.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} ${ts.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
+    const values = [tsStr, entry.actor, entry.actorRole, entry.action, entry.resource, entry.resourceType, entry.details, entry.ipAddress];
+
+    let cx = margin + 4;
+    values.forEach((val, i) => {
+      page.drawText(String(val ?? ""), {
+        x: cx, y: y - 8,
+        size: 6.5, font, color: rgb(0.20, 0.15, 0.10),
+        maxWidth: colWidths[i] - 6,
+      });
+      cx += colWidths[i];
+    });
+
+    y -= rowHeight;
+  });
+
+  if (entries.length === 0) {
+    page.drawText("No audit entries to display.", {
+      x: margin, y: y - 10,
+      size: 9, font, color: rgb(0.55, 0.50, 0.45),
+    });
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `audit-log-${new Date().toISOString().split("T")[0]}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -213,7 +313,7 @@ export default function AuditTrailPage() {
             <Download className="w-3.5 h-3.5" />
             Export CSV
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => toast.info("Export PDF", "PDF export requires backend integration.")}>
+          <Button variant="ghost" size="sm" onClick={() => void exportPDF(entries)}>
             <Download className="w-3.5 h-3.5" />
             Export PDF
           </Button>
