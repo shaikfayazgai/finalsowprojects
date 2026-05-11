@@ -106,6 +106,7 @@ export function useContributorOnboarding() {
   const [availability,        setAvailability]        = useState("");
   const [degree,              setDegree]              = useState("");
   const [branch,              setBranch]              = useState("");
+  const [educationFile,       setEducationFile]       = useState<File | null>(null);
   const [linkedin,            setLinkedin]            = useState("");
   const [primarySkills,       setPrimarySkills]       = useState<string[]>([]);
   const [skillInput,          setSkillInput]          = useState("");
@@ -323,6 +324,7 @@ export function useContributorOnboarding() {
     availability, setAvailability,
     degree, setDegree,
     branch, setBranch,
+    educationFile, setEducationFile,
     linkedin, setLinkedin,
     primarySkills, skillInput, setSkillInput, addPrimarySkill, removePrimarySkill,
     secondarySkills, secondarySkillInput, setSecondarySkillInput, addSecondarySkill, removeSecondarySkill,
