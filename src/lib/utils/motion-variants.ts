@@ -1,5 +1,15 @@
 /* Shared Framer Motion variants for consistent page animations */
 
+/**
+ * Returns "show" when the page was hidden at mount time (background tab load).
+ * Prevents Framer Motion's opacity:0 initial state from inflating LCP
+ * because background tabs throttle animation frames.
+ */
+export function getInitialVariant(): "hidden" | "show" {
+  if (typeof document === "undefined") return "hidden";
+  return document.hidden ? "show" : "hidden";
+}
+
 export const stagger = {
   hidden: {},
   show: { transition: { staggerChildren: 0.06 } },

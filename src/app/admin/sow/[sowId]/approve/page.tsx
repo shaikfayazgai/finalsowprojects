@@ -151,14 +151,20 @@ function normaliseDetailToSOW(item: Record<string, unknown>): SOW {
   );
 
   /* Commercial details — budget lives here */
-  const cd = (item.commercial_details ?? {}) as Record<string, unknown>;
+  const cd = (
+    item.commercial_details ??
+    genContent.commercial_details ??
+    {}
+  ) as Record<string, unknown>;
   const budgetRisk = (cd.budgetRisk ?? cd.budget_risk ?? {}) as Record<string, unknown>;
   const estimatedBudget = Number(
+    item.minimum_budget ?? cd.minimum_budget ?? genContent.minimum_budget ??
     item.estimated_budget ?? item.estimatedBudget ??
     budgetRisk.budgetMinimum ?? budgetRisk.budget_minimum ??
     cd.total_budget ?? cd.totalBudget ?? 0
   );
   const estimatedBudgetMax = Number(
+    item.maximum_budget ?? cd.maximum_budget ?? genContent.maximum_budget ??
     budgetRisk.budgetMaximum ?? budgetRisk.budget_maximum ??
     item.estimated_budget_max ?? 0
   ) || undefined;
@@ -601,6 +607,16 @@ export default function AdminSOWApprovePage() {
 
   /* ── API: SOW detail (tries enterprise → manual → AI endpoints in priority order) ── */
   const { data: detailData, isLoading: detailLoading } = useAdminSOWDetail(sowId);
+  React.useEffect(() => {
+    if (detailData) {
+      console.log("[SOW budget debug]", {
+        minimum_budget: (detailData as Record<string,unknown>).minimum_budget,
+        maximum_budget: (detailData as Record<string,unknown>).maximum_budget,
+        commercial_details: (detailData as Record<string,unknown>).commercial_details,
+        generated_content_cd: ((detailData as Record<string,unknown>).generated as Record<string,unknown>)?.content,
+      });
+    }
+  }, [detailData]);
   const apiSow = React.useMemo(
     () => (detailData ? normaliseDetailToSOW(detailData) : null),
     [detailData],
