@@ -23,8 +23,8 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const provider = searchParams.get("provider");
-  const redirectAfter = searchParams.get("redirectAfter") ?? "/enterprise/dashboard";
-  const role = searchParams.get("role") ?? "enterprise";
+  const redirectAfter = searchParams.get("redirectAfter") ?? "/auth/redirect";
+  const role = searchParams.get("role") ?? "";
   const rawIntent = (searchParams.get("intent") ?? "").toLowerCase();
   const intent: "login" | "register" | undefined =
     rawIntent === "login" || rawIntent === "register" ? rawIntent : undefined;

@@ -78,7 +78,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         provider:     {},
       },
       async authorize(credentials) {
-        const role = ((credentials.role as string) || "enterprise") as UserRole;
+        const role = ((credentials.role as string) || "contributor") as UserRole;
         const userId = (credentials.userId as string) || "";
         const email = (credentials.email as string) || "";
         if (!userId || !email) return null;

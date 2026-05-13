@@ -35,7 +35,7 @@ function OAuthCallbackContent() {
   // MFA state — populated when the OAuth exchange returns mfa_pending
   const mfaPendingTokenRef = useRef("");
   const mfaProviderRef = useRef<"google" | "microsoft">("google");
-  const redirectAfterRef = useRef("/enterprise/dashboard");
+  const redirectAfterRef = useRef("/auth/redirect");
   const mfaUserRef = useRef<{ id: string; email: string; firstName: string; lastName: string; role: string } | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaLoading, setMfaLoading] = useState(false);
@@ -134,8 +134,8 @@ function OAuthCallbackContent() {
       }
 
       // ── Parse state ──────────────────────────────────────────────────────
-      let redirectAfter = "/enterprise/dashboard";
-      let roleFromState: string = "enterprise";
+      let redirectAfter = "/auth/redirect";
+      let roleFromState: string = "";
       let providerFromState: "google" | "microsoft" | null = null;
       try {
         const cachedRedirect = sessionStorage.getItem("_oauth_redirect_after");
@@ -248,7 +248,7 @@ function OAuthCallbackContent() {
               email: data.user.email,
               firstName: data.user.firstName,
               lastName: data.user.lastName,
-              role: roleFromState,
+              role: data.user?.role || roleFromState,
               provider,
             });
             if (bypassResult?.ok) {

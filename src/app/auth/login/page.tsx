@@ -482,7 +482,6 @@ function LoginPageContent() {
     const params = new URLSearchParams({
       provider,
       redirectAfter,
-      role: userRole || "enterprise",
       intent: "login",
     });
     window.location.href = `/api/auth/oauth/authorize?${params.toString()}`;

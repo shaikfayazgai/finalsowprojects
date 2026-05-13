@@ -27,6 +27,7 @@ export default async function AuthRedirectPage() {
   if (user.role === "admin")       redirect("/admin/dashboard");
   if (user.role === "super_admin") redirect("/admin/dashboard");
   if (user.role === "reviewer")    redirect("/enterprise/reviewer");
+  if (user.role === "mentor")      redirect("/mentor/dashboard");
   if (user.role === "enterprise")  redirect("/enterprise/dashboard");
 
   // Non-empty but unrecognised role → show an error on the login page.
