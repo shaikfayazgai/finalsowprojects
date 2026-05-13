@@ -499,6 +499,7 @@ export default function PlanDetailPage() {
         totalMilestones: Number(raw.total_milestones ?? raw.totalMilestones ?? (raw.summary as Record<string, unknown>)?.total_milestones ?? 0),
         estimatedHours: Number(raw.estimated_hours ?? raw.estimatedHours ?? ((raw.summary as Record<string, unknown>)?.estimated_total_effort_days as number ?? 0) * 8),
         estimatedCost: Number(raw.estimated_cost ?? raw.estimatedCost ?? 0),
+        maximumBudget: Number(raw.maximum_budget ?? raw.maximumBudget ?? raw.max_budget ?? 0),
         complexity: (raw.complexity ?? "medium") as DecompositionPlan["complexity"],
         version: Number(raw.version ?? raw.plan_version ?? 1),
         teamId: (raw.team_id ?? raw.teamId) as string | undefined,
@@ -836,7 +837,7 @@ export default function PlanDetailPage() {
       console.log("[ConfirmPlan] getReviewChecklist raw response:", JSON.stringify(checklistRes, null, 2));
 
       // Unwrap: handles { data: [...] }, { data: { items: [...] } }, { items: [...] }, or direct array
-      const outer = checklistRes as Record<string, unknown>;
+      const outer = checklistRes as unknown as Record<string, unknown>;
       const inner = (outer.data ?? outer) as unknown;
       const rawItems: Record<string, unknown>[] = Array.isArray(inner)
         ? inner

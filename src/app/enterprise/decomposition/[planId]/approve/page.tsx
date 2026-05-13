@@ -85,6 +85,7 @@ export default function ApprovePlanPage() {
         totalMilestones: Number(raw.total_milestones ?? raw.totalMilestones ?? 0),
         estimatedHours: Number(raw.estimated_hours ?? raw.estimatedHours ?? 0),
         estimatedCost: Number(raw.estimated_cost ?? raw.estimatedCost ?? 0),
+        maximumBudget: Number(raw.maximum_budget ?? raw.maximumBudget ?? raw.max_budget ?? 0),
         complexity: (raw.complexity ?? "medium") as DecompositionPlan["complexity"],
         version: Number(raw.version ?? 1),
         teamId: (raw.team_id ?? raw.teamId) as string | undefined,
