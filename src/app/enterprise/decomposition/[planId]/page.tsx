@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { fetchInternal, ApiError } from "@/lib/api/client";
+import { sowApi } from "@/lib/api/sow";
 import { decompositionApi } from "@/lib/api/decomposition";
 import { Skeleton } from "@/components/ui";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
@@ -558,7 +559,11 @@ export default function PlanDetailPage() {
           aiConfidence: Number(t.ai_confidence ?? t.aiConfidence ?? 0),
           itemStatus: (t.item_status ?? t.itemStatus ?? "proposed") as DecompositionTask["itemStatus"],
           subtasks: (t.subtasks ?? []) as DecompositionTask["subtasks"],
-        };
+          startDate: (t.start_date ?? t.startDate) as string | undefined,
+          endDate: (t.end_date ?? t.endDate) as string | undefined,
+          critical: Boolean(t.critical ?? false),
+          seniority: (t.seniority ?? "") as string,
+        } as unknown as DecompositionTask;
       });
     }
     return [];
@@ -634,6 +639,8 @@ export default function PlanDetailPage() {
   const [isConfirmed, setIsConfirmed] = React.useState(
     () => plan?.status === "approved" || plan?.status === "completed" || plan?.status === "in_progress"
   );
+  const [promoteLoading, setPromoteLoading] = React.useState(false);
+  const [isPromoted, setIsPromoted] = React.useState(false);
 
   // Expand first 2 milestones once data loads
   React.useEffect(() => {
@@ -823,23 +830,55 @@ export default function PlanDetailPage() {
     setConfirmLoading(true);
     try {
       const updatedBy = session?.user?.email ?? session?.user?.id ?? "";
-      for (const itemId of ["item1", "item2", "item3"]) {
+
+      // Fetch checklist items and mark all as checked before confirming
+      const checklistRes = await decompositionApi.getReviewChecklist(planId);
+      console.log("[ConfirmPlan] getReviewChecklist raw response:", JSON.stringify(checklistRes, null, 2));
+
+      // Unwrap: handles { data: [...] }, { data: { items: [...] } }, { items: [...] }, or direct array
+      const outer = checklistRes as Record<string, unknown>;
+      const inner = (outer.data ?? outer) as unknown;
+      const rawItems: Record<string, unknown>[] = Array.isArray(inner)
+        ? inner
+        : Array.isArray((inner as Record<string, unknown>)?.items)
+          ? (inner as Record<string, unknown>).items as Record<string, unknown>[]
+          : Array.isArray((inner as Record<string, unknown>)?.checklist)
+            ? (inner as Record<string, unknown>).checklist as Record<string, unknown>[]
+            : [];
+
+      console.log("[ConfirmPlan] checklist items to patch:", rawItems.length, rawItems.map((i) => i.item_id ?? i.id));
+
+      for (const item of rawItems) {
+        const itemId = String(item.item_id ?? item.id ?? "");
+        if (!itemId) continue;
         await decompositionApi.updateReviewChecklist(planId, {
           item_id: itemId,
           is_checked: true,
           updated_by: updatedBy,
         });
       }
-      await decompositionApi.confirmPlan(planId, {
-        checklist: { item1: true, item2: true, item3: true },
-        confirmed_by: updatedBy,
-      });
+
+      await decompositionApi.confirmPlan(planId, { confirmed_by: updatedBy });
       setIsConfirmed(true);
       toast.success("Plan Confirmed", "The decomposition plan has been confirmed successfully.");
     } catch (err) {
       toast.error("Confirmation Failed", err instanceof Error ? err.message : "An error occurred.");
     } finally {
       setConfirmLoading(false);
+    }
+  };
+
+  const handlePromoteToPortfolio = async () => {
+    if (promoteLoading || !plan.sowId) return;
+    setPromoteLoading(true);
+    try {
+      await sowApi.promoteToPortfolio(plan.sowId);
+      setIsPromoted(true);
+      toast.success("Added to Portfolio", "The project has been added to your portfolio successfully.");
+    } catch (err) {
+      toast.error("Failed to Add", err instanceof Error ? err.message : "An error occurred.");
+    } finally {
+      setPromoteLoading(false);
     }
   };
 
@@ -1154,7 +1193,7 @@ export default function PlanDetailPage() {
                               <div key={task.id}>
                                 <div className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-black/[0.02] cursor-pointer"
                                   style={{ borderTop: "1px solid var(--border-hair)" }}
-                                  onClick={() => hasSubtasks && toggleTask(task.id)}>
+                                  onClick={() => toggleTask(task.id)}>
                                   <span className={cn("w-2.5 h-2.5 rounded-full shrink-0 ml-5", ts.dotColor)} />
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
@@ -1180,19 +1219,105 @@ export default function PlanDetailPage() {
                                     </div>
                                     <span className="text-[10px] font-mono text-gray-500 w-7 text-right">{task.aiConfidence}%</span>
                                   </div>
-                                  {hasSubtasks && (isTaskOpen ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />)}
+                                  {isTaskOpen ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
                                 </div>
 
-                                {isTaskOpen && hasSubtasks && (
-                                  <div className="ml-14 mr-5 mb-3 mt-1 pl-4" style={{ borderLeft: "2px solid var(--border-hair)" }}>
-                                    {task.subtasks.map((st) => (
-                                      <div key={st.id} className="flex items-center gap-2.5 py-1.5">
-                                        {st.itemStatus === "accepted" ? <CheckCircle2 className="w-3 h-3 text-forest-500 shrink-0" /> : <Circle className="w-3 h-3 text-gray-300 shrink-0" />}
-                                        <span className="text-[11px] text-gray-600 flex-1 truncate">{st.title}</span>
-                                        <span className="text-[9px] font-mono text-gray-400">{st.estimatedHours}h</span>
+                                {isTaskOpen && (
+                                  <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                                    className="overflow-hidden"
+                                    style={{ borderTop: "1px solid var(--border-hair)" }}
+                                  >
+                                    <div className="ml-[52px] mr-5 my-4 space-y-4">
+
+                                      {/* Description */}
+                                      {task.description && (
+                                        <p className="text-[12.5px] text-gray-500 leading-relaxed pl-3" style={{ borderLeft: "2px solid #e5e7eb" }}>
+                                          {task.description}
+                                        </p>
+                                      )}
+
+                                      {/* Acceptance Criteria */}
+                                      {task.acceptanceCriteria.length > 0 && (
+                                        <div>
+                                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Acceptance Criteria</p>
+                                          <ul className="space-y-1.5">
+                                            {task.acceptanceCriteria.map((criterion, ci) => (
+                                              <li key={ci} className="flex items-start gap-2.5">
+                                                <span className="shrink-0 mt-[5px] w-1.5 h-1.5 rounded-full bg-teal-400" />
+                                                <span className="text-[12px] text-gray-600 leading-relaxed">{criterion}</span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+
+                                      {/* Meta chips row */}
+                                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1" style={{ borderTop: "1px solid var(--border-hair)" }}>
+                                        {/* Skills */}
+                                        {task.skillsRequired.length > 0 && (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-[10px] text-gray-400 shrink-0">Skills</span>
+                                            <div className="flex flex-wrap gap-1">
+                                              {task.skillsRequired.map(s => (
+                                                <span key={s.name} className="text-[10px] font-medium text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full">{s.name}</span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                        {/* Separator */}
+                                        {task.skillsRequired.length > 0 && <span className="w-px h-3 bg-gray-200" />}
+                                        {/* Experience Level */}
+                                        {!!(task as unknown as Record<string, unknown>).seniority && (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-[10px] text-gray-400">Experience Level</span>
+                                            <span className="text-[11px] font-semibold text-gray-700">{(task as unknown as Record<string, unknown>).seniority as string}</span>
+                                          </div>
+                                        )}
+                                        {/* Separator */}
+                                        {!!(task as unknown as Record<string, unknown>).startDate && <span className="w-px h-3 bg-gray-200" />}
+                                        {/* Timeline */}
+                                        {!!(task as unknown as Record<string, unknown>).startDate && (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-[10px] text-gray-400">Start Date</span>
+                                            <span className="text-[11px] font-semibold text-gray-700">{formatDate((task as unknown as Record<string, unknown>).startDate as string)}</span>
+                                            <span className="text-gray-300 text-[10px]">→</span>
+                                            <span className="text-[10px] text-gray-400">End Date</span>
+                                            <span className="text-[11px] font-semibold text-gray-700">{(task as unknown as Record<string, unknown>).endDate ? formatDate((task as unknown as Record<string, unknown>).endDate as string) : "—"}</span>
+                                          </div>
+                                        )}
+                                        {/* Critical */}
+                                        {!!(task as unknown as Record<string, unknown>).critical && (
+                                          <>
+                                            <span className="w-px h-3 bg-gray-200" />
+                                            <Badge variant="danger" dot>Critical</Badge>
+                                          </>
+                                        )}
                                       </div>
-                                    ))}
-                                  </div>
+
+                                      {/* Subtasks */}
+                                      {task.subtasks.length > 0 && (
+                                        <div style={{ borderTop: "1px solid var(--border-hair)" }} className="pt-3">
+                                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Subtasks</p>
+                                          <div className="space-y-1">
+                                            {task.subtasks.map((st) => (
+                                              <div key={st.id} className="flex items-center gap-2 py-1">
+                                                {st.itemStatus === "accepted"
+                                                  ? <CheckCircle2 className="w-3 h-3 text-forest-500 shrink-0" />
+                                                  : <Circle className="w-3 h-3 text-gray-300 shrink-0" />}
+                                                <span className="text-[11.5px] text-gray-600 flex-1 truncate">{st.title}</span>
+                                                <span className="text-[9.5px] font-mono text-gray-400 shrink-0">{st.estimatedHours}h</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                    </div>
+                                  </motion.div>
                                 )}
                               </div>
                             );
@@ -1265,12 +1390,45 @@ export default function PlanDetailPage() {
                 <span className="text-sm font-semibold text-gray-800">Review Checklist</span>
               </div>
               {isConfirmed ? (
-                <div className="py-8 px-5 flex flex-col items-center gap-3 text-center">
+                <div className="py-6 px-5 flex flex-col items-center gap-3 text-center">
                   <div className="w-12 h-12 rounded-full bg-forest-50 border border-forest-200 flex items-center justify-center">
                     <CheckCircle2 className="w-6 h-6 text-forest-500" />
                   </div>
                   <p className="text-[13px] font-semibold text-forest-700">Plan Confirmed</p>
                   <p className="text-[11px] text-gray-400">Contributor matching is now running.</p>
+                  {isPromoted ? (
+                    <div className="w-full flex items-center justify-center gap-2 text-[12px] font-semibold py-2.5 rounded-xl text-white bg-gradient-to-r from-brown-400 to-brown-600 mt-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Added to Portfolio
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handlePromoteToPortfolio}
+                      disabled={promoteLoading}
+                      className={cn(
+                        "w-full flex items-center justify-center gap-2 text-[12px] font-semibold py-2.5 rounded-xl transition-all mt-1",
+                        !promoteLoading
+                          ? "text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 shadow-sm"
+                          : "text-gray-400 bg-gray-100 cursor-not-allowed"
+                      )}
+                    >
+                      {promoteLoading ? (
+                        <>
+                          <motion.span
+                            className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                          />
+                          Adding…
+                        </>
+                      ) : (
+                        <>
+                          <TrendingUp className="w-3.5 h-3.5" />
+                          Add to Portfolio
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="py-3 px-5 space-y-4">

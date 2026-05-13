@@ -216,11 +216,11 @@ export function MilestonePaymentModal({
                   {isPending && (
                     <button
                       type="button"
-                      disabled={!scriptLoaded || isProcessing}
+                      disabled={isProcessing}
                       onClick={() => handlePay(m)}
                       className={cn(
                         "flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-xl transition-all mt-1",
-                        scriptLoaded && !isProcessing
+                        !isProcessing
                           ? "text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 shadow-sm"
                           : "text-gray-400 bg-gray-100 cursor-not-allowed",
                       )}
