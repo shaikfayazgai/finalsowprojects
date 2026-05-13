@@ -181,6 +181,7 @@ export default function OnboardingModal() {
                     availability={ob.availability}           setAvailability={ob.setAvailability}
                     degree={ob.degree}                       setDegree={ob.setDegree}
                     branch={ob.branch}                       setBranch={ob.setBranch}
+                    educationFile={ob.educationFile}         setEducationFile={ob.setEducationFile}
                     linkedin={ob.linkedin}                   setLinkedin={ob.setLinkedin}
                     primarySkills={ob.primarySkills}
                     skillInput={ob.skillInput}               setSkillInput={ob.setSkillInput}

@@ -393,6 +393,7 @@ interface Props {
   availability: string;          setAvailability: (v: string) => void;
   degree: string;                setDegree: (v: string) => void;
   branch: string;                setBranch: (v: string) => void;
+  educationFile: File | null;    setEducationFile: (f: File | null) => void;
   linkedin: string;              setLinkedin: (v: string) => void;
   primarySkills: string[];
   skillInput: string;            setSkillInput: (v: string) => void;
@@ -425,7 +426,7 @@ export function Step2Profile({
   departmentCategory, setDepartmentCategory,
   departmentOther, setDepartmentOther,
   availability, setAvailability,
-  degree, setDegree, branch, setBranch,
+  degree, setDegree, branch, setBranch, educationFile, setEducationFile,
   linkedin, setLinkedin,
   primarySkills, skillInput, setSkillInput, addPrimarySkill, removePrimarySkill,
   secondarySkills, secondarySkillInput, setSecondarySkillInput, addSecondarySkill, removeSecondarySkill,
@@ -464,6 +465,9 @@ export function Step2Profile({
     else if (Number(availability) < 1 || Number(availability) > 60) { errs.availability = "Must be between 1–60 hours"; }
     if (!departmentCategory) { errs.dept = "Department category is required"; }
     if (departmentCategory === "other" && !departmentOther.trim()) { errs.deptOther = "Please specify your department"; }
+    if (!degree.trim()) { errs.degree = "Degree / qualification is required"; }
+    if (!branch.trim()) { errs.branch = "Field of study is required"; }
+    if (!educationFile) { errs.educationFile = "Please upload your degree certificate"; }
     if (primarySkills.length === 0) { errs.skills = "Add at least one primary skill"; }
     if (needsExperienceRate && !yearsExperience) { errs.yearsExperience = "Years of experience is required"; }
     setFieldErrors(errs);
@@ -588,16 +592,46 @@ export function Step2Profile({
 
         {/* Education */}
         <div>
-          <SectionLabel icon={GraduationCap} text="Education" optional />
+          <SectionLabel icon={GraduationCap} text="Education" />
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-gray-700">Degree / Qualification</Label>
+              <Label className="text-sm font-medium text-gray-700">Degree / Qualification <span className="text-red-400">*</span></Label>
               <Input placeholder="e.g. B.Tech, MBA" value={degree} onChange={e => setDegree(e.target.value)} maxLength={80} />
+              {fieldErrors.degree && <p className="text-xs text-red-500">{fieldErrors.degree}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-gray-700">Field of Study</Label>
+              <Label className="text-sm font-medium text-gray-700">Field of Study <span className="text-red-400">*</span></Label>
               <Input placeholder="e.g. Computer Science" value={branch} onChange={e => setBranch(e.target.value)} maxLength={80} />
+              {fieldErrors.branch && <p className="text-xs text-red-500">{fieldErrors.branch}</p>}
             </div>
+          </div>
+          <div className="mt-3 space-y-1.5">
+            <Label className="text-sm font-medium text-gray-700">Degree Certificate <span className="text-red-400">*</span></Label>
+            {educationFile ? (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-teal-200 bg-teal-50">
+                <GraduationCap className="w-4 h-4 text-teal-600 shrink-0" />
+                <span className="text-sm text-teal-700 truncate flex-1">{educationFile.name}</span>
+                <button type="button" onClick={() => setEducationFile(null)} className="text-gray-400 hover:text-red-500 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-1.5 px-4 py-5 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 cursor-pointer hover:border-teal-300 hover:bg-teal-50/40 transition-all">
+                <GraduationCap className="w-6 h-6 text-gray-400" />
+                <span className="text-sm font-medium text-gray-600">Upload degree certificate</span>
+                <span className="text-xs text-gray-400">PDF, JPG or PNG · max 5 MB</span>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f && f.size <= 5 * 1024 * 1024) setEducationFile(f);
+                  }}
+                />
+              </label>
+            )}
+            {fieldErrors.educationFile && <p className="text-xs text-red-500">{fieldErrors.educationFile}</p>}
           </div>
         </div>
 

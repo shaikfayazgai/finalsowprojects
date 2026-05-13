@@ -220,6 +220,7 @@ export function useOnboardingWizard() {
   }
 
   function goToStep3() {
+    if (!esigVerified) { setError("Please complete e-signature verification to continue"); return; }
     if (!billingCurrency) { setError("Please select a billing currency"); return; }
     if (!billingContactEmail.trim()) { setError("Please enter a billing contact email"); return; }
     if (!billingContactName.trim()) { setError("Please enter a billing contact name"); return; }
