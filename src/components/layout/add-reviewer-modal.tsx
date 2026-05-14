@@ -209,7 +209,19 @@ export function AddReviewerModal({ open, onClose }: AddReviewerModalProps) {
           setStep("success");
           return;
         }
-        setErrors({ email: msg });
+        // The backend says "A reviewer with this email already exists" even when
+        // the email belongs to a different role (enterprise / contributor / admin).
+        // Surface a role-neutral message instead so the user isn't misled.
+        const lower = String(msg).toLowerCase();
+        const looksLikeDuplicateEmail =
+          lower.includes("already exists") ||
+          lower.includes("already in use") ||
+          lower.includes("already registered");
+        setErrors({
+          email: looksLikeDuplicateEmail
+            ? "An account with this email already exists. Please use a different email."
+            : msg,
+        });
         setSaving(false);
         return;
       }

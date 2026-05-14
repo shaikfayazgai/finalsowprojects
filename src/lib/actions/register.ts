@@ -81,13 +81,23 @@ export async function registerContributor(data: unknown): Promise<ActionResult> 
     if (err instanceof ApiError) {
       console.error("[registerContributor] API error", err.status, err.message);
       if (err.status === 409) {
-        return { success: false, error: "An account with this email already exists" };
+        // Backend returns { detail: { code: "EMAIL_ROLE_CONFLICT", message: "This email is already
+        // registered as a <role> account." } } for both same-role and cross-role conflicts. Surface
+        // the role-specific message rather than a generic "already exists" so the user knows which
+        // role to sign in as.
+        return { success: false, error: extractRoleConflictMessage(err, "An account with this email already exists") };
       }
       return { success: false, error: err.message };
     }
     console.error("[registerContributor] unexpected error", err);
     return { success: false, error: "Registration failed. Please try again." };
   }
+}
+
+function extractRoleConflictMessage(err: ApiError, fallback: string): string {
+  const body = err.body as { detail?: { code?: string; message?: string } } | undefined;
+  const detailMsg = body?.detail?.message;
+  return typeof detailMsg === "string" && detailMsg.length > 0 ? detailMsg : fallback;
 }
 
 // ── SSO Contributor Onboarding (existing SSO user, no password) ──────────
@@ -249,7 +259,7 @@ export async function registerEnterprise(data: unknown): Promise<ActionResult> {
   } catch (err) {
     if (err instanceof ApiError) {
       if (err.status === 409) {
-        return { success: false, error: "An account with this email already exists" };
+        return { success: false, error: extractRoleConflictMessage(err, "An account with this email already exists") };
       }
       return { success: false, error: err.message };
     }
