@@ -33,14 +33,14 @@ const REQUIREMENTS = [
 
 // Backend-issued reset-flow error codes → user-friendly messages.
 const RESET_ERROR_MESSAGES: Record<string, string> = {
-  RESET_TOKEN_NOT_FOUND:    "Reset link is invalid. Please request a new one.",
-  RESET_TOKEN_USED:         "This reset link has already been used. Please request a new one.",
-  RESET_TOKEN_SUPERSEDED:   "A newer reset link was issued. Please use the latest email.",
-  RESET_TOKEN_EXPIRED:      "Reset link has expired. Please request a new one.",
-  RESET_TOKEN_USER_MISSING: "Account not found. Please contact support.",
-  PASSWORD_TOO_SHORT:       "Password must be at least 8 characters.",
-  PASSWORDS_DO_NOT_MATCH:   "Passwords don't match.",
+  RESET_TOKEN_NOT_FOUND:  "Reset link is invalid. Request a new one.",
+  RESET_TOKEN_SUPERSEDED: "A newer reset link was issued. Use the latest email.",
+  RESET_TOKEN_USED:       "This reset link was already used. Request a new one.",
+  RESET_TOKEN_EXPIRED:    "This reset link has expired. Request a new one.",
+  PASSWORD_TOO_SHORT:     "Password must be at least 8 characters.",
+  PASSWORDS_DO_NOT_MATCH: "Passwords do not match.",
 };
+const RESET_ERROR_FALLBACK = "Invalid reset link.";
 
 function getStrength(pw: string) {
   let score = 0;
@@ -169,17 +169,17 @@ function ResetPasswordContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token,
-          new_password: password,
-          confirm_password: confirm,
+          newPassword: password,
+          confirmPassword: confirm,
         }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        const code = typeof err?.code === "string" ? err.code : "";
-        const friendly =
-          (code && RESET_ERROR_MESSAGES[code]) ||
-          (typeof err?.message === "string" ? err.message : "Failed to reset password");
-        setError(friendly);
+        const detail = err?.detail;
+        const code = typeof detail === "object" && detail !== null && typeof detail.code === "string"
+          ? detail.code
+          : "";
+        setError((code && RESET_ERROR_MESSAGES[code]) || RESET_ERROR_FALLBACK);
         return;
       }
       setSuccess(true);
