@@ -82,6 +82,8 @@ export default function EnterpriseRegisterPage() {
               setAdminTitle={reg.setAdminTitle}
               adminEmail={reg.adminEmail}
               setAdminEmail={reg.setAdminEmail}
+              adminEmailExists={reg.adminEmailExists}
+              adminEmailChecking={reg.adminEmailChecking}
               adminDept={reg.adminDept}
               setAdminDept={reg.setAdminDept}
               phoneCountry={reg.phoneCountry}
@@ -114,8 +116,6 @@ export default function EnterpriseRegisterPage() {
               phoneOtpLoading={reg.phoneOtpLoading}
               phoneOtpDevHint={reg.phoneOtpDevHint}
               adminEmail={reg.adminEmail}
-              setAdminEmail={reg.setAdminEmail}
-              initialAdminEmail={reg.initialAdminEmail}
               emailOtpSent={reg.emailOtpSent}
               emailOtp={reg.emailOtp}
               setEmailOtp={reg.setEmailOtp}

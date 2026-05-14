@@ -9,7 +9,7 @@ import { signIn } from "next-auth/react";
 const stepAnim = {
   initial: { opacity: 0, x: 24 },
   animate: { opacity: 1, x: 0 },
-  exit:    { opacity: 0, x: -24 },
+  exit: { opacity: 0, x: -24 },
   transition: { duration: 0.28, ease: "easeOut" as const },
 };
 import {
@@ -53,15 +53,41 @@ const STATS = [
 ];
 
 const FEATURES = [
-  { Icon: Zap,       title: "AI-Matched Tasks",      desc: "Get recommended to projects that fit your exact skill set." },
-  { Icon: Globe,     title: "Global Earnings",        desc: "Get paid in your local currency with zero conversion fees." },
-  { Icon: TrendingUp,title: "Verified Portfolio",    desc: "Build a trust-scored profile that speaks louder than a CV." },
-  { Icon: Users,     title: "Expert Community",       desc: "Collaborate with top-tier professionals across 120+ countries." },
+  {
+    Icon: Zap,
+    title: "AI-Matched Tasks",
+    desc: "Get recommended to projects that fit your exact skill set.",
+  },
+  {
+    Icon: Globe,
+    title: "Global Earnings",
+    desc: "Get paid in your local currency with zero conversion fees.",
+  },
+  {
+    Icon: TrendingUp,
+    title: "Verified Portfolio",
+    desc: "Build a trust-scored profile that speaks louder than a CV.",
+  },
+  {
+    Icon: Users,
+    title: "Expert Community",
+    desc: "Collaborate with top-tier professionals across 120+ countries.",
+  },
 ];
 
 const MOCK_SSO_DATA: Record<SSOProvider, SSOData> = {
-  google:    { firstName: "Alex",  lastName: "Johnson", email: "alex.johnson@gmail.com",   provider: "google"    },
-  microsoft: { firstName: "Jamie", lastName: "Lee",     email: "jamie.lee@outlook.com",     provider: "microsoft" },
+  google: {
+    firstName: "Alex",
+    lastName: "Johnson",
+    email: "alex.johnson@gmail.com",
+    provider: "google",
+  },
+  microsoft: {
+    firstName: "Jamie",
+    lastName: "Lee",
+    email: "jamie.lee@outlook.com",
+    provider: "microsoft",
+  },
 };
 
 /* ─────────────────────────── helpers ─────────────────────────── */
@@ -86,15 +112,15 @@ const CONTENT = {
     accent: "starts here",
     desc: "Whether you're a student or a seasoned professional — get AI-matched to real projects and build a verified global portfolio.",
     stats: [
-      { value: "50K+",  label: "Contributors" },
-      { value: "120+",  label: "Countries"     },
-      { value: "2.4K+", label: "Companies"     },
+      { value: "50K+", label: "Contributors" },
+      { value: "120+", label: "Countries" },
+      { value: "2.4K+", label: "Companies" },
     ],
     badges: [
-      { Icon: BadgeCheck,    label: "Verified Professionals" },
-      { Icon: CreditCard,    label: "Secure Payments"        },
-      { Icon: MessageSquare, label: "Smart Collaboration"    },
-      { Icon: LayoutGrid,    label: "Project Management"     },
+      { Icon: BadgeCheck, label: "Verified Professionals" },
+      { Icon: CreditCard, label: "Secure Payments" },
+      { Icon: MessageSquare, label: "Smart Collaboration" },
+      { Icon: LayoutGrid, label: "Project Management" },
     ],
   },
   enterprise: {
@@ -103,15 +129,15 @@ const CONTENT = {
     accent: "team",
     desc: "Hire vetted talent, manage distributed projects, and scale with AI-governed workforce intelligence — all in one platform.",
     stats: [
-      { value: "2,400+", label: "Companies"       },
-      { value: "50K+",   label: "Verified Talent" },
-      { value: "120+",   label: "Countries"        },
+      { value: "2,400+", label: "Companies" },
+      { value: "50K+", label: "Verified Talent" },
+      { value: "120+", label: "Countries" },
     ],
     badges: [
-      { Icon: Shield,      label: "SOC 2 Certified"    },
-      { Icon: Lock,        label: "256-bit Encryption" },
-      { Icon: Zap,         label: "99.9% Uptime SLA"   },
-      { Icon: ShieldCheck, label: "GDPR Compliant"     },
+      { Icon: Shield, label: "SOC 2 Certified" },
+      { Icon: Lock, label: "256-bit Encryption" },
+      { Icon: Zap, label: "99.9% Uptime SLA" },
+      { Icon: ShieldCheck, label: "GDPR Compliant" },
     ],
   },
 } as const;
@@ -121,7 +147,6 @@ function LeftContent({ role }: { role?: "contributor" | "enterprise" }) {
 
   return (
     <div className="hidden lg:flex flex-col flex-1 max-w-lg pt-8 pb-8 pr-10 gap-14">
-
       {/* TOP — Branding + Headline */}
       <div>
         <Link href="/" className="flex items-center gap-2 mb-8 group w-fit">
@@ -142,15 +167,22 @@ function LeftContent({ role }: { role?: "contributor" | "enterprise" }) {
           {c.headline} <span className="text-teal-600">{c.accent}</span>.
         </h2>
 
-        <p className="text-sm text-beige-600 leading-relaxed max-w-sm">{c.desc}</p>
+        <p className="text-sm text-beige-600 leading-relaxed max-w-sm">
+          {c.desc}
+        </p>
       </div>
 
       {/* MIDDLE — Stats + Badges */}
       <div>
         <div className="flex items-center gap-8 mb-8">
           {c.stats.map(({ value, label }, i) => (
-            <div key={label} className={i > 0 ? "pl-8 border-l border-beige-200" : ""}>
-              <p className="font-heading text-2xl font-bold text-brown-950">{value}</p>
+            <div
+              key={label}
+              className={i > 0 ? "pl-8 border-l border-beige-200" : ""}
+            >
+              <p className="font-heading text-2xl font-bold text-brown-950">
+                {value}
+              </p>
               <p className="text-xs text-beige-500 mt-1">{label}</p>
             </div>
           ))}
@@ -158,9 +190,14 @@ function LeftContent({ role }: { role?: "contributor" | "enterprise" }) {
 
         <div className="flex flex-wrap gap-3">
           {c.badges.map(({ Icon, label }) => (
-            <div key={label} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/50 border border-beige-100">
+            <div
+              key={label}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/50 border border-beige-100"
+            >
               <Icon className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-              <span className="text-xs text-brown-700 font-medium">{label}</span>
+              <span className="text-xs text-brown-700 font-medium">
+                {label}
+              </span>
             </div>
           ))}
         </div>
@@ -181,8 +218,18 @@ function RoleBar({
   animateIn?: boolean;
 }) {
   const config = {
-    contributor: { label: "Contributor Account", Icon: Sparkles, color: "bg-teal-500", ring: "ring-teal-200" },
-    enterprise:  { label: "Enterprise Account",  Icon: Briefcase, color: "bg-brown-600", ring: "ring-brown-200" },
+    contributor: {
+      label: "Contributor Account",
+      Icon: Sparkles,
+      color: "bg-teal-500",
+      ring: "ring-teal-200",
+    },
+    enterprise: {
+      label: "Enterprise Account",
+      Icon: Briefcase,
+      color: "bg-brown-600",
+      ring: "ring-brown-200",
+    },
   } as const;
   const { label, Icon, color, ring } = config[role];
 
@@ -193,11 +240,15 @@ function RoleBar({
       }`}
     >
       <div className="flex items-center gap-2">
-        <div className={`w-7 h-7 rounded-lg ${color} ring-2 ${ring} flex items-center justify-center shadow-sm`}>
+        <div
+          className={`w-7 h-7 rounded-lg ${color} ring-2 ${ring} flex items-center justify-center shadow-sm`}
+        >
           <Icon className="w-3.5 h-3.5 text-white" />
         </div>
         <span className="text-sm font-semibold text-brown-950">{label}</span>
-        {role === "contributor" && <CheckCircle className="w-3.5 h-3.5 text-teal-500" />}
+        {role === "contributor" && (
+          <CheckCircle className="w-3.5 h-3.5 text-teal-500" />
+        )}
       </div>
       <button
         type="button"
@@ -221,14 +272,20 @@ function InviteOnlyCard() {
             <Mail className="w-5 h-5 text-white" />
           </div>
           <div>
-            <p className="font-semibold text-brown-950 mb-1">Invitation Required</p>
+            <p className="font-semibold text-brown-950 mb-1">
+              Invitation Required
+            </p>
             <p className="text-sm text-beige-600 leading-relaxed">
-              Enterprise accounts are provisioned by a GlimmoraTeam Admin and created via a secure email invitation.
-              Please check your inbox for your account creation link.
+              Enterprise accounts are provisioned by a GlimmoraTeam Admin and
+              created via a secure email invitation. Please check your inbox for
+              your account creation link.
             </p>
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-beige-100">
               <span className="text-xs text-beige-500">No invitation?</span>
-              <Link href="/auth/login" className="text-xs text-teal-600 hover:text-teal-700 font-medium">
+              <Link
+                href="/auth/login"
+                className="text-xs text-teal-600 hover:text-teal-700 font-medium"
+              >
                 Contact your Administrator
               </Link>
             </div>
@@ -260,9 +317,13 @@ function AuthMethodPicker({
   }, []);
 
   const isContributor = role === "contributor";
-  const accentClass   = isContributor ? "bg-teal-50 border-teal-200 text-teal-800" : "bg-brown-50 border-brown-200 text-brown-800";
-  const iconClass     = isContributor ? "from-teal-500 to-teal-700 shadow-teal-200"  : "from-brown-500 to-brown-700 shadow-brown-200";
-  const RoleIcon      = isContributor ? Sparkles : Briefcase;
+  const accentClass = isContributor
+    ? "bg-teal-50 border-teal-200 text-teal-800"
+    : "bg-brown-50 border-brown-200 text-brown-800";
+  const iconClass = isContributor
+    ? "from-teal-500 to-teal-700 shadow-teal-200"
+    : "from-brown-500 to-brown-700 shadow-brown-200";
+  const RoleIcon = isContributor ? Sparkles : Briefcase;
 
   return (
     <div
@@ -271,8 +332,12 @@ function AuthMethodPicker({
       }`}
     >
       {/* Context banner */}
-      <div className={`p-3.5 rounded-2xl border flex items-center gap-3 mb-5 ${accentClass}`}>
-        <div className={`w-9 h-9 rounded-xl bg-linear-to-br ${iconClass} flex items-center justify-center shrink-0 shadow-lg`}>
+      <div
+        className={`p-3.5 rounded-2xl border flex items-center gap-3 mb-5 ${accentClass}`}
+      >
+        <div
+          className={`w-9 h-9 rounded-xl bg-linear-to-br ${iconClass} flex items-center justify-center shrink-0 shadow-lg`}
+        >
           <RoleIcon className="w-4 h-4 text-white" />
         </div>
         <div>
@@ -306,10 +371,22 @@ function AuthMethodPicker({
             <RefreshCw className="w-5 h-5 animate-spin text-beige-400 shrink-0" />
           ) : (
             <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z" />
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              <path
+                fill="#4285F4"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
             </svg>
           )}
           <span>Continue with Google</span>
@@ -329,9 +406,9 @@ function AuthMethodPicker({
             <RefreshCw className="w-5 h-5 animate-spin text-beige-400 shrink-0" />
           ) : (
             <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-              <rect fill="#F25022" x="1"  y="1"  width="10" height="10" />
-              <rect fill="#7FBA00" x="13" y="1"  width="10" height="10" />
-              <rect fill="#00A4EF" x="1"  y="13" width="10" height="10" />
+              <rect fill="#F25022" x="1" y="1" width="10" height="10" />
+              <rect fill="#7FBA00" x="13" y="1" width="10" height="10" />
+              <rect fill="#00A4EF" x="1" y="13" width="10" height="10" />
               <rect fill="#FFB900" x="13" y="13" width="10" height="10" />
             </svg>
           )}
@@ -377,7 +454,11 @@ const ROLE_OPTIONS = [
     sub: "For students & professionals seeking real-world opportunities",
     Icon: Sparkles,
     who: "Students · Freelancers · Working Professionals",
-    perks: ["AI-matched tasks & internships", "Build a verified skill portfolio", "Earn globally — any experience level"],
+    perks: [
+      "AI-matched tasks & internships",
+      "Build a verified skill portfolio",
+      "Earn globally — any experience level",
+    ],
     activeColor: "border-teal-400 bg-teal-50/60 shadow-teal-100",
     iconColor: "bg-teal-500",
     checkColor: "text-teal-500",
@@ -390,7 +471,11 @@ const ROLE_OPTIONS = [
     sub: "For companies hiring & managing distributed talent",
     Icon: Briefcase,
     who: "Startups · SMBs · Large Enterprises",
-    perks: ["Post projects & hire vetted talent", "Manage teams & track deliverables", "Workforce analytics & compliance tools"],
+    perks: [
+      "Post projects & hire vetted talent",
+      "Manage teams & track deliverables",
+      "Workforce analytics & compliance tools",
+    ],
     activeColor: "border-brown-400 bg-brown-50/60 shadow-brown-100",
     iconColor: "bg-brown-500",
     checkColor: "text-brown-500",
@@ -411,7 +496,9 @@ function RolePicker({
   return (
     <div
       className={`transition-all duration-400 ${
-        visible ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+        visible
+          ? "opacity-100 scale-100"
+          : "opacity-0 scale-95 pointer-events-none"
       }`}
     >
       <GlassCard variant="heavy" padding="lg" className="mb-4">
@@ -420,50 +507,84 @@ function RolePicker({
             Select account type
           </p>
           <div className="space-y-3">
-            {ROLE_OPTIONS.map(({ role, label, sub, who, Icon, perks, activeColor, iconColor, checkColor, badge, badgeColor }) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => onSelect(role)}
-                onMouseEnter={() => setHovered(role)}
-                onMouseLeave={() => setHovered(null)}
-                className={`group w-full flex items-start gap-4 p-4 rounded-2xl border-2 bg-white transition-all duration-200 text-left shadow-sm hover:shadow-md ${
-                  hovered === role ? activeColor : "border-beige-200"
-                }`}
-              >
-                {/* Icon */}
-                <div className={`w-10 h-10 rounded-xl ${iconColor} flex items-center justify-center shrink-0 mt-0.5 shadow-sm`}>
-                  <Icon className="w-5 h-5 text-white" />
-                </div>
-
-                {/* Text */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-sm font-semibold text-brown-950">{label}</p>
-                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${badgeColor}`}>{badge}</span>
+            {ROLE_OPTIONS.map(
+              ({
+                role,
+                label,
+                sub,
+                who,
+                Icon,
+                perks,
+                activeColor,
+                iconColor,
+                checkColor,
+                badge,
+                badgeColor,
+              }) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => onSelect(role)}
+                  onMouseEnter={() => setHovered(role)}
+                  onMouseLeave={() => setHovered(null)}
+                  className={`group w-full flex items-start gap-4 p-4 rounded-2xl border-2 bg-white transition-all duration-200 text-left shadow-sm hover:shadow-md ${
+                    hovered === role ? activeColor : "border-beige-200"
+                  }`}
+                >
+                  {/* Icon */}
+                  <div
+                    className={`w-10 h-10 rounded-xl ${iconColor} flex items-center justify-center shrink-0 mt-0.5 shadow-sm`}
+                  >
+                    <Icon className="w-5 h-5 text-white" />
                   </div>
-                  <p className="text-xs text-beige-500 mb-1.5">{sub}</p>
-                  <p className="text-[11px] font-medium text-beige-400 mb-2">{who}</p>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1">
-                    {perks.map((p) => (
-                      <span key={p} className="flex items-center gap-1 text-[11px] text-beige-600">
-                        <CheckCircle className={`w-3 h-3 ${checkColor} shrink-0`} />
-                        {p}
+
+                  {/* Text */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-semibold text-brown-950">
+                        {label}
+                      </p>
+                      <span
+                        className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${badgeColor}`}
+                      >
+                        {badge}
                       </span>
-                    ))}
+                    </div>
+                    <p className="text-xs text-beige-500 mb-1.5">{sub}</p>
+                    <p className="text-[11px] font-medium text-beige-400 mb-2">
+                      {who}
+                    </p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {perks.map((p) => (
+                        <span
+                          key={p}
+                          className="flex items-center gap-1 text-[11px] text-beige-600"
+                        >
+                          <CheckCircle
+                            className={`w-3 h-3 ${checkColor} shrink-0`}
+                          />
+                          {p}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Arrow */}
-                <ArrowRight className={`w-4 h-4 mt-1 shrink-0 transition-all duration-200 ${hovered === role ? "text-brown-400 translate-x-0.5" : "text-beige-300"}`} />
-              </button>
-            ))}
+                  {/* Arrow */}
+                  <ArrowRight
+                    className={`w-4 h-4 mt-1 shrink-0 transition-all duration-200 ${hovered === role ? "text-brown-400 translate-x-0.5" : "text-beige-300"}`}
+                  />
+                </button>
+              ),
+            )}
           </div>
         </GlassCardContent>
       </GlassCard>
       <p className="text-center text-sm text-beige-600 mb-2">
         Already have an account?{" "}
-        <Link href="/auth/login" className="text-teal-600 hover:text-teal-700 font-medium">
+        <Link
+          href="/auth/login"
+          className="text-teal-600 hover:text-teal-700 font-medium"
+        >
           Sign in
         </Link>
       </p>
@@ -488,7 +609,9 @@ function ContributorRegisterContent() {
   const searchParams = useSearchParams();
   const ssoParam = searchParams.get("sso");
 
-  const [ssoData] = useState<SSOData | null>(() => ssoParam ? getSsoDataFromStorage() : null);
+  const [ssoData] = useState<SSOData | null>(() =>
+    ssoParam ? getSsoDataFromStorage() : null,
+  );
   const reg = useRegistration(ssoData);
 
   const [uiState, setUiState] = useState<UIState>(() => {
@@ -496,7 +619,9 @@ function ContributorRegisterContent() {
     if (ssoParam) return "registering";
     return "picker";
   });
-  const [selectedRole, setSelectedRole] = useState<"contributor" | "enterprise" | "">("");
+  const [selectedRole, setSelectedRole] = useState<
+    "contributor" | "enterprise" | ""
+  >("");
   const [ssoLoading, setSsoLoading] = useState<SSOProvider | null>(null);
   const [roleBarAnimated, setRoleBarAnimated] = useState(false);
 
@@ -575,7 +700,10 @@ function ContributorRegisterContent() {
   };
 
   // When SSO pre-fills role
-  const activeRole = (reg.registrationRole as "contributor" | "enterprise") || (selectedRole as "contributor" | "enterprise") || undefined;
+  const activeRole =
+    (reg.registrationRole as "contributor" | "enterprise") ||
+    (selectedRole as "contributor" | "enterprise") ||
+    undefined;
 
   const showLeftContent = uiState === "picker" || uiState === "authOptions";
 
@@ -598,220 +726,292 @@ function ContributorRegisterContent() {
           <CheckCircle className="w-5 h-5 text-teal-500 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-teal-800">
-              Signed in with {ssoData.provider === "google" ? "Google" : "Microsoft"}
+              Signed in with{" "}
+              {ssoData.provider === "google" ? "Google" : "Microsoft"}
             </p>
             <p className="text-xs text-teal-700 mt-0.5 leading-relaxed">
-              Welcome, {ssoData.firstName}! Select your account type and complete your profile to get started.
+              Welcome, {ssoData.firstName}! Select your account type and
+              complete your profile to get started.
             </p>
           </div>
         </div>
       )}
 
-        {/* ── State: picker ── */}
-        {uiState === "picker" && (
-          <RolePicker onSelect={handleRoleSelect} visible={uiState === "picker"} />
-        )}
+      {/* ── State: picker ── */}
+      {uiState === "picker" && (
+        <RolePicker
+          onSelect={handleRoleSelect}
+          visible={uiState === "picker"}
+        />
+      )}
 
-        {/* ── State: auth options (role selected, not yet registering) ── */}
-        {uiState === "authOptions" && activeRole && (
-          <div className="space-y-4">
-            {/* Role badge at top */}
-            <RoleBar
-              role={activeRole}
-              onChange={resetToRolePicker}
-              animateIn={roleBarAnimated}
-            />
-
-            <div
-              className="rounded-2xl p-8"
-              style={{
-                background: "rgba(255,255,255,0.85)",
-                backdropFilter: "blur(24px)",
-                border: "1px solid rgba(0,0,0,0.06)",
-                boxShadow: "0 4px 32px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04)",
-              }}
-            >
-              <AuthMethodPicker
-                role={activeRole}
-                onSSO={handleSSO}
-                onManual={handleManual}
-                ssoLoading={ssoLoading}
-              />
-            </div>
-
-            <p className="text-center text-sm text-beige-600">
-              Already have an account?{" "}
-              <Link href="/auth/login" className="text-teal-600 hover:text-teal-700 font-medium">
-                Sign in
-              </Link>
-            </p>
-          </div>
-        )}
-
-        {/* ── State: registering (manual form steps) ── */}
-        {uiState === "registering" && reg.registrationRole === "contributor" && (
-          <div className="space-y-4 pb-2">
-            <RoleBar role="contributor" onChange={resetToRolePicker} animateIn />
-
-            <div className="p-4 rounded-2xl bg-teal-50 border border-teal-200 flex items-start gap-3">
-              <Sparkles className="w-5 h-5 text-teal-500 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-teal-800">Welcome to GlimmoraTeam</p>
-                <p className="text-xs text-teal-700 mt-0.5 leading-relaxed">
-                  AI-matched tasks · global earnings · verified portfolio · set up in 4 quick steps.
-                </p>
-              </div>
-            </div>
-
-            <StepProgress step={reg.step} />
-
-            <AnimatePresence mode="wait">
-              {reg.step === 1 && (
-                <motion.div key="c-step-1" {...stepAnim}>
-                  <Step1Identity
-                    firstName={reg.firstName} setFirstName={reg.setFirstName}
-                    lastName={reg.lastName} setLastName={reg.setLastName}
-                    phoneCountry={reg.phoneCountry} setPhoneCountry={reg.setPhoneCountry}
-                    phone={reg.phone} setPhone={reg.setPhone}
-                    email={reg.email} setEmail={reg.setEmail}
-                    password={reg.password} setPassword={reg.setPassword}
-                    confirm={reg.confirm} setConfirm={reg.setConfirm}
-                    showPw={reg.showPw} setShowPw={reg.setShowPw}
-                    showCon={reg.showCon} setShowCon={reg.setShowCon}
-                    contribType={reg.contribType} setContribType={reg.setContribType}
-                    country={reg.country} setCountry={reg.setCountry}
-                    passwordStrength={reg.passwordStrength}
-                    error={reg.error}
-                    onContinue={reg.goToStep2}
-                    isSsoUser={reg.isSsoUser}
-                    ssoProvider={reg.ssoProvider}
-                  />
-                </motion.div>
-              )}
-
-              {reg.step === 2 && (
-                <motion.div key="c-step-2" {...stepAnim}>
-                  <Step3Profile
-                    contribType={reg.contribType}
-                    dob={reg.dob} setDob={reg.setDob}
-                    timezone={reg.timezone} setTimezone={reg.setTimezone}
-                    departmentCategory={reg.departmentCategory} setDepartmentCategory={reg.setDepartmentCategory}
-                    departmentOther={reg.departmentOther} setDepartmentOther={reg.setDepartmentOther}
-                    availability={reg.availability} setAvailability={reg.setAvailability}
-                    degree={reg.degree} setDegree={reg.setDegree}
-                    branch={reg.branch} setBranch={reg.setBranch}
-                    linkedin={reg.linkedin} setLinkedin={reg.setLinkedin}
-                    mentorAck={reg.mentorAck} setMentorAck={reg.setMentorAck}
-                    primarySkills={reg.primarySkills}
-                    skillInput={reg.skillInput} setSkillInput={reg.setSkillInput}
-                    addPrimarySkill={reg.addPrimarySkill} removePrimarySkill={reg.removePrimarySkill}
-                    secondarySkills={reg.secondarySkills}
-                    secondarySkillInput={reg.secondarySkillInput} setSecondarySkillInput={reg.setSecondarySkillInput}
-                    addSecondarySkill={reg.addSecondarySkill} removeSecondarySkill={reg.removeSecondarySkill}
-                    otherSkills={reg.otherSkills}
-                    otherSkillInput={reg.otherSkillInput} setOtherSkillInput={reg.setOtherSkillInput}
-                    addOtherSkill={reg.addOtherSkill} removeOtherSkill={reg.removeOtherSkill}
-                    workStart={reg.workStart} setWorkStart={reg.setWorkStart}
-                    workEnd={reg.workEnd} setWorkEnd={reg.setWorkEnd}
-                    jobTitle={reg.jobTitle} setJobTitle={reg.setJobTitle}
-                    careerStage={reg.careerStage} setCareerStage={reg.setCareerStage}
-                    yearsExperience={reg.yearsExperience} setYearsExperience={reg.setYearsExperience}
-                    studentCurrency={reg.studentCurrency}
-                    studentHourlyRate={reg.studentHourlyRate}
-                    womenRateCurrency={reg.womenRateCurrency}
-                    womenRateTable={reg.womenRateTable}
-                    generalRateCurrency={reg.generalRateCurrency}
-                    generalRateTable={reg.generalRateTable}
-                    error={reg.error}
-                    onContinue={reg.goToStep3}
-                    onBack={() => { reg.setStep(1); reg.setError(""); }}
-                  />
-                </motion.div>
-              )}
-
-              {reg.step === 3 && (
-                <motion.div key="c-step-3" {...stepAnim}>
-                  <Step2Verification
-                    registrationEmail={reg.email}
-                    phoneCountry={reg.phoneCountry} setPhoneCountry={reg.setPhoneCountry}
-                    phone={reg.phone} setPhone={reg.setPhone}
-                    otpSent={reg.otpSent}
-                    otp={reg.otp} setOtp={reg.setOtp}
-                    cooldown={reg.cooldown}
-                    phoneVerified={reg.phoneVerified}
-                    phoneOtpLoading={reg.phoneOtpLoading}
-                    verificationEmail={reg.verificationEmail} setVerificationEmail={reg.setVerificationEmail}
-                    emailOtpSent={reg.emailOtpSent}
-                    emailOtp={reg.emailOtp} setEmailOtp={reg.setEmailOtp}
-                    emailCooldown={reg.emailCooldown}
-                    emailVerified={reg.emailVerified}
-                    emailOtpLoading={reg.emailOtpLoading}
-                    ndaAccepted={reg.ndaAccepted} setNdaAccepted={reg.setNdaAccepted}
-                    ndaSignature={reg.ndaSignature} setNdaSignature={reg.setNdaSignature}
-                    ndaSignedFile={reg.ndaSignedFile} setNdaSignedFile={reg.setNdaSignedFile}
-                    error={reg.error}
-                    onSendOTP={reg.sendOTP}
-                    onVerifyOTP={reg.verifyOTP}
-                    onSendEmailOTP={reg.sendEmailOTP}
-                    onVerifyEmailOTP={reg.verifyEmailOTP}
-                    onContinue={reg.goToStep4}
-                    onBack={() => { reg.setStep(2); reg.setError(""); }}
-                  />
-                </motion.div>
-              )}
-
-              {reg.step === 4 && (
-                <motion.div key="c-step-4" {...stepAnim}>
-                  <Step4Consent
-                    resumeFile={reg.resumeFile} setResumeFile={reg.setResumeFile}
-                    resumeDrag={reg.resumeDrag} setResumeDrag={reg.setResumeDrag}
-                    acceptTos={reg.acceptTos} setAcceptTos={reg.setAcceptTos}
-                    acceptCoc={reg.acceptCoc} setAcceptCoc={reg.setAcceptCoc}
-                    acceptPrivacy={reg.acceptPrivacy} setAcceptPrivacy={reg.setAcceptPrivacy}
-                    acceptFee={reg.acceptFee} setAcceptFee={reg.setAcceptFee}
-                    acceptAhp={reg.acceptAhp} setAcceptAhp={reg.setAcceptAhp}
-                    marketingOptIn={reg.marketingOptIn} setMarketingOptIn={reg.setMarketingOptIn}
-                    isLoading={reg.isLoading}
-                    error={reg.error}
-                    onPreview={() => reg.setPreviewOpen(true)}
-                    onSubmit={reg.handleFinalSubmit}
-                    onBack={() => { reg.setStep(3); reg.setError(""); }}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
-
-        {reg.previewOpen && (
-          <ReviewPreviewModal
-            onClose={() => reg.setPreviewOpen(false)}
-            onEditStep={step => { reg.setStep(step); reg.setError(""); }}
-            firstName={reg.firstName}
-            lastName={reg.lastName}
-            email={reg.email}
-            contribType={reg.contribType}
-            dob={reg.dob}
-            country={reg.country}
-            phone={reg.phone}
-            verificationEmail={reg.verificationEmail}
-            timezone={reg.timezone}
-            departmentCategory={reg.departmentCategory}
-            departmentOther={reg.departmentOther}
-            degree={reg.degree}
-            branch={reg.branch}
-            availability={reg.availability}
-            linkedin={reg.linkedin}
-            primarySkills={reg.primarySkills}
-            secondarySkills={reg.secondarySkills}
-            otherSkills={reg.otherSkills}
-            yearsExperience={reg.yearsExperience}
-            careerStage={reg.careerStage}
-            workStart={reg.workStart}
-            workEnd={reg.workEnd}
+      {/* ── State: auth options (role selected, not yet registering) ── */}
+      {uiState === "authOptions" && activeRole && (
+        <div className="space-y-4">
+          {/* Role badge at top */}
+          <RoleBar
+            role={activeRole}
+            onChange={resetToRolePicker}
+            animateIn={roleBarAnimated}
           />
-        )}
 
+          <div
+            className="rounded-2xl p-8"
+            style={{
+              background: "rgba(255,255,255,0.85)",
+              backdropFilter: "blur(24px)",
+              border: "1px solid rgba(0,0,0,0.06)",
+              boxShadow:
+                "0 4px 32px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04)",
+            }}
+          >
+            <AuthMethodPicker
+              role={activeRole}
+              onSSO={handleSSO}
+              onManual={handleManual}
+              ssoLoading={ssoLoading}
+            />
+          </div>
+
+          <p className="text-center text-sm text-beige-600">
+            Already have an account?{" "}
+            <Link
+              href="/auth/login"
+              className="text-teal-600 hover:text-teal-700 font-medium"
+            >
+              Sign in
+            </Link>
+          </p>
+        </div>
+      )}
+
+      {/* ── State: registering (manual form steps) ── */}
+      {uiState === "registering" && reg.registrationRole === "contributor" && (
+        <div className="space-y-4 pb-2">
+          <RoleBar role="contributor" onChange={resetToRolePicker} animateIn />
+
+          <div className="p-4 rounded-2xl bg-teal-50 border border-teal-200 flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-teal-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-teal-800">
+                Welcome to GlimmoraTeam
+              </p>
+              <p className="text-xs text-teal-700 mt-0.5 leading-relaxed">
+                AI-matched tasks · global earnings · verified portfolio · set up
+                in 4 quick steps.
+              </p>
+            </div>
+          </div>
+
+          <StepProgress step={reg.step} />
+
+          <AnimatePresence mode="wait">
+            {reg.step === 1 && (
+              <motion.div key="c-step-1" {...stepAnim}>
+                <Step1Identity
+                  firstName={reg.firstName}
+                  setFirstName={reg.setFirstName}
+                  lastName={reg.lastName}
+                  setLastName={reg.setLastName}
+                  phoneCountry={reg.phoneCountry}
+                  setPhoneCountry={reg.setPhoneCountry}
+                  phone={reg.phone}
+                  setPhone={reg.setPhone}
+                  email={reg.email}
+                  setEmail={reg.setEmail}
+                  emailExists={reg.emailExists}
+                  emailChecking={reg.emailChecking}
+                  password={reg.password}
+                  setPassword={reg.setPassword}
+                  confirm={reg.confirm}
+                  setConfirm={reg.setConfirm}
+                  showPw={reg.showPw}
+                  setShowPw={reg.setShowPw}
+                  showCon={reg.showCon}
+                  setShowCon={reg.setShowCon}
+                  contribType={reg.contribType}
+                  setContribType={reg.setContribType}
+                  country={reg.country}
+                  setCountry={reg.setCountry}
+                  passwordStrength={reg.passwordStrength}
+                  error={reg.error}
+                  onContinue={reg.goToStep2}
+                  isSsoUser={reg.isSsoUser}
+                  ssoProvider={reg.ssoProvider}
+                />
+              </motion.div>
+            )}
+
+            {reg.step === 2 && (
+              <motion.div key="c-step-2" {...stepAnim}>
+                <Step3Profile
+                  contribType={reg.contribType}
+                  dob={reg.dob}
+                  setDob={reg.setDob}
+                  timezone={reg.timezone}
+                  setTimezone={reg.setTimezone}
+                  departmentCategory={reg.departmentCategory}
+                  setDepartmentCategory={reg.setDepartmentCategory}
+                  departmentOther={reg.departmentOther}
+                  setDepartmentOther={reg.setDepartmentOther}
+                  availability={reg.availability}
+                  setAvailability={reg.setAvailability}
+                  degree={reg.degree}
+                  setDegree={reg.setDegree}
+                  branch={reg.branch}
+                  setBranch={reg.setBranch}
+                  linkedin={reg.linkedin}
+                  setLinkedin={reg.setLinkedin}
+                  mentorAck={reg.mentorAck}
+                  setMentorAck={reg.setMentorAck}
+                  primarySkills={reg.primarySkills}
+                  skillInput={reg.skillInput}
+                  setSkillInput={reg.setSkillInput}
+                  addPrimarySkill={reg.addPrimarySkill}
+                  removePrimarySkill={reg.removePrimarySkill}
+                  secondarySkills={reg.secondarySkills}
+                  secondarySkillInput={reg.secondarySkillInput}
+                  setSecondarySkillInput={reg.setSecondarySkillInput}
+                  addSecondarySkill={reg.addSecondarySkill}
+                  removeSecondarySkill={reg.removeSecondarySkill}
+                  otherSkills={reg.otherSkills}
+                  otherSkillInput={reg.otherSkillInput}
+                  setOtherSkillInput={reg.setOtherSkillInput}
+                  addOtherSkill={reg.addOtherSkill}
+                  removeOtherSkill={reg.removeOtherSkill}
+                  workStart={reg.workStart}
+                  setWorkStart={reg.setWorkStart}
+                  workEnd={reg.workEnd}
+                  setWorkEnd={reg.setWorkEnd}
+                  jobTitle={reg.jobTitle}
+                  setJobTitle={reg.setJobTitle}
+                  careerStage={reg.careerStage}
+                  setCareerStage={reg.setCareerStage}
+                  yearsExperience={reg.yearsExperience}
+                  setYearsExperience={reg.setYearsExperience}
+                  studentCurrency={reg.studentCurrency}
+                  studentHourlyRate={reg.studentHourlyRate}
+                  womenRateCurrency={reg.womenRateCurrency}
+                  womenRateTable={reg.womenRateTable}
+                  generalRateCurrency={reg.generalRateCurrency}
+                  generalRateTable={reg.generalRateTable}
+                  error={reg.error}
+                  onContinue={reg.goToStep3}
+                  onBack={() => {
+                    reg.setStep(1);
+                    reg.setError("");
+                  }}
+                />
+              </motion.div>
+            )}
+
+            {reg.step === 3 && (
+              <motion.div key="c-step-3" {...stepAnim}>
+                <Step2Verification
+                  registrationEmail={reg.email}
+                  phoneCountry={reg.phoneCountry}
+                  setPhoneCountry={reg.setPhoneCountry}
+                  phone={reg.phone}
+                  setPhone={reg.setPhone}
+                  otpSent={reg.otpSent}
+                  otp={reg.otp}
+                  setOtp={reg.setOtp}
+                  cooldown={reg.cooldown}
+                  phoneVerified={reg.phoneVerified}
+                  phoneOtpLoading={reg.phoneOtpLoading}
+                  verificationEmail={reg.verificationEmail}
+                  setVerificationEmail={reg.setVerificationEmail}
+                  emailOtpSent={reg.emailOtpSent}
+                  emailOtp={reg.emailOtp}
+                  setEmailOtp={reg.setEmailOtp}
+                  emailCooldown={reg.emailCooldown}
+                  emailVerified={reg.emailVerified}
+                  emailOtpLoading={reg.emailOtpLoading}
+                  ndaAccepted={reg.ndaAccepted}
+                  setNdaAccepted={reg.setNdaAccepted}
+                  ndaSignature={reg.ndaSignature}
+                  setNdaSignature={reg.setNdaSignature}
+                  ndaSignedFile={reg.ndaSignedFile}
+                  setNdaSignedFile={reg.setNdaSignedFile}
+                  error={reg.error}
+                  onSendOTP={reg.sendOTP}
+                  onVerifyOTP={reg.verifyOTP}
+                  onSendEmailOTP={reg.sendEmailOTP}
+                  onVerifyEmailOTP={reg.verifyEmailOTP}
+                  onContinue={reg.goToStep4}
+                  onBack={() => {
+                    reg.setStep(2);
+                    reg.setError("");
+                  }}
+                />
+              </motion.div>
+            )}
+
+            {reg.step === 4 && (
+              <motion.div key="c-step-4" {...stepAnim}>
+                <Step4Consent
+                  resumeFile={reg.resumeFile}
+                  setResumeFile={reg.setResumeFile}
+                  resumeDrag={reg.resumeDrag}
+                  setResumeDrag={reg.setResumeDrag}
+                  acceptTos={reg.acceptTos}
+                  setAcceptTos={reg.setAcceptTos}
+                  acceptCoc={reg.acceptCoc}
+                  setAcceptCoc={reg.setAcceptCoc}
+                  acceptPrivacy={reg.acceptPrivacy}
+                  setAcceptPrivacy={reg.setAcceptPrivacy}
+                  acceptFee={reg.acceptFee}
+                  setAcceptFee={reg.setAcceptFee}
+                  acceptAhp={reg.acceptAhp}
+                  setAcceptAhp={reg.setAcceptAhp}
+                  marketingOptIn={reg.marketingOptIn}
+                  setMarketingOptIn={reg.setMarketingOptIn}
+                  isLoading={reg.isLoading}
+                  error={reg.error}
+                  onPreview={() => reg.setPreviewOpen(true)}
+                  onSubmit={reg.handleFinalSubmit}
+                  onBack={() => {
+                    reg.setStep(3);
+                    reg.setError("");
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {reg.previewOpen && (
+        <ReviewPreviewModal
+          onClose={() => reg.setPreviewOpen(false)}
+          onEditStep={(step) => {
+            reg.setStep(step);
+            reg.setError("");
+          }}
+          firstName={reg.firstName}
+          lastName={reg.lastName}
+          email={reg.email}
+          contribType={reg.contribType}
+          dob={reg.dob}
+          country={reg.country}
+          phone={reg.phone}
+          verificationEmail={reg.verificationEmail}
+          timezone={reg.timezone}
+          departmentCategory={reg.departmentCategory}
+          departmentOther={reg.departmentOther}
+          degree={reg.degree}
+          branch={reg.branch}
+          availability={reg.availability}
+          linkedin={reg.linkedin}
+          primarySkills={reg.primarySkills}
+          secondarySkills={reg.secondarySkills}
+          otherSkills={reg.otherSkills}
+          yearsExperience={reg.yearsExperience}
+          careerStage={reg.careerStage}
+          workStart={reg.workStart}
+          workEnd={reg.workEnd}
+        />
+      )}
     </>
   );
 
@@ -820,12 +1020,20 @@ function ContributorRegisterContent() {
     const isAuthOptions = uiState === "authOptions";
     return (
       <div className="w-full flex items-start gap-16 max-w-7xl mx-auto px-8">
-        <LeftContent role={isAuthOptions ? (activeRole ?? undefined) : undefined} />
-        <div className={`w-full flex flex-col justify-center pt-8 ${isAuthOptions ? "max-w-[440px]" : "max-w-xl"}`}>
+        <LeftContent
+          role={isAuthOptions ? (activeRole ?? undefined) : undefined}
+        />
+        <div
+          className={`w-full flex flex-col justify-center pt-8 ${isAuthOptions ? "max-w-[440px]" : "max-w-xl"}`}
+        >
           {!isAuthOptions && (
             <div className="mb-6">
-              <h1 className="font-heading text-[22px] font-bold text-brown-950">Create your account</h1>
-              <p className="text-sm text-gray-500 mt-1">Join the Global Workforce Intelligence Platform</p>
+              <h1 className="font-heading text-[22px] font-bold text-brown-950">
+                Create your account
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Join the Global Workforce Intelligence Platform
+              </p>
             </div>
           )}
           {formBody}

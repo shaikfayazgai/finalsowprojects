@@ -38,8 +38,6 @@ interface Props {
   phoneOtpLoading: boolean;
   phoneOtpDevHint?: string;
   adminEmail: string;
-  setAdminEmail: (v: string) => void;
-  initialAdminEmail: string;
   emailOtpSent: boolean;
   emailOtp: string;
   setEmailOtp: (v: string) => void;
@@ -73,8 +71,6 @@ export function Step3Security({
   phoneOtpLoading,
   phoneOtpDevHint = "",
   adminEmail,
-  setAdminEmail,
-  initialAdminEmail,
   emailOtpSent,
   emailOtp,
   setEmailOtp,
@@ -379,9 +375,8 @@ export function Step3Security({
                   type="email"
                   placeholder="Work email for verification"
                   value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  className="flex-1"
-                  disabled={emailVerified}
+                  className="flex-1 bg-beige-50 text-beige-700"
+                  readOnly
                 />
                 <Button
                   type="button"
@@ -407,18 +402,6 @@ export function Step3Security({
                   )}
                 </Button>
               </div>
-              {adminEmail.trim() !== "" &&
-                initialAdminEmail.trim() !== "" &&
-                adminEmail.trim().toLowerCase() !==
-                  initialAdminEmail.trim().toLowerCase() && (
-                  <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-amber-700 leading-relaxed">
-                      This email is also used in Step 2. Changing it will update
-                      both.
-                    </p>
-                  </div>
-                )}
             </div>
 
             {emailOtpSent && !emailVerified && (

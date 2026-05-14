@@ -26,18 +26,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(GENERIC_RESPONSE);
     }
 
-    // Backend owns the entire flow: generates the token, persists it, sends the email.
-    // We don't read the response body — backend may return 404 for unknown emails;
-    // we surface the same generic message either way to avoid email enumeration.
+    // Derive the app origin so the backend can embed the correct reset link in the email.
+    // The link must point back to OUR /auth/reset-password page, not the Glimmora backend.
+    const requestUrl = new URL(req.url);
+    const appOrigin = process.env.NEXTAUTH_URL
+      ? new URL(process.env.NEXTAUTH_URL).origin
+      : `${requestUrl.protocol}//${requestUrl.host}`;
+    const resetUrl = `${appOrigin}/auth/reset-password`;
+
     try {
-      await fetch(`${backendUrl}/api/v1/auth/password/forgot`, {
+      const res = await fetch(`${backendUrl}/api/v1/auth/password/forgot`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          reset_url: resetUrl,
+          redirect_url: resetUrl,
+          callback_url: resetUrl,
+        }),
         signal: AbortSignal.timeout(10000),
       });
-    } catch {
-      /* network error — still return generic success */
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error("[forgot-password] backend error", res.status, data);
+      }
+    } catch (err) {
+      console.error("[forgot-password] network error", err);
     }
 
     return NextResponse.json(GENERIC_RESPONSE);

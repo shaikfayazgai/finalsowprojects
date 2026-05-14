@@ -7,7 +7,41 @@ import { COUNTRIES_DATA } from "../../data";
 import { getPasswordStrength } from "../../helpers";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { registerEnterprise } from "@/lib/actions/register";
-import { fetchInternal } from "@/lib/api/client";
+import { authApi } from "@/lib/api/auth";
+import { ApiError, fetchInternal } from "@/lib/api/client";
+
+function pickBoolean(source: Record<string, unknown>, keys: string[]): boolean | null {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "boolean") return value;
+  }
+  return null;
+}
+
+function getEmailExists(raw: unknown): boolean | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const data = raw as Record<string, unknown>;
+  const direct = pickBoolean(data, [
+    "exists",
+    "emailExists",
+    "email_exists",
+    "registered",
+    "isRegistered",
+    "is_registered",
+    "userExists",
+    "user_exists",
+  ]);
+  if (direct !== null) return direct;
+
+  const available = pickBoolean(data, ["available", "emailAvailable", "email_available"]);
+  if (available !== null) return !available;
+
+  const nested = data.data ?? data.result;
+  if (nested && typeof nested === "object") return getEmailExists(nested);
+
+  return null;
+}
 
 export type OrgType =
   | ""
@@ -42,6 +76,8 @@ export function useEnterpriseRegistration() {
   const [adminLastName, setAdminLastName] = useState("");
   const [adminTitle, setAdminTitle] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
+  const [adminEmailExists, setAdminEmailExists] = useState<boolean | null>(null);
+  const [adminEmailChecking, setAdminEmailChecking] = useState(false);
   const [initialAdminEmail, setInitialAdminEmail] = useState("");
   const [adminDept, setAdminDept] = useState("");
   const [phoneCountry, setPhoneCountry] = useState("India");
@@ -235,6 +271,77 @@ export function useEnterpriseRegistration() {
     }
   }
 
+  async function checkAdminEmailExists(
+    value: string,
+    updateState = true,
+  ): Promise<boolean | null> {
+    const normalizedEmail = value.trim().toLowerCase();
+
+    if (
+      !normalizedEmail ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
+    ) {
+      if (updateState) setAdminEmailExists(null);
+      return null;
+    }
+
+    try {
+      const raw = await authApi.validateEmail(normalizedEmail);
+      const exists = getEmailExists(raw);
+      if (exists === null) {
+        if (updateState) setAdminEmailExists(null);
+        return null;
+      }
+
+      if (updateState) setAdminEmailExists(exists);
+      return exists;
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          if (updateState) setAdminEmailExists(true);
+          return true;
+        }
+
+        if (err.status === 401 || err.status === 404) {
+          if (updateState) setAdminEmailExists(false);
+          return false;
+        }
+      }
+
+      if (updateState) setAdminEmailExists(null);
+      return null;
+    }
+  }
+
+  useEffect(() => {
+    const normalizedEmail = adminEmail.trim().toLowerCase();
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+
+    setAdminEmailExists(null);
+    if (!validEmail) {
+      setAdminEmailChecking(false);
+      return;
+    }
+
+    let active = true;
+    setAdminEmailChecking(true);
+
+    const timer = window.setTimeout(() => {
+      void checkAdminEmailExists(normalizedEmail, false)
+        .then((exists) => {
+          if (active) setAdminEmailExists(exists);
+        })
+        .finally(() => {
+          if (active) setAdminEmailChecking(false);
+        });
+    }, 500);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [adminEmail]);
+
   function goToStep2() {
     if (!orgName.trim()) {
       setError("Please enter your organisation name");
@@ -268,7 +375,7 @@ export function useEnterpriseRegistration() {
     setStep(2);
   }
 
-  function goToStep3() {
+  async function goToStep3() {
     if (!adminFirstName.trim()) {
       setError("Please enter the administrator's first name");
       return;
@@ -281,8 +388,19 @@ export function useEnterpriseRegistration() {
       setError("Please enter a valid phone number");
       return;
     }
-    if (!adminEmail.trim() || !adminEmail.includes("@")) {
+    if (!adminEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
       setError("Please enter a valid business email address");
+      return;
+    }
+    setIsLoading(true);
+    const existingEmail = await checkAdminEmailExists(adminEmail);
+    setIsLoading(false);
+    if (existingEmail === true) {
+      setError("This email is already registered. Please sign in instead.");
+      return;
+    }
+    if (existingEmail === null) {
+      setError("Could not validate email availability. Please try again.");
       return;
     }
     if (!adminTitle.trim()) {
@@ -441,6 +559,8 @@ export function useEnterpriseRegistration() {
     setAdminTitle,
     adminEmail,
     setAdminEmail,
+    adminEmailExists,
+    adminEmailChecking,
     initialAdminEmail,
     adminDept,
     setAdminDept,

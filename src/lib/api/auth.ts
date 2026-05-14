@@ -191,6 +191,14 @@ export const authApi = {
     });
   },
 
+  /** Email-only validation used during registration to check availability. */
+  async validateEmail(email: string): Promise<unknown> {
+    return apiCall("/api/v1/auth/validate", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+
   /** Exchange a refresh token for a new access token. */
   async refreshToken(refreshToken: string): Promise<TokenPair> {
     return apiCall<TokenPair>("/api/v1/auth/refresh", {

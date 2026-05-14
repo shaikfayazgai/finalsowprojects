@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertCircle, ArrowRight, CheckCircle,
-  GraduationCap, Briefcase, Users, Smartphone,
+  GraduationCap, Briefcase, Users, Smartphone, Loader2,
 } from "lucide-react";
 import {
   GlassCard, GlassCardContent, Button, Input, Label,
@@ -22,6 +22,8 @@ interface Props {
   phoneCountry: string;    setPhoneCountry: (v: string) => void;
   phone: string;           setPhone: (v: string) => void;
   email: string;           setEmail: (v: string) => void;
+  emailExists?: boolean | null;
+  emailChecking?: boolean;
   password: string;        setPassword: (v: string) => void;
   confirm: string;         setConfirm: (v: string) => void;
   showPw: boolean;         setShowPw: (v: boolean) => void;
@@ -30,7 +32,7 @@ interface Props {
   country: string;         setCountry: (v: string) => void;
   passwordStrength: PasswordStrength;
   error: string;
-  onContinue: () => void;
+  onContinue: () => void | Promise<void>;
   isSsoUser?: boolean;
   ssoProvider?: "google" | "microsoft" | null;
   hideSignInLink?: boolean;
@@ -76,6 +78,8 @@ export function Step1Identity({
   phoneCountry, setPhoneCountry,
   phone, setPhone,
   email, setEmail,
+  emailExists = null,
+  emailChecking = false,
   password, setPassword,
   confirm, setConfirm,
   showPw, setShowPw,
@@ -91,6 +95,7 @@ export function Step1Identity({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const selectedPhoneCountry = COUNTRIES_DATA.find((c) => c.name === phoneCountry);
   const phoneMaxLen = selectedPhoneCountry?.phoneMaxLength ?? 12;
+  const showEmailAvailability = email.trim() && !fieldErrors.email && !isSsoUser;
 
   const validateField = (field: string, value: string) => {
     const errs = { ...fieldErrors };
@@ -209,7 +214,16 @@ export function Step1Identity({
                 onChange={e => setEmail(e.target.value)}
                 onBlur={() => validateField("email", email)}
                 autoComplete="email"
-                readOnly={isSsoUser} className={isSsoUser ? "pr-10 bg-beige-50 text-beige-700" : ""} />
+                readOnly={isSsoUser}
+                className={
+                  isSsoUser
+                    ? "pr-10 bg-beige-50 text-beige-700"
+                    : emailExists === true
+                      ? "border-red-300 focus-visible:ring-red-500/20"
+                      : emailExists === false
+                        ? "border-teal-300 focus-visible:ring-teal-500/20"
+                        : ""
+                } />
               {isSsoUser && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
                   <CheckCircle className="w-4 h-4 text-teal-500" />
@@ -217,6 +231,24 @@ export function Step1Identity({
               )}
             </div>
             {fieldErrors.email && <p className="text-xs text-red-500">{fieldErrors.email}</p>}
+            {showEmailAvailability && emailChecking && (
+              <p className="text-xs text-beige-500 flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Checking email availability...
+              </p>
+            )}
+            {showEmailAvailability && !emailChecking && emailExists === true && (
+              <p className="text-xs text-red-500 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                This email is already registered. Please sign in instead.
+              </p>
+            )}
+            {showEmailAvailability && !emailChecking && emailExists === false && (
+              <p className="text-xs text-teal-600 flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" />
+                Email is available
+              </p>
+            )}
             {isSsoUser && ssoProvider && (
               <p className="text-xs text-teal-600 flex items-center gap-1">
                 <CheckCircle className="w-3 h-3" />

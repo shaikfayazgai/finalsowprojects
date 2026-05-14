@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import {
   AlertCircle, ArrowRight, ArrowLeft,
   UserCircle, Mail, Briefcase,
-  ChevronDown, Search, X, Check,
+  ChevronDown, Search, X, Check, CheckCircle, Loader2,
 } from "lucide-react";
 import {
   GlassCard, GlassCardContent, Button, Input, Label,
@@ -142,11 +142,13 @@ interface Props {
   adminLastName: string;  setAdminLastName:  (v: string) => void;
   adminTitle: string;     setAdminTitle:     (v: string) => void;
   adminEmail: string;     setAdminEmail:     (v: string) => void;
+  adminEmailExists?: boolean | null;
+  adminEmailChecking?: boolean;
   adminDept: string;      setAdminDept:      (v: string) => void;
   phoneCountry: string;   setPhoneCountry:   (v: string) => void;
   phone: string;          setPhone:          (v: string) => void;
   error: string;
-  onContinue: () => void;
+  onContinue: () => void | Promise<void>;
   onBack: () => void;
 }
 
@@ -155,6 +157,8 @@ export function Step2AdminContact({
   adminLastName,  setAdminLastName,
   adminTitle,     setAdminTitle,
   adminEmail,     setAdminEmail,
+  adminEmailExists = null,
+  adminEmailChecking = false,
   adminDept,      setAdminDept,
   phoneCountry,   setPhoneCountry,
   phone,          setPhone,
@@ -163,6 +167,8 @@ export function Step2AdminContact({
 }: Props) {
   const [adminDeptOther, setAdminDeptOther] = useState("");
   const selectedCountry = COUNTRIES_DATA.find(c => c.name === phoneCountry);
+  const showAdminEmailAvailability =
+    adminEmail.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail);
 
   return (
     <GlassCard variant="heavy" padding="lg" className="w-full">
@@ -236,9 +242,33 @@ export function Step2AdminContact({
                 <div className="relative">
                   <Input id="adminEmail" type="email" placeholder="name@company.com"
                     value={adminEmail} onChange={e => setAdminEmail(e.target.value)}
-                    className="pl-9" autoComplete="email" />
+                    className={`pl-9 ${
+                      adminEmailExists === true
+                        ? "border-red-300 focus-visible:ring-red-500/20"
+                        : adminEmailExists === false
+                          ? "border-teal-300 focus-visible:ring-teal-500/20"
+                          : ""
+                    }`} autoComplete="email" />
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-beige-400 pointer-events-none" />
                 </div>
+                {showAdminEmailAvailability && adminEmailChecking && (
+                  <p className="text-xs text-beige-500 flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Checking email availability...
+                  </p>
+                )}
+                {showAdminEmailAvailability && !adminEmailChecking && adminEmailExists === true && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    This email is already registered. Please sign in instead.
+                  </p>
+                )}
+                {showAdminEmailAvailability && !adminEmailChecking && adminEmailExists === false && (
+                  <p className="text-xs text-teal-600 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    Email is available
+                  </p>
+                )}
                 <p className="text-[10px] text-beige-400">Use your work email - this will be used for all account notifications</p>
               </div>
 
