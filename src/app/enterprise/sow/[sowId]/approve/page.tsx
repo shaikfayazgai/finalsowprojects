@@ -253,6 +253,26 @@ export default function SOWApprovePage() {
     const msgs: ChatMsg[] = [];
     fullStages.forEach((s) => {
       const label = stageLabels[s.stage] ?? s.stage;
+
+      // Surface stage-level comment (from the approve/reject action)
+      const stageComment = s.comments as string | undefined;
+      if (stageComment?.trim()) {
+        const rawStage = rawStagesArr.find((r) => {
+          const n = (r.stage_number ?? r.stage) as number;
+          return (stageNumToKey[n] ?? stageKeys[n - 1]) === s.stage;
+        });
+        const time   = String(rawStage?.decided_at ?? rawStage?.updated_at ?? "");
+        const reviewer = String(rawStage?.reviewer_name ?? rawStage?.reviewer ?? "");
+        const isGlimmora = reviewer.toLowerCase().includes("glimmora") || reviewer.toLowerCase().includes("admin");
+        msgs.push({
+          from: isGlimmora ? "glimmora" : "enterprise",
+          text: stageComment,
+          time: time ? fmtTime(time) : "",
+          stageLabel: label,
+        });
+      }
+
+      // Also include individual decision entries if present
       (s.decisions ?? []).forEach((d) => {
         const decisionType = String(d.decision ?? d.type ?? "comment").toLowerCase();
         const text         = String(d.comments ?? d.message ?? d.text ?? "");
@@ -260,7 +280,6 @@ export default function SOWApprovePage() {
         const authorName   = String((d.decided_by as Record<string, unknown>)?.name ?? d.decided_by ?? d.author ?? d.reviewer ?? "");
         if (!text) return;
 
-        // Glimmora admin decisions surface as "glimmora"; enterprise comments as "enterprise"
         const isGlimmora = decisionType === "approve" || authorName.toLowerCase().includes("glimmora") || authorName.toLowerCase().includes("admin");
         msgs.push({
           from: isGlimmora ? "glimmora" : "enterprise",
@@ -269,7 +288,6 @@ export default function SOWApprovePage() {
           stageLabel: label,
         });
 
-        // Inline reply
         if (d.reply) {
           msgs.push({
             from: "glimmora",

@@ -20,6 +20,7 @@ import type { ContributorTaskStatus } from "@/types/contributor";
 import { useTaskStore } from "@/lib/stores/task-store";
 import { fetchTask, fetchAcceptImpact, acceptTask, declineTask, startTask, requestExtension, fetchTaskTimeline, fetchWorkroom, fetchWorkroomTemplates, fetchWorkroomLinks, postWorkroomMessage, fetchWorkroomMessages, uploadWorkroomFile, deleteWorkroomUpload, patchChecklistItem, type TaskDetail, type AcceptImpact, type TaskTimelineEvent, type Workroom, type WorkroomChecklistItem, type WorkroomTemplate, type WorkroomLink } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Helpers ═══ */
 
@@ -124,7 +125,7 @@ export default function ContributorTaskDetailPage() {
   const params = useParams();
   const taskId = params.taskId as string;
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
 
   /* Store task used as instant preview while API loads */
   const storeTask = useTaskStore((s) => s.selectedTask);
@@ -1981,8 +1982,9 @@ export default function ContributorTaskDetailPage() {
                       });
                       setUploads((prev: any[]) => [...prev, {
                         id: result.id,
-                        fileName: result.filename,
-                        title: result.title || result.filename,
+                        fileName: result.filename || uploadFile.name,
+                        filename: result.filename || uploadFile.name,
+                        title: result.title || result.filename || uploadFile.name,
                         fileSize: uploadFile.size,
                         size_bytes: uploadFile.size,
                         uploadedAt: result.uploaded_at,

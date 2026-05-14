@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
-import { useGapItems } from "@/lib/hooks/use-manual-sow";
+import { useGapItems, useUpdateGapItem } from "@/lib/hooks/use-manual-sow";
 import type { GapItem, GapSeverity } from "@/types/enterprise";
 import { Skeleton } from "@/components/ui";
 
@@ -320,6 +320,7 @@ export default function GapAnalysisPage() {
   const store = useSOWUploadStore();
   const sowId = store.uploadedSowId;
   const { data: gapRes, isLoading: gapsLoading } = useGapItems(sowId);
+  const updateGapItem = useUpdateGapItem(sowId);
 
   /* Map API data */
   const apiGaps: GapItem[] = React.useMemo(() => {
@@ -335,9 +336,13 @@ export default function GapAnalysisPage() {
     store.gapItems.length > 0 ? store.gapItems : [],
   );
 
-  /* Update from API when available */
+  /* Load from API on initial mount only — do not overwrite local state on subsequent refetches */
+  const hasInitiallyLoaded = React.useRef(false);
   React.useEffect(() => {
-    if (apiGaps.length > 0) setGaps(apiGaps);
+    if (apiGaps.length > 0 && !hasInitiallyLoaded.current) {
+      setGaps(apiGaps);
+      hasInitiallyLoaded.current = true;
+    }
   }, [apiGaps]);
 
   const [selectedGapId, setSelectedGapId] = React.useState<string | null>(null);
@@ -379,10 +384,29 @@ export default function GapAnalysisPage() {
   }, [currentChat.length]);
 
   /* ── Gap actions ── */
-  const resolveGap     = React.useCallback((id: string) => setGaps((p) => p.map((g) => g.id === id ? { ...g, isResolved: true } : g)), []);
-  const acknowledgeGap = React.useCallback((id: string) => setGaps((p) => p.map((g) => g.id === id ? { ...g, isAcknowledged: !g.isAcknowledged } : g)), []);
-  const dismissGap     = React.useCallback((id: string) => setGaps((p) => p.map((g) => g.id === id ? { ...g, isDismissed: true } : g)), []);
-  const resetGap       = React.useCallback((id: string) => setGaps((p) => p.map((g) => g.id === id ? { ...g, isResolved: false, isAcknowledged: false, isDismissed: false } : g)), []);
+  const resolveGap = React.useCallback((id: string) => {
+    setGaps((p) => p.map((g) => g.id === id ? { ...g, isResolved: true } : g));
+    if (sowId) updateGapItem.mutate({ gapId: id, data: { is_resolved: true } });
+  }, [sowId, updateGapItem]);
+
+  const acknowledgeGap = React.useCallback((id: string) => {
+    setGaps((p) => p.map((g) => {
+      if (g.id !== id) return g;
+      const next = !g.isAcknowledged;
+      if (sowId) updateGapItem.mutate({ gapId: id, data: { is_acknowledged: next } });
+      return { ...g, isAcknowledged: next };
+    }));
+  }, [sowId, updateGapItem]);
+
+  const dismissGap = React.useCallback((id: string) => {
+    setGaps((p) => p.map((g) => g.id === id ? { ...g, isDismissed: true } : g));
+    if (sowId) updateGapItem.mutate({ gapId: id, data: { is_dismissed: true } });
+  }, [sowId, updateGapItem]);
+
+  const resetGap = React.useCallback((id: string) => {
+    setGaps((p) => p.map((g) => g.id === id ? { ...g, isResolved: false, isAcknowledged: false, isDismissed: false } : g));
+    if (sowId) updateGapItem.mutate({ gapId: id, data: { is_resolved: false, is_acknowledged: false, is_dismissed: false } });
+  }, [sowId, updateGapItem]);
 
   /* ── Select gap ── */
   const handleSelectGap = (gap: GapItem) => {

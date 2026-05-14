@@ -30,6 +30,7 @@ import {
   type DigitalTwinHistoryResponse,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Helpers ═══ */
 
@@ -188,7 +189,7 @@ function MonthlyActivityChart({
 
 export default function DigitalTwinPage() {
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
   const contributorId = session?.user?.id ?? "";
 
   const [twin, setTwin] = React.useState<DigitalTwinUi>(() => mapDigitalTwinToUi({}));

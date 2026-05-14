@@ -25,6 +25,7 @@ import { Badge, Button } from "@/components/ui";
 import { toast } from "@/lib/stores/toast-store";
 import { mockInvoices } from "@/mocks/data/enterprise-billing";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
+import { downloadPdf } from "@/lib/utils/file-download";
 
 const statusConfig: Record<
   string,
@@ -70,6 +71,45 @@ export default function InvoiceDetailPage() {
   const tax = 0;
   const total = subtotal + tax;
   const balanceDue = total - invoice.paidAmount;
+
+  const handleDownloadPdf = async () => {
+    try {
+      await downloadPdf(`invoice-${invoice.number}.pdf`, {
+        title: `Invoice ${invoice.number}`,
+        subtitle: "Invoice",
+        meta: {
+          Status: statusConfig[invoice.status].label,
+          "Bill To": mockProjects.find((p) => p.id === invoice.projectId)?.client ?? "Client",
+          Project: getProjectTitle(invoice.projectId),
+          Issued: formatDate(invoice.issuedDate),
+          Due: formatDate(invoice.dueDate),
+          Currency: invoice.currency,
+        },
+        summary: [
+          { label: "Subtotal", value: formatCurrency(subtotal) },
+          { label: "Tax (0%)", value: formatCurrency(tax) },
+          { label: "Total", value: formatCurrency(total) },
+          { label: "Amount Paid", value: formatCurrency(invoice.paidAmount) },
+          { label: "Balance Due", value: formatCurrency(Math.max(balanceDue, 0)) },
+        ],
+        table: {
+          headers: ["Description", "Qty", "Rate", "Amount"],
+          rows: invoice.lineItems.map((item) => [
+            item.description,
+            item.quantity,
+            formatCurrency(item.rate),
+            formatCurrency(item.amount),
+          ]),
+          colWeights: [3.5, 0.8, 1.2, 1.2],
+        },
+        footerNote:
+          "Payment is due within the terms specified above. Late payments may incur additional fees as per the service agreement.",
+      });
+      toast.success("Download Complete", `Invoice ${invoice.number} downloaded as PDF.`);
+    } catch {
+      toast.error("Download Failed", "Could not generate the PDF. Please try again.");
+    }
+  };
 
   return (
     <motion.div
@@ -117,11 +157,11 @@ export default function InvoiceDetailPage() {
               Send Reminder
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => toast.info("Download PDF", "PDF download requires backend integration.")}>
+          <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
             <Download className="w-3.5 h-3.5" />
             Download PDF
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => toast.info("Print Dialog", "Opening print preview...")}>
+          <Button variant="ghost" size="icon-sm" onClick={() => window.print()}>
             <Printer className="w-4 h-4" />
           </Button>
         </div>

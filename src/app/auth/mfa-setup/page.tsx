@@ -137,10 +137,10 @@ function MFASetupContent() {
       if (data.access_token) {
         const { signIn } = await import("next-auth/react");
         await signIn("glimmora-oauth", {
-          userId: (session?.user as { id?: string })?.id || "",
-          email: session?.user?.email || email,
-          firstName: session?.user?.name?.split(" ")[0] || "",
-          lastName: session?.user?.name?.split(" ").slice(1).join(" ") || "",
+          userId: data.user?.id || (session?.user as { id?: string })?.id || "",
+          email: data.user?.email || session?.user?.email || email,
+          firstName: data.user?.firstName || session?.user?.name?.split(" ")[0] || "",
+          lastName: data.user?.lastName || session?.user?.name?.split(" ").slice(1).join(" ") || "",
           role: "enterprise",
           accessToken: data.access_token,
           refreshToken: data.refresh_token || "",

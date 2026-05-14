@@ -7,7 +7,6 @@ import {
   mockEarningsSummary,
   mockCredentials,
   mockLearningRecommendations,
-  mockSupportTickets,
   mockNotifications,
   mockDigitalTwin,
   mockWorkroomData,
@@ -57,7 +56,7 @@ function listFromQuery<T>(items: T[], query: URLSearchParams) {
   };
 }
 
-export function resolveContributorMock(path: string, method: string): MockResult | null {
+export function resolveContributorMock(path: string, method: string, body?: string): MockResult | null {
   if (!path.includes("/api/contributor") && !path.includes("/api/public/credentials")) return null;
   const url = new URL(path, "http://localhost");
   const p = url.pathname;
@@ -190,7 +189,13 @@ export function resolveContributorMock(path: string, method: string): MockResult
 
   if (p === "/api/contributor/tasks" && m === "GET") {
     const statusFilter = q.get("status");
-    const filtered = statusFilter && statusFilter !== "all" ? mockContributorTasks.filter((t) => t.status === statusFilter) : mockContributorTasks;
+    const priorityFilter = q.get("priority");
+    let filtered = statusFilter && statusFilter !== "all"
+      ? mockContributorTasks.filter((t) => t.status === statusFilter)
+      : mockContributorTasks;
+    if (priorityFilter && priorityFilter !== "all") {
+      filtered = filtered.filter((t) => t.priority === priorityFilter);
+    }
     return {
       status: 200,
       body: listFromQuery(
@@ -302,12 +307,26 @@ export function resolveContributorMock(path: string, method: string): MockResult
 
   if (p === "/api/contributor/earnings/summary" && m === "GET") return { status: 200, body: { total_earned: mockEarningsSummary.totalEarned, eligible: mockEarningsSummary.eligible, pending: mockEarningsSummary.pending, processing: mockEarningsSummary.processing, paid_out: mockEarningsSummary.paidOut, currency: mockEarningsSummary.currency, current_month: mockEarningsSummary.currentMonth, previous_month: mockEarningsSummary.previousMonth, lifetime_tasks_completed: mockEarningsSummary.lifetimeTasksCompleted, average_per_task: mockEarningsSummary.averagePerTask } };
   if (p === "/api/contributor/earnings/overview" && m === "GET") return { status: 200, body: JSON.stringify({ note: "Mock overview enabled" }) };
-  if (p === "/api/contributor/earnings" && m === "GET") return { status: 200, body: JSON.stringify(listFromQuery(mockEarnings, q)) };
-  if (p.match(/^\/api\/contributor\/earnings\/[^/]+$/) && m === "GET") return { status: 200, body: JSON.stringify(mockEarnings[0]) };
+  if (p === "/api/contributor/earnings" && m === "GET") {
+    const statusFilter = q.get("status");
+    const filtered = statusFilter && statusFilter !== "all"
+      ? mockEarnings.filter((e) => e.status === statusFilter)
+      : mockEarnings;
+    return { status: 200, body: JSON.stringify(listFromQuery(filtered, q)) };
+  }
+  if (p.match(/^\/api\/contributor\/earnings\/[^/]+$/) && m === "GET") {
+    const id = decodeURIComponent(p.split("/").pop() ?? "");
+    const found = mockEarnings.find((x) => x.id === id) ?? mockEarnings[0];
+    return { status: 200, body: JSON.stringify(found) };
+  }
   if (p === "/api/contributor/earnings/kyc/status" && m === "GET") return { status: 200, body: JSON.stringify({ status: "verified" }) };
   if (p === "/api/contributor/earnings/kyc/start" && m === "POST") return { status: 200, body: JSON.stringify({ status: "in_progress" }) };
   if (p === "/api/contributor/payouts" && m === "GET") return { status: 200, body: JSON.stringify(listFromQuery(mockPayouts, q)) };
-  if (p.match(/^\/api\/contributor\/payouts\/[^/]+$/) && m === "GET") return { status: 200, body: JSON.stringify(mockPayouts[0]) };
+  if (p.match(/^\/api\/contributor\/payouts\/[^/]+$/) && m === "GET") {
+    const id = decodeURIComponent(p.split("/").pop() ?? "");
+    const found = mockPayouts.find((x) => x.id === id || x.reference === id) ?? mockPayouts[0];
+    return { status: 200, body: JSON.stringify(found) };
+  }
   if (p.match(/^\/api\/contributor\/payouts\/[^/]+\/receipt$/) && m === "GET") return { status: 200, body: JSON.stringify("https://example.com/receipt/mock.pdf") };
   if (p === "/api/contributor/payout-preferences" && m === "GET") return { status: 200, body: { preferred_method: "upi", minimum_payout_amount: "25", auto_payout: true, account_name: null, account_number: null, bank_name: null, routing_code: null, country: "IN", provider: null, phone_number: null, paypal_email: null, upi_id: "chirag@upi", wallet_address: null, network: null, token: null } };
   if (p === "/api/contributor/payout-preferences" && m === "PUT") return resolveContributorMock("/api/contributor/payout-preferences", "GET");
@@ -365,7 +384,7 @@ export function resolveContributorMock(path: string, method: string): MockResult
         participants: [{ id: "u-reviewer", name: t.participantName, role: "reviewer", avatar: "https://i.pravatar.cc/100?img=22" }],
         project_name: "Contributor Program",
         task_id: "task-504",
-        messages: t.messages.map((m1: Record<string, unknown>) => ({
+        messages: t.messages.map((m1: Record<string, any>) => ({
           id: m1.id,
           sender_id: m1.sender === "contributor" ? "contrib-1001" : "u-reviewer",
           sender_name: m1.sender === "contributor" ? mockContributorProfile.displayName : t.participantName,
@@ -377,17 +396,38 @@ export function resolveContributorMock(path: string, method: string): MockResult
       },
     };
   }
-  if (p.match(/^\/api\/contributor\/messages\/threads\/[^/]+\/messages$/) && m === "POST") return { status: 200, body: { id: "msg-new", sender_id: "contrib-1001", sender_name: mockContributorProfile.displayName, sender_role: "contributor", content: "Mock sent message", timestamp: new Date().toISOString(), rating: null } };
+  if (p.match(/^\/api\/contributor\/messages\/threads\/[^/]+\/messages$/) && m === "POST") {
+    let content = "";
+    let attachmentIds: string[] = [];
+    try {
+      const parsed = body ? JSON.parse(body) : {};
+      content = typeof parsed.content === "string" ? parsed.content : "";
+      attachmentIds = Array.isArray(parsed.attachment_ids) ? parsed.attachment_ids : [];
+    } catch { /* ignore parse error, fall back to empty content */ }
+    return {
+      status: 200,
+      body: {
+        id: `msg-${Date.now()}`,
+        sender_id: "contrib-1001",
+        sender_name: mockContributorProfile.displayName,
+        sender_role: "contributor",
+        content,
+        attachment_ids: attachmentIds,
+        timestamp: new Date().toISOString(),
+        rating: null,
+      },
+    };
+  }
   if (p.match(/^\/api\/contributor\/messages\/threads\/[^/]+\/read$/) && m === "POST") return { status: 204, body: {} };
   if (p.match(/^\/api\/contributor\/messages\/[^/]+\/rating$/) && m === "POST") return { status: 204, body: {} };
 
-  if (p === "/api/contributor/support/tickets" && m === "GET") return { status: 200, body: listFromQuery(mockSupportTickets.map((t) => ({ ...t, created_at: t.createdAt, updated_at: t.updatedAt })), q) };
-  if (p === "/api/contributor/support/tickets" && m === "POST") return { status: 200, body: { id: "sup-new", subject: "Mock Ticket", category: "general", priority: "medium", status: "open", description: "Created in mock mode", attachment_ids: [], related_task_id: null, related_project_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), messages: [] } };
-  if (p.match(/^\/api\/contributor\/support\/tickets\/[^/]+$/) && m === "GET") return { status: 200, body: { id: "sup-7001", subject: "Task 504 deadline clarification", category: "task_support", priority: "high", status: "open", description: "Please confirm extension policy.", attachment_ids: [], related_task_id: "task-504", related_project_id: null, created_at: "2026-04-24T09:25:00.000Z", updated_at: "2026-04-24T10:00:00.000Z", messages: [{ id: "tm-1", author: "contributor", message: "Need due date confirmation", attachment_ids: [], created_at: "2026-04-24T09:25:00.000Z" }] } };
-  if (p.match(/^\/api\/contributor\/support\/tickets\/[^/]+\/messages$/) && m === "POST") return { status: 200, body: { id: "tm-new", author: "contributor", message: "Mock response", attachment_ids: [], created_at: new Date().toISOString() } };
-  if (p === "/api/contributor/support/grievances" && m === "GET") return { status: 200, body: { items: [{ id: "gr-1", category: "process", subject: "Review delay", status: "open", created_at: "2026-04-18T10:00:00.000Z", anonymous: false }], total: 1 } };
-  if (p === "/api/contributor/support/grievances" && m === "POST") return { status: 200, body: { id: "gr-new", category: "process", subject: "Mock grievance", description: "Created in mock mode", related_reference: null, anonymous: false, attachment_ids: [], status: "open", created_at: new Date().toISOString(), updated_at: new Date().toISOString() } };
-  if (p.match(/^\/api\/contributor\/support\/grievances\/[^/]+$/) && m === "GET") return { status: 200, body: { id: "gr-1", category: "process", subject: "Review delay", description: "Waiting on review for 4 days.", related_reference: null, anonymous: false, attachment_ids: [], status: "open", created_at: "2026-04-18T10:00:00.000Z", updated_at: "2026-04-23T10:00:00.000Z" } };
+  // Support tickets: always hit the real backend (no mock interception).
+  if (p === "/api/contributor/support/tickets") return null;
+  if (p.match(/^\/api\/contributor\/support\/tickets\/[^/]+$/)) return null;
+  if (p.match(/^\/api\/contributor\/support\/tickets\/[^/]+\/messages$/)) return null;
+  // Support grievances: always hit the real backend (no mock interception).
+  if (p === "/api/contributor/support/grievances") return null;
+  if (p.match(/^\/api\/contributor\/support\/grievances\/[^/]+$/)) return null;
   if (p === "/api/contributor/support/faqs" && m === "GET") return { status: 200, body: { items: [{ id: "faq-1", category: "payout", question: "When are payouts processed?", answer: "Payouts are processed every week." }, { id: "faq-2", category: "tasks", question: "How to request extension?", answer: "Open task details and use request extension." }], total: 2 } };
   if (p === "/api/contributor/support/safety-reports" && m === "POST") return { status: 200, body: { id: "sr-1", category: "security", description: "Mock report", related_reference: null, attachment_ids: [], status: "submitted", created_at: new Date().toISOString() } };
 

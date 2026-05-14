@@ -2,10 +2,7 @@
 
 import * as React from "react";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { fetchInternal } from "@/lib/api/client";
-import { sowApi } from "@/lib/api/sow";
 import { useSession } from "next-auth/react";
-import { useCurrentUser } from "@/lib/hooks/use-auth";
 import {
   User,
   Camera,
@@ -24,11 +21,8 @@ import {
   QrCode,
   KeyRound,
   Info,
-
-
-
-  
   Pencil,
+  Briefcase,
 } from "lucide-react";
 import {
   GlassCard,
@@ -45,6 +39,7 @@ import {
   SelectItem,
 } from "@/components/ui";
 import { toast } from "@/lib/stores/toast-store";
+import { useCurrentUser } from "@/lib/hooks/use-auth";
 
 /* ─────────────────────── Password Strength ─────────────────────── */
 
@@ -75,14 +70,12 @@ function getPasswordStrength(password: string): {
 
 function validatePassword(password: string): string[] {
   const errors: string[] = [];
-  if (password.length < 12)
-    errors.push("Must be at least 12 characters");
+  if (password.length < 12) errors.push("Must be at least 12 characters");
   if (!/[A-Z]/.test(password))
     errors.push("Must contain at least 1 uppercase letter");
   if (!/[a-z]/.test(password))
     errors.push("Must contain at least 1 lowercase letter");
-  if (!/[0-9]/.test(password))
-    errors.push("Must contain at least 1 digit");
+  if (!/[0-9]/.test(password)) errors.push("Must contain at least 1 digit");
   if (!/[^A-Za-z0-9]/.test(password))
     errors.push("Must contain at least 1 special character");
   return errors;
@@ -90,7 +83,16 @@ function validatePassword(password: string): string[] {
 
 /* ─────────────────────── Mock Recovery Codes ─────────────────────── */
 
-const MOCK_RECOVERY_CODES: string[] = [];
+const MOCK_RECOVERY_CODES = [
+  "A7K9-M2X4",
+  "B3P8-N6W1",
+  "C5R2-Q9Y7",
+  "D1T6-S4Z3",
+  "E8U0-V5H2",
+  "F4W3-X7J9",
+  "G6Y1-Z8K5",
+  "H2A9-B0L4",
+];
 
 /* ═══════════════════════════════════════════════════════════════════ */
 /*  Profile Page                                                      */
@@ -100,14 +102,17 @@ export default function ProfilePage() {
   /* ── Personal Information State ── */
   const { data: session } = useSession();
   const { data: currentUser, isLoading: isUserLoading } = useCurrentUser();
-  const sessionUser = session?.user as any;
-
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [firstName, setFirstName] = useState(
+    session?.user?.name?.split(" ")[0] ?? "",
+  );
+  const [lastName, setLastName] = useState(
+    session?.user?.name?.split(" ")[1] ?? "",
+  );
+  const [displayName, setDisplayName] = useState(session?.user?.name ?? "");
   const [jobTitle, setJobTitle] = useState("");
   const [phone, setPhone] = useState("");
-  const [department, setDepartment] = useState("");
+  const [adminDept, setAdminDept] = useState("");
+  const [adminDeptOther, setAdminDeptOther] = useState("");
 
   // Derive email from API first, then session (avoids the useState-async-session trap)
   const email = currentUser?.email ?? session?.user?.email ?? "";
@@ -120,30 +125,47 @@ export default function ProfilePage() {
       setDisplayName(`${currentUser.firstName ?? ""} ${currentUser.lastName ?? ""}`.trim());
       setJobTitle(currentUser.role ?? "");
       setPhone(currentUser.phone ?? "");
-    } else {
-      const u = session?.user as any;
-      // Try firstName/lastName directly first
-      if (u?.firstName) setFirstName(u.firstName);
-      if (u?.lastName) setLastName(u.lastName);
-      if (u?.firstName || u?.lastName) {
-        setDisplayName(`${u?.firstName ?? ""} ${u?.lastName ?? ""}`.trim());
-      } else if (u?.name) {
-      // Fallback to name split
-      const parts = u.name.split(" ");
+    } else if (!isUserLoading && session?.user?.name) {
+      const parts = session.user.name.split(" ");
       setFirstName(parts[0] ?? "");
       setLastName(parts.slice(1).join(" ") ?? "");
-      setDisplayName(u.name);
+      setDisplayName(session.user.name);
     }
-    if (u?.role) setJobTitle(u.role);
-    if (u?.adminDept) setDepartment(u.adminDept);
-  }
-}, [currentUser, session?.user]);
+  }, [currentUser, isUserLoading, session?.user?.name]);
+
+  useEffect(() => {
+    const loadPhoto = () => {
+      const saved = localStorage.getItem("profilePhoto");
+      if (saved) setProfilePhoto(saved);
+    };
+
+    loadPhoto();
+
+    window.addEventListener("profilePhotoUpdated", loadPhoto);
+
+    return () => {
+      window.removeEventListener("profilePhotoUpdated", loadPhoto);
+    };
+  }, []);
 
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [displayNameCustomized, setDisplayNameCustomized] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  /* ── Organisation State ── */
+  const [orgName, setOrgName] = useState("");
+  const [orgType, setOrgType] = useState("");
+  const [orgTypeOther, setOrgTypeOther] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [industryOther, setIndustryOther] = useState("");
+  const [companySize, setCompanySize] = useState("");
+  const [website, setWebsite] = useState("");
+  const [incorporationCountry, setIncorporationCountry] = useState("");
+  const [incorporationFile, setIncorporationFile] = useState<File | null>(null);
+  const incorporationFileInputRef = useRef<HTMLInputElement>(null);
+  const [isEditingOrg, setIsEditingOrg] = useState(false);
   const [personalErrors, setPersonalErrors] = useState<Record<string, string>>(
-    {}
+    {},
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -155,11 +177,11 @@ export default function ProfilePage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>(
-    {}
+    {},
   );
 
   /* ── MFA State ── */
-  const mfaEnabled = currentUser?.mfaEnabled ?? true;
+  const [mfaEnabled] = useState(true);
   const [mfaMethod, setMfaMethod] = useState("totp");
   const [verificationCode, setVerificationCode] = useState("");
   const [showRecoveryCodes, setShowRecoveryCodes] = useState(false);
@@ -183,26 +205,55 @@ export default function ProfilePage() {
   /* ── Handlers ── */
 
   const handlePhotoUpload = useCallback(
-  async (e: React.ChangeEvent<HTMLInputElement>) => {
+  (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     if (!["image/png", "image/jpeg"].includes(file.type)) {
       toast.error("Invalid file type", "Please upload a PNG or JPG image.");
       return;
     }
+
     if (file.size > 2 * 1024 * 1024) {
       toast.error("File too large", "Maximum file size is 2MB.");
       return;
     }
-    const url = URL.createObjectURL(file);
-    setProfilePhoto(url);
-    try {
-      await sowApi.uploadProfilePicture(file);
-      toast.success("Profile photo updated.");
-    } catch {
-      toast.error("Failed to upload photo.");
-    }
-  }, []
+
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      img.src = reader.result as string;
+    };
+
+    img.onload = () => {
+      const size = Math.min(img.width, img.height); // square crop
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) return;
+
+      canvas.width = 256;
+      canvas.height = 256;
+
+      // center crop
+      const sx = (img.width - size) / 2;
+      const sy = (img.height - size) / 2;
+
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, 256, 256);
+
+      const base64 = canvas.toDataURL("image/jpeg", 0.9);
+
+      setProfilePhoto(base64);
+
+      // optional persistence (safe)
+      localStorage.setItem("profilePhoto", base64);
+      window.dispatchEvent(new Event("profilePhotoUpdated"));
+    };
+
+    reader.readAsDataURL(file);
+  },
+  []
 );
 
   const handleFirstNameChange = useCallback(
@@ -212,7 +263,7 @@ export default function ProfilePage() {
         setDisplayName(`${value} ${lastName}`.trim());
       }
     },
-    [lastName, displayNameCustomized]
+    [lastName, displayNameCustomized],
   );
 
   const handleLastNameChange = useCallback(
@@ -222,7 +273,7 @@ export default function ProfilePage() {
         setDisplayName(`${firstName} ${value}`.trim());
       }
     },
-    [firstName, displayNameCustomized]
+    [firstName, displayNameCustomized],
   );
 
   const handleDisplayNameChange = useCallback((value: string) => {
@@ -241,7 +292,7 @@ export default function ProfilePage() {
     else if (!nameRegex.test(firstName))
       errors.firstName = "Only letters, spaces, and hyphens are allowed.";
 
-    if (!lastName || lastName.length < 1)
+    if (!lastName || lastName.length < 2)
       errors.lastName = "Last name must be at least 2 characters.";
     else if (lastName.length > 50)
       errors.lastName = "Last name must be under 50 characters.";
@@ -258,17 +309,35 @@ export default function ProfilePage() {
     return Object.keys(errors).length === 0;
   }, [firstName, lastName, displayName, jobTitle]);
 
-  const handleSavePersonalInfo = useCallback(async (): Promise<boolean> => {
-    if (!validatePersonalInfo()) return false;
-    try {
-      await sowApi.updateProfile({ firstName, lastName, phone, adminTitle: jobTitle, adminDept: department });
+  const handleSavePersonalInfo = useCallback((): boolean => {
+    if (validatePersonalInfo()) {
       toast.success("Personal information updated.");
       return true;
-    } catch {
-      toast.error("Failed to save. Please try again.");
-      return false;
     }
-  }, [validatePersonalInfo, firstName, lastName, phone, jobTitle, department]);
+    return false;
+  }, [validatePersonalInfo]);
+
+  const handleSaveOrgDetails = useCallback((): boolean => {
+    toast.success("Organisation details updated.");
+    return true;
+  }, []);
+
+  const handleIncorporationFile = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.type !== "application/pdf") {
+        toast.error("Invalid file type", "Please upload a PDF document.");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("File too large", "Maximum file size is 10MB.");
+        return;
+      }
+      setIncorporationFile(file);
+    },
+    [],
+  );
 
   const handleUpdatePassword = useCallback(() => {
     const errors: Record<string, string> = {};
@@ -280,8 +349,7 @@ export default function ProfilePage() {
       errors.newPassword = "New password is required.";
     } else {
       const validationErrors = validatePassword(newPassword);
-      if (validationErrors.length > 0)
-        errors.newPassword = validationErrors[0];
+      if (validationErrors.length > 0) errors.newPassword = validationErrors[0];
     }
 
     if (!confirmPassword) {
@@ -291,10 +359,7 @@ export default function ProfilePage() {
     }
 
     // Mock: PWD-003 check
-    if (
-      newPassword &&
-      ["Password123!", "OldPass2024#"].includes(newPassword)
-    ) {
+    if (newPassword && ["Password123!", "OldPass2024#"].includes(newPassword)) {
       errors.newPassword =
         "This password was recently used. Choose a different one.";
     }
@@ -344,10 +409,7 @@ export default function ProfilePage() {
   }, []);
 
   const toggleNotification = useCallback(
-    (
-      key: keyof typeof notifications,
-      channel: "email" | "inApp"
-    ) => {
+    (key: keyof typeof notifications, channel: "email" | "inApp") => {
       setNotifications((prev) => ({
         ...prev,
         [key]: {
@@ -356,7 +418,7 @@ export default function ProfilePage() {
         },
       }));
     },
-    []
+    [],
   );
 
   /* ═══════════════════════════════════════════════════════════════ */
@@ -398,15 +460,32 @@ export default function ProfilePage() {
               </div>
             </div>
             {!isEditing ? (
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+              >
                 <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
               </Button>
             ) : (
               <div className="flex items-center gap-2 shrink-0">
-                <Button variant="outline" size="sm" onClick={() => { setIsEditing(false); setPersonalErrors({}); }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsEditing(false);
+                    setPersonalErrors({});
+                  }}
+                >
                   Cancel
                 </Button>
-                <Button variant="primary" size="sm" onClick={async () => { const ok = await handleSavePersonalInfo(); if (ok) setIsEditing(false); }}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    if (handleSavePersonalInfo()) setIsEditing(false);
+                  }}
+                >
                   Save
                 </Button>
               </div>
@@ -423,8 +502,6 @@ export default function ProfilePage() {
                     alt="Profile"
                     className="h-full w-full object-cover"
                   />
-                ) : isUserLoading ? (
-                  <div className="h-10 w-10 rounded-full bg-beige-300 animate-pulse" />
                 ) : (
                   <span className="text-3xl font-heading font-semibold text-brown-400">
                     {firstName[0]}
@@ -455,48 +532,29 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>First Name</Label>
-                {isUserLoading ? (
-                  <div className="h-10 rounded-xl bg-beige-200 animate-pulse" />
-                ) : (
-                  <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
-                    {firstName || "—"}
-                  </div>
-                )}
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {firstName || "—"}
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Last Name</Label>
-                {isUserLoading ? (
-                  <div className="h-10 rounded-xl bg-beige-200 animate-pulse" />
-                ) : (
-                  <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
-                    {lastName || "—"}
-                  </div>
-                )}
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {lastName || "—"}
+                </div>
               </div>
             </div>
 
             {/* Username — readonly */}
             <div className="space-y-1.5">
               <Label>Username</Label>
-              {isUserLoading ? (
-                <div className="h-10 rounded-xl bg-beige-200 animate-pulse" />
-              ) : (
-                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
-                  {displayName || "—"}
-                </div>
-              )}
+              <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                {displayName || "—"}
+              </div>
             </div>
 
             {/* Work Email — readonly */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="email">Work Email</Label>
-                {!isUserLoading && currentUser && (
-                  <Badge variant={currentUser.emailVerified ? "teal" : "gold"} size="sm" dot>
-                    {currentUser.emailVerified ? "Verified" : "Unverified"}
-                  </Badge>
-                )}
-              </div>
+              <Label htmlFor="email">Work Email</Label>
               <Input
                 id="email"
                 value={email}
@@ -522,7 +580,9 @@ export default function ProfilePage() {
                     maxLength={100}
                   />
                   {personalErrors.jobTitle && (
-                    <p className="text-xs text-red-500">{personalErrors.jobTitle}</p>
+                    <p className="text-xs text-red-500">
+                      {personalErrors.jobTitle}
+                    </p>
                   )}
                 </>
               ) : (
@@ -534,14 +594,7 @@ export default function ProfilePage() {
 
             {/* Phone Number — editable */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="phone">Phone Number</Label>
-                {!isUserLoading && currentUser && (
-                  <Badge variant={currentUser.phoneVerified ? "teal" : "gold"} size="sm" dot>
-                    {currentUser.phoneVerified ? "Verified" : "Unverified"}
-                  </Badge>
-                )}
-              </div>
+              <Label htmlFor="phone">Phone Number</Label>
               {isEditing ? (
                 <Input
                   id="phone"
@@ -556,19 +609,340 @@ export default function ProfilePage() {
                 </div>
               )}
             </div>
-            {/* Department */}
+
+            {/* Admin Department — editable */}
             <div className="space-y-1.5">
-              <Label htmlFor="department">Department</Label>
+              <Label htmlFor="adminDept">Department</Label>
               {isEditing ? (
+                <Select value={adminDept} onValueChange={setAdminDept}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Chief Executive Officer (CEO)">CEO</SelectItem>
+                    <SelectItem value="Chief Technology Officer (CTO)">CTO</SelectItem>
+                    <SelectItem value="Chief Operating Officer (COO)">COO</SelectItem>
+                    <SelectItem value="Chief Financial Officer (CFO)">CFO</SelectItem>
+                    <SelectItem value="Founder / Co-Founder">Founder / Co-Founder</SelectItem>
+                    <SelectItem value="Engineering">Engineering</SelectItem>
+                    <SelectItem value="IT & Infrastructure">IT & Infrastructure</SelectItem>
+                    <SelectItem value="Data & Analytics">Data & Analytics</SelectItem>
+                    <SelectItem value="Cybersecurity">Cybersecurity</SelectItem>
+                    <SelectItem value="Product Management">Product Management</SelectItem>
+                    <SelectItem value="Strategy & Operations">Strategy & Operations</SelectItem>
+                    <SelectItem value="Business Development">Business Development</SelectItem>
+                    <SelectItem value="Finance & Accounting">Finance & Accounting</SelectItem>
+                    <SelectItem value="Legal & Compliance">Legal & Compliance</SelectItem>
+                    <SelectItem value="Marketing & Growth">Marketing & Growth</SelectItem>
+                    <SelectItem value="Human Resources">Human Resources</SelectItem>
+                    <SelectItem value="Talent Acquisition">Talent Acquisition</SelectItem>
+                    <SelectItem value="Customer Success">Customer Success</SelectItem>
+                    <SelectItem value="Administration">Administration</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {adminDept || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Department (Other) — editable, conditional */}
+            {adminDept === "Other" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="adminDeptOther">Department (Other)</Label>
+                {isEditing ? (
+                  <Input
+                    id="adminDeptOther"
+                    value={adminDeptOther}
+                    onChange={(e) => setAdminDeptOther(e.target.value)}
+                    placeholder="Specify your department"
+                    maxLength={80}
+                  />
+                ) : (
+                  <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                    {adminDeptOther || "—"}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </GlassCardContent>
+      </GlassCard>
+
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/*  Section 1b: Organisation Details                          */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+
+      <GlassCard variant="heavy" padding="lg">
+        <GlassCardContent>
+          <div className="flex items-start justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brown-100 text-brown-600">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg font-semibold text-brown-950">
+                  Organisation Details
+                </h2>
+                <p className="text-sm text-beige-600">
+                  Company information captured during registration.
+                </p>
+              </div>
+            </div>
+            {!isEditingOrg ? (
+              <Button variant="outline" size="sm" onClick={() => setIsEditingOrg(true)}>
+                <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 shrink-0">
+                <Button variant="outline" size="sm" onClick={() => setIsEditingOrg(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    if (handleSaveOrgDetails()) setIsEditingOrg(false);
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-5">
+            {/* Organisation Name */}
+            <div className="space-y-1.5">
+              <Label htmlFor="orgName">Organisation Name</Label>
+              {isEditingOrg ? (
                 <Input
-                  id="department"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  placeholder="e.g. Engineering"
+                  id="orgName"
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  placeholder="Legal name of your organisation"
+                  maxLength={120}
                 />
               ) : (
                 <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
-                  {department || "—"}
+                  {orgName || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Organisation Type */}
+            <div className="space-y-1.5">
+              <Label>Organisation Type</Label>
+              {isEditingOrg ? (
+                <Select value={orgType} onValueChange={setOrgType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select organisation type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="startup">Startup</SelectItem>
+                    <SelectItem value="sme">SME</SelectItem>
+                    <SelectItem value="large-enterprise">Enterprise</SelectItem>
+                    <SelectItem value="mnc">MNC</SelectItem>
+                    <SelectItem value="ngo">NGO / Non-profit</SelectItem>
+                    <SelectItem value="government">Government</SelectItem>
+                    <SelectItem value="educational">Educational</SelectItem>
+                    <SelectItem value="agency">Agency</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {orgType || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Organisation Type — Other */}
+            {orgType === "other" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="orgTypeOther">Organisation Type (Other)</Label>
+                {isEditingOrg ? (
+                  <Input
+                    id="orgTypeOther"
+                    value={orgTypeOther}
+                    onChange={(e) => setOrgTypeOther(e.target.value)}
+                    placeholder="Specify your organisation type"
+                    maxLength={80}
+                  />
+                ) : (
+                  <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                    {orgTypeOther || "—"}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Industry */}
+            <div className="space-y-1.5">
+              <Label>Industry / Sector</Label>
+              {isEditingOrg ? (
+                <Select value={industry} onValueChange={setIndustry}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your industry" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="software-saas">Software & SaaS</SelectItem>
+                    <SelectItem value="it-services">IT Services & Consulting</SelectItem>
+                    <SelectItem value="cybersecurity">Cybersecurity</SelectItem>
+                    <SelectItem value="ai-data">AI, Data Science & Analytics</SelectItem>
+                    <SelectItem value="hardware">Hardware & Electronics</SelectItem>
+                    <SelectItem value="telecom">Telecommunications</SelectItem>
+                    <SelectItem value="banking">Banking & Financial Services</SelectItem>
+                    <SelectItem value="investment">Investment & Asset Management</SelectItem>
+                    <SelectItem value="insurance">Insurance</SelectItem>
+                    <SelectItem value="accounting">Accounting & Audit</SelectItem>
+                    <SelectItem value="consulting">Management Consulting</SelectItem>
+                    <SelectItem value="healthcare">Hospitals & Healthcare</SelectItem>
+                    <SelectItem value="pharma">Pharmaceuticals & Biotech</SelectItem>
+                    <SelectItem value="medtech">Medical Devices & HealthTech</SelectItem>
+                    <SelectItem value="advertising">Advertising & Marketing</SelectItem>
+                    <SelectItem value="media">Media & Entertainment</SelectItem>
+                    <SelectItem value="publishing">Publishing & Content</SelectItem>
+                    <SelectItem value="design-creative">Design & Creative Services</SelectItem>
+                    <SelectItem value="automotive">Automotive & Transportation</SelectItem>
+                    <SelectItem value="aerospace">Aerospace & Defence</SelectItem>
+                    <SelectItem value="construction">Construction & Real Estate</SelectItem>
+                    <SelectItem value="energy">Energy & Utilities</SelectItem>
+                    <SelectItem value="fmcg">FMCG & Consumer Goods</SelectItem>
+                    <SelectItem value="logistics">Logistics & Supply Chain</SelectItem>
+                    <SelectItem value="edtech">Education & e-Learning</SelectItem>
+                    <SelectItem value="research">Research & Development</SelectItem>
+                    <SelectItem value="nonprofit">Non-profit & NGO</SelectItem>
+                    <SelectItem value="public-admin">Government & Public Administration</SelectItem>
+                    <SelectItem value="legal">Legal Services & Compliance</SelectItem>
+                    <SelectItem value="staffing">Staffing & Recruitment</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {industry || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Industry — Other */}
+            {industry === "other" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="industryOther">Industry (Other)</Label>
+                {isEditingOrg ? (
+                  <Input
+                    id="industryOther"
+                    value={industryOther}
+                    onChange={(e) => setIndustryOther(e.target.value)}
+                    placeholder="Specify your industry or sector"
+                    maxLength={80}
+                  />
+                ) : (
+                  <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                    {industryOther || "—"}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Company Size */}
+            <div className="space-y-1.5">
+              <Label>Company Size</Label>
+              {isEditingOrg ? (
+                <Select value={companySize} onValueChange={setCompanySize}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select company size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1-10">1 – 10 (Solo / micro team)</SelectItem>
+                    <SelectItem value="11-50">11 – 50 (Small team)</SelectItem>
+                    <SelectItem value="51-200">51 – 200 (Growing team)</SelectItem>
+                    <SelectItem value="201-1000">201 – 1,000 (Mid-size)</SelectItem>
+                    <SelectItem value="1001-5000">1,001 – 5,000 (Large)</SelectItem>
+                    <SelectItem value="5001-10000">5,001 – 10,000 (Very large)</SelectItem>
+                    <SelectItem value="10000+">10,000+ (Global enterprise)</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {companySize || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Website */}
+            <div className="space-y-1.5">
+              <Label htmlFor="website">Website URL</Label>
+              {isEditingOrg ? (
+                <Input
+                  id="website"
+                  type="url"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="www.company.com"
+                />
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {website || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Country of Incorporation */}
+            <div className="space-y-1.5">
+              <Label htmlFor="incorporationCountry">Country of Incorporation</Label>
+              {isEditingOrg ? (
+                <Input
+                  id="incorporationCountry"
+                  value={incorporationCountry}
+                  onChange={(e) => setIncorporationCountry(e.target.value)}
+                  placeholder="e.g. India, United Kingdom"
+                  maxLength={80}
+                />
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {incorporationCountry || "—"}
+                </div>
+              )}
+            </div>
+
+            {/* Certification of Incorporation */}
+            <div className="space-y-1.5">
+              <Label>Certification of Incorporation</Label>
+              {isEditingOrg ? (
+                <div>
+                  <input
+                    ref={incorporationFileInputRef}
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={handleIncorporationFile}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => incorporationFileInputRef.current?.click()}
+                    className="w-full flex items-center gap-3 rounded-xl border-2 border-dashed border-beige-300 hover:border-beige-400 bg-white px-4 py-3 transition-colors"
+                  >
+                    {incorporationFile ? (
+                      <>
+                        <Check className="w-4 h-4 text-teal-500 shrink-0" />
+                        <span className="text-xs font-medium text-teal-700 truncate">
+                          {incorporationFile.name}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-brown-700">
+                        Click to upload PDF (max 10MB)
+                      </span>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="text-sm text-brown-950 py-2.5 px-3 rounded-xl bg-beige-50/50 border border-beige-200 min-h-[40px]">
+                  {incorporationFile?.name || "—"}
                 </div>
               )}
             </div>
@@ -680,10 +1054,10 @@ export default function ProfilePage() {
                       passwordStrength.label === "Weak"
                         ? "text-red-500"
                         : passwordStrength.label === "Fair"
-                        ? "text-gold-600"
-                        : passwordStrength.label === "Strong"
-                        ? "text-forest-600"
-                        : "text-teal-600"
+                          ? "text-gold-600"
+                          : passwordStrength.label === "Strong"
+                            ? "text-forest-600"
+                            : "text-teal-600"
                     }`}
                   >
                     {passwordStrength.label}
@@ -801,29 +1175,17 @@ export default function ProfilePage() {
                     MFA Status
                   </p>
                   <p className="text-xs text-beige-500">
-                    {currentUser?.mfaEnrollmentRequired
-                      ? "Enrollment required. Please set up MFA to secure your account."
-                      : "Required by your organization. MFA cannot be disabled."}
+                    Required by your organization. MFA cannot be disabled.
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Badge variant={mfaEnabled ? "teal" : "gold"} size="sm" dot>
-                  {mfaEnabled ? "Enabled" : "Disabled"}
+                <Badge variant="teal" size="sm" dot>
+                  Enabled
                 </Badge>
                 <Switch checked={mfaEnabled} disabled />
               </div>
             </div>
-
-            {/* MFA Enrollment Required Warning */}
-            {currentUser?.mfaEnrollmentRequired && !mfaEnabled && (
-              <div className="flex items-start gap-2 p-3 rounded-xl bg-gold-50 border border-gold-200 text-gold-800">
-                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                <p className="text-xs leading-relaxed">
-                  Your organization requires MFA. Complete setup below to avoid losing access.
-                </p>
-              </div>
-            )}
 
             {/* MFA Method */}
             <div className="space-y-1.5">
@@ -833,9 +1195,8 @@ export default function ProfilePage() {
                   <SelectValue placeholder="Select MFA method" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="totp">
-                    Authenticator App (TOTP)
-                  </SelectItem>
+                  <SelectItem value="totp">Authenticator App (TOTP)</SelectItem>
+                  <SelectItem value="sms">SMS OTP</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -884,9 +1245,7 @@ export default function ProfilePage() {
 
                 {/* Verification Code */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="verificationCode">
-                    Verification Code
-                  </Label>
+                  <Label htmlFor="verificationCode">Verification Code</Label>
                   <Input
                     id="verificationCode"
                     value={verificationCode}
@@ -901,6 +1260,22 @@ export default function ProfilePage() {
                   />
                   <p className="text-xs text-beige-500">
                     Enter the code from your authenticator app to verify setup.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* SMS OTP info */}
+            {mfaMethod === "sms" && (
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-beige-100/40 border border-beige-200/50">
+                <Smartphone className="h-5 w-5 text-beige-500 mt-0.5 flex-shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-brown-800">
+                    SMS OTP will be sent to your registered phone number.
+                  </p>
+                  <p className="text-xs text-beige-500">
+                    Make sure your phone number is up to date in Personal
+                    Information above.
                   </p>
                 </div>
               </div>
@@ -1068,7 +1443,10 @@ export default function ProfilePage() {
               </div>
               <div className="w-20 flex justify-center">
                 <div className="relative">
-                  <Switch checked={notifications.slaApproaching.inApp} disabled />
+                  <Switch
+                    checked={notifications.slaApproaching.inApp}
+                    disabled
+                  />
                   <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] text-beige-400 whitespace-nowrap">
                     Required
                   </span>

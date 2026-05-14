@@ -40,16 +40,37 @@ const Avatar = React.forwardRef<
 ));
 Avatar.displayName = AvatarPrimitive.Root.displayName;
 
+/* ✅ FIXED AvatarImage */
 const AvatarImage = React.forwardRef<
   React.ComponentRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Image
-    ref={ref}
-    className={cn("aspect-square h-full w-full object-cover", className)}
-    {...props}
-  />
-));
+>(({ className, src, ...props }, ref) => {
+  const [profilePhoto, setProfilePhoto] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const loadPhoto = () => {
+      const saved = localStorage.getItem("profilePhoto");
+      setProfilePhoto(saved);
+    };
+
+    loadPhoto();
+
+    window.addEventListener("profilePhotoUpdated", loadPhoto);
+
+    return () => {
+      window.removeEventListener("profilePhotoUpdated", loadPhoto);
+    };
+  }, []);
+
+  return (
+    <AvatarPrimitive.Image
+      ref={ref}
+      src={profilePhoto || src}
+      className={cn("aspect-square h-full w-full object-cover", className)}
+      {...props}
+    />
+  );
+});
 AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 
 const AvatarFallback = React.forwardRef<

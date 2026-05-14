@@ -185,18 +185,26 @@ function OAuthCallbackContent() {
       // ── Case A-MFA: Glimmora returned mfa_pending params directly ────
       const mfaPendingToken = searchParams.get("mfa_pending_token");
       if (mfaPendingToken && searchParams.get("status") === "mfa_pending") {
-        const providerParam = searchParams.get("provider");
-        mfaPendingTokenRef.current = mfaPendingToken;
-        mfaProviderRef.current = providerParam === "microsoft" ? "microsoft" : "google";
-        redirectAfterRef.current = redirectAfter;
-        mfaUserRef.current = {
-          id:        searchParams.get("user_id") ?? "",
-          email:     searchParams.get("email") ?? "",
+        const providerParam = searchParams.get("provider") === "microsoft" ? "microsoft" : "google";
+        // Temporary contributor SSO bypass: skip MFA prompt and continue to onboarding/login redirect.
+        const bypassResult = await signIn("glimmora-oauth", {
+          redirect: false,
+          accessToken: "",
+          refreshToken: "",
+          expiresIn: "3600",
+          userId: searchParams.get("user_id") ?? "",
+          email: searchParams.get("email") ?? "",
           firstName: searchParams.get("first_name") ?? "",
-          lastName:  searchParams.get("last_name") ?? "",
-          role:      searchParams.get("role") ?? roleFromState,
-        };
-        setStatus("mfa");
+          lastName: searchParams.get("last_name") ?? "",
+          role: searchParams.get("role") ?? roleFromState,
+          provider: providerParam,
+        });
+        if (bypassResult?.ok) {
+          router.replace(redirectAfter);
+        } else {
+          setErrorMsg("Could not continue SSO without MFA. Please try again.");
+          setStatus("error");
+        }
         return;
       }
 
@@ -224,17 +232,25 @@ function OAuthCallbackContent() {
 
           // MFA required — show inline TOTP form
           if (isMfaPending(data)) {
-            mfaPendingTokenRef.current = data.mfa_pending_token;
-            mfaProviderRef.current = provider;
-            redirectAfterRef.current = redirectAfter;
-            mfaUserRef.current = {
-              id:        data.user.id,
-              email:     data.user.email,
+            // Temporary contributor SSO bypass: create tokenless session and continue.
+            const bypassResult = await signIn("glimmora-oauth", {
+              redirect: false,
+              accessToken: "",
+              refreshToken: "",
+              expiresIn: "3600",
+              userId: data.user.id,
+              email: data.user.email,
               firstName: data.user.firstName,
-              lastName:  data.user.lastName,
-              role:      roleFromState,
-            };
-            setStatus("mfa");
+              lastName: data.user.lastName,
+              role: roleFromState,
+              provider,
+            });
+            if (bypassResult?.ok) {
+              router.replace(redirectAfter);
+            } else {
+              setErrorMsg("Could not continue SSO without MFA. Please try again.");
+              setStatus("error");
+            }
             return;
           }
 

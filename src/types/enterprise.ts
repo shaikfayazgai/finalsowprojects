@@ -81,6 +81,14 @@ export type NotificationChannel = "email" | "in_app" | "slack" | "webhook";
 /* ── SOW Approval Pipeline (5-Stage per FSD v2.7 Section 7.7) ── */
 export type ApprovalStage = "business" | "glimmora_commercial" | "legal" | "security" | "final";
 export type ApprovalStageStatus = "pending" | "in_review" | "approved" | "rejected";
+export type AdminApprovalStageStatus = ApprovalStageStatus | "not_required";
+export interface AdminApprovalStageStatuses {
+  business_owner: AdminApprovalStageStatus;
+  commercial: AdminApprovalStageStatus;
+  legal: AdminApprovalStageStatus;
+  security: AdminApprovalStageStatus;
+  final_approver: AdminApprovalStageStatus;
+}
 
 export interface SOWApprovalStage {
   stage: ApprovalStage;
@@ -100,6 +108,7 @@ export interface RiskScoreBreakdown {
   compliance: number;
   patternMatch: number;
   overall: number;
+  riskLevel?: string;
 }
 
 export interface HallucinationFlag {
@@ -134,6 +143,7 @@ export interface SOW {
   riskScore: RiskScoreBreakdown;
   tags: string[];
   estimatedBudget: number;
+  estimatedBudgetMax?: number;
   estimatedDuration: string;
   planId?: string;
   stakeholders: string[];
@@ -143,6 +153,7 @@ export interface SOW {
   industry?: string;
   gapAnalysisScore?: number;
   approvalStages: SOWApprovalStage[];
+  approvalStageStatuses?: AdminApprovalStageStatuses;
 }
 
 export interface SOWSection {
@@ -804,7 +815,7 @@ export interface ApprovalAuthorities {
   sowSubmitter?: string;
   businessOwnerApprover: string;
   finalApprover: string;
-  legalReviewer?: string;
+  legalComplianceReviewer?: string;
   securityReviewer?: string;
 }
 

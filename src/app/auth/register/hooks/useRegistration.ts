@@ -6,6 +6,7 @@ import { COUNTRIES_DATA } from "../data";
 import { getPasswordStrength, getAgeFromDob } from "../helpers";
 import { registerContributor } from "@/lib/actions/register";
 import { usePricingConfig } from "@/lib/hooks/usePricingConfig";
+import { fetchInternal } from "@/lib/api/client";
 import type { RegistrationRole, ContributorType, SSOData } from "../types";
 
 export function useRegistration(ssoData?: SSOData | null) {
@@ -143,10 +144,24 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     setError("");
     setPhoneOtpLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setPhoneOtpLoading(false);
-    setOtpSent(true);
-    startCooldown();
+    try {
+      const res = await fetchInternal("/api/auth/otp/send-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError((data as { message?: string }).message ?? "Could not send OTP. Please try again.");
+        return;
+      }
+      setOtpSent(true);
+      startCooldown();
+    } catch {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setPhoneOtpLoading(false);
+    }
   }
 
   async function verifyOTP() {
@@ -156,9 +171,23 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     setError("");
     setPhoneOtpLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setPhoneOtpLoading(false);
-    setPhoneVerified(true);
+    try {
+      const res = await fetchInternal("/api/auth/otp/verify-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code: otp }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError((data as { message?: string }).message ?? "Invalid or expired code. Please try again.");
+        return;
+      }
+      setPhoneVerified(true);
+    } catch {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setPhoneOtpLoading(false);
+    }
   }
 
   async function sendEmailOTP() {
@@ -168,10 +197,24 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     setError("");
     setEmailOtpLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setEmailOtpLoading(false);
-    setEmailOtpSent(true);
-    startEmailCooldown();
+    try {
+      const res = await fetchInternal("/api/auth/otp/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError((data as { message?: string }).message ?? "Could not send email OTP. Please try again.");
+        return;
+      }
+      setEmailOtpSent(true);
+      startEmailCooldown();
+    } catch {
+      setError("Failed to send email. Please check your connection and try again.");
+    } finally {
+      setEmailOtpLoading(false);
+    }
   }
 
   async function verifyEmailOTP() {
@@ -181,9 +224,23 @@ export function useRegistration(ssoData?: SSOData | null) {
     }
     setError("");
     setEmailOtpLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setEmailOtpLoading(false);
-    setEmailVerified(true);
+    try {
+      const res = await fetchInternal("/api/auth/otp/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail, code: emailOtp }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError((data as { message?: string }).message ?? "Invalid or expired code. Please try again.");
+        return;
+      }
+      setEmailVerified(true);
+    } catch {
+      setError("Verification failed. Please try again.");
+    } finally {
+      setEmailOtpLoading(false);
+    }
   }
 
   function goToStep2() {

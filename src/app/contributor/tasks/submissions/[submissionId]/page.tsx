@@ -22,6 +22,7 @@ import {
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { ApiError } from "@/lib/api/client";
 import { toast } from "@/lib/stores/toast-store";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Badge ═══ */
 
@@ -146,7 +147,7 @@ export default function SubmissionDetailPage() {
 
   /* Stable token ref */
   const tokenRef = React.useRef<string | null>(null);
-  if (session?.user?.accessToken) tokenRef.current = session.user.accessToken as string;
+  tokenRef.current = getContributorAccessToken(session);
 
   /* Open edit panel — seed form with current values */
   function openEdit() {
@@ -230,8 +231,7 @@ export default function SubmissionDetailPage() {
       setError("Not authenticated.");
       return;
     }
-    const token = session?.user?.accessToken as string | undefined;
-    if (!token) return;
+    const token = getContributorAccessToken(session) ?? "";
 
     setLoading(true);
     setError(null);
@@ -255,7 +255,7 @@ export default function SubmissionDetailPage() {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionStatus, session?.user?.accessToken, submissionId]);
+  }, [sessionStatus, session, submissionId]);
 
   /* Fetch review feedback once we know the task_id */
   React.useEffect(() => {

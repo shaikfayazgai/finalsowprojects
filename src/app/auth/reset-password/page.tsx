@@ -25,11 +25,22 @@ const TRUST_BADGES = [
 ];
 
 const REQUIREMENTS = [
-  { check: (pw: string) => pw.length >= 10, text: "At least 10 characters" },
+  { check: (pw: string) => pw.length >= 8, text: "At least 8 characters" },
   { check: (pw: string) => /[A-Z]/.test(pw), text: "Uppercase letter" },
   { check: (pw: string) => /[a-z]/.test(pw), text: "Lowercase letter" },
   { check: (pw: string) => /[0-9]/.test(pw), text: "Number" },
 ];
+
+// Backend-issued reset-flow error codes → user-friendly messages.
+const RESET_ERROR_MESSAGES: Record<string, string> = {
+  RESET_TOKEN_NOT_FOUND:    "Reset link is invalid. Please request a new one.",
+  RESET_TOKEN_USED:         "This reset link has already been used. Please request a new one.",
+  RESET_TOKEN_SUPERSEDED:   "A newer reset link was issued. Please use the latest email.",
+  RESET_TOKEN_EXPIRED:      "Reset link has expired. Please request a new one.",
+  RESET_TOKEN_USER_MISSING: "Account not found. Please contact support.",
+  PASSWORD_TOO_SHORT:       "Password must be at least 8 characters.",
+  PASSWORDS_DO_NOT_MATCH:   "Passwords don't match.",
+};
 
 function getStrength(pw: string) {
   let score = 0;
@@ -147,20 +158,28 @@ function ResetPasswordContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 10) { setError("Password must be at least 10 characters"); return; }
+    if (password.length < 8) { setError("Password must be at least 8 characters"); return; }
     if (password !== confirm)  { setError("Passwords do not match"); return; }
 
     setError("");
     setIsLoading(true);
     try {
-      const res = await fetchInternal("/api/auth/password/change", {
+      const res = await fetchInternal("/api/auth/password/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, new_password: password }),
+        body: JSON.stringify({
+          token,
+          new_password: password,
+          confirm_password: confirm,
+        }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        setError(err?.message ?? "Failed to reset password");
+        const err = await res.json().catch(() => ({}));
+        const code = typeof err?.code === "string" ? err.code : "";
+        const friendly =
+          (code && RESET_ERROR_MESSAGES[code]) ||
+          (typeof err?.message === "string" ? err.message : "Failed to reset password");
+        setError(friendly);
         return;
       }
       setSuccess(true);
@@ -359,7 +378,7 @@ function ResetPasswordContent() {
                       className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600"
                     >
                       <AlertCircle className="w-4 h-4 shrink-0" />
-                      {error}
+                      {typeof error === "string" ? error : "An error occurred"}
                     </motion.div>
                   )}
                 </AnimatePresence>

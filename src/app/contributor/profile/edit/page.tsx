@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import {
   User, Mail, Phone, Globe, MapPin, Clock,
   Lock, CheckCircle2, Plus, Trash2, AlertCircle, RefreshCw,
+  Calendar, Briefcase, GraduationCap, Link2, Building,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
@@ -19,6 +20,7 @@ import {
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { useContributorPhonePrefill } from "@/lib/stores/contributor-phone-store";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Badge ═══ */
 
@@ -151,7 +153,7 @@ function normalizeProficiency(p?: string) {
 
 export default function ProfileEditPage() {
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
   const contributorId = session?.user?.id ?? "";
 
   const [displayName, setDisplayName] = React.useState("");
@@ -167,6 +169,17 @@ export default function ProfileEditPage() {
   const [availability, setAvailability] = React.useState("available");
   const [language, setLanguage] = React.useState("en");
   const [skills, setSkills] = React.useState<Array<{ name: string; proficiency: string }>>([]);
+  const [dob, setDob] = React.useState("");
+  const [departmentCategory, setDepartmentCategory] = React.useState("");
+  const [departmentOther, setDepartmentOther] = React.useState("");
+  const [degree, setDegree] = React.useState("");
+  const [branch, setBranch] = React.useState("");
+  const [linkedin, setLinkedin] = React.useState("");
+  const [jobTitle, setJobTitle] = React.useState("");
+  const [workStart, setWorkStart] = React.useState("");
+  const [workEnd, setWorkEnd] = React.useState("");
+  const [careerStage, setCareerStage] = React.useState("");
+  const [yearsExperience, setYearsExperience] = React.useState("");
 
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [saveError, setSaveError] = React.useState<string | null>(null);
@@ -186,6 +199,7 @@ export default function ProfileEditPage() {
   }, []);
 
   const applyProfileFromApi = React.useCallback((data: ContributorProfileResponse) => {
+    const raw = data as Record<string, unknown>;
     setDisplayName(String(data.display_name ?? ""));
     setEmail(String(data.email ?? ""));
     setAnonymousId(String(data.anonymous_id ?? ""));
@@ -204,6 +218,17 @@ export default function ProfileEditPage() {
         proficiency: normalizeProficiency(s.proficiency),
       })),
     );
+    setDob(String(raw.dob ?? raw.date_of_birth ?? ""));
+    setDepartmentCategory(String(raw.department_category ?? raw.departmentCategory ?? ""));
+    setDepartmentOther(String(raw.department_other ?? raw.departmentOther ?? ""));
+    setDegree(String(raw.degree ?? ""));
+    setBranch(String(raw.branch ?? raw.field_of_study ?? ""));
+    setLinkedin(String(raw.linkedin ?? raw.linkedin_url ?? ""));
+    setJobTitle(String(raw.job_title ?? raw.jobTitle ?? ""));
+    setWorkStart(String(raw.work_start ?? raw.workStart ?? ""));
+    setWorkEnd(String(raw.work_end ?? raw.workEnd ?? ""));
+    setCareerStage(String(raw.career_stage ?? raw.careerStage ?? ""));
+    setYearsExperience(String(raw.years_experience ?? raw.yearsExperience ?? ""));
   }, []);
 
   React.useEffect(() => {
@@ -250,7 +275,19 @@ export default function ProfileEditPage() {
         weekly_hours: Number.isFinite(weeklyHours) ? weeklyHours : 0,
         availability,
         language,
-      });
+        // Extended fields (registration-only fields exposed for editing)
+        dob,
+        department_category: departmentCategory,
+        department_other: departmentOther,
+        degree,
+        branch,
+        linkedin,
+        job_title: jobTitle,
+        work_start: workStart,
+        work_end: workEnd,
+        career_stage: careerStage,
+        years_experience: yearsExperience,
+      } as Parameters<typeof patchContributorProfile>[2]);
       const updated = await putContributorProfileSkills(token, contributorId, {
         skills: skills
           .map((s) => ({ name: s.name.trim(), proficiency: normalizeProficiency(s.proficiency) }))
@@ -479,6 +516,131 @@ export default function ProfileEditPage() {
               <option key={l.value} value={l.value}>{l.label}</option>
             ))}
           </Select>
+        </div>
+      </motion.div>
+
+      {/* ═══ SECTION 4b: PROFILE DETAILS ═══ */}
+      <motion.div variants={fadeUp} className="card-parchment mb-5">
+        <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: "1px solid var(--border-soft)" }}>
+          <Briefcase className="w-4 h-4 text-gray-500" />
+          <span className="text-sm font-semibold text-gray-800">Profile Details</span>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          <Input
+            label="Date of Birth"
+            icon={Calendar}
+            type="date"
+            value={dob}
+            onChange={(e) => setDob(e.target.value)}
+          />
+          <Input
+            label="Job Title"
+            icon={Briefcase}
+            value={jobTitle}
+            onChange={(e) => setJobTitle(e.target.value)}
+            placeholder="e.g. Frontend Developer"
+            maxLength={100}
+          />
+          <Select
+            label="Department Category"
+            icon={Building}
+            value={departmentCategory}
+            onChange={(e) => setDepartmentCategory(e.target.value)}
+          >
+            <option value="">Select department</option>
+            <option value="engineering">Engineering & Development</option>
+            <option value="devops">DevOps & Infrastructure</option>
+            <option value="data">Data & Analytics</option>
+            <option value="cybersecurity">Cybersecurity</option>
+            <option value="qa">Quality Assurance & Testing</option>
+            <option value="design">Design & UX/UI</option>
+            <option value="content">Content & Copywriting</option>
+            <option value="media">Media & Video Production</option>
+            <option value="product">Product Management</option>
+            <option value="marketing">Marketing & Growth</option>
+            <option value="sales">Sales & Business Development</option>
+            <option value="finance">Finance & Accounting</option>
+            <option value="operations">Operations & Strategy</option>
+            <option value="hr">Human Resources</option>
+            <option value="customer-support">Customer Support</option>
+            <option value="legal">Legal & Compliance</option>
+            <option value="research">Research & Development</option>
+            <option value="education">Education & Training</option>
+            <option value="other">Other</option>
+          </Select>
+          {departmentCategory === "other" && (
+            <Input
+              label="Department (Other)"
+              icon={Building}
+              value={departmentOther}
+              onChange={(e) => setDepartmentOther(e.target.value)}
+              placeholder="Specify your department"
+              maxLength={80}
+            />
+          )}
+          <Input
+            label="Degree / Qualification"
+            icon={GraduationCap}
+            value={degree}
+            onChange={(e) => setDegree(e.target.value)}
+            placeholder="Highest degree or qualification"
+            maxLength={80}
+          />
+          <Input
+            label="Field of Study"
+            icon={GraduationCap}
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            placeholder="Major or branch"
+            maxLength={80}
+          />
+          <Input
+            label="LinkedIn URL"
+            icon={Link2}
+            type="url"
+            value={linkedin}
+            onChange={(e) => setLinkedin(e.target.value)}
+            placeholder="https://www.linkedin.com/in/your-profile"
+          />
+          <Select
+            label="Career Stage"
+            value={careerStage}
+            onChange={(e) => setCareerStage(e.target.value)}
+          >
+            <option value="">Select career stage</option>
+            <option value="re-entering">Re-entering the workforce</option>
+            <option value="mid-career">Mid-career professional</option>
+            <option value="senior">Senior professional</option>
+            <option value="career-change">Career transition / change</option>
+          </Select>
+          <Select
+            label="Years of Experience"
+            value={yearsExperience}
+            onChange={(e) => setYearsExperience(e.target.value)}
+          >
+            <option value="">Select experience range</option>
+            <option value="exp0to1">0-1 years</option>
+            <option value="exp1to3">1-3 years</option>
+            <option value="exp3to5">3-5 years</option>
+            <option value="exp5to10">5-10 years</option>
+            <option value="exp10plus">10+ years</option>
+          </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Preferred Start Time"
+              icon={Clock}
+              type="time"
+              value={workStart}
+              onChange={(e) => setWorkStart(e.target.value)}
+            />
+            <Input
+              label="Preferred End Time"
+              icon={Clock}
+              type="time"
+              value={workEnd}
+              onChange={(e) => setWorkEnd(e.target.value)}
+            />
+          </div>
         </div>
       </motion.div>
 

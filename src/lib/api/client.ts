@@ -4,6 +4,7 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    public readonly body?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -17,7 +18,9 @@ const FORCE_CONTRIBUTOR_MOCKS =
 
 function mockResponseIfAvailable(path: string, options?: RequestInit): Response | null {
   if (!FORCE_CONTRIBUTOR_MOCKS) return null;
-  const mock = resolveContributorMock(path, options?.method ?? "GET");
+  const rawBody = options?.body;
+  const bodyStr = typeof rawBody === "string" ? rawBody : undefined;
+  const mock = resolveContributorMock(path, options?.method ?? "GET", bodyStr);
   if (!mock) return null;
   return new Response(JSON.stringify(mock.body), {
     status: mock.status,
@@ -42,7 +45,7 @@ export async function fetchInternal(
     ? AbortSignal.any([externalSignal, timeoutSignal])
     : timeoutSignal;
   try {
-    return await fetch(path, { ...rest, signal });
+    return await fetch(path, { credentials: "include", ...rest, signal });
   } catch (err) {
     if (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError")) {
       throw new ApiError(408, "Request timed out. Please try again.");
@@ -99,7 +102,7 @@ export async function apiCall<T>(
       } else {
         message = JSON.stringify(detail);
       }
-      throw new ApiError(res.status, message);
+      throw new ApiError(res.status, message, body);
     }
 
     const data = await res.json() as T;

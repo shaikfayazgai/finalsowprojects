@@ -26,6 +26,7 @@ import {
   type EarningsSummary, type ChartPeriod, type EarningsListParams, type PayoutPreferences,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Helpers ═══ */
 
@@ -135,7 +136,7 @@ function buildFallbackChartData(): ChartPoint[] {
 
 function EarningsChart() {
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
   const [period, setPeriod] = React.useState<"3m" | "6m" | "1y">("6m");
   const [retryCount, setRetryCount] = React.useState(0);
   const [hoveredIdx, setHoveredIdx] = React.useState<number | null>(null);
@@ -291,14 +292,19 @@ function EarningsChart() {
                   <circle cx={p.x} cy={p.y} r={isCurrent ? 6 : hoveredIdx === i ? 5 : 3.5}
                     fill="white" stroke={isCurrent ? "var(--color-brown-500)" : hoveredIdx === i ? "var(--color-brown-400)" : "var(--color-gray-300)"}
                     strokeWidth={isCurrent ? 2.5 : 2} />
-                  {(hoveredIdx === i || isCurrent) && p.value > 0 && (
+                  {(hoveredIdx === i || isCurrent) && p.value > 0 && (() => {
+                    const tooltipAbove = p.y - 30 >= PT;
+                    const rectY = tooltipAbove ? p.y - 30 : p.y + 8;
+                    const textY = tooltipAbove ? p.y - 15.5 : p.y + 23.5;
+                    return (
                     <>
-                      <rect x={p.x - 32} y={p.y - 30} width={64} height={22} rx={6} fill={isCurrent ? "var(--color-brown-600)" : "var(--color-gray-700)"} />
-                      <text x={p.x} y={p.y - 15.5} textAnchor="middle" fill="white" style={{ fontSize: 11, fontWeight: 600, fontFamily: "var(--font-mono, monospace)" }}>
+                      <rect x={p.x - 32} y={rectY} width={64} height={22} rx={6} fill={isCurrent ? "var(--color-brown-600)" : "var(--color-gray-700)"} />
+                      <text x={p.x} y={textY} textAnchor="middle" fill="white" style={{ fontSize: 11, fontWeight: 600, fontFamily: "var(--font-mono, monospace)" }}>
                         ${p.value.toLocaleString()}
                       </text>
                     </>
-                  )}
+                    );
+                  })()}
                   <text x={p.x} y={H - 10} textAnchor="middle" className={isCurrent ? "fill-brown-600" : "fill-gray-400"} style={{ fontSize: 11, fontWeight: isCurrent ? 600 : 500 }}>
                     {p.label}
                   </text>
@@ -331,7 +337,7 @@ const SUMMARY_FALLBACK: EarningsSummary = {
 
 export default function EarningsPage() {
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
 
   const [summary, setSummary] = React.useState<EarningsSummary>(SUMMARY_FALLBACK);
   const [summaryLoading, setSummaryLoading] = React.useState(true);
@@ -833,6 +839,7 @@ export default function EarningsPage() {
       account_number: prefs?.account_number || "",
       bank_name:      prefs?.bank_name      || "",
       routing_code:   prefs?.routing_code   || "",
+      ifsc_code:      prefs?.ifsc_code      || "",
       country:        prefs?.country        || "",
       provider:       prefs?.provider       || "",
       phone_number:   prefs?.phone_number   || "",
@@ -1262,6 +1269,7 @@ export default function EarningsPage() {
                       if (prefs.bank_name)      detailRows.push({ label: "Bank",           value: prefs.bank_name });
                       if (prefs.account_number) detailRows.push({ label: "Account",        value: `****${prefs.account_number.slice(-4)}` });
                       if (prefs.routing_code)   detailRows.push({ label: "Routing Code",   value: prefs.routing_code });
+                      if (prefs.ifsc_code)      detailRows.push({ label: "IFSC Code",      value: prefs.ifsc_code });
                       if (prefs.country)        detailRows.push({ label: "Country",         value: prefs.country });
                     } else if (method === "paypal") {
                       if (prefs.paypal_email)   detailRows.push({ label: "PayPal Email",   value: prefs.paypal_email });
@@ -1508,9 +1516,9 @@ export default function EarningsPage() {
           const earnedAt     = e.earned_at     ?? e.earnedAt     ?? "";
           const paidAt       = e.paid_at       ?? e.paidAt       ?? null;
           const payoutRef    = e.payout_id     ?? e.payoutId     ?? e.payout_ref ?? null;
-          const rateCard     = e.rate_card     ?? e.rateCard     ?? (task ? task.pricing.model : null);
-          const rate         = e.rate          ?? (task ? task.pricing.amount : gross);
-          const effort       = e.effort        ?? e.estimated_hours ?? (task ? `${task.estimatedHours} hours` : null);
+          const rateCard     = e.rate_card     ?? e.rateCard     ?? task?.pricing?.model  ?? null;
+          const rate         = e.rate          ?? task?.pricing?.amount ?? gross;
+          const effort       = e.effort        ?? e.estimated_hours ?? (task?.estimatedHours != null ? `${task.estimatedHours} hours` : null);
           const taskLink     = e.task_id       ?? e.taskId       ?? (task ? task.id : null);
           const notes        = e.notes         ?? e.description  ?? null;
 
@@ -1660,6 +1668,7 @@ export default function EarningsPage() {
               { key: "account_number", label: "Account Number",         placeholder: "Account number" },
               { key: "bank_name",      label: "Bank Name",              placeholder: "Bank name" },
               { key: "routing_code",   label: "Routing / SWIFT / IBAN", placeholder: "Routing or SWIFT code" },
+              { key: "ifsc_code",      label: "IFSC Code",              placeholder: "e.g. HDFC0001234" },
               { key: "country",        label: "Country",                placeholder: "e.g. US" },
             ] as { key: keyof typeof editFields; label: string; placeholder: string }[]).map(({ key, label, placeholder }) => (
               <div key={key}>
@@ -1737,9 +1746,11 @@ export default function EarningsPage() {
                 <p className="text-[11px] text-gray-400 mt-0.5">Automatically pay out when minimum is reached</p>
               </div>
               <div onClick={() => setEditAutoPayout((v) => !v)}
-                className={`relative w-10 h-5.5 rounded-full transition-colors cursor-pointer ${editAutoPayout ? "bg-brown-500" : "bg-gray-300"}`}
+                role="switch"
+                aria-checked={editAutoPayout}
+                className={`relative rounded-full transition-colors cursor-pointer ${editAutoPayout ? "bg-brown-500" : "bg-gray-300"}`}
                 style={{ width: 40, height: 22 }}>
-                <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white shadow transition-transform ${editAutoPayout ? "translate-x-5" : "translate-x-0.5"}`}
+                <div className="absolute rounded-full bg-white shadow transition-all"
                   style={{ width: 18, height: 18, top: 2, left: editAutoPayout ? 20 : 2 }} />
               </div>
             </label>

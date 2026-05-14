@@ -8,11 +8,25 @@ import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 interface Props { onComplete: () => void; onBack?: () => void }
 
+const MOCK_BUSINESS_CONTEXT = {
+  projectVision: "Build a cloud-native AI-governed workforce platform that connects global enterprises with a vetted pool of contributors, enabling seamless SOW creation, intelligent task decomposition, and end-to-end project delivery with built-in compliance and quality assurance.",
+  businessCriticality: "mission_critical" as const,
+  definitionOfSuccess: "Platform live with ≥50 enterprise clients onboarded, contributor task acceptance rate ≥90%, SOW-to-delivery cycle reduced by 40%, zero critical compliance incidents in the first 12 months, and NPS ≥60 across both enterprise and contributor segments.",
+  currentState: "Manual SOW creation via Word documents and email-based approvals. No standardised contributor vetting process. Project tracking in spreadsheets with no real-time visibility. Compliance checks done post-hoc, leading to frequent rework.",
+  desiredFutureState: "Fully automated AI-governed platform with structured SOW generation, multi-stage approval pipelines, real-time project dashboards, contributor digital twins, and built-in regulatory compliance across all active engagements.",
+};
+
 export function Section1BusinessContext({ onComplete, onBack }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.businessContext;
   const [errors, setErrors] = React.useState<SectionErrors>({});
   const touched = React.useRef<Set<string>>(new Set());
+
+  const fillMockData = () => {
+    store.updateCommercialSection("businessContext", MOCK_BUSINESS_CONTEXT);
+    setErrors({});
+    touched.current.clear();
+  };
 
   const update = (patch: Partial<typeof data>) => {
     store.updateCommercialSection("businessContext", patch);
@@ -43,7 +57,7 @@ export function Section1BusinessContext({ onComplete, onBack }: Props) {
 
   return (
     <>
-      <SectionHeader number={1} title="Business Context & Vision" />
+      <SectionHeader number={1} title="Business Context & Vision" onMockFill={fillMockData} />
 
       <div className="px-6 py-6 space-y-5">
 

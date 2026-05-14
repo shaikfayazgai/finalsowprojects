@@ -50,7 +50,8 @@ export interface SOWActionRequest {
 export interface ApprovalDecision {
   decision: string;
   comments?: string | null;
-  /** Reviewer identity — sent as both `reviewer` and `decided_by` for backend compatibility. */
+  /** Reviewer identity — sent as reviewer_name, reviewer, and decided_by for backend compatibility. */
+  reviewer_name?: string;
   reviewer?: string;
   decided_by?: string;
 }
@@ -235,11 +236,15 @@ export const sowApi = {
    * to that role.
    */
   listSowsAsAdmin(): Promise<BaseResponse> {
-    return sowCall<BaseResponse>("/api/v1/sows");
+    return sowCall<BaseResponse>("/api/v1/sows/enterprise/all");
   },
 
   getSow(sowId: string): Promise<BaseResponse> {
     return sowCall<BaseResponse>(`/api/v1/sows/${sowId}`);
+  },
+
+  getEnterpriseSOWById(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sows/enterprise/${sowId}`);
   },
 
   sowAction(sowId: string, payload: SOWActionRequest): Promise<BaseResponse> {
@@ -247,11 +252,11 @@ export const sowApi = {
   },
 
   getHallucinationAnalysis(sowId: string): Promise<BaseResponse> {
-    return sowCall<BaseResponse>(`/api/v1/sows/${sowId}/hallucination-analysis`);
+    return sowCall<BaseResponse>(`/api/v1/sows/${sowId}/hallucination-analysis`, "GET", undefined, false, true);
   },
 
   getRiskAssessment(sowId: string): Promise<BaseResponse> {
-    return sowCall<BaseResponse>(`/api/v1/sows/${sowId}/risk-assessment`);
+    return sowCall<BaseResponse>(`/api/v1/sows/${sowId}/risk-assessment`, "GET", undefined, false, true);
   },
 
   // ── Approval Pipeline ──
@@ -265,6 +270,8 @@ export const sowApi = {
       `/api/v1/approvals/${sowId}/stage/${stage}/decide`,
       "POST",
       payload,
+      false,
+      false, // use personal token so backend identifies the logged-in user as reviewer
     );
   },
 
@@ -400,8 +407,8 @@ export const sowApi = {
     return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/commercial-details/${section}`, "PATCH", data);
   },
 
-  validateCommercialSection(sowId: string, section: string): Promise<BaseResponse> {
-    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/commercial-details/${section}/validate`, "POST");
+  validateCommercialSection(sowId: string, section: string, data: Record<string, unknown>): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/commercial-details/${section}/validate`, "POST", data);
   },
 
   markSectionComplete(sowId: string, section: string): Promise<BaseResponse> {
@@ -413,12 +420,13 @@ export const sowApi = {
     final_approver: string;
     legal_compliance_reviewer?: string;
     security_reviewer?: string;
+    sow_submitter?: string;
   }): Promise<BaseResponse> {
     return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/approval-authorities`, "PATCH", data);
   },
 
-  generateManualSOW(sowId: string, opts?: { include_extracted_sections?: boolean }): Promise<BaseResponse> {
-    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/generate`, "POST", opts ?? {});
+  generateManualSOW(sowId: string): Promise<BaseResponse> {
+    return sowCall<BaseResponse>(`/api/v1/sow/${sowId}/generate`, "POST", {});
   },
 
   getGenerationStatus(sowId: string): Promise<BaseResponse> {

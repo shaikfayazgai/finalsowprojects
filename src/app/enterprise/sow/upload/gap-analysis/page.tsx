@@ -599,7 +599,7 @@ export default function GapAnalysisPage() {
             )}
           </div>
           <Link
-            href={allCriticalResolved ? "/enterprise/sow/upload/commercial-details" : "#"}
+            href={allCriticalResolved ? "/enterprise/sow/upload/details" : "#"}
             className={cn(!allCriticalResolved && "pointer-events-none")}
           >
             <Button

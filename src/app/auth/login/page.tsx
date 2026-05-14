@@ -247,6 +247,40 @@ function LoginPageContent() {
         return;
       }
 
+      // First-login temp password — backend now returns 200 (not 403) on /auth/login,
+      // with user.requiresPasswordChange === true. Validate route surfaces this flag.
+      // Get a real access_token by calling /auth/login, stash it for the change-password
+      // page, and redirect. No NextAuth session is created until after the password change.
+      if (validateData.passwordChangeRequired) {
+        const apiBase = process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? "";
+        try {
+          const loginRes = await fetch(`${apiBase}/api/v1/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+          });
+          const loginData = await loginRes.json().catch(() => ({}));
+          const accessToken = (loginData as { access_token?: string }).access_token;
+          if (!loginRes.ok || !accessToken) {
+            setError("Could not start the password-change flow. Please try again.");
+            setIsLoading(false);
+            return;
+          }
+          try {
+            sessionStorage.setItem("_first_login_token", accessToken);
+            sessionStorage.setItem("_first_login_email", email.trim().toLowerCase());
+          } catch {
+            /* sessionStorage unavailable — proceed; page will surface a clear error */
+          }
+        } catch {
+          setError("Network error. Please check your connection and try again.");
+          setIsLoading(false);
+          return;
+        }
+        window.location.href = "/auth/change-password";
+        return;
+      }
+
       // MFA required — skip signIn, store the pending token and show TOTP step
       if (validateData.mfaRequired) {
         mfaPendingTokenRef.current = validateData.mfaPendingToken ?? "";

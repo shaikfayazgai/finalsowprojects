@@ -2,7 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { sowApi } from "@/lib/api/sow";
+import { adminSowApi } from "@/lib/api/admin-sow";
 import { transformStepPayload, toStep9 } from "@/lib/api/sow-transformers";
+import { toast } from "@/lib/stores/toast-store";
 
 // ── Query keys ────────────────────────────────────────────────────────────
 
@@ -126,7 +128,7 @@ export function useSowList() {
 export function useAdminSowList() {
   return useQuery({
     queryKey: [...sowKeys.sows(), "admin"] as const,
-    queryFn: () => sowApi.listSowsAsAdmin(),
+    queryFn: () => adminSowApi.listEnterpriseSOWs(),
   });
 }
 
@@ -149,9 +151,11 @@ export function useDeleteAiSOW() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: sowKeys.sows() });
       qc.invalidateQueries({ queryKey: sowKeys.all });
+      toast.success("SOW deleted successfully");
     },
     onError: (err: unknown) => {
-      console.error("[DeleteAiSOW]", err instanceof Error ? err.message : err);
+      const msg = err instanceof Error ? err.message : "Failed to delete SOW";
+      toast.error("Failed to delete SOW", msg);
     },
   });
 }

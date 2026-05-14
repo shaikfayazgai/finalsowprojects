@@ -3,7 +3,8 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -44,9 +45,12 @@ import {
   MessageSquareDiff,
   Undo2,
   Check,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { sowApi } from "@/lib/api/sow";
+import { createEnterpriseDecompositionPlan } from "@/lib/api/decomposition-plans";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/stores/toast-store";
 import { useNotificationStore } from "@/lib/stores/notification-store";
 import { useSowMessagesStore } from "@/lib/stores/sow-messages-store";
@@ -72,7 +76,7 @@ import { StatusTimeline } from "@/components/enterprise/status-timeline";
 import { mockSOWs, mockSOWSections } from "@/mocks/data/enterprise-sow";
 import { useSowStore, INITIAL_APPROVAL_STAGES } from "@/lib/stores/sow-store";
 import { useSOWPipelineStore } from "@/lib/stores/sow-pipeline-store";
-import { useConfirmAndSubmit, useSOWDetail, useApprovalStages, useRecordApprovalDecision } from "@/lib/hooks/use-manual-sow";
+import { useConfirmAndSubmit, useSOWDetail, useApprovalStages, useRecordApprovalDecision, useManualSOW, useSOWSections, useHallucinationAnalysis, useRiskAssessment } from "@/lib/hooks/use-manual-sow";
 import { mockProjects } from "@/mocks/data/enterprise-projects";
 import {
   mockSOWClauses,
@@ -295,6 +299,11 @@ export default function SOWDetailPage() {
   const backHref = pathname.includes("/approval/") ? "/enterprise/sow/approval" : "/enterprise/sow";
   const backLabel = pathname.includes("/approval/") ? "Approval Pipeline" : "SOW Repository";
   const sowId = params.sowId as string;
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const [isDecomposing, setIsDecomposing] = React.useState(false);
+  const [decompositionStarted, setDecompositionStarted] = React.useState(false);
   const allSows = useSowStore((s) => s.sows);
   const addSow = useSowStore((s) => s.addSow);
   const updateSow = useSowStore((s) => s.updateSow);
@@ -302,6 +311,79 @@ export default function SOWDetailPage() {
   const updatePipelineSOW = useSOWPipelineStore((s) => s.updateSOW);
   const pipelineSows = useSOWPipelineStore((s) => s.sows);
   const { data: apiSowData, isLoading: apiSowLoading, flow: apiFlow } = useSOWDetail(sowId);
+
+  // Direct query for the header — handles both { success, data: {...} } and flat shapes
+  const manualSowQuery = useManualSOW(sowId);
+  const headerData = React.useMemo(() => {
+    const raw = manualSowQuery.data as Record<string, unknown> | null | undefined;
+    if (!raw) return null;
+    // unwrap { success, data: {...} } wrapper if present
+    const d = (typeof raw.data === "object" && raw.data !== null ? raw.data : raw) as Record<string, unknown>;
+
+    // nested sub-objects
+    const gc = (typeof d.generated_content === "object" && d.generated_content !== null ? d.generated_content : {}) as Record<string, unknown>;
+    const gen = (typeof d.generated === "object" && d.generated !== null ? d.generated : {}) as Record<string, unknown>;
+    const genContent = (typeof gen.content === "object" && gen.content !== null ? gen.content : {}) as Record<string, unknown>;
+    const qm = (typeof d.quality_metrics === "object" && d.quality_metrics !== null ? d.quality_metrics : {}) as Record<string, unknown>;
+
+    // risk: prefer generated.risk (manual SOW), then top-level risk, then risk_score object
+    const genRisk = (typeof gen.risk === "object" && gen.risk !== null ? gen.risk : {}) as Record<string, unknown>;
+    const topRisk = (typeof d.risk === "object" && d.risk !== null ? d.risk : {}) as Record<string, unknown>;
+    const rsObj = (typeof d.risk_score === "object" && d.risk_score !== null ? d.risk_score : {}) as Record<string, unknown>;
+    const riskScore = Number(genRisk.risk_score ?? topRisk.risk_score ?? topRisk.riskScore ?? 0);
+    const riskLevel = String(genRisk.risk_level ?? topRisk.risk_level ?? topRisk.riskLevel ?? "");
+
+    // budget: prefer commercial_details.budgetRisk (manual SOW embed), then flat fields
+    const cd = (typeof d.commercial_details === "object" && d.commercial_details !== null ? d.commercial_details : {}) as Record<string, unknown>;
+    const br = (typeof cd.budgetRisk === "object" && cd.budgetRisk !== null ? cd.budgetRisk : {}) as Record<string, unknown>;
+    const budgetMin = Number(br.budgetMinimum ?? br.budget_minimum ?? d.budgetMinimum ?? d.budget_minimum ?? 0);
+    const budgetMax = Number(br.budgetMaximum ?? br.budget_maximum ?? d.budgetMaximum ?? d.budget_maximum ?? 0);
+
+    // duration: prefer timelineTeam section, then flat fields
+    const tt = (typeof cd.timelineTeam === "object" && cd.timelineTeam !== null ? cd.timelineTeam : {}) as Record<string, unknown>;
+    const startDate = String(tt.startDate ?? "");
+    const endDate = String(tt.targetEndDate ?? "");
+    let estimatedDuration = String(d.estimated_duration ?? d.estimatedDuration ?? d.timeline ?? "");
+    if (!estimatedDuration && startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const weeks = Math.round((end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000));
+      estimatedDuration = weeks > 0 ? `${weeks} week${weeks > 1 ? "s" : ""}` : "";
+    }
+
+    const intakeMode = String(d.intake_mode ?? d.intakeMode ?? "");
+    const isAI = intakeMode === "ai_generated";
+
+    // title from generated.content.document_title, then generated_content, then top-level
+    const title = String(genContent.document_title ?? gc.document_title ?? d.title ?? d.project_title ?? "");
+    const client = String(d.client ?? d.client_name ?? d.client_organisation ?? genContent.client ?? gc.client_name ?? gc.client ?? "");
+
+    // confidence: prefer generated.confidence.overall, then ai_confidence
+    const genConf = (typeof gen.confidence === "object" && gen.confidence !== null ? gen.confidence : {}) as Record<string, unknown>;
+    const aiConfidence = Number(genConf.overall ?? d.ai_confidence ?? d.aiConfidence ?? qm.overall_confidence ?? rsObj.overall ?? 0);
+
+    return {
+      title,
+      client,
+      version:           d.version != null ? Number(d.version) : null,
+      status:            String(d.status ?? ""),
+      intakeMode,
+      isAI,
+      confidentiality:   String(d.confidentiality ?? d.data_sensitivity ?? "internal"),
+      updatedAt:         String(d.updated_at ?? d.updatedAt ?? d.created_at ?? ""),
+      budgetMin,
+      budgetMax,
+      estimatedBudget:   Number(d.estimated_budget ?? d.estimatedBudget ?? 0),
+      estimatedDuration,
+      riskScore,
+      riskLevel,
+      aiConfidence,
+      completeness:      Number(qm.completeness ?? rsObj.completeness ?? 0),
+      templateId:        String(d.template_id ?? d.templateId ?? gc.template_id ?? ""),
+      industry:          String(d.industry ?? gc.industry ?? ""),
+    };
+  }, [manualSowQuery.data]);
+
   const confirmAndSubmit = useConfirmAndSubmit(sowId);
   // Declared up here so the approval-pipeline query below can enable polling
   // while stage 2 is active (the enterprise user waits for GlimmoraTeam admin).
@@ -326,9 +408,13 @@ export default function SOWDetailPage() {
         if (bizOwner.includes(", ")) client = bizOwner.split(", ").pop()?.trim() ?? "";
       }
       const qm = (raw.quality_metrics ?? raw.qualityMetrics ?? {}) as Record<string, unknown>;
+      const riskObj = (typeof raw.risk === "object" && raw.risk !== null ? raw.risk : {}) as Record<string, unknown>;
       const riskRaw = raw.risk_score ?? raw.riskScore ?? qm.risk_score ?? qm.riskScore;
       let riskOverall = 0;
-      if (typeof riskRaw === "number") {
+      // First try nested risk object (e.g. { risk: { risk_score: 15, risk_level: "Low" } })
+      if (riskObj.risk_score != null) {
+        riskOverall = Number(riskObj.risk_score);
+      } else if (typeof riskRaw === "number") {
         riskOverall = riskRaw;
       } else if (riskRaw && typeof riskRaw === "object") {
         riskOverall = Number((riskRaw as Record<string, unknown>).overall ?? 0);
@@ -366,7 +452,7 @@ export default function SOWDetailPage() {
         pages: Number(raw.pages ?? raw.page_count ?? raw.pageCount ?? 0),
         parsedSections: Number(raw.parsed_sections ?? raw.parsedSections ?? 0),
         totalSections: Number(raw.total_sections ?? raw.totalSections ?? 0),
-        aiConfidence: Number(raw.ai_confidence ?? raw.aiConfidence ?? qm.overall_confidence ?? raw.confidence_score ?? 0),
+        aiConfidence: Number(raw.ai_confidence ?? raw.aiConfidence ?? (typeof raw.risk_score === "object" && raw.risk_score !== null ? (raw.risk_score as Record<string, unknown>).overall : null) ?? qm.overall_confidence ?? raw.confidence_score ?? 0),
         riskScore: {
           overall: riskOverall,
           completeness: Number((riskRaw as Record<string, unknown>)?.completeness ?? qm.completeness ?? 0),
@@ -414,50 +500,162 @@ export default function SOWDetailPage() {
 
     return { ...SOW_DEFAULTS, id: sowId } as import("@/types/enterprise").SOW;
   }, [apiSowData, apiFlow, allSows, pipelineSows, sowId]);
+
+  const handleStartDecomposition = React.useCallback(async () => {
+    if (isDecomposing) return;
+    setIsDecomposing(true);
+    try {
+      const raw = apiSowData as Record<string, unknown> | null;
+      const payload = {
+        wizard_id:     String(raw?.wizard_id ?? raw?.id ?? sowId),
+        enterprise_id: String(raw?.enterprise_id ?? (session?.user as { id?: string })?.id ?? ""),
+        sow_reference: sow.id,
+        project_name:  sow.title,
+      };
+      const res = await createEnterpriseDecompositionPlan(payload);
+      const planId = String(
+        (res.data as Record<string, unknown> | null)?.id ??
+        (res.data as Record<string, unknown> | null)?.plan_id ?? ""
+      );
+      await queryClient.invalidateQueries({ queryKey: ["enterprise", "decomposition", "plans"] });
+      if (planId) updateSow(sowId, { planId });
+      setDecompositionStarted(true);
+      router.push("/enterprise/decomposition");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to start decomposition";
+      toast.error("Decomposition failed", msg);
+    } finally {
+      setIsDecomposing(false);
+    }
+  }, [isDecomposing, apiSowData, sowId, session, sow, router, queryClient, updateSow]);
+
   const linkedProject = sow ? mockProjects.find((p) => p.sowId === sow.id) : undefined;
-  const apiSections = React.useMemo(() => {
-    const raw = apiSowData as Record<string, unknown> | null | undefined;
-    const gc = (raw?.generated_content ?? {}) as Record<string, unknown>;
-    const list = gc.sections as Array<{ section_id: string; title: string; confidence: number; content: string }> | undefined;
-    if (!list?.length) return null;
-    return list.map((s, i) => ({
-      id: s.section_id,
-      sowId: sowId,
-      title: s.title,
-      content: s.content,
-      confidence: s.confidence,
-      order: i + 1,
-    }));
-  }, [apiSowData, sowId]);
-  const sections = apiSections ?? (sow ? mockSOWSections.filter((s) => s.sowId === sow.id) : []);
+
+  const { data: sectionsApiData, isLoading: sectionsLoading } = useSOWSections(sowId);
+
+  const sections = React.useMemo(() => {
+    type SectionItem = { section_id: string; title: string; confidence: number; content: string };
+
+    function mapSections(list: SectionItem[]) {
+      return list.map((s, i) => ({
+        id: String((s as Record<string,unknown>).section_id ?? (s as Record<string,unknown>).id ?? `sec-${i}`),
+        sowId,
+        title: String(s.title ?? ""),
+        content: String(s.content ?? ""),
+        confidence: Number(s.confidence ?? (s as Record<string,unknown>).confidence_score ?? 0),
+        order: Number((s as Record<string,unknown>).order ?? (s as Record<string,unknown>).section_order ?? i + 1),
+      }));
+    }
+
+    // 1. Primary: GET /api/v1/sow/{sowId}/sections (manual SOW endpoint)
+    const sRaw = sectionsApiData as Record<string, unknown> | null | undefined;
+    if (sRaw) {
+      const list = (Array.isArray(sRaw.data) ? sRaw.data : Array.isArray(sRaw) ? sRaw : []) as SectionItem[];
+      if (list.length > 0) return mapSections(list);
+    }
+
+    // 2. AI SOW: sections embedded directly in GET /api/v1/sows/{sowId} response.
+    //    apiSowData is already the unwrapped inner data object.
+    if (apiFlow === "ai" && apiSowData) {
+      const aData = apiSowData as Record<string, unknown>;
+      // Try common paths: data.sections, data.generated_sow.sections, data.generated.content.sections
+      const aiSections =
+        (Array.isArray(aData.sections) ? aData.sections : null) ??
+        (Array.isArray((aData.generated_sow as any)?.sections) ? (aData.generated_sow as any).sections : null) ??
+        (Array.isArray((aData.generated as any)?.sections) ? (aData.generated as any).sections : null) ??
+        (Array.isArray(((aData.generated as any)?.content as any)?.sections) ? ((aData.generated as any)?.content as any).sections : null) ??
+        (Array.isArray((aData.generated_content as any)?.sections) ? (aData.generated_content as any).sections : null);
+      if (aiSections?.length) return mapSections(aiSections as SectionItem[]);
+    }
+
+    // 3. Fallback: sections embedded in manual SOW response
+    //    Response shape: { data: { generated: { content: { sections: [...] } } } }
+    const mRaw = manualSowQuery.data as Record<string, unknown> | null | undefined;
+    const mData = (typeof mRaw?.data === "object" && mRaw?.data !== null ? mRaw.data : mRaw) as Record<string, unknown> | null ?? {};
+    const gen = (typeof mData?.generated === "object" && mData?.generated !== null ? mData.generated : {}) as Record<string, unknown>;
+    const genContent = (typeof gen.content === "object" && gen.content !== null ? gen.content : {}) as Record<string, unknown>;
+    const genList = genContent.sections as SectionItem[] | undefined;
+    if (genList?.length) return mapSections(genList);
+
+    // 4. Also check generated_content (AI SOW shape in manual query)
+    const gcFallback = (typeof mData?.generated_content === "object" && mData?.generated_content !== null ? mData.generated_content : {}) as Record<string, unknown>;
+    const gcList = gcFallback.sections as SectionItem[] | undefined;
+    if (gcList?.length) return mapSections(gcList);
+
+    // 5. Last resort: local mock data
+    return sow ? mockSOWSections.filter((s) => s.sowId === sow.id) : [];
+  }, [sectionsApiData, apiSowData, apiFlow, manualSowQuery.data, sow, sowId]);
 
   // Derive approval stages from GET /api/v1/approvals/{sow_id} when available,
   // so the stepper always reflects the real pipeline state.
   const pipelineResolvedStages = React.useMemo(() => {
-    const pRaw = (pipelineApiData as any)?.data;
+    const pRaw = (pipelineApiData as Record<string, unknown> | null | undefined)?.data as Record<string, unknown> | undefined;
     const pArr: Record<string, unknown>[] = Array.isArray(pRaw)
       ? pRaw
-      : Array.isArray((pRaw as any)?.stages)
-      ? (pRaw as any).stages
-      : Array.isArray((pRaw as any)?.approval_stages)
-      ? (pRaw as any).approval_stages
+      : Array.isArray((pRaw as Record<string, unknown>)?.stages)
+      ? (pRaw as Record<string, unknown>).stages as Record<string, unknown>[]
+      : Array.isArray((pRaw as Record<string, unknown>)?.approval_stages)
+      ? (pRaw as Record<string, unknown>).approval_stages as Record<string, unknown>[]
       : [];
     if (pArr.length === 0) return null;
+    // current_active_stage tells us which stage is actively being reviewed
+    // (API may return all stages as "pending" and rely on this field)
+    const currentActive = Number((pRaw as Record<string, unknown>)?.current_active_stage ?? 0);
+    const overallStatus = String((pRaw as Record<string, unknown>)?.overall_status ?? "");
     const stageKeyMap: Record<number, string> = { 1: "business", 2: "glimmora_commercial", 3: "legal", 4: "security", 5: "final" };
+    // reverse map to match string stage keys returned by the API (e.g. "business" → 1)
+    const stageNumMap: Record<string, number> = Object.fromEntries(Object.entries(stageKeyMap).map(([k, v]) => [v, Number(k)]));
     return [1, 2, 3, 4, 5].map((num) => {
-      const apiSt = pArr.find((s) => Number(s.stage ?? s.stage_number) === num);
+      const apiSt = pArr.find((s) => {
+        const stageVal = s.stage ?? s.stage_key ?? s.stage_number;
+        if (typeof stageVal === "number") return stageVal === num;
+        if (typeof stageVal === "string") {
+          return stageNumMap[stageVal] === num || Number(stageVal) === num;
+        }
+        return false;
+      });
       const rawStatus = String(apiSt?.status ?? "pending").toLowerCase();
-      const status: import("@/types/enterprise").ApprovalStageStatus =
-        rawStatus === "approved" ? "approved" :
-        rawStatus === "rejected" || rawStatus === "changes_requested" ? "rejected" :
-        rawStatus === "in_review" || rawStatus === "active" || rawStatus === "in_progress" ? "in_review" :
-        "pending";
+      let status: import("@/types/enterprise").ApprovalStageStatus;
+      if (rawStatus === "approved") {
+        status = "approved";
+      } else if (rawStatus === "rejected" || rawStatus === "changes_requested") {
+        status = "rejected";
+      } else if (
+        rawStatus === "in_review" || rawStatus === "active" || rawStatus === "in_progress" ||
+        // Use current_active_stage when the API returns "pending" for all stages
+        (rawStatus === "pending" && currentActive === num && overallStatus !== "completed")
+      ) {
+        status = "in_review";
+      } else if (overallStatus !== "completed" && currentActive > num) {
+        // stages before the active one that are still "pending" were already passed
+        status = "approved";
+      } else {
+        status = "pending";
+      }
+      const stageName = String(apiSt?.stage_name ?? "");
+      const reviewerVal = apiSt?.reviewer_name ?? apiSt?.reviewer ?? apiSt?.reviewer_email ?? null;
+      const slaStatus = String(apiSt?.sla_status ?? "");
+      const slaDueDays = apiSt?.sla_due_days != null ? Number(apiSt.sla_due_days) : null;
       return {
         stage: stageKeyMap[num] as import("@/types/enterprise").ApprovalStage,
         status,
-        reviewer: String(apiSt?.reviewer_name ?? apiSt?.reviewer ?? "") || undefined,
-      } satisfies import("@/types/enterprise").SOWApprovalStage;
+        reviewer: reviewerVal ? String(reviewerVal) : undefined,
+        ...(stageName ? { stageName } : {}),
+        ...(slaStatus ? { slaStatus } : {}),
+        ...(slaDueDays != null ? { slaDueDays } : {}),
+      } satisfies import("@/types/enterprise").SOWApprovalStage & { stageName?: string; slaStatus?: string; slaDueDays?: number };
     });
+  }, [pipelineApiData]);
+
+  // Extract approval_route and overall_status for display
+  const pipelineInfo = React.useMemo(() => {
+    const pRaw = (pipelineApiData as Record<string, unknown> | null | undefined)?.data as Record<string, unknown> | undefined;
+    if (!pRaw) return null;
+    return {
+      approvalRoute: String(pRaw.approval_route ?? ""),
+      overallStatus: String(pRaw.overall_status ?? ""),
+      currentActiveStage: Number(pRaw.current_active_stage ?? 0),
+    };
   }, [pipelineApiData]);
 
   // Use pipeline API stages for the stepper display; fall back to sow.approvalStages
@@ -489,7 +687,84 @@ export default function SOWDetailPage() {
   const ethicsScreening = sow ? mockEthicsScreening[sow.id] || [] : [];
   const regulatoryItems = sow ? mockRegulatoryAlignment[sow.id] || [] : [];
   const genParams = sow ? mockGenerationParams[sow.id] : undefined;
-  const hallucinationLayers = sow ? mockHallucinationLayers[sow.id] || [] : [];
+  // Only call the wizard/AI analysis endpoints when the SOW was loaded from /api/v1/sows/
+  // (apiFlow === "ai"). Manual SOWs with intake_mode "ai_generated" still live in the
+  // /api/v1/sow/ namespace and will 404 on the /sows/ endpoints.
+  const isAiFlow = apiFlow === "ai";
+  const { data: hallucinationApiData } = useHallucinationAnalysis(sowId, isAiFlow);
+  const { data: riskAssessmentApiData } = useRiskAssessment(sowId, isAiFlow);
+
+  // Normalise hallucination analysis API response → UI shape
+  const hallucinationLayers = React.useMemo(() => {
+    const raw = hallucinationApiData as Record<string, unknown> | null | undefined;
+    const d = (typeof raw?.data === "object" && raw?.data !== null ? raw.data : raw) as Record<string, unknown> | null ?? {};
+    const list = (Array.isArray(d?.layers) ? d.layers
+      : Array.isArray((d as Record<string,unknown>)?.hallucination_layers) ? (d as Record<string,unknown>).hallucination_layers
+      : []) as Array<Record<string, unknown>>;
+    if (list.length > 0) {
+      const statusMap: Record<string, string> = {
+        green: "passed", passed: "passed",
+        yellow: "warning", warning: "warning", amber: "warning",
+        red: "failed", failed: "failed",
+        skipped: "skipped", inactive: "skipped",
+      };
+      return list.map((l) => ({
+        layer: Number(l.layer_id ?? l.layer ?? l.id ?? 0),
+        name: String(l.name ?? l.layer_name ?? ""),
+        status: statusMap[String(l.status ?? "").toLowerCase()] ?? "skipped",
+        description: String(l.description ?? l.detail ?? ""),
+        details: String(l.detail ?? l.description ?? l.result ?? ""),
+      }));
+    }
+    // Fallback to mock data if API returned nothing
+    return sow ? mockHallucinationLayers[sow.id] || [] : [];
+  }, [hallucinationApiData, sow]);
+
+  // Normalise risk assessment API response → { overall, completeness, confidence, compliance, patternMatch }
+  const apiRiskBreakdown = React.useMemo(() => {
+    if (!riskAssessmentApiData) return null;
+    const raw = riskAssessmentApiData as unknown as Record<string, unknown>;
+    // Unwrap { success, data } wrapper if present
+    const d = (typeof raw.data === "object" && raw.data !== null
+      ? raw.data
+      : raw) as Record<string, unknown>;
+    if (!d || Object.keys(d).length === 0) return null;
+
+    // Nested breakdown object (most common)
+    const breakdown = (typeof d.breakdown === "object" && d.breakdown !== null
+      ? d.breakdown
+      : typeof d.scores === "object" && d.scores !== null
+      ? d.scores
+      : typeof d.categories === "object" && d.categories !== null
+      ? d.categories
+      : d) as Record<string, unknown>;
+
+    // Overall score — try every plausible field name
+    const overall = Number(
+      d.overall ?? d.risk_score ?? d.overall_score ?? d.total_score ??
+      d.score ?? d.riskScore ?? d.totalScore ?? 0
+    );
+
+    const completeness = Number(
+      breakdown.completeness ?? d.completeness ?? breakdown.completeness_score ?? 0
+    );
+    const confidence = Number(
+      breakdown.confidence ?? d.confidence ?? breakdown.confidence_score ?? 0
+    );
+    const compliance = Number(
+      breakdown.compliance ?? d.compliance ?? breakdown.compliance_score ?? 0
+    );
+    const patternMatch = Number(
+      breakdown.pattern_match ?? breakdown.patternMatch ?? d.pattern_match ??
+      d.patternMatch ?? breakdown.pattern_match_score ?? 0
+    );
+
+    // If everything resolved to zero there's nothing to show
+    if (overall === 0 && completeness === 0 && confidence === 0 && compliance === 0 && patternMatch === 0) return null;
+
+    return { overall, completeness, confidence, compliance, patternMatch };
+  }, [riskAssessmentApiData]);
+
   const sensitivityReqs = sow ? sensitivityHandlingRequirements[sow.dataSensitivity] || [] : [];
 
   /* UI state */
@@ -800,129 +1075,153 @@ export default function SOWDetailPage() {
       {/* ── Header ── */}
       <motion.div
         variants={fadeUp}
-        className="rounded-2xl border border-beige-200/50 bg-white/80 backdrop-blur-sm overflow-hidden"
+        className="rounded-2xl border border-beige-200/50 bg-white overflow-hidden"
       >
-        {/* Top accent bar */}
-        <div className="h-1 w-full bg-gradient-to-r from-brown-400 via-brown-300 to-beige-300" />
-
         <div className="px-7 pt-6 pb-5">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 mb-2.5 flex-wrap">
-                <h1 className="text-[22px] font-bold text-brown-900 tracking-tight font-heading leading-snug">
-                  {sow.title}
-                </h1>
-                <Badge variant={statusVariantMap[sow.status]} size="md" dot>
-                  {statusLabel[sow.status]}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                {sow.client && (
-                  <span className="text-[13px] font-medium text-brown-700">{sow.client}</span>
-                )}
-                <span className="w-px h-3.5 bg-beige-200" />
-                <span className="text-[12px] text-beige-500">v{sow.version}</span>
-                {sow.fileSize && sow.fileSize !== "—" && (
-                  <>
-                    <span className="w-px h-3.5 bg-beige-200" />
-                    <span className="text-[12px] text-beige-500">{sow.fileSize}</span>
-                  </>
-                )}
-                {sow.createdBy && (
-                  <>
-                    <span className="w-px h-3.5 bg-beige-200" />
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-4.5 h-4.5 rounded-full bg-gradient-to-br from-brown-200 to-beige-200 flex items-center justify-center">
-                        <User className="w-2.5 h-2.5 text-brown-600" />
-                      </div>
-                      <span className="text-[12px] text-beige-500">{sow.createdBy}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-              {/* Metric row */}
-              <div className="flex items-center gap-6 mt-4 pt-4 border-t border-beige-100">
-                <div>
-                  <p className="text-[10px] font-semibold text-beige-400 uppercase tracking-widest mb-0.5">Estimated Budget</p>
-                  <p className="text-[13px] font-bold text-brown-800">{sow.estimatedBudget > 0 ? `$${sow.estimatedBudget.toLocaleString()}` : "TBD"}</p>
-                </div>
-                <div className="w-px h-8 bg-beige-200" />
-                <div>
-                  <p className="text-[10px] font-semibold text-beige-400 uppercase tracking-widest mb-0.5">Estimated Duration</p>
-                  <p className="text-[13px] font-bold text-brown-800">{sow.estimatedDuration || "TBD"}</p>
-                </div>
-              </div>
 
-              {/* Badges row */}
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <Badge variant={sow.intakeMode === "ai_generated" ? "teal" : "beige"} size="sm">
-                  {sow.intakeMode === "ai_generated"
-                    ? <><Bot className="w-3 h-3" /> AI Generated</>
-                    : <><Upload className="w-3 h-3" /> Manual Upload</>
-                  }
-                </Badge>
-                <Badge variant={confidentialityVariantMap[sow.confidentiality]} size="sm">
-                  <Lock className="w-3 h-3" />
-                  {sow.confidentiality.charAt(0).toUpperCase() + sow.confidentiality.slice(1)}
-                </Badge>
-                {sow.riskScore.overall > 0 && (
-                  <Badge variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"} size="sm">
-                    <Gauge className="w-3 h-3" />
-                    Risk {sow.riskScore.overall}/100
-                  </Badge>
-                )}
-                {sow.aiConfidence > 0 && (
-                  <Badge variant={confidenceColor(sow.aiConfidence) === "forest" ? "forest" : confidenceColor(sow.aiConfidence) === "teal" ? "teal" : "gold"} size="sm">
-                    <Sparkles className="w-3 h-3" />
-                    AI {sow.aiConfidence}% Confidence
-                  </Badge>
-                )}
-                <span className="text-[11px] text-beige-400 pl-0.5">Updated {formatDate(sow.updatedAt)}</span>
-              </div>
-            </div>
+          {/* ── SOW Header (live data from headerData, falls back to sow memo) ── */}
+          {(() => {
+            const h = headerData;
+            const title     = h?.title     || sow.title;
+            const client    = h?.client    || sow.client;
+            const version   = h?.version   ?? sow.version;
+            const status    = (h?.status   || sow.status) as import("@/types/enterprise").SowStatus;
+            const intake    = h?.intakeMode || sow.intakeMode;
+            const conf      = h?.confidentiality || sow.confidentiality;
+            const updatedAt = h?.updatedAt  || sow.updatedAt;
+            const createdBy = sow.createdBy;
+            const isAI      = intake === "ai_generated";
 
-            {/* CTA */}
-            <div className="flex items-center gap-2 shrink-0">
-              {(sow.status === "draft" || sow.status === "review") && isValidated && (
-                <Button variant="gradient-primary" size="sm" onClick={() => setShowSubmitModal(true)}>
-                  <Send className="w-3.5 h-3.5" />
-                  Submit for Approval
-                </Button>
-              )}
-              {sow.status === "draft" && !isValidated && (
-                <Link href={sow.intakeMode === "ai_generated" ? "/enterprise/sow/generate" : "/enterprise/sow/upload"}>
-                  <Button variant="outline" size="sm">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Continue Setup
-                  </Button>
-                </Link>
-              )}
-              {sow.status === "approval" && (
-                <Link href={`/enterprise/sow/${sow.id}/approve`}>
-                  <Button variant="outline" size="sm">
-                    <Clock className="w-3.5 h-3.5" />
-                    View Approval Progress
-                  </Button>
-                </Link>
-              )}
-              {sow.status === "approved" && sow.planId && (
-                <Link href={`/enterprise/decomposition/${sow.planId}`}>
-                  <Button variant="outline" size="sm">
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    View Plan
-                  </Button>
-                </Link>
-              )}
-              {sow.status === "approved" && !sow.planId && (
-                <Link href={`/enterprise/decomposition?sowId=${sow.id}`}>
-                  <Button variant="gradient-primary" size="sm">
-                    <Layers className="w-3.5 h-3.5" />
-                    Start Decomposition
-                  </Button>
-                </Link>
-              )}
-            </div>
-          </div>
+            const budgetText = (h?.budgetMin ?? 0) > 0 || (h?.budgetMax ?? 0) > 0
+              ? `$${(h!.budgetMin).toLocaleString()}–$${(h!.budgetMax).toLocaleString()}`
+              : (h?.estimatedBudget ?? sow.estimatedBudget) > 0
+              ? `$${(h?.estimatedBudget ?? sow.estimatedBudget).toLocaleString()}`
+              : "TBD";
+            const durationText = h?.estimatedDuration || sow.estimatedDuration || "TBD";
+
+            // risk & confidence — in badges row
+            const riskScore = h?.riskScore ?? sow.riskScore.overall;
+            const riskLevel = h?.riskLevel ?? "";
+            const aiConf    = h?.aiConfidence ?? sow.aiConfidence ?? 0;
+
+            return (
+              <>
+                {/* ── Row 1: title · status · CTA ── */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0 flex-wrap">
+                    <h1 className="text-[21px] font-bold text-brown-900 tracking-tight font-heading leading-snug">
+                      {title}
+                    </h1>
+                    <Badge variant={statusVariantMap[status] ?? "beige"} size="md" dot>
+                      {statusLabel[status] ?? status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                    {(status === "draft" || status === "review") && isValidated && (
+                      <Button variant="gradient-primary" size="sm" onClick={() => setShowSubmitModal(true)}>
+                        <Send className="w-3.5 h-3.5" /> Submit for Approval
+                      </Button>
+                    )}
+                    {status === "draft" && !isValidated && (
+                      <Link href={isAI ? "/enterprise/sow/generate" : "/enterprise/sow/upload"}>
+                        <Button variant="outline" size="sm">
+                          <Settings className="w-3.5 h-3.5" /> Continue Setup
+                        </Button>
+                      </Link>
+                    )}
+                    {status === "approval" && (
+                      <Link href={`/enterprise/sow/${sow.id}/approve`}>
+                        <Button variant="outline" size="sm">
+                          <Clock className="w-3.5 h-3.5" /> View Approval Progress
+                        </Button>
+                      </Link>
+                    )}
+                    {status === "approved" && sow.planId && (
+                      <Link href={`/enterprise/decomposition/${sow.planId}`}>
+                        <Button variant="outline" size="sm">
+                          <ExternalLink className="w-3.5 h-3.5" /> View Plan
+                        </Button>
+                      </Link>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Row 2: client | v{version} | 👤 createdBy ── */}
+                <div className="flex items-center gap-0 mt-2 text-[12px] text-beige-500">
+                  {client && (
+                    <span className="font-medium text-brown-700">{client}</span>
+                  )}
+                  {client && <span className="mx-2.5 text-beige-300">|</span>}
+                  <span>v{version}</span>
+                  {createdBy && (
+                    <>
+                      <span className="mx-2.5 text-beige-300">|</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-full bg-beige-200 flex items-center justify-center shrink-0">
+                          <User className="w-2.5 h-2.5 text-beige-500" />
+                        </span>
+                        {createdBy}
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                {/* ── Divider ── */}
+                <div className="mt-4 mb-4 border-t border-beige-100" />
+
+                {/* ── Row 3: 2-column metrics ── */}
+                <div className="flex items-stretch">
+                  <div className="pr-6">
+                    <p className="text-[10px] font-semibold text-beige-400 uppercase tracking-widest mb-1">Estimated Budget</p>
+                    <p className="text-[13px] font-bold text-brown-800">{budgetText}</p>
+                  </div>
+                  <div className="w-px bg-beige-200 self-stretch" />
+                  <div className="pl-6">
+                    <p className="text-[10px] font-semibold text-beige-400 uppercase tracking-widest mb-1">Estimated Duration</p>
+                    <p className="text-[13px] font-bold text-brown-800">{durationText}</p>
+                  </div>
+                </div>
+
+                {/* ── Divider ── */}
+                <div className="mt-4 mb-3 border-t border-beige-100" />
+
+                {/* ── Row 4: badges ── */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Intake mode */}
+                  <Badge variant={isAI ? "teal" : "beige"} size="sm">
+                    {isAI ? <><Bot className="w-3 h-3" /> AI Generated</> : <><Upload className="w-3 h-3" /> Manual Upload</>}
+                  </Badge>
+
+                  {/* Confidentiality */}
+                  <Badge variant={confidentialityVariantMap[conf as import("@/types/enterprise").ConfidentialityLevel] ?? "beige"} size="sm">
+                    <Lock className="w-3 h-3" />
+                    {conf.charAt(0).toUpperCase() + conf.slice(1)}
+                  </Badge>
+
+                  {/* Risk score — manual: shows level; AI: just number */}
+                  {riskScore > 0 && (
+                    <Badge variant={riskScore <= 25 ? "forest" : riskScore <= 50 ? "gold" : "brown"} size="sm">
+                      <Gauge className="w-3 h-3" />
+                      Risk {riskScore}/100{riskLevel && !isAI ? ` · ${riskLevel}` : ""}
+                    </Badge>
+                  )}
+
+                  {/* AI confidence */}
+                  {aiConf > 0 && (
+                    <Badge variant={confidenceColor(aiConf) === "forest" ? "forest" : confidenceColor(aiConf) === "teal" ? "teal" : "gold"} size="sm">
+                      <Sparkles className="w-3 h-3" />
+                      AI {aiConf % 1 === 0 ? aiConf : aiConf.toFixed(1)}% Confidence
+                    </Badge>
+                  )}
+
+                  {updatedAt && (
+                    <span className="text-[11px] text-beige-400 ml-0.5">Updated {formatDate(updatedAt)}</span>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+
         </div>
       </motion.div>
 
@@ -1034,21 +1333,24 @@ export default function SOWDetailPage() {
                 </div>
 
                 {/* Quick risk summary */}
-                {sow.riskScore.overall > 0 && (
-                  <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
-                    <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-3">Risk Score</h3>
-                    <div className="flex items-center gap-2 mb-3">
-                      <ShieldCheck className={cn("w-5 h-5", sow.riskScore.overall <= 30 ? "text-forest-500" : sow.riskScore.overall <= 60 ? "text-gold-500" : "text-brown-600")} />
-                      <span className={cn("text-[18px] font-bold", sow.riskScore.overall <= 30 ? "text-forest-600" : sow.riskScore.overall <= 60 ? "text-gold-600" : "text-brown-700")}>
-                        {sow.riskScore.overall}/100
-                      </span>
-                      <Badge variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"} size="sm">
-                        {sow.riskScore.overall <= 25 ? "Low" : sow.riskScore.overall <= 50 ? "Medium" : sow.riskScore.overall <= 75 ? "High" : "Critical"}
-                      </Badge>
+                {(() => {
+                  const r = apiRiskBreakdown ?? sow.riskScore;
+                  return r.overall > 0 ? (
+                    <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
+                      <h3 className="text-[12px] font-bold text-beige-500 uppercase tracking-wider mb-3">Risk Score</h3>
+                      <div className="flex items-center gap-2 mb-3">
+                        <ShieldCheck className={cn("w-5 h-5", r.overall <= 30 ? "text-forest-500" : r.overall <= 60 ? "text-gold-500" : "text-brown-600")} />
+                        <span className={cn("text-[18px] font-bold", r.overall <= 30 ? "text-forest-600" : r.overall <= 60 ? "text-gold-600" : "text-brown-700")}>
+                          {r.overall}/100
+                        </span>
+                        <Badge variant={r.overall <= 25 ? "forest" : r.overall <= 50 ? "gold" : "brown"} size="sm">
+                          {r.overall <= 25 ? "Low" : r.overall <= 50 ? "Medium" : r.overall <= 75 ? "High" : "Critical"}
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-beige-500">See Risk & Compliance tab for full breakdown.</p>
                     </div>
-                    <p className="text-[11px] text-beige-500">See Risk & Compliance tab for full breakdown.</p>
-                  </div>
-                )}
+                  ) : null;
+                })()}
 
                 {/* Deliverables summary */}
                 <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
@@ -1205,9 +1507,12 @@ export default function SOWDetailPage() {
           <TabsContent value="document" className="mt-0">
             <div className="p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">
+                <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide flex items-center gap-2">
                   {sow.intakeMode === "ai_generated" ? "Generated Document" : "Uploaded Document"}
-                  <span className="ml-2 text-[12px] font-normal text-beige-500">({sections.length} sections)</span>
+                  {sectionsLoading && sections.length === 0
+                    ? <span className="ml-1 w-3.5 h-3.5 rounded-full border-2 border-beige-300 border-t-brown-500 animate-spin inline-block" />
+                    : <span className="ml-2 text-[12px] font-normal text-beige-500">({sections.length} sections)</span>
+                  }
                 </h2>
                 <div className="flex items-center gap-2">
                   <div className="relative">
@@ -1236,7 +1541,21 @@ export default function SOWDetailPage() {
                 </button>
               </div>
 
-              {filteredDocSections.length === 0 ? (
+              {sectionsLoading && sections.length === 0 ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="rounded-2xl border border-beige-100 bg-beige-50/50 p-4 flex items-center gap-3">
+                      <Skeleton className="w-7 h-7 rounded-lg shrink-0" />
+                      <div className="flex-1 space-y-1.5">
+                        <Skeleton className="h-3.5 w-2/5 rounded" />
+                        <Skeleton className="h-3 w-3/5 rounded" />
+                      </div>
+                      <Skeleton className="w-16 h-1.5 rounded-full hidden sm:block" />
+                      <Skeleton className="w-8 h-3 rounded" />
+                    </div>
+                  ))}
+                </div>
+              ) : filteredDocSections.length === 0 ? (
                 <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-12 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-beige-100 flex items-center justify-center mx-auto mb-4">
                     <Layers className="w-7 h-7 text-beige-400" />
@@ -1411,6 +1730,7 @@ export default function SOWDetailPage() {
                             failed: { badge: "brown" as const, icon: X, label: "Failed" },
                             skipped: { badge: "beige" as const, icon: Clock, label: "Skipped" },
                           }[layer.status];
+                          if (!statusConfig) return null;
                           return (
                             <div key={layer.layer} className="flex items-start gap-3 p-3 rounded-xl bg-beige-50/50 border border-beige-200/30">
                               <div className={cn(
@@ -1560,26 +1880,28 @@ export default function SOWDetailPage() {
               <h2 className="text-[14px] font-bold text-brown-800 uppercase tracking-wide">Risk & Compliance</h2>
 
               {/* Risk Score Breakdown */}
-              {sow.riskScore.overall > 0 && (
+              {(() => {
+                const r = apiRiskBreakdown ?? sow.riskScore;
+                return r.overall > 0 ? (
                 <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
                   <div className="flex items-center justify-between mb-5">
                     <h3 className="text-[13px] font-bold text-beige-500 uppercase tracking-wider">Risk Score Breakdown</h3>
                     <div className="flex items-center gap-2">
-                      <ShieldCheck className={cn("w-5 h-5", sow.riskScore.overall <= 30 ? "text-forest-500" : sow.riskScore.overall <= 60 ? "text-gold-500" : "text-brown-600")} />
-                      <span className={cn("text-[20px] font-bold", sow.riskScore.overall <= 30 ? "text-forest-600" : sow.riskScore.overall <= 60 ? "text-gold-600" : "text-brown-700")}>
-                        {sow.riskScore.overall}/100
+                      <ShieldCheck className={cn("w-5 h-5", r.overall <= 30 ? "text-forest-500" : r.overall <= 60 ? "text-gold-500" : "text-brown-600")} />
+                      <span className={cn("text-[20px] font-bold", r.overall <= 30 ? "text-forest-600" : r.overall <= 60 ? "text-gold-600" : "text-brown-700")}>
+                        {r.overall}/100
                       </span>
-                      <Badge variant={sow.riskScore.overall <= 25 ? "forest" : sow.riskScore.overall <= 50 ? "gold" : "brown"} size="md">
-                        {sow.riskScore.overall <= 25 ? "Low Risk" : sow.riskScore.overall <= 50 ? "Medium Risk" : sow.riskScore.overall <= 75 ? "High Risk" : "Critical Risk"}
+                      <Badge variant={r.overall <= 25 ? "forest" : r.overall <= 50 ? "gold" : "brown"} size="md">
+                        {r.overall <= 25 ? "Low Risk" : r.overall <= 50 ? "Medium Risk" : r.overall <= 75 ? "High Risk" : "Critical Risk"}
                       </Badge>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                      { label: "Completeness", value: sow.riskScore.completeness, max: 30, weight: "30%" },
-                      { label: "Confidence", value: sow.riskScore.confidence, max: 25, weight: "25%" },
-                      { label: "Compliance", value: sow.riskScore.compliance, max: 25, weight: "25%" },
-                      { label: "Pattern Match", value: sow.riskScore.patternMatch, max: 20, weight: "20%" },
+                      { label: "Completeness", value: r.completeness, max: 30, weight: "30%" },
+                      { label: "Confidence", value: r.confidence, max: 25, weight: "25%" },
+                      { label: "Compliance", value: r.compliance, max: 25, weight: "25%" },
+                      { label: "Pattern Match", value: r.patternMatch, max: 20, weight: "20%" },
                     ].map((item) => (
                       <div key={item.label} className="rounded-xl bg-beige-50/60 border border-beige-200/30 p-4">
                         <div className="flex items-center justify-between mb-2">
@@ -1603,7 +1925,8 @@ export default function SOWDetailPage() {
                     ))}
                   </div>
                 </div>
-              )}
+                ) : null;
+              })()}
 
               {/* Ethics Screening */}
               <div className="rounded-2xl border border-beige-100 bg-beige-50/50 p-5">
@@ -1795,11 +2118,16 @@ export default function SOWDetailPage() {
                 };
 
                 recordDecision.mutate(
-                  { stage: activeApprovalIdx + 1, decision: "approve", comments: signatureText },
+                  {
+                    stage: activeApprovalIdx + 1,
+                    decision: "approve",
+                    reviewer: signatureText.trim(),
+                  },
                   {
                     onSuccess: doLocalApprove,
-                    onError: () => {
-                      // API failed — still advance locally so UI isn't blocked
+                    onError: (err) => {
+                      console.error("[Approval] POST failed:", err);
+                      // Advance locally so the UI is not blocked
                       doLocalApprove();
                     },
                   }
@@ -1819,11 +2147,17 @@ export default function SOWDetailPage() {
                 const noteText = requestChangesNote || PRE_FILLED_NOTES[activeApprovalIdx] || "Please review and address the feedback.";
 
                 // Send to decide API with decision: request_changes
-                recordDecision.mutate({
-                  stage: activeApprovalIdx + 1,
-                  decision: "request_changes",
-                  comments: `[${requestSection}] ${noteText}`,
-                });
+                recordDecision.mutate(
+                  {
+                    stage: activeApprovalIdx + 1,
+                    decision: "request_changes",
+                    comments: `[${requestSection}] ${noteText}`,
+                    reviewer: signatureText.trim() || sow.createdBy || "Enterprise Admin",
+                  },
+                  {
+                    onError: (err) => console.error("[Approval] request_changes POST failed:", err),
+                  }
+                );
 
                 // Push into global notification bell
                 pushNotification({
@@ -1874,7 +2208,12 @@ export default function SOWDetailPage() {
               const handleSendComment = () => {
                 if (!commentText.trim()) return;
                 recordDecision.mutate(
-                  { stage: activeApprovalIdx + 1, decision: "comment" as any, comments: commentText },
+                  {
+                    stage: activeApprovalIdx + 1,
+                    decision: "comment" as any,
+                    comments: commentText,
+                    reviewer: signatureText.trim() || sow.createdBy || "Enterprise Admin",
+                  },
                   {
                     onSuccess: () => {
                       toast.success("Comment sent", "Your comment has been sent to Glimmora admin.");
@@ -1889,21 +2228,47 @@ export default function SOWDetailPage() {
               };
 
               // Extract decisions/comments from the API pipeline for each stage
-              const pipelineStages = (pipelineApiData as any)?.data?.stages ?? (pipelineApiData as any)?.data ?? [];
+              const pipelineRawData = (pipelineApiData as any)?.data ?? {};
+              const pipelineStageArr: any[] =
+                Array.isArray(pipelineRawData?.stages) ? pipelineRawData.stages
+                : Array.isArray(pipelineRawData?.approval_stages) ? pipelineRawData.approval_stages
+                : Array.isArray(pipelineRawData) ? pipelineRawData
+                : [];
+              const stageNumLookup: Record<string, number> = { business: 1, glimmora_commercial: 2, legal: 3, security: 4, final: 5 };
               const stageDecisions: Array<{ decision: string; comments: string; decided_at: string; decided_by: string; reply?: string }> =
                 (() => {
-                  const stage = Array.isArray(pipelineStages)
-                    ? pipelineStages.find((s: any) => s.stage_number === activeApprovalIdx + 1 || s.stage === activeApprovalIdx + 1)
-                    : null;
-                  const raw = stage?.decisions ?? stage?.comments ?? [];
-                  if (!Array.isArray(raw)) return [];
-                  return raw.map((d: any) => ({
-                    decision: String(d.decision ?? d.type ?? "comment"),
-                    comments: String(d.comments ?? d.message ?? d.text ?? ""),
-                    decided_at: String(d.decided_at ?? d.created_at ?? d.timestamp ?? ""),
-                    decided_by: String(d.decided_by?.name ?? d.decided_by?.email ?? d.author ?? d.reviewer ?? "Admin"),
-                    reply: d.reply ? String(d.reply) : undefined,
-                  }));
+                  const targetNum = activeApprovalIdx + 1;
+                  const stage = pipelineStageArr.find((s: any) => {
+                    const sVal = s.stage ?? s.stage_key ?? s.stage_number;
+                    if (typeof sVal === "number") return sVal === targetNum;
+                    if (typeof sVal === "string") return stageNumLookup[sVal] === targetNum || Number(sVal) === targetNum;
+                    return false;
+                  });
+                  if (!stage) return [];
+                  const raw = stage?.decisions ?? [];
+                  const entries: Array<{ decision: string; comments: string; decided_at: string; decided_by: string; reply?: string }> = [];
+                  // Stage-level comment string (from approve/reject action)
+                  if (typeof stage.comments === "string" && stage.comments.trim()) {
+                    entries.push({
+                      decision: String(stage.status ?? "comment"),
+                      comments: stage.comments,
+                      decided_at: String(stage.decided_at ?? stage.updated_at ?? ""),
+                      decided_by: String(stage.reviewer_name ?? stage.reviewer ?? ""),
+                    });
+                  }
+                  // Individual decision entries
+                  if (Array.isArray(raw)) {
+                    raw.forEach((d: any) => {
+                      entries.push({
+                        decision: String(d.decision ?? d.type ?? "comment"),
+                        comments: String(d.comments ?? d.message ?? d.text ?? ""),
+                        decided_at: String(d.decided_at ?? d.created_at ?? d.timestamp ?? ""),
+                        decided_by: String(d.decided_by?.name ?? d.decided_by?.email ?? d.author ?? d.reviewer ?? ""),
+                        reply: d.reply ? String(d.reply) : undefined,
+                      });
+                    });
+                  }
+                  return entries;
                 })();
 
               const isChangesRequested = changesRequestedStageIdx >= 0;
@@ -1949,14 +2314,55 @@ export default function SOWDetailPage() {
                         <CheckCircle2 className="w-4 h-4 text-forest-600 shrink-0" />
                         <p className="text-[13px] text-forest-800 font-medium">All stages approved — SOW is fully signed off.</p>
                       </div>
-                      <Link
-                        href={sow.planId ? `/enterprise/decomposition/${sow.planId}` : `/enterprise/decomposition?sowId=${sow.id}`}
-                        className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all"
-                        style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
-                      >
-                        <GitBranch className="w-3.5 h-3.5" />
-                        {sow.planId ? "View Plan" : "Start Decomposition"}
-                      </Link>
+                      {sow.planId ? (
+                        <Link
+                          href={`/enterprise/decomposition`}
+                          className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all"
+                          style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
+                        >
+                          <GitBranch className="w-3.5 h-3.5" />
+                          View Decomposition
+                        </Link>
+                      ) : sow.intakeMode === "ai_generated" ? (
+                        <button
+                          onClick={handleStartDecomposition}
+                          disabled={isDecomposing}
+                          className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                          style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
+                        >
+                          <GitBranch className="w-3.5 h-3.5" />
+                          {isDecomposing ? "Starting…" : decompositionStarted ? "View Decomposition" : "Start Decomposition"}
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/enterprise/decomposition?sowId=${sow.id}`}
+                          className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all"
+                          style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
+                        >
+                          <GitBranch className="w-3.5 h-3.5" />
+                          Start Decomposition
+                        </Link>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Pipeline metadata from API ── */}
+                  {pipelineInfo && (
+                    <div className="flex items-center justify-between gap-3 px-5 py-2.5 bg-beige-50/60 border-b border-beige-100">
+                      {pipelineInfo.approvalRoute && (
+                        <p className="text-[11px] text-beige-500 truncate">
+                          <span className="font-semibold text-beige-600 mr-1">Route:</span>
+                          {pipelineInfo.approvalRoute}
+                        </p>
+                      )}
+                      <span className={cn(
+                        "shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full",
+                        pipelineInfo.overallStatus === "completed" ? "bg-forest-100 text-forest-700"
+                          : pipelineInfo.overallStatus === "in_progress" ? "bg-teal-100 text-teal-700"
+                          : "bg-beige-100 text-beige-600"
+                      )}>
+                        {pipelineInfo.overallStatus.replace(/_/g, " ")}
+                      </span>
                     </div>
                   )}
 
@@ -1975,8 +2381,9 @@ export default function SOWDetailPage() {
                           : idx === activeApprovalIdx && !isDone;
                         const isRejected = stage.status === "rejected";
                         const meta = STAGE_META[stage.stage] ?? { name: stage.stage, role: "" };
+                        const extStage = stage as typeof stage & { slaStatus?: string; slaDueDays?: number };
                         return (
-                          <div key={stage.stage} className="relative z-10 flex flex-col items-center gap-2 flex-1">
+                          <div key={stage.stage} className="relative z-10 flex flex-col items-center gap-1.5 flex-1">
                             <div className={cn(
                               "w-10 h-10 rounded-full border-2 flex items-center justify-center bg-white shrink-0 transition-all",
                               isApproved ? "bg-teal-500 border-teal-500 shadow-md shadow-teal-100" :
@@ -2000,6 +2407,16 @@ export default function SOWDetailPage() {
                               <p className={cn("text-[10px] mt-0.5",
                                 isApproved ? "text-teal-500" : isActive ? "text-teal-600" : "text-beige-400"
                               )}>{meta.role}</p>
+                              {(isActive || isApproved) && extStage.slaDueDays != null && (
+                                <span className={cn(
+                                  "mt-1 inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded-full",
+                                  extStage.slaStatus === "on_track" ? "bg-teal-50 text-teal-600" :
+                                  extStage.slaStatus === "at_risk"  ? "bg-gold-50 text-gold-600" :
+                                  "bg-brown-50 text-brown-600"
+                                )}>
+                                  {isApproved ? "✓ Done" : `${extStage.slaDueDays}d SLA`}
+                                </span>
+                              )}
                             </div>
                           </div>
                         );

@@ -210,7 +210,7 @@ export const useSOWUploadStore = create<SOWUploadState>()(
       /* Commercial Details */
       commercialDetails: emptyCommercialDetails,
       commercialSectionStatus: { ...defaultSectionStatus },
-      approvalAuthorities: { businessOwnerApprover: "", finalApprover: "" },
+      approvalAuthorities: { businessOwnerApprover: "", finalApprover: "", legalComplianceReviewer: "" },
       updateCommercialSection: (key, data) =>
         set((s) => ({
           commercialDetails: {
@@ -260,7 +260,7 @@ export const useSOWUploadStore = create<SOWUploadState>()(
           gapItems: [],
           commercialDetails: emptyCommercialDetails,
           commercialSectionStatus: { ...defaultSectionStatus },
-          approvalAuthorities: { businessOwnerApprover: "", finalApprover: "" },
+          approvalAuthorities: { businessOwnerApprover: "", finalApprover: "", legalComplianceReviewer: "" },
           generationState: "idle",
           previewState: null,
           lastAutoSaved: null,

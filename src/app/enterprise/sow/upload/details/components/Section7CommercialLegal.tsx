@@ -6,7 +6,7 @@ import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { validateSection, validateField, type SectionErrors } from "@/lib/validations/sow-upload-details";
 import { SectionHeader, SectionFooter, Field, CustomSelect, inputCls } from "./_shared";
 
-interface Props { onComplete: () => void; onBack?: () => void }
+interface Props { onComplete: () => void; onBack?: () => void; loading?: boolean }
 
 const IP_OPTIONS = [
   { value: "client_owns_all",            label: "Client Owns All IP",              description: "Full IP transfer to client upon milestone 3 delivery" },
@@ -18,11 +18,13 @@ const IP_OPTIONS = [
 const SOURCE_CODE_OPTIONS = [
   { value: "glimmora_hosts_transfer",  label: "GlimmoraTeam Hosts → Transfers on M3", description: "Repository hosted by GlimmoraTeam, transferred at milestone 3" },
   { value: "client_provides_day_one", label: "Client Provides Repository",             description: "Client-owned repository from day one of engagement" },
+  { value: "client_hosts",            label: "Client Hosts",                           description: "Client manages and hosts the repository throughout the engagement" },
 ];
 
 const THIRD_PARTY_OPTIONS = [
   { value: "client_pays",      label: "Client Pays Directly", description: "All third-party licensing costs billed directly to client" },
   { value: "glimmora_absorbs", label: "Absorbed in Quote",    description: "GlimmoraTeam absorbs third-party costs within the quoted price" },
+  { value: "split",            label: "Split Cost",           description: "Third-party costs shared equally between client and GlimmoraTeam" },
 ];
 
 const CHANGE_REQUEST_OPTIONS = [
@@ -76,7 +78,7 @@ function UserInput({ value, onChange, onBlur, placeholder, error }: {
   );
 }
 
-export function Section7CommercialLegal({ onComplete, onBack }: Props) {
+export function Section7CommercialLegal({ onComplete, onBack, loading }: Props) {
   const store = useSOWUploadStore();
   const data = store.commercialDetails.commercialLegal;
   const auth = store.approvalAuthorities;
@@ -202,12 +204,30 @@ export function Section7CommercialLegal({ onComplete, onBack }: Props) {
                 placeholder="Full name of Business Owner"
               />
             </Field>
+
+            <Field label="Legal & Compliance Reviewer" error={errors.legalComplianceReviewer}>
+              <UserInput
+                value={auth.legalComplianceReviewer ?? ""}
+                onChange={(v) => updateAuth({ legalComplianceReviewer: v })}
+                onBlur={() => blurField("legalComplianceReviewer")}
+                placeholder="Full name of Legal & Compliance Reviewer"
+              />
+            </Field>
+
+            <Field label="Final Approver" error={errors.finalApprover}>
+              <UserInput
+                value={auth.finalApprover}
+                onChange={(v) => updateAuth({ finalApprover: v })}
+                onBlur={() => blurField("finalApprover")}
+                placeholder="Full name of Final Approver"
+              />
+            </Field>
           </div>
         </SubSection>
 
       </div>
 
-      <SectionFooter onBack={onBack} onComplete={handleComplete} completeLabel="Generate Final SOW" variant="generate" />
+      <SectionFooter onBack={onBack} onComplete={handleComplete} completeLabel="Generate Final SOW" variant="generate" loading={loading} />
     </>
   );
 }

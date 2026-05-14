@@ -179,6 +179,19 @@ export interface ContributorSettingsResponse {
   quiet_hours_start: string;
   quiet_hours_end: string;
   two_factor_enabled: boolean;
+  // Read-only freelancer summary surfaced on the settings page.
+  // Editing happens on /contributor/profile.
+  freelancer_profile?: {
+    full_name: string | null;
+    skills: string[];
+    experience_level: string | null;
+    portfolio_url: string | null;
+    linkedin: string | null;
+    weekly_hours: number | null;
+    availability: string | null;
+    country: string | null;
+    city: string | null;
+  };
 }
 
 export async function fetchContributorSettings(
@@ -1043,6 +1056,7 @@ export interface PayoutPreferences {
   account_number: string | null;
   bank_name:      string | null;
   routing_code:   string | null;
+  ifsc_code:      string | null;
   country:        string | null;
   provider:       string | null;
   phone_number:   string | null;
@@ -1770,6 +1784,23 @@ export async function fetchSupportTicketDetail(
   );
 }
 
+export type SupportTicketStatus = "open" | "in_progress" | "resolved" | "closed";
+
+export async function updateSupportTicketStatus(
+  token: string,
+  ticketId: string,
+  status: SupportTicketStatus,
+): Promise<SupportTicketDetail> {
+  return apiCall<SupportTicketDetail>(
+    `/api/contributor/support/tickets/${encodeURIComponent(ticketId)}`,
+    {
+      method: "PATCH",
+      token,
+      body: JSON.stringify({ status }),
+    },
+  );
+}
+
 export interface PostTicketMessagePayload {
   message: string;
   attachment_ids?: string[];
@@ -2325,6 +2356,15 @@ export interface ContributorProfileResponse {
   country?: string;
   city?: string;
   skills?: ContributorProfileSkillApi[];
+  // Signup-time fields (returned by backend, surfaced in Personal Details).
+  date_of_birth?: string | null;
+  department_category?: string | null;
+  department_other?: string | null;
+  degree?: string | null;
+  linkedin?: string | null;
+  primary_skills?: string[] | null;
+  secondary_skills?: string[] | null;
+  other_skills?: string[] | null;
   [key: string]: unknown;
 }
 
@@ -2376,6 +2416,17 @@ export type ProfileUiState = {
   weeklyHours: number;
   availability: string;
   skills: ProfileUiSkill[];
+  // Signup-time fields surfaced in Personal Details.
+  country?: string;
+  phone?: string;
+  dob?: string | null;
+  departmentCategory?: string | null;
+  departmentOther?: string | null;
+  degree?: string | null;
+  linkedin?: string | null;
+  primarySkills: string[];
+  secondarySkills: string[];
+  otherSkills: string[];
 };
 
 export function mapContributorProfileToUi(
@@ -2412,6 +2463,16 @@ export function mapContributorProfileToUi(
       evidenceCount: Number(sk.evidence_count ?? 0),
       lastValidatedAt: sk.last_validated_at,
     })),
+    country: raw.country,
+    phone: raw.phone,
+    dob: raw.date_of_birth,
+    departmentCategory: raw.department_category,
+    departmentOther: raw.department_other,
+    degree: raw.degree,
+    linkedin: raw.linkedin,
+    primarySkills: raw.primary_skills ?? [],
+    secondarySkills: raw.secondary_skills ?? [],
+    otherSkills: raw.other_skills ?? [],
   };
 }
 
@@ -2846,4 +2907,46 @@ export async function fetchPublicCredential(shareId: string): Promise<PublicCred
   }
 
   return res.json() as Promise<PublicCredential>;
+}
+
+// ── Contributor universal search ─────────────────────────────────────────────
+
+export type ContributorSearchResultType = "task" | "learning" | "submission";
+
+export interface ContributorSearchResult {
+  type: ContributorSearchResultType;
+  id: string;
+  title: string;
+  subtitle: string | null;
+  url: string | null;
+  score: number;
+}
+
+export interface ContributorSearchResponse {
+  query: string;
+  total: number;
+  results: ContributorSearchResult[];
+}
+
+export async function searchContributor(
+  token: string,
+  contributorId: string,
+  query: string,
+  options?: { limit?: number; signal?: AbortSignal },
+): Promise<ContributorSearchResponse> {
+  const limit = options?.limit ?? 20;
+  const path = `/api/contributor/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+  const res = await fetchInternal(path, {
+    method: "GET",
+    headers: profileHeaders(token, contributorId),
+    signal: options?.signal,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: `Error ${res.status}` }));
+    throw new ApiError(
+      res.status,
+      (body as { detail?: string })?.detail ?? `Search failed (${res.status})`,
+    );
+  }
+  return res.json() as Promise<ContributorSearchResponse>;
 }

@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import {
   Mail, Clock, Globe, Shield,
-  Calendar, Pencil, Briefcase,
+  Calendar, Pencil, Briefcase, Phone,
   ArrowRight, AlertCircle, RefreshCw, ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
@@ -18,6 +18,7 @@ import {
   type ProfileUiState,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Badge ═══ */
 
@@ -84,7 +85,7 @@ function emptyProfileState(
 
 export default function ProfilePage() {
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
   const contributorId = session?.user?.id ?? "";
 
   const sessionName = session?.user?.name ?? "";
@@ -328,6 +329,26 @@ export default function ProfilePage() {
           <div className="space-y-1">
             <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Availability</p>
             <p className="text-[13px] text-gray-800">{(profile as any).weeklyHours ? `${(profile as any).weeklyHours} hrs/week` : "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1"><Phone className="w-3 h-3" /> Phone</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).phone || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Job Title</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).jobTitle || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Department (Other)</p>
+            <p className="text-[13px] text-gray-800">{(profile as any).departmentOther || "—"}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Preferred Work Hours</p>
+            <p className="text-[13px] text-gray-800">
+              {(profile as any).workStart || (profile as any).workEnd
+                ? `${(profile as any).workStart || "—"} – ${(profile as any).workEnd || "—"}`
+                : "—"}
+            </p>
           </div>
 
           <div className="space-y-1 sm:col-span-2">

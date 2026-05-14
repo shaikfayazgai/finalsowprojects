@@ -27,6 +27,7 @@ import {
   type AcademicPortfolioResponse,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══ Badge ═══ */
 
@@ -112,7 +113,7 @@ export default function CredentialDetailPage() {
   const params = useParams();
   const credentialId = params.credentialId as string;
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.user?.accessToken;
+  const token = getContributorAccessToken(session);
 
   /* ── Credential state ── */
   const [credential, setCredential] = React.useState<Credential | null>(null);

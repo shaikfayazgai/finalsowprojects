@@ -727,7 +727,7 @@ export function toStep9(fd: FD) {
   return {
     business_owner_approver_id: fd.businessOwnerApprover,
     final_approver_id: fd.finalApprover || fd.businessOwnerApprover,
-    legal_compliance_reviewer_id: maybe(fd.legalReviewer),
+    legal_compliance_reviewer_id: maybe(fd.legalComplianceReviewer),
     security_reviewer_id: maybe(fd.securityReviewer),
   };
 }

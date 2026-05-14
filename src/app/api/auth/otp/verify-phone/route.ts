@@ -2,17 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { timingSafeEqual } from "node:crypto";
 
+export const runtime = "nodejs";
+
 function getSecret() {
   const s = process.env.AUTH_SECRET;
   if (!s) throw new Error("AUTH_SECRET not set");
   return new TextEncoder().encode(s);
 }
 
-function normalizeIndianPhone(raw: string): string | null {
+function normalizeIndianPhone(raw: string): { e164: string; local10: string } | null {
   const digits = raw.replace(/\D/g, "");
-  if (digits.length === 10) return `+91${digits}`;
-  if (digits.length === 12 && digits.startsWith("91")) return `+${digits}`;
-  if (digits.length === 13 && digits.startsWith("091")) return `+91${digits.slice(3)}`;
+  if (digits.length === 10) {
+    return { e164: `+91${digits}`, local10: digits };
+  }
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return { e164: `+${digits}`, local10: digits.slice(2) };
+  }
+  if (digits.length === 13 && digits.startsWith("091")) {
+    return { e164: `+91${digits.slice(3)}`, local10: digits.slice(3) };
+  }
   return null;
 }
 
@@ -26,10 +34,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const normalizedPhone = normalizeIndianPhone(String(phone));
-    if (!normalizedPhone) {
+    const normalized = normalizeIndianPhone(String(phone));
+    if (!normalized) {
       return NextResponse.json(
-        { error: "INVALID_PHONE", message: "Please use a valid Indian mobile number." },
+        {
+          error: "INVALID_PHONE",
+          message:
+            "SMS OTP supports Indian mobile numbers only (10 digits, or +91…). Example: 9876543210.",
+        },
         { status: 400 },
       );
     }
@@ -55,7 +67,7 @@ export async function POST(req: NextRequest) {
       return res;
     }
 
-    if (payload.phone !== normalizedPhone) {
+    if (payload.phone !== normalized.e164) {
       return NextResponse.json(
         { error: "PHONE_MISMATCH", message: "Phone number does not match. Please request a new code." },
         { status: 400 },
@@ -73,7 +85,10 @@ export async function POST(req: NextRequest) {
 
     const expected = Buffer.from(payload.code);
     const received = Buffer.from(String(code).padEnd(payload.code.length, " "));
-    const match = expected.length === received.length && timingSafeEqual(expected, received);
+    const match =
+      expected.length === received.length &&
+      timingSafeEqual(expected, received);
+
     if (!match) {
       return NextResponse.json(
         { error: "WRONG_CODE", message: "Incorrect code. Please check and try again." },

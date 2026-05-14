@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { fetchInternal } from "@/lib/api/client";
 import {
   Mail, RotateCcw, Send, Save, Check, Eye, EyeOff,
-  SendHorizonal, Info, HelpCircle,
+  SendHorizonal, Info, HelpCircle, Settings, Loader2, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 import {
   useEmailTemplateStore,
@@ -13,6 +13,29 @@ import {
   type EmailTemplate,
   DEFAULT_TEMPLATES,
 } from "@/lib/stores/email-template-store";
+
+/* ── SMTP Provider Types ── */
+
+interface SMTPConfig {
+  provider: "office365" | "gmail" | "sendgrid" | "custom";
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  fromAddress: string;
+  fromName: string;
+  replyToAddress: string;
+  useTLS: boolean;
+  useSSL: boolean;
+  active: boolean;
+  lastTested?: string;
+}
+
+const SMTP_PROVIDERS: Record<string, { host: string; port: number; useTLS: boolean; useSSL: boolean }> = {
+  office365: { host: "smtp.office365.com", port: 587, useTLS: true, useSSL: false },
+  gmail: { host: "smtp.gmail.com", port: 587, useTLS: true, useSSL: false },
+  sendgrid: { host: "smtp.sendgrid.net", port: 587, useTLS: true, useSSL: false },
+};
 
 /* ── Constants ── */
 
@@ -282,6 +305,30 @@ export default function AdminEmailTemplatesPage() {
   const [sendingAll, setSendingAll] = React.useState(false);
   const [allSentResults, setAllSentResults] = React.useState<{ id: EmailTemplateId; ok: boolean }[]>([]);
 
+  // ── Tab state ──
+  const [activeTab, setActiveTab] = React.useState<"templates" | "smtp">("templates");
+
+  // ── SMTP Config state ──
+  const [smtpConfig, setSmtpConfig] = React.useState<SMTPConfig>({
+    provider: "office365",
+    host: "smtp.office365.com",
+    port: 587,
+    username: "",
+    password: "",
+    fromAddress: "",
+    fromName: "Glimmora",
+    replyToAddress: "",
+    useTLS: true,
+    useSSL: false,
+    active: false,
+    lastTested: "4/16/2026, 9:28:30 PM",
+  });
+  const [smtpSaving, setSmtpSaving] = React.useState(false);
+  const [smtpSaved, setSmtpSaved] = React.useState(false);
+  const [smtpError, setSmtpError] = React.useState("");
+  const [smtpTesting, setSmtpTesting] = React.useState(false);
+  const [smtpTestResult, setSmtpTestResult] = React.useState<"idle" | "success" | "error">("idle");
+
   const template = templates[selectedId];
   const [draft, setDraft] = React.useState<EmailTemplate>(template);
   React.useEffect(() => { setDraft(templates[selectedId]); }, [selectedId, templates]);
@@ -371,31 +418,138 @@ export default function AdminEmailTemplatesPage() {
     setSendingAll(false);
   }
 
+  // ── SMTP handlers ──
+  function handleProviderChange(newProvider: string) {
+    const provider = newProvider as "office365" | "gmail" | "sendgrid" | "custom";
+    const preset = SMTP_PROVIDERS[provider];
+    setSmtpConfig((c) => ({
+      ...c,
+      provider,
+      ...(preset && { host: preset.host, port: preset.port, useTLS: preset.useTLS, useSSL: preset.useSSL }),
+    }));
+  }
+
+  async function handleSmtpSave() {
+    setSmtpSaving(true);
+    setSmtpError("");
+    try {
+      const res = await fetchInternal("/api/admin/email-settings/smtp", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(smtpConfig),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setSmtpSaved(true);
+        setTimeout(() => setSmtpSaved(false), 2000);
+      } else {
+        setSmtpError(data?.message || "Failed to save SMTP config");
+      }
+    } catch (err) {
+      setSmtpError(err instanceof Error ? err.message : "Failed to save SMTP config");
+    } finally {
+      setSmtpSaving(false);
+    }
+  }
+
+  async function handleSmtpTest() {
+    setSmtpTesting(true);
+    setSmtpTestResult("idle");
+    try {
+      const res = await fetchInternal("/api/admin/email-settings/smtp/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(smtpConfig),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setSmtpTestResult("success");
+        setSmtpConfig((c) => ({ ...c, lastTested: new Date().toLocaleString() }));
+      } else {
+        setSmtpTestResult("error");
+        setSmtpError(data?.message || "SMTP test failed");
+      }
+    } catch (err) {
+      setSmtpTestResult("error");
+      setSmtpError(err instanceof Error ? err.message : "SMTP test failed");
+    } finally {
+      setSmtpTesting(false);
+      setTimeout(() => setSmtpTestResult("idle"), 3000);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      {/* Page header */}
+      {/* Page header with tabs */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brown-500 to-brown-700 flex items-center justify-center">
             <Mail className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-heading text-2xl font-bold text-brown-950">Email Templates</h1>
-            <p className="text-sm text-beige-600 mt-0.5">Customize the emails your users receive from Glimmora</p>
+            <h1 className="font-heading text-2xl font-bold text-brown-950">
+              {activeTab === "templates" ? "Email Templates" : "Email Settings"}
+            </h1>
+            <p className="text-sm text-beige-600 mt-0.5">
+              {activeTab === "templates"
+                ? "Customize the emails your users receive from Glimmora"
+                : "Configure your SMTP provider and email delivery settings"}
+            </p>
           </div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setShowPreview((v) => !v)} style={secondaryBtn}>
-            {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
-            {showPreview ? "Hide Preview" : "Show Preview"}
-          </button>
-          <button onClick={handleSave} disabled={!isDirty} style={{ ...primaryBtn, opacity: isDirty ? 1 : 0.45 }}>
-            {savedId === selectedId ? <Check size={14} /> : <Save size={14} />}
-            {savedId === selectedId ? "Saved!" : "Save Changes"}
-          </button>
         </div>
       </div>
 
+      {/* Tab navigation */}
+      <div className="flex gap-1 border-b border-beige-200">
+        <button
+          onClick={() => setActiveTab("templates")}
+          style={{
+            padding: "10px 16px",
+            borderBottom: activeTab === "templates" ? "2px solid #A67763" : "2px solid transparent",
+            background: "transparent",
+            color: activeTab === "templates" ? "#A67763" : "#9ca3af",
+            fontSize: 13,
+            fontWeight: activeTab === "templates" ? 600 : 500,
+            cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+        >
+          <Mail size={14} className="inline mr-2" style={{ verticalAlign: "text-bottom" }} />
+          Email Templates
+        </button>
+        <button
+          onClick={() => setActiveTab("smtp")}
+          style={{
+            padding: "10px 16px",
+            borderBottom: activeTab === "smtp" ? "2px solid #A67763" : "2px solid transparent",
+            background: "transparent",
+            color: activeTab === "smtp" ? "#A67763" : "#9ca3af",
+            fontSize: 13,
+            fontWeight: activeTab === "smtp" ? 600 : 500,
+            cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+        >
+          <Settings size={14} className="inline mr-2" style={{ verticalAlign: "text-bottom" }} />
+          SMTP Settings
+        </button>
+      </div>
+
+      {activeTab === "templates" && (
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setShowPreview((v) => !v)} style={secondaryBtn}>
+          {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+          {showPreview ? "Hide Preview" : "Show Preview"}
+        </button>
+        <button onClick={handleSave} disabled={!isDirty} style={{ ...primaryBtn, opacity: isDirty ? 1 : 0.45 }}>
+          {savedId === selectedId ? <Check size={14} /> : <Save size={14} />}
+          {savedId === selectedId ? "Saved!" : "Save Changes"}
+        </button>
+      </div>
+      )}
+
+      {activeTab === "templates" && (
+      <>
       {/* Send All Tests banner */}
       <div className="rounded-xl border border-beige-100 bg-white px-5 py-4">
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" as const }}>
@@ -667,6 +821,244 @@ export default function AdminEmailTemplatesPage() {
 
         </div>
       </div>
+      </>
+      )}
+
+      {activeTab === "smtp" && (
+      <div className="rounded-xl border border-beige-100 bg-white overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-beige-100">
+          <div>
+            <p className="font-semibold text-sm text-brown-950">SMTP Provider Configuration</p>
+            <p className="text-xs text-beige-500 mt-0.5">Configure your mail server for email delivery</p>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
+          {smtpError && (
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 14px",
+              borderRadius: 8, background: "rgba(185,28,28,0.08)", border: "1px solid rgba(185,28,28,0.2)",
+            }}>
+              <AlertTriangle size={16} style={{ color: "#B91C1C", flexShrink: 0, marginTop: 1 }} />
+              <p style={{ fontSize: 13, color: "#B91C1C", margin: 0, lineHeight: 1.5 }}>{smtpError}</p>
+            </div>
+          )}
+
+          {/* SMTP Provider dropdown */}
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+              SMTP Provider <span style={{ color: "#DC2626" }}>*</span>
+            </label>
+            <p style={{ fontSize: 12, color: "#9ca3af", margin: "0 0 8px", lineHeight: 1.5 }}>
+              Select a provider to auto-fill server details, or choose Custom
+            </p>
+            <select
+              value={smtpConfig.provider}
+              onChange={(e) => handleProviderChange(e.target.value)}
+              style={{
+                ...inputStyle, appearance: "none", paddingRight: 32,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236A4C3F' d='M1 1l5 5 5-5'/%3E%3C/svg%3E")`,
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 12px center",
+              }}
+            >
+              <option value="office365">Office 365</option>
+              <option value="gmail">Gmail / Google Workspace</option>
+              <option value="sendgrid">SendGrid</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+
+          {/* SMTP Host & Port */}
+          <div style={{ display: "flex", gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+                SMTP Host <span style={{ color: "#DC2626" }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={smtpConfig.host}
+                onChange={(e) => setSmtpConfig((c) => ({ ...c, host: e.target.value }))}
+                style={inputStyle}
+                placeholder="smtp.office365.com"
+              />
+            </div>
+            <div style={{ flex: "0 0 120px" }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+                Port <span style={{ color: "#DC2626" }}>*</span>
+              </label>
+              <input
+                type="number"
+                value={smtpConfig.port}
+                onChange={(e) => setSmtpConfig((c) => ({ ...c, port: Number(e.target.value) }))}
+                style={inputStyle}
+                placeholder="587"
+              />
+            </div>
+          </div>
+
+          {/* SMTP Username & Password */}
+          <div style={{ display: "flex", gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+                SMTP Username <span style={{ color: "#DC2626" }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={smtpConfig.username}
+                onChange={(e) => setSmtpConfig((c) => ({ ...c, username: e.target.value }))}
+                style={inputStyle}
+                placeholder="your-email@example.com"
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+                SMTP Password
+              </label>
+              <input
+                type="password"
+                value={smtpConfig.password}
+                onChange={(e) => setSmtpConfig((c) => ({ ...c, password: e.target.value }))}
+                style={inputStyle}
+                placeholder="Leave blank to keep current"
+              />
+            </div>
+          </div>
+
+          {/* From Address & From Name */}
+          <div style={{ display: "flex", gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+                From Address <span style={{ color: "#DC2626" }}>*</span>
+              </label>
+              <input
+                type="email"
+                value={smtpConfig.fromAddress}
+                onChange={(e) => setSmtpConfig((c) => ({ ...c, fromAddress: e.target.value }))}
+                style={inputStyle}
+                placeholder="noreply@example.com"
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+                From Name
+              </label>
+              <input
+                type="text"
+                value={smtpConfig.fromName}
+                onChange={(e) => setSmtpConfig((c) => ({ ...c, fromName: e.target.value }))}
+                style={inputStyle}
+                placeholder="Glimmora"
+              />
+            </div>
+          </div>
+
+          {/* Reply-To Address */}
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+              Reply-To Address
+            </label>
+            <input
+              type="email"
+              value={smtpConfig.replyToAddress}
+              onChange={(e) => setSmtpConfig((c) => ({ ...c, replyToAddress: e.target.value }))}
+              style={inputStyle}
+              placeholder="support@example.com"
+            />
+          </div>
+
+          {/* Encryption toggles */}
+          <div style={{ display: "flex", gap: 24 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={smtpConfig.useTLS}
+                onChange={(e) => setSmtpConfig((c) => ({ ...c, useTLS: e.target.checked }))}
+                style={{ accentColor: "#A67763", width: 18, height: 18 }}
+              />
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#374151" }}>Use TLS</p>
+                <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>Enable TLS encryption (recommended for port 587)</p>
+              </div>
+            </label>
+          </div>
+
+          <div style={{ display: "flex", gap: 24 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={smtpConfig.useSSL}
+                onChange={(e) => setSmtpConfig((c) => ({ ...c, useSSL: e.target.checked }))}
+                style={{ accentColor: "#A67763", width: 18, height: 18 }}
+              />
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#374151" }}>Use SSL</p>
+                <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>Enable SSL encryption (for port 465)</p>
+              </div>
+            </label>
+          </div>
+
+          {/* Active toggle */}
+          <div style={{ paddingTop: 8, borderTop: "1px solid rgba(166,119,99,0.1)" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={smtpConfig.active}
+                onChange={(e) => setSmtpConfig((c) => ({ ...c, active: e.target.checked }))}
+                style={{ accentColor: "#A67763", width: 18, height: 18 }}
+              />
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: smtpConfig.active ? "#2D6A4F" : "#9ca3af" }}>
+                  {smtpConfig.active ? "Active — Email sending enabled" : "Inactive — Email sending disabled"}
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Last tested */}
+          {smtpConfig.lastTested && (
+            <div style={{
+              padding: "10px 12px", borderRadius: 8, background: "rgba(166,119,99,0.05)",
+              border: "1px solid rgba(166,119,99,0.15)", fontSize: 12, color: "#6b7280",
+            }}>
+              Last tested: {smtpConfig.lastTested}
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 8, borderTop: "1px solid rgba(166,119,99,0.1)" }}>
+            <button
+              onClick={handleSmtpTest}
+              disabled={smtpTesting}
+              style={{
+                ...secondaryBtn,
+                opacity: smtpTesting ? 0.6 : 1,
+                ...(smtpTestResult === "error" ? { borderColor: "rgba(185,28,28,0.4)", color: "#B91C1C" } : {}),
+                ...(smtpTestResult === "success" ? { borderColor: "rgba(45,106,79,0.4)", color: "#2D6A4F" } : {}),
+              }}
+            >
+              {smtpTestResult === "success" && <CheckCircle2 size={13} />}
+              {smtpTestResult === "error" && <AlertTriangle size={13} />}
+              {smtpTesting && <Loader2 size={13} className="animate-spin" />}
+              {smtpTestResult === "success" ? "Test Passed" : smtpTestResult === "error" ? "Test Failed" : smtpTesting ? "Testing…" : "Test Connection"}
+            </button>
+            <button
+              onClick={handleSmtpSave}
+              disabled={smtpSaving}
+              style={{
+                ...primaryBtn,
+                opacity: smtpSaving ? 0.6 : 1,
+              }}
+            >
+              {smtpSaved ? <Check size={13} /> : smtpSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              {smtpSaved ? "Saved!" : smtpSaving ? "Saving…" : "Save Config"}
+            </button>
+          </div>
+        </div>
+      </div>
+      )}
     </div>
   );
 }

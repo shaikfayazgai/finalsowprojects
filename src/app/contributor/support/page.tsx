@@ -21,6 +21,7 @@ import {
   fetchSupportTicketDetail, type SupportTicketDetail,
   createSupportTicket,
   postSupportTicketMessage,
+  updateSupportTicketStatus, type SupportTicketStatus,
   fetchGrievances, type GrievanceItem,
   createGrievance,
   fetchGrievanceDetail, type GrievanceDetail,
@@ -29,6 +30,7 @@ import {
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { ApiError } from "@/lib/api/client";
 import { toast } from "@/lib/stores/toast-store";
+import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
@@ -209,6 +211,7 @@ function NewTicketForm({
   const [submitted,   setSubmitted]   = React.useState(false);
   const [ticketId,    setTicketId]    = React.useState("");
   const [submitError, setSubmitError] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const canSubmit = subject.trim() && description.trim() && !submitting;
 
@@ -218,15 +221,15 @@ function NewTicketForm({
     setSubmitError(null);
     try {
       const result = await createSupportTicket(token, {
-        subject:     subject.trim(),
+        subject:        subject.trim(),
         category,
         priority,
-        description: description.trim(),
-        attachment_ids: [],          // file upload API not yet available
+        description:    description.trim(),
+        attachment_ids: [],
       });
       setTicketId(result.id);
       setSubmitted(true);
-      onSuccess?.();                 // refresh ticket list
+      onSuccess?.();
       setTimeout(() => onClose(), 3500);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Failed to submit ticket. Please try again.";
@@ -235,6 +238,13 @@ function NewTicketForm({
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleTicketFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setAttachments((prev) => [...prev, ...files.map((f) => f.name)]);
+    e.currentTarget.value = "";
   };
 
   if (submitted) {
@@ -269,6 +279,7 @@ function NewTicketForm({
               <SelectItem value="task_question">Task Question</SelectItem>
               <SelectItem value="payment">Payment Issue</SelectItem>
               <SelectItem value="safety">Safety Concern</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -305,8 +316,9 @@ function NewTicketForm({
               </button>
             </span>
           ))}
+          <input ref={fileInputRef} onChange={handleTicketFiles} aria-hidden multiple type="file" className="hidden" />
           <button
-            onClick={() => setAttachments((p) => [...p, `file_${p.length + 1}.png`])}
+            onClick={() => fileInputRef.current?.click()}
             className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-400 hover:text-gray-600 border border-dashed border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
           >
             <Upload className="w-3 h-3" /> Add file
@@ -374,6 +386,7 @@ function NewGrievanceForm({
   const [submitted,      setSubmitted]      = React.useState(false);
   const [refId,          setRefId]          = React.useState("");
   const [submitError,    setSubmitError]    = React.useState<string | null>(null);
+  const grvFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const canSubmit = grvSubject.trim() && grvDescription.trim() && !submitting;
 
@@ -401,6 +414,13 @@ function NewGrievanceForm({
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleGrvFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setGrvAttachments((prev) => [...prev, ...files.map((f) => f.name)]);
+    e.currentTarget.value = "";
   };
 
   if (submitted) {
@@ -449,7 +469,8 @@ function NewGrievanceForm({
               <button onClick={() => setGrvAttachments((p) => p.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-red-500"><X className="w-3 h-3" /></button>
             </span>
           ))}
-          <button onClick={() => setGrvAttachments((p) => [...p, `evidence_${p.length + 1}.pdf`])} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-400 hover:text-gray-600 border border-dashed border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors">
+          <input ref={grvFileInputRef} onChange={handleGrvFiles} aria-hidden multiple type="file" className="hidden" />
+          <button onClick={() => grvFileInputRef.current?.click()} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-400 hover:text-gray-600 border border-dashed border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors">
             <Upload className="w-3 h-3" /> Upload evidence
           </button>
         </div>
@@ -494,6 +515,7 @@ function SafetyReportForm({ onClose, token }: { onClose: () => void; token: stri
   const [submitting, setSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [refId, setRefId] = React.useState("");
+  const safetyFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const handleSubmit = async () => {
     if (!safetyDescription.trim() || !token) return;
@@ -516,6 +538,13 @@ function SafetyReportForm({ onClose, token }: { onClose: () => void; token: stri
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSafetyFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setSafetyAttachments((prev) => [...prev, ...files.map((f) => f.name)]);
+    e.currentTarget.value = "";
   };
 
   if (submitted) {
@@ -564,7 +593,8 @@ function SafetyReportForm({ onClose, token }: { onClose: () => void; token: stri
               <button onClick={() => setSafetyAttachments((p) => p.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-red-500"><X className="w-3 h-3" /></button>
             </span>
           ))}
-          <button onClick={() => setSafetyAttachments((p) => [...p, `screenshot_${p.length + 1}.png`])} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-400 hover:text-gray-600 border border-dashed border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors">
+          <input ref={safetyFileInputRef} onChange={handleSafetyFiles} aria-hidden multiple type="file" className="hidden" />
+          <button onClick={() => safetyFileInputRef.current?.click()} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-400 hover:text-gray-600 border border-dashed border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors">
             <Upload className="w-3 h-3" /> Upload evidence
           </button>
         </div>
@@ -867,6 +897,34 @@ function TicketsTab({
   const [replySending,  setReplySending]  = React.useState<Set<string>>(new Set());
   const [replyError,    setReplyError]    = React.useState<Record<string, string>>({});
 
+  /* Status update in-flight per ticket */
+  const [statusUpdating, setStatusUpdating] = React.useState<Set<string>>(new Set());
+
+  const applyStatusToCaches = React.useCallback((ticketId: string, newStatus: string, updatedAt?: string) => {
+    setTickets((prev) => prev.map((tk) => tk.id === ticketId ? { ...tk, status: newStatus, updated_at: updatedAt ?? tk.updated_at } : tk));
+    setDetailCache((prev) => {
+      const existing = prev[ticketId];
+      if (!existing) return prev;
+      return { ...prev, [ticketId]: { ...existing, status: newStatus, updated_at: updatedAt ?? existing.updated_at } };
+    });
+  }, []);
+
+  const handleStatusChange = React.useCallback(async (ticketId: string, newStatus: SupportTicketStatus) => {
+    if (!token || statusUpdating.has(ticketId)) return;
+    setStatusUpdating((prev) => new Set(prev).add(ticketId));
+    try {
+      const updated = await updateSupportTicketStatus(token, ticketId, newStatus);
+      applyStatusToCaches(ticketId, updated.status, updated.updated_at);
+      const labels: Record<string, string> = { in_progress: "In Progress", resolved: "Resolved", closed: "Closed", open: "Open" };
+      toast.success("Status updated", `Ticket marked as ${labels[updated.status] ?? updated.status}.`);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to update status. Please try again.";
+      toast.error("Status update failed", msg);
+    } finally {
+      setStatusUpdating((prev) => { const s = new Set(prev); s.delete(ticketId); return s; });
+    }
+  }, [token, statusUpdating, applyStatusToCaches]);
+
   /* ── Fetch all tickets once ── */
   const load = React.useCallback(async (t: string) => {
     if (!t) return;
@@ -927,6 +985,14 @@ function TicketsTab({
       /* Clear reply box */
       setReplyText((prev) => { const n = { ...prev }; delete n[ticketId]; return n; });
       toast.success("Reply sent", "Your message has been sent to support.");
+      /* Auto-transition Open → In Progress when work begins on the ticket */
+      const currentTicket = tickets.find((t) => t.id === ticketId);
+      if (currentTicket?.status === "open") {
+        try {
+          const updated = await updateSupportTicketStatus(token, ticketId, "in_progress");
+          applyStatusToCaches(ticketId, updated.status, updated.updated_at);
+        } catch { /* best-effort */ }
+      }
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Failed to send reply. Please try again.";
       setReplyError((prev) => ({ ...prev, [ticketId]: msg }));
@@ -934,7 +1000,7 @@ function TicketsTab({
     } finally {
       setReplySending((prev) => { const s = new Set(prev); s.delete(ticketId); return s; });
     }
-  }, [token, replyText, replySending]);
+  }, [token, replyText, replySending, tickets, applyStatusToCaches]);
 
   /* ── Client-side status filter ── */
   const filteredTickets = React.useMemo(() => {
@@ -1139,6 +1205,53 @@ function TicketsTab({
                                 })}
                               </div>
                             )}
+
+                            {/* Status actions */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+                              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Manage Status</span>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {ticket.status === "open" && (
+                                  <button
+                                    onClick={() => handleStatusChange(ticket.id, "in_progress")}
+                                    disabled={statusUpdating.has(ticket.id)}
+                                    className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                                  >
+                                    {statusUpdating.has(ticket.id) ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Wrench className="w-3 h-3" />}
+                                    Start Working
+                                  </button>
+                                )}
+                                {(ticket.status === "open" || ticket.status === "in_progress") && (
+                                  <button
+                                    onClick={() => handleStatusChange(ticket.id, "resolved")}
+                                    disabled={statusUpdating.has(ticket.id)}
+                                    className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-forest-50 text-forest-600 hover:bg-forest-100 transition-colors disabled:opacity-50"
+                                  >
+                                    {statusUpdating.has(ticket.id) ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                                    Mark Resolved
+                                  </button>
+                                )}
+                                {ticket.status === "resolved" && (
+                                  <button
+                                    onClick={() => handleStatusChange(ticket.id, "closed")}
+                                    disabled={statusUpdating.has(ticket.id)}
+                                    className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                                  >
+                                    {statusUpdating.has(ticket.id) ? <RefreshCw className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                    Close Ticket
+                                  </button>
+                                )}
+                                {(ticket.status === "resolved" || ticket.status === "closed") && (
+                                  <button
+                                    onClick={() => handleStatusChange(ticket.id, "open")}
+                                    disabled={statusUpdating.has(ticket.id)}
+                                    className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                                  >
+                                    {statusUpdating.has(ticket.id) ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                    Reopen
+                                  </button>
+                                )}
+                              </div>
+                            </div>
 
                             {/* Resolved banner */}
                             {isResolved && (
@@ -1534,7 +1647,7 @@ type FormId = "ticket" | "grievance" | "safety" | null;
 export default function SupportPage() {
   const { data: session, status: sessionStatus } = useSession();
   const tokenRef = React.useRef<string>("");
-  if (session?.user?.accessToken) tokenRef.current = session.user.accessToken as string;
+  tokenRef.current = getContributorAccessToken(session) ?? "";
   const token = tokenRef.current;
 
   const [activeTab,            setActiveTab]            = React.useState<TabId>("help");

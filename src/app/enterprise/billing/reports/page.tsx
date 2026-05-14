@@ -27,9 +27,11 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { toast } from "@/lib/stores/toast-store";
-import { mockProjects } from "@/mocks/data/enterprise-projects";
+import { mockProjects, mockDeliverables, mockMilestones } from "@/mocks/data/enterprise-projects";
+import { mockInvoices } from "@/mocks/data/enterprise-billing";
+import { useRateCardsStore } from "@/lib/stores/rate-cards-store";
+import { buildSimpleReportPdf, downloadCSV, triggerDownload, todayStamp, type PdfTable } from "@/lib/utils/file-download";
 
 /* ── Report Type Definitions ── */
 const reportTypes = [
@@ -91,112 +93,15 @@ const recentExports = [
   { id: 4, name: "task-pricing-feb-2026.pdf", type: "Task Pricing", format: "PDF", date: "Feb 20, 2026", size: "1.8 MB" },
 ];
 
-function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amount);
 }
 
-async function buildPdfBytes(reportId: string): Promise<Uint8Array> {
-  const date = new Date().toISOString().split("T")[0];
-  const pdfDoc = await PDFDocument.create();
-  const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bold    = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-  const page = pdfDoc.addPage([595, 842]);
-  const { width, height } = page.getSize();
-  const margin = 50;
-  let y = height - margin;
-
-  const reportLabel = reportId
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-
-  // Header bar
-  page.drawRectangle({ x: 0, y: height - 70, width, height: 70, color: rgb(0.11, 0.47, 0.44) });
-  page.drawText("GlimmoraTeam", { x: margin, y: height - 30, size: 14, font: bold, color: rgb(1, 1, 1) });
-  page.drawText("Financial Report", { x: margin, y: height - 50, size: 10, font: regular, color: rgb(0.8, 0.95, 0.93) });
-
-  y = height - 100;
-
-  page.drawText(reportLabel, { x: margin, y, size: 18, font: bold, color: rgb(0.13, 0.15, 0.18) });
-  y -= 20;
-  page.drawText(`Generated: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, {
-    x: margin, y, size: 9, font: regular, color: rgb(0.45, 0.45, 0.5),
-  });
-  y -= 6;
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: rgb(0.85, 0.87, 0.9) });
-  y -= 24;
-
-  const rows = [
-    ["Type",     "Date",       "Description",               "Amount",  "Status"],
-    ["Invoice",  "2026-03-01", "SOW #2024-001 Milestone 1", "$12,500", "Paid"],
-    ["Invoice",  "2026-03-05", "SOW #2024-002 Delivery",    "$8,200",  "Pending"],
-    ["Payout",   "2026-03-02", "Contributor Disbursement",  "$3,400",  "Disbursed"],
-    ["Invoice",  "2026-02-28", "Platform Fee Q1",            "$1,200",  "Paid"],
-    ["Payout",   "2026-02-25", "Milestone Bonus Pool",       "$950",    "Disbursed"],
-  ];
-  const colX = [margin, 130, 210, 360, 460];
-
-  rows.forEach((row, i) => {
-    const isHeader = i === 0;
-    if (isHeader) {
-      page.drawRectangle({ x: margin - 4, y: y - 4, width: width - margin * 2 + 8, height: 18, color: rgb(0.95, 0.97, 0.97) });
-    } else if (i % 2 === 0) {
-      page.drawRectangle({ x: margin - 4, y: y - 4, width: width - margin * 2 + 8, height: 18, color: rgb(0.98, 0.99, 0.99) });
-    }
-    row.forEach((cell, ci) => {
-      page.drawText(cell, {
-        x: colX[ci], y,
-        size: isHeader ? 9 : 8.5,
-        font: isHeader ? bold : regular,
-        color: isHeader ? rgb(0.13, 0.15, 0.18) : rgb(0.25, 0.27, 0.32),
-      });
-    });
-    y -= 22;
-  });
-
-  y -= 12;
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: rgb(0.85, 0.87, 0.9) });
-  y -= 18;
-  page.drawText("* This is a mock report. Connect the backend API to generate live data.", {
-    x: margin, y, size: 7.5, font: regular, color: rgb(0.6, 0.6, 0.65),
-  });
-
-  page.drawText(`GlimmoraTeam  ·  Confidential  ·  ${date}`, {
-    x: margin, y: 30, size: 8, font: regular, color: rgb(0.65, 0.65, 0.7),
-  });
-  page.drawText("Page 1 of 1", {
-    x: width - margin - 40, y: 30, size: 8, font: regular, color: rgb(0.65, 0.65, 0.7),
-  });
-
-  return pdfDoc.save();
-}
-
-async function generateMockReport(reportId: string, fmt: string): Promise<void> {
-  const date = new Date().toISOString().split("T")[0];
-  const filename = `${reportId}-report-${date}.${fmt}`;
-
-  if (fmt === "csv") {
-    const content = [
-      `"Report","${reportId}","Generated","${new Date().toISOString()}"`,
-      `"Type","Date","Amount","Status"`,
-      `"Invoice","2026-03-01","$12,500","Paid"`,
-      `"Invoice","2026-03-05","$8,200","Pending"`,
-      `"Payout","2026-03-02","$3,400","Disbursed"`,
-    ].join("\n");
-    triggerDownload(new Blob([content], { type: "text/csv" }), filename);
-    return;
-  }
-
-  const pdfBytes = await buildPdfBytes(reportId);
-  triggerDownload(new Blob([pdfBytes as BlobPart], { type: "application/pdf" }), filename);
+interface ReportContent {
+  title: string;
+  table: PdfTable;
+  summary?: { label: string; value: string }[];
+  filename: string;
 }
 
 export default function FinancialReportsPage() {
@@ -209,17 +114,163 @@ export default function FinancialReportsPage() {
   const [previewing, setPreviewing] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
 
+  const rateCards = useRateCardsStore((s) => s.rateCards);
+
   // Clean up object URL when preview closes
   React.useEffect(() => {
     if (!previewUrl) return;
     return () => URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
+  const selectedReportData = reportTypes.find((r) => r.id === selectedReport);
+
+  const buildReportContent = React.useCallback((reportId: string): ReportContent => {
+    const stamp = todayStamp();
+    const projectFilter = project === "all" ? null : project;
+
+    if (reportId === "task-pricing") {
+      const rows = rateCards.map((c) => [
+        c.skill, c.level, c.region,
+        formatCurrency(c.hourlyRate),
+        formatCurrency(c.dailyRate),
+        c.effectiveFrom, c.status,
+      ]);
+      return {
+        title: "Task Pricing Report",
+        filename: `task-pricing-report-${stamp}`,
+        table: {
+          headers: ["Skill", "Level", "Region", "Hourly Rate", "Daily Rate", "Effective From", "Status"],
+          rows,
+          colWeights: [2, 0.8, 1.4, 1.1, 1.1, 1.3, 0.9],
+        },
+        summary: [
+          { label: "Active rate cards", value: String(rateCards.filter((c) => c.status === "active").length) },
+          { label: "Draft rate cards",  value: String(rateCards.filter((c) => c.status === "draft").length) },
+          { label: "Total cards",        value: String(rateCards.length) },
+        ],
+      };
+    }
+
+    if (reportId === "payout-report") {
+      const approved = mockDeliverables.filter((d) => d.status === "approved");
+      const filtered = projectFilter ? approved.filter((d) => d.projectId === projectFilter) : approved;
+      const rows = filtered.map((d) => {
+        const proj = mockProjects.find((p) => p.id === d.projectId);
+        const milestone = mockMilestones.find((m) => m.id === d.milestoneId);
+        const payout = milestone ? Math.round(milestone.budget / (milestone.deliverables || 1)) : 0;
+        return [proj?.title ?? d.projectId, milestone?.title ?? d.milestoneId, d.id, "Approved", formatCurrency(payout)];
+      });
+      return {
+        title: "Payout Report",
+        filename: `payout-report-${stamp}`,
+        table: {
+          headers: ["Project", "Milestone", "Deliverable", "Status", "Payout"],
+          rows,
+          colWeights: [2, 2, 1.4, 1, 1.1],
+        },
+        summary: [
+          { label: "Approved deliverables", value: String(filtered.length) },
+          { label: "Total payout",          value: formatCurrency(rows.reduce((sum, r) => {
+            const cell = String(r[4] ?? "").replace(/[^0-9.-]/g, "");
+            return sum + (Number(cell) || 0);
+          }, 0)) },
+        ],
+      };
+    }
+
+    if (selectedReport === "full-financial") {
+      const rcRows = rateCards.map((c) => ["Rate Card", c.skill, `${c.level} / ${c.region}`, formatCurrency(c.hourlyRate), c.status]);
+      const invRows = (projectFilter ? mockInvoices.filter((i) => i.projectId === projectFilter) : mockInvoices).map((inv) => [
+        "Invoice", inv.number, mockProjects.find((p) => p.id === inv.projectId)?.title ?? inv.projectId,
+        formatCurrency(inv.amount), inv.status,
+      ]);
+      const delRows = mockDeliverables.filter((d) => d.status === "approved").map((d) => {
+        const milestone = mockMilestones.find((m) => m.id === d.milestoneId);
+        const payout = milestone ? Math.round(milestone.budget / (milestone.deliverables || 1)) : 0;
+        return ["Payout", d.id, mockProjects.find((p) => p.id === d.projectId)?.title ?? d.projectId, formatCurrency(payout), "Disbursed"];
+      });
+      const rows = [...rcRows, ...invRows, ...delRows];
+      return {
+        title: "Full Financial Report",
+        filename: `full-financial-report-${stamp}`,
+        table: {
+          headers: ["Type", "Reference", "Description", "Amount", "Status"],
+          rows,
+          colWeights: [1, 1.4, 2.4, 1.2, 1],
+        },
+        summary: [
+          { label: "Rate cards",   value: String(rcRows.length) },
+          { label: "Invoices",     value: String(invRows.length) },
+          { label: "Payouts",      value: String(delRows.length) },
+        ],
+      };
+    }
+
+    // billing-summary (default)
+    const filteredInvoices = projectFilter ? mockInvoices.filter((i) => i.projectId === projectFilter) : mockInvoices;
+    const rows = filteredInvoices.map((inv) => [
+      inv.number,
+      mockProjects.find((p) => p.id === inv.projectId)?.title ?? inv.projectId,
+      inv.status,
+      inv.issuedDate,
+      inv.dueDate,
+      formatCurrency(inv.amount),
+      formatCurrency(inv.paidAmount),
+    ]);
+    const totalAmount = filteredInvoices.reduce((sum, i) => sum + i.amount, 0);
+    const totalPaid = filteredInvoices.reduce((sum, i) => sum + i.paidAmount, 0);
+    return {
+      title: "Billing Summary",
+      filename: `billing-summary-${stamp}`,
+      table: {
+        headers: ["Invoice #", "Project", "Status", "Issued", "Due", "Amount", "Paid"],
+        rows,
+        colWeights: [1.3, 2.4, 1, 1.1, 1.1, 1.2, 1.2],
+      },
+      summary: [
+        { label: "Invoices",   value: String(filteredInvoices.length) },
+        { label: "Total",      value: formatCurrency(totalAmount) },
+        { label: "Total paid", value: formatCurrency(totalPaid) },
+        { label: "Outstanding", value: formatCurrency(totalAmount - totalPaid) },
+      ],
+    };
+  }, [rateCards, project]);
+
+  const reportContent = React.useMemo(
+    () => buildReportContent(selectedReport),
+    [buildReportContent, selectedReport],
+  );
+
+  const downloadReport = async (reportId: string, fmt: "csv" | "pdf") => {
+    const content = buildReportContent(reportId);
+    const filename = `${content.filename}.${fmt}`;
+    if (fmt === "csv") {
+      downloadCSV(filename, content.table.headers, content.table.rows);
+    } else {
+      const bytes = await buildSimpleReportPdf({
+        title: content.title,
+        subtitle: "Financial Report",
+        meta: { Scope: scope, "Date Range": dateRange, Project: project },
+        summary: content.summary,
+        table: content.table,
+        footerNote: content.table.rows.length === 0 ? "No data available for the selected scope." : undefined,
+      });
+      triggerDownload(new Blob([bytes as BlobPart], { type: "application/pdf" }), filename);
+    }
+  };
+
   const handlePreview = async () => {
     setPreviewing(true);
     try {
-      const pdfBytes = await buildPdfBytes(selectedReport);
-      const url = URL.createObjectURL(new Blob([pdfBytes as BlobPart], { type: "application/pdf" }));
+      const bytes = await buildSimpleReportPdf({
+        title: reportContent.title,
+        subtitle: "Financial Report",
+        meta: { Scope: scope, "Date Range": dateRange, Project: project },
+        summary: reportContent.summary,
+        table: reportContent.table,
+        footerNote: reportContent.table.rows.length === 0 ? "No data available for the selected scope." : undefined,
+      });
+      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
       setPreviewUrl(url);
     } catch {
       toast.error("Preview Failed", "Could not generate the preview. Please try again.");
@@ -232,15 +283,26 @@ export default function FinancialReportsPage() {
     setPreviewUrl(null);
   };
 
-  const selectedReportData = reportTypes.find((r) => r.id === selectedReport);
-
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      await generateMockReport(selectedReport, format);
+      const filename = `${reportContent.filename}.${format}`;
+      if (format === "csv") {
+        downloadCSV(filename, reportContent.table.headers, reportContent.table.rows);
+      } else {
+        const bytes = await buildSimpleReportPdf({
+          title: reportContent.title,
+          subtitle: "Financial Report",
+          meta: { Scope: scope, "Date Range": dateRange, Project: project },
+          summary: reportContent.summary,
+          table: reportContent.table,
+          footerNote: reportContent.table.rows.length === 0 ? "No data available for the selected scope." : undefined,
+        });
+        triggerDownload(new Blob([bytes as BlobPart], { type: "application/pdf" }), filename);
+      }
       toast.success(
         "Report Downloaded",
-        `${selectedReportData?.title} saved as ${selectedReport}-report-${new Date().toISOString().split("T")[0]}.${format}`
+        `${selectedReportData?.title} saved as ${filename} (${reportContent.table.rows.length} row${reportContent.table.rows.length === 1 ? "" : "s"}).`
       );
     } catch {
       toast.error("Download Failed", "Could not generate the report. Please try again.");
@@ -488,11 +550,15 @@ export default function FinancialReportsPage() {
               {recentExports.map((exp) => (
                 <button
                   key={exp.id}
-                  onClick={() => {
+                  onClick={async () => {
                     const reportId = exp.type.toLowerCase().replace(/\s+/g, "-");
-                    const fmt = exp.format.toLowerCase();
-                    generateMockReport(reportId, fmt);
-                    toast.success("Re-downloading", exp.name);
+                    const fmt = (exp.format.toLowerCase() === "pdf" ? "pdf" : "csv") as "csv" | "pdf";
+                    try {
+                      await downloadReport(reportId, fmt);
+                      toast.success("Re-downloading", exp.name);
+                    } catch {
+                      toast.error("Download Failed", "Could not generate the report. Please try again.");
+                    }
                   }}
                   className="w-full text-left flex items-center gap-3 p-3 rounded-xl border border-beige-100/60 hover:border-beige-200 hover:bg-beige-50/40 transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown-500 focus-visible:ring-offset-2"
                 >
@@ -550,8 +616,13 @@ export default function FinancialReportsPage() {
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    await generateMockReport(selectedReport, "pdf");
-                    closePreview();
+                    try {
+                      await downloadReport(selectedReport, "pdf");
+                    } catch {
+                      toast.error("Download Failed", "Could not generate the report. Please try again.");
+                    } finally {
+                      closePreview();
+                    }
                   }}
                 >
                   <Download className="w-3.5 h-3.5" />
