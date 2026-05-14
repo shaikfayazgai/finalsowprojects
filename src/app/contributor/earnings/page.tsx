@@ -39,7 +39,9 @@ function Pill({ bg, color, children }: { bg: string; color: string; children: Re
 
 const earnCfg: Record<string, { color: string; bg: string; label: string }> = {
   pending:    { color: "var(--color-gold-700)",   bg: "var(--color-gold-50)",    label: "Pending" },
+  earned:     { color: "var(--color-teal-700)",   bg: "var(--color-teal-50)",    label: "Earned" },
   eligible:   { color: "var(--color-teal-700)",   bg: "var(--color-teal-50)",    label: "Eligible" },
+  on_hold:    { color: "var(--color-gold-700)",   bg: "var(--color-gold-50)",    label: "On Hold" },
   processing: { color: "var(--color-brown-700)",  bg: "var(--color-brown-50)",   label: "Processing" },
   paid:       { color: "var(--color-forest-700)", bg: "var(--color-forest-50)",  label: "Paid" },
   failed:     { color: "var(--danger)",           bg: "var(--danger-light)",     label: "Failed" },
@@ -1016,8 +1018,10 @@ export default function EarningsPage() {
                   <FilterSelect value={earnStatusFilter} onValueChange={setEarnStatusFilter} placeholder="All Status"
                     options={[
                       { value: "all", label: "All Status" },
+                      { value: "earned", label: "Earned" },
                       { value: "eligible", label: "Eligible" },
                       { value: "pending", label: "Pending" },
+                      { value: "on_hold", label: "On Hold" },
                       { value: "paid", label: "Paid" },
                       { value: "processing", label: "Processing" },
                     ]} />
