@@ -42,7 +42,7 @@ export default function ReviewerSectionLayout({ children }: { children: React.Re
         const me = await authApi.getCurrentUser(token);
         if (cancelled) return;
         if (me.requiresPasswordChange) {
-          router.replace(`/auth/change-temp-password?callbackUrl=${encodeURIComponent(pathname || "/enterprise/reviewer")}`);
+          router.replace(`/auth/change-password?callbackUrl=${encodeURIComponent(pathname || "/enterprise/reviewer")}`);
           return;
         }
       } catch {
