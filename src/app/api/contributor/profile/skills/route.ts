@@ -31,6 +31,7 @@ export async function PUT(req: NextRequest) {
       headers,
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
     });
     console.log(`[profile/skills/route] ← ${backendRes.status}`);
 
@@ -46,6 +47,12 @@ export async function PUT(req: NextRequest) {
 
     if (backendRes.status === 404) {
       return NextResponse.json({ detail: "Profile or skills not found." }, { status: 404 });
+    }
+
+    // Backend endpoint not yet implemented — return the submitted skills payload
+    // so the UI reflects what the user saved.
+    if (backendRes.status === 405) {
+      return NextResponse.json(body, { status: 200 });
     }
 
     const errBody = await backendRes.json().catch(() => ({

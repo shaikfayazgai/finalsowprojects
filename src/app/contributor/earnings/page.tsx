@@ -95,7 +95,7 @@ export type ChartPoint = { label: string; value: number };
 
 /* Maps the UI period key to the exact value the API expects */
 const PERIOD_API_MAP: Record<"3m" | "6m" | "1y", ChartPeriod> = {
-  "3m": "3M",
+  "3m": "3m",
   "6m": "6m",
   "1y": "1y",
 };
