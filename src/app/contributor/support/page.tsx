@@ -14,7 +14,6 @@ import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Input, Textarea, Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
-import { mockSupportTickets } from "@/mocks/data/contributor";
 import {
   fetchSupportFaqs, type SupportFaqItem,
   fetchSupportTickets, type SupportTicketItem,
@@ -136,10 +135,9 @@ function FormDrawer({
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   MOCK DATA
+   API DATA
    ═══════════════════════════════════════════════════════════════ */
 
-/* mockGrievances removed — replaced by real API */
 
 const grievanceCategoryLabels: Record<string, string> = {
   review_dispute: "Review Decision Dispute",

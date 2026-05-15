@@ -47,6 +47,8 @@ const KPI_ICON_FALLBACK_BG = [
   "bg-gradient-to-br from-forest-400 to-forest-600",
 ];
 const KPI_ICONS_FALLBACK = [ListChecks, Wallet, Award, Target];
+const HIDDEN_DASHBOARD_KPIS = new Set(["credentials"]);
+const SHOW_CONTRIBUTOR_CREDENTIALS_AND_LEARNING = false;
 
 // ── Banner colour map ─────────────────────────────────────────────────────────
 
@@ -353,7 +355,7 @@ export default function ContributorDashboardPage() {
   const recentEarnings = data?.recent_earnings ?? [];
   const credentials = data?.credentials ?? [];
   const recommendations = data?.recommended_learning ?? [];
-  const kpis = data?.kpis ?? [];
+  const kpis = (data?.kpis ?? []).filter((kpi) => !HIDDEN_DASHBOARD_KPIS.has(kpi.key));
   const actionItems = data?.action_items ?? [];
   const visibleBanners = (data?.system_banners ?? []).filter((b) => !dismissedBanners.has(b.id));
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -408,7 +410,6 @@ export default function ContributorDashboardPage() {
             [
               { label: "Active Tasks", value: activeTasks.length.toString(), icon: ListChecks, iconBg: "bg-gradient-to-br from-teal-400 to-teal-600" },
               { label: "Total Earned", value: earnings ? `${earnings.currency}${earnings.total_paid_all_time.toLocaleString()}` : "—", icon: Wallet, iconBg: "bg-gradient-to-br from-brown-400 to-brown-600" },
-              { label: "Credentials", value: credentials.length.toString(), icon: Award, iconBg: "bg-gradient-to-br from-gold-400 to-gold-600" },
               { label: "Pending Payout", value: earnings ? `${earnings.currency}${earnings.pending_payout.toLocaleString()}` : "—", icon: Target, iconBg: "bg-gradient-to-br from-forest-400 to-forest-600" },
             ].map((kpi) => {
               const KpiIcon = kpi.icon;
@@ -566,7 +567,7 @@ export default function ContributorDashboardPage() {
       </motion.div>
 
       {/* ═══ SKILLS + EARNINGS + CREDENTIALS ═══ */}
-      <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+      <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
         {/* Skills */}
         <div className="card-parchment">
           <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
@@ -646,7 +647,7 @@ export default function ContributorDashboardPage() {
           )}
         </div>
 
-        {/* Credentials */}
+        {SHOW_CONTRIBUTOR_CREDENTIALS_AND_LEARNING && (
         <div className="card-parchment">
           <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
             <span className="text-sm font-semibold text-gray-800">Credentials</span>
@@ -687,9 +688,11 @@ export default function ContributorDashboardPage() {
             </div>
           )}
         </div>
+        )}
       </motion.div>
 
       {/* ═══ LEARNING RECOMMENDATIONS ═══ */}
+      {SHOW_CONTRIBUTOR_CREDENTIALS_AND_LEARNING && (
       <motion.div variants={fadeUp} className="card-parchment">
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border-soft)" }}>
           <div className="flex items-center gap-2">
@@ -724,6 +727,7 @@ export default function ContributorDashboardPage() {
           </div>
         )}
       </motion.div>
+      )}
 
     </motion.div>
   );

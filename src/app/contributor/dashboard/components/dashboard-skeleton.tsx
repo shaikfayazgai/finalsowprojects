@@ -13,8 +13,8 @@ export function ContributorDashboardSkeleton() {
       </div>
 
       {/* KPI Row — 4 tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        {[1, 2, 3, 4].map((i) => (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {[1, 2, 3].map((i) => (
           <Skeleton key={i} className="h-24 rounded-xl" />
         ))}
       </div>
@@ -26,14 +26,10 @@ export function ContributorDashboardSkeleton() {
       </div>
 
       {/* Skills + Earnings + Credentials */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        <Skeleton className="h-52 rounded-xl" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <Skeleton className="h-52 rounded-xl" />
         <Skeleton className="h-52 rounded-xl" />
       </div>
-
-      {/* Learning Recommendations */}
-      <Skeleton className="h-36 rounded-xl" />
     </div>
   );
 }

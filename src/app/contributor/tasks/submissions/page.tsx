@@ -7,18 +7,19 @@ import { motion } from "framer-motion";
 import {
   ClipboardCheck, FileText, ChevronRight, Eye, Plus,
   CheckCircle2, RotateCcw, AlertCircle, Hourglass, Send,
-  RefreshCw, Loader2, X, Save,
+  RefreshCw, Loader2, X, Save, Upload, Paperclip, Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import {
-  fetchSubmissions, createSubmission, fetchLatestSubmission,
-  type SubmissionItem, type SubmissionsListResponse, type SubmissionDetail,
+  fetchSubmissions, createSubmission, fetchLatestSubmission, fetchTasks, fetchTask, uploadWorkroomFile,
+  type SubmissionItem, type SubmissionsListResponse, type SubmissionDetail, type TaskItem,
 } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { ApiError } from "@/lib/api/client";
 import { toast } from "@/lib/stores/toast-store";
 import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
+import { useSubmissionStore } from "@/lib/stores/submission-store";
 
 /* ═══ Badge ═══ */
 
@@ -82,6 +83,7 @@ const statusConfig: Record<string, { variant: string; label: string; icon: React
 
 export default function SubmissionsPage() {
   const { data: session, status: sessionStatus } = useSession();
+  const setSubmissionOverride = useSubmissionStore((s) => s.setSubmissionOverride);
 
   const [data, setData]       = React.useState<SubmissionsListResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -94,9 +96,16 @@ export default function SubmissionsPage() {
   /* New submission drawer */
   const [drawerOpen, setDrawerOpen]   = React.useState(false);
   const [taskId, setTaskId]           = React.useState("");
+  const [taskOptions, setTaskOptions] = React.useState<TaskItem[]>([]);
+  const [tasksLoading, setTasksLoading] = React.useState(false);
+  const [tasksError, setTasksError] = React.useState<string | null>(null);
+  const [taskDescription, setTaskDescription] = React.useState("");
+  const [taskDescriptionLoading, setTaskDescriptionLoading] = React.useState(false);
   const [mode, setMode]               = React.useState<"draft" | "submit">("draft");
-  const [version, setVersion]         = React.useState(1);
   const [notes, setNotes]             = React.useState("");
+  const [resourceUrl, setResourceUrl] = React.useState("");
+  const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
+  const [isDraggingFiles, setIsDraggingFiles] = React.useState(false);
   const [submitting, setSubmitting]   = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
 
@@ -150,10 +159,81 @@ export default function SubmissionsPage() {
     }
   }, [sessionStatus, session, load]);
 
+  const loadTaskOptions = React.useCallback(async (token: string) => {
+    setTasksLoading(true);
+    setTasksError(null);
+    try {
+      const sk = sessionKeyFragment(token);
+      const res = await dedupeAsync(`contrib:submission-task-options:${sk}`, () =>
+        fetchTasks(token, { page: 1, page_size: 100, sort_by: "due_date", sort_dir: "asc" }),
+      );
+      setTaskOptions(res.items);
+    } catch (err) {
+      setTasksError(err instanceof ApiError ? err.message : "Failed to load tasks.");
+      setTaskOptions([]);
+    } finally {
+      setTasksLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const token = tokenRef.current;
+    if (!drawerOpen || !token) return;
+    void loadTaskOptions(token);
+  }, [drawerOpen, loadTaskOptions]);
+
+  React.useEffect(() => {
+    const token = tokenRef.current;
+    if (!drawerOpen || !taskId || !token) {
+      setTaskDescription("");
+      return;
+    }
+
+    const selected = taskOptions.find((task) => task.id === taskId);
+    setTaskDescription(selected ? `${selected.title}` : "");
+    setTaskDescriptionLoading(true);
+    let live = true;
+    fetchTask(token, taskId)
+      .then((task) => {
+        if (!live) return;
+        const description = task.description || (task as unknown as { brief?: string }).brief || selected?.title || "";
+        setTaskDescription(description);
+      })
+      .catch(() => {
+        if (!live) return;
+        setTaskDescription(selected?.title ? `No description available for ${selected.title}.` : "No description available.");
+      })
+      .finally(() => {
+        if (live) setTaskDescriptionLoading(false);
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [drawerOpen, taskId, taskOptions]);
+
   /* Open / reset drawer */
   function openDrawer() {
-    setTaskId(""); setMode("draft"); setVersion(1); setNotes(""); setSubmitError(null);
+    setTaskId("");
+    setTaskDescription("");
+    setMode("draft");
+    setNotes("");
+    setResourceUrl("");
+    setSelectedFiles([]);
+    setIsDraggingFiles(false);
+    setSubmitError(null);
     setDrawerOpen(true);
+  }
+
+  function addSelectedFiles(files: FileList | File[]) {
+    const incoming = Array.from(files);
+    setSelectedFiles((prev) => {
+      const existing = new Set(prev.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
+      return [
+        ...prev,
+        ...incoming.filter((file) => !existing.has(`${file.name}:${file.size}:${file.lastModified}`)),
+      ];
+    });
   }
 
   /* Create submission */
@@ -164,7 +244,53 @@ export default function SubmissionsPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await createSubmission(token, taskId.trim(), { submission_mode: mode, version, notes: notes.trim() || undefined });
+      const cleanTaskId = taskId.trim();
+      const uploadedFiles = selectedFiles.length > 0
+        ? await Promise.all(selectedFiles.map((file) =>
+            uploadWorkroomFile(token, cleanTaskId, {
+              file,
+              category: "deliverable",
+              title: file.name.replace(/\.[^.]+$/, ""),
+            }),
+          ))
+        : [];
+      const uploadedFileDetails = selectedFiles.map((file, idx) => ({
+        id: uploadedFiles[idx]?.id || `local-file-${Date.now()}-${idx}`,
+        filename: uploadedFiles[idx]?.filename || file.name,
+        mime_type: file.type || "application/octet-stream",
+      }));
+      const cleanUrl = resourceUrl.trim();
+      const taskDescriptionEvidence = taskDescription.trim();
+      const created = await createSubmission(token, cleanTaskId, {
+        submission_mode: mode,
+        notes: notes.trim() || undefined,
+        file_ids: uploadedFileDetails.map((file) => file.id),
+        evidence_items: [
+          ...(taskDescriptionEvidence
+            ? [{ label: "Task Description", description: taskDescriptionEvidence }]
+            : []),
+          ...(cleanUrl
+            ? [{ label: "Application URL", url: cleanUrl, description: "Submitted application or reference URL" }]
+            : []),
+        ],
+        structured_response: {
+          task_description: taskDescriptionEvidence,
+          submitted_files: uploadedFileDetails,
+          application_url: cleanUrl,
+        },
+      });
+      setSubmissionOverride({
+        ...created,
+        files: uploadedFileDetails,
+        evidence: [
+          ...(taskDescriptionEvidence
+            ? [{ id: "task-description", label: "Task Description", description: taskDescriptionEvidence, file_id: "", checklist_item_id: "" }]
+            : []),
+          ...(cleanUrl
+            ? [{ id: "application-url", label: "Application URL", description: cleanUrl, file_id: "", checklist_item_id: "" }]
+            : []),
+        ],
+      });
       toast.success("Submission created successfully.");
       setDrawerOpen(false);
       load(token, { bust: true });
@@ -398,9 +524,33 @@ export default function SubmissionsPage() {
                 <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
                   Task ID <span className="text-red-400">*</span>
                 </label>
-                <input type="text" value={taskId} onChange={(e) => setTaskId(e.target.value)}
-                  placeholder="e.g. tsk_001"
-                  className="w-full text-[13px] text-gray-800 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all placeholder:text-gray-400" />
+                <select
+                  value={taskId}
+                  onChange={(e) => setTaskId(e.target.value)}
+                  disabled={tasksLoading}
+                  className="w-full text-[13px] text-gray-800 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all disabled:opacity-60"
+                >
+                  <option value="">{tasksLoading ? "Loading tasks..." : "Select a task"}</option>
+                  {taskOptions.map((task) => (
+                    <option key={task.id} value={task.id}>
+                      {task.id} - {task.title}
+                    </option>
+                  ))}
+                </select>
+                {tasksError && <p className="text-[11px] text-red-500 mt-1.5">{tasksError}</p>}
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+                  Task Description
+                </label>
+                <textarea
+                  value={taskDescriptionLoading ? "Loading task description..." : taskDescription}
+                  onChange={(e) => setTaskDescription(e.target.value)}
+                  disabled={taskDescriptionLoading}
+                  rows={4}
+                  placeholder="Select a task to view its description"
+                  className="w-full text-[13px] text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all placeholder:text-gray-400 disabled:opacity-60"
+                />
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
@@ -417,9 +567,70 @@ export default function SubmissionsPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">Version</label>
-                <input type="number" min={1} value={version} onChange={(e) => setVersion(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full text-[13px] text-gray-800 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
+                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">Attachment</label>
+                <label
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingFiles(true);
+                  }}
+                  onDragLeave={() => setIsDraggingFiles(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingFiles(false);
+                    addSelectedFiles(e.dataTransfer.files);
+                  }}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-center transition-all cursor-pointer",
+                    isDraggingFiles ? "border-teal-400 bg-teal-50" : "border-gray-200 bg-gray-50 hover:border-teal-300 hover:bg-teal-50/50",
+                  )}
+                >
+                  <Upload className="w-5 h-5 text-teal-500" />
+                  <span className="text-[12px] font-medium text-gray-700">Drop files here or browse</span>
+                  <span className="text-[10px] text-gray-400">Images, videos, PDFs, archives, and other deliverables</span>
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) addSelectedFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {selectedFiles.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    {selectedFiles.map((file, idx) => (
+                      <div key={`${file.name}-${file.lastModified}-${idx}`} className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-2">
+                        <Paperclip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span className="text-[11px] text-gray-700 truncate flex-1">{file.name}</span>
+                        <span className="text-[10px] text-gray-400 shrink-0">{Math.max(1, Math.round(file.size / 1024))} KB</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFiles((prev) => prev.filter((_, i) => i !== idx))}
+                          className="text-gray-300 hover:text-red-500 transition-colors"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+                  Application URL
+                </label>
+                <div className="relative">
+                  <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <input
+                    type="url"
+                    value={resourceUrl}
+                    onChange={(e) => setResourceUrl(e.target.value)}
+                    placeholder="https://github.com/org/repo or app URL"
+                    className="w-full text-[13px] text-gray-800 bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all placeholder:text-gray-400"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">Notes</label>

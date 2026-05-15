@@ -8,7 +8,6 @@ import {
   Settings,
   ListChecks,
   Wallet,
-  Award,
   GraduationCap,
   HeartHandshake,
   MessageSquare,
@@ -141,8 +140,6 @@ export const contributorNav: ModuleConfig = {
       title: "Growth",
       items: [
         { label: "Earnings", href: "/contributor/earnings", icon: Wallet },
-        { label: "Credentials", href: "/contributor/credentials", icon: Award },
-        { label: "Learning", href: "/contributor/learning", icon: GraduationCap },
       ],
     },
     {

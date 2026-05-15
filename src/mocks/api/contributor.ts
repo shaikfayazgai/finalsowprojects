@@ -311,7 +311,38 @@ export function resolveContributorMock(path: string, method: string, body?: stri
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/workroom\/checklist\/[^/]+$/) && m === "PATCH") return { status: 200, body: { ok: true } };
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/latest-submission$/) && m === "GET") return { status: 200, body: mockSubmissions[0] };
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/review-feedback$/) && m === "GET") return { status: 200, body: { task_id: "task-504", submission_id: "sub-9002", reviewer_feedback: "Add edge cases", review_score: 71, rubric_score: 71, criteria: [{ criterion_id: "coverage", score: 7, max_score: 10, comment: "Increase edge-case count" }] } };
-  if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/submissions$/) && m === "POST") return { status: 200, body: { ...mockSubmissions[0], id: "sub-new", status: "submitted" } };
+  if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/submissions$/) && m === "POST") {
+    let parsed: Record<string, any> = {};
+    try { parsed = body ? JSON.parse(body) : {}; } catch { /* ignore */ }
+    const structured = parsed.structured_response ?? {};
+    const files = Array.isArray(structured.submitted_files)
+      ? structured.submitted_files
+      : Array.isArray(parsed.file_ids)
+        ? parsed.file_ids.map((id: string, i: number) => ({ id, filename: `attachment-${i + 1}`, mime_type: "application/octet-stream" }))
+        : [];
+    const evidence = Array.isArray(parsed.evidence_items)
+      ? parsed.evidence_items.map((item: Record<string, any>, i: number) => ({
+          id: `ev-${i + 1}`,
+          label: item.label ?? "",
+          description: item.url ?? item.description ?? "",
+          file_id: item.file_id ?? "",
+          checklist_item_id: item.checklist_item_id ?? "",
+        }))
+      : [];
+    return {
+      status: 200,
+      body: {
+        ...mockSubmissions[0],
+        id: "sub-new",
+        task_id: decodeURIComponent(p.split("/")[4] ?? mockSubmissions[0].taskId),
+        submitted_at: new Date().toISOString(),
+        status: parsed.submission_mode === "draft" ? "draft" : "submitted",
+        notes: parsed.notes ?? "",
+        files,
+        evidence,
+      },
+    };
+  }
 
   if (p === "/api/contributor/submissions" && m === "GET") return { status: 200, body: listFromQuery(mockSubmissions.map((s) => ({ ...s, task_id: s.taskId, submitted_at: s.submittedAt })), q) };
   if (p.match(/^\/api\/contributor\/submissions\/[^/]+$/) && m === "GET") return { status: 200, body: mockSubmissions[0] };

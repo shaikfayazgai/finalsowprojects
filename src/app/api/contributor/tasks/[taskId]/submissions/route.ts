@@ -42,6 +42,12 @@ export async function POST(
   if (backendRes.status === 404) {
     const now = new Date().toISOString();
     const syntheticId = `sub_${Date.now()}`;
+    const structured = typeof payload.structured_response === "object" && payload.structured_response !== null
+      ? payload.structured_response as Record<string, unknown>
+      : {};
+    const submittedFiles = Array.isArray(structured.submitted_files)
+      ? structured.submitted_files as Array<Record<string, unknown>>
+      : [];
 
     const synthetic = {
       id:           syntheticId,
@@ -51,7 +57,19 @@ export async function POST(
       status:       payload.submission_mode === "submit" ? "submitted" : "draft",
       description:  "",
       notes:        typeof payload.notes === "string" ? payload.notes : "",
-      files:        [],
+      files:        submittedFiles.length > 0
+        ? submittedFiles.map((file, i) => ({
+            id:        String(file.id ?? `file-${i}`),
+            filename:  String(file.filename ?? `attachment-${i + 1}`),
+            mime_type: String(file.mime_type ?? "application/octet-stream"),
+          }))
+        : Array.isArray(payload.file_ids)
+          ? (payload.file_ids as unknown[]).map((id, i) => ({
+              id:        String(id),
+              filename:  `attachment-${i + 1}`,
+              mime_type: "application/octet-stream",
+            }))
+          : [],
       evidence:     Array.isArray(payload.evidence_items)
         ? (payload.evidence_items as Array<Record<string, unknown>>).map((e, i) => ({
             id:                String(i),

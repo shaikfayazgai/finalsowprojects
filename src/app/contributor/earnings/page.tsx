@@ -17,9 +17,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
 import { toast } from "@/lib/stores/toast-store";
 import {
-  mockEarnings, mockPayouts, mockContributorProfile, mockContributorTasks,
-} from "@/mocks/data/contributor";
-import {
   fetchEarningsSummary, fetchEarningsOverview, fetchEarningsChart, fetchEarnings,
   fetchKycStatus, startKyc, fetchEarningById, fetchPayoutById, fetchPayouts, fetchPayoutReceipt,
   fetchPayoutPreferences, updatePayoutPreferences,
@@ -57,8 +54,7 @@ const methodLabel: Record<string, string> = { bank_transfer: "Bank Transfer", mo
 function fmt$(n: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n); }
 function fmtDate(iso: string) { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
 
-const taskMap = new Map(mockContributorTasks.map((t) => [t.id, t]));
-function getTask(id: string) { return taskMap.get(id); }
+function getTask(_id: string): Record<string, any> | null { return null; }
 
 type EarnSortField = "task" | "amount" | "status" | "date";
 type PayoutSortField = "reference" | "amount" | "method" | "status" | "date";
@@ -487,9 +483,6 @@ export default function EarningsPage() {
     }
   }, [kycRaw]);
 
-  const allPayouts = mockPayouts;
-  const profile = mockContributorProfile;
-
   /* Drawers */
   const [earningDrawer, setEarningDrawer] = React.useState<any>(null);
   const [payoutDrawer, setPayoutDrawer] = React.useState<any>(null);
@@ -788,7 +781,7 @@ export default function EarningsPage() {
   }, [token, sessionStatus]);
 
   const hasPayoutMethod = !prefsLoading && !!prefs?.preferred_method && prefs.preferred_method !== "none";
-  const isWomenTrack = profile.track === "women";
+  const isWomenTrack = false;
 
   /* ── Payout Preferences Edit Drawer ─────────────────────────── */
   const [prefsDrawerOpen, setPrefsDrawerOpen] = React.useState(false);
