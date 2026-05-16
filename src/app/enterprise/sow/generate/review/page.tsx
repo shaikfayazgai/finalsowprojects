@@ -244,9 +244,8 @@ export default function SOWAIDraftReviewPage() {
     if (submitted) sessionStorage.removeItem("sow-ai-review-active");
   }, [submitted]);
 
-  // Guard: active while the user has reviewed anything or typed feedback, and hasn't submitted yet
   const navGuard = useNavigationGuard({
-    isActive: !submitted && (resolvedFlags.size > 0 || changesFeedback.trim().length > 0),
+    isActive: !submitted && Boolean(projectTitle),
     allowedPathPrefixes: ["/enterprise/sow/generate/review"],
   });
 

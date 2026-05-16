@@ -157,12 +157,14 @@ export default function GeneratePreviewPage({
   flow = "manual",
   onBack,
   onRejectRegenerate,
+  onSubmitComplete,
   detailsOverride,
 }: {
   sowId?: string | null;
   flow?: "manual" | "ai";
   onBack?: () => void;
   onRejectRegenerate?: () => void;
+  onSubmitComplete?: () => void;
   detailsOverride?: any;
 }) {
   const router = useRouter();
@@ -210,10 +212,22 @@ export default function GeneratePreviewPage({
   React.useEffect(() => {
     if (!submitted) return;
     const target = sowId ? `/enterprise/sow/${sowId}?tab=approval` : "/enterprise/sow";
-    router.prefetch(target);
-    const timer = setTimeout(() => router.push(target), 600);
+    // Clear all draft/resume state so the ResumeBanner never reappears.
+    if (flow === "manual") {
+      store.reset();
+    } else {
+      try {
+        sessionStorage.removeItem("sow-generator-draft");
+        sessionStorage.removeItem("sow-wizard-id");
+        sessionStorage.removeItem("sow-ai-review-active");
+      } catch { /* ignore */ }
+    }
+    onSubmitComplete?.();
+    // Use window.location to bypass any active navigation guard override.
+    const timer = setTimeout(() => { window.location.href = target; }, 600);
     return () => clearTimeout(timer);
-  }, [submitted, sowId, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submitted, sowId]);
 
   /* Start generation animation on mount — skip if already complete */
   const didInitRef = React.useRef(false);
@@ -294,7 +308,6 @@ export default function GeneratePreviewPage({
       onSuccess: () => {
         refetchApprovalPipeline();
         setSubmitted(true);
-        setTimeout(() => router.push("/enterprise/sow"), 600);
       },
       onError: (err) => {
         setSubmitError(err instanceof Error ? err.message : "Failed to submit SOW. Please try again.");

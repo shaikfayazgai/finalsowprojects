@@ -135,8 +135,9 @@ export function MilestonePaymentModal({
         {/* Header */}
         <div className="px-6 pt-5 pb-4 flex items-start justify-between border-b border-gray-100">
           <div>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-0.5">GlimmoraTeam Platform</p>
             <p className="text-[15px] font-bold text-gray-900">Milestone Payments</p>
-            <p className="text-[12px] text-gray-400 mt-0.5 truncate max-w-[400px]">{title}</p>
+            <p className="text-[11.5px] text-gray-400 mt-0.5 truncate max-w-[400px]">{title}</p>
           </div>
           {!isProcessing && (
             <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
@@ -221,7 +222,7 @@ export function MilestonePaymentModal({
                       className={cn(
                         "flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-xl transition-all mt-1",
                         !isProcessing
-                          ? "text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700 shadow-sm"
+                          ? "text-white bg-gradient-to-r from-teal-500 to-forest-600 hover:from-teal-600 hover:to-forest-700 shadow-sm"
                           : "text-gray-400 bg-gray-100 cursor-not-allowed",
                       )}
                     >

@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue, Skeleton } from "@/components/ui";
 import type { DecompositionPlan, PlanStatus } from "@/types/enterprise";
-import { useKickoff, useWithdraw } from "@/lib/hooks/use-decomposition";
+import { useWithdraw, useKickoffAction, useApproveKickoff } from "@/lib/hooks/use-decomposition";
 import { decompositionApi } from "@/lib/api/decomposition";
 import { ApiError } from "@/lib/api/client";
 import { useQuery } from "@tanstack/react-query";
@@ -53,7 +53,7 @@ const statusMap: Record<PlanStatus, { variant: string; label: string }> = {
 function formatCost(n: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 0 }).format(n); }
 
 /* ═══ Primary Action Button ═══ */
-function PrimaryActionButton({ plan, onClick, onKickoff, onWithdraw }: { plan: DecompositionPlan; onClick: (e: React.MouseEvent) => void; onKickoff?: (e: React.MouseEvent) => void; onWithdraw?: (planId: string) => void }) {
+function PrimaryActionButton({ plan, onClick, onKickoff, onWithdraw, onApproveKickoff }: { plan: DecompositionPlan; onClick: (e: React.MouseEvent) => void; onKickoff?: (e: React.MouseEvent) => void; onWithdraw?: (planId: string) => void; onApproveKickoff?: (plan: DecompositionPlan) => void }) {
   const [showWithdrawModal, setShowWithdrawModal] = React.useState(false);
   const [showConfirmModal, setShowConfirmModal] = React.useState(false);
   const [showToast, setShowToast] = React.useState(false);
@@ -62,6 +62,16 @@ function PrimaryActionButton({ plan, onClick, onKickoff, onWithdraw }: { plan: D
       <button
         onClick={(e) => { e.stopPropagation(); onKickoff?.(e); }}
         className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[11px] font-bold text-white bg-teal-500 hover:bg-teal-600 transition-all shadow-sm">
+        Kick-off
+      </button>
+    );
+  }
+  if (plan.status === "ai_review_in_progress") {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onApproveKickoff?.(plan); }}
+        className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[11px] font-bold text-white bg-gradient-to-r from-teal-500 to-forest-500 hover:from-teal-600 hover:to-forest-600 transition-all shadow-sm">
+        <BrainCircuit className="w-3 h-3" />
         Kick-off
       </button>
     );
@@ -184,7 +194,17 @@ export default function DecompositionPlansPage() {
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [paymentPlan, setPaymentPlan] = React.useState<DecompositionPlan | null>(null);
   const [plans, setPlans] = React.useState<DecompositionPlan[]>([]);
-  const [justPaidIds, setJustPaidIds] = React.useState<Set<string>>(new Set());
+  const [approveKickoffPlan, setApproveKickoffPlan] = React.useState<DecompositionPlan | null>(null);
+  const [approveKickoffError, setApproveKickoffError] = React.useState("");
+
+  // Persist paid plan IDs in sessionStorage so second click routes to approve-kickoff
+  // even after a page refresh within the same browser session.
+  const [justPaidIds, setJustPaidIds] = React.useState<Set<string>>(() => {
+    try {
+      const raw = sessionStorage.getItem("decomp-paid-plans");
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch { return new Set(); }
+  });
 
   // ── API data & mutations ──
   const { data: apiPlansRes, isLoading: plansLoading, isError: plansError, error: plansErrorObj } = useQuery({
@@ -192,8 +212,9 @@ export default function DecompositionPlansPage() {
     queryFn: listEnterpriseDecompositionPlans,
     staleTime: 30_000,
   });
-  const kickoffMutation = useKickoff();
   const withdrawMutation = useWithdraw();
+  const kickoffActionMutation = useKickoffAction();
+  const approveKickoffMutation = useApproveKickoff();
 
   // Map backend status strings to frontend PlanStatus
   const normalizeStatus = (s: string): PlanStatus => {
@@ -206,6 +227,7 @@ export default function DecompositionPlansPage() {
       REVISION_IN_PROGRESS: "revision_in_progress",
       COMPLETED: "completed",
       WITHDRAWN: "completed",
+      AI_REVIEW_IN_PROGRESS: "ai_review_in_progress",
     };
     return map[s] ?? (s as PlanStatus);
   };
@@ -261,7 +283,13 @@ export default function DecompositionPlansPage() {
   }, [apiPlansRes]);
 
   const handleKickoff = (plan: DecompositionPlan) => {
-    kickoffMutation.mutate({ plan_id: plan.id });
+    // If payment was already released (tracked this session), skip the payment
+    // modal and go straight to the AI task breakdown confirmation.
+    if (justPaidIds.has(plan.id)) {
+      setApproveKickoffError("");
+      setApproveKickoffPlan(plan);
+      return;
+    }
     setPaymentPlan(plan);
   };
 
@@ -273,15 +301,19 @@ export default function DecompositionPlansPage() {
   };
 
   const handlePaymentSuccess = (paidPlanId: string) => {
-    setPlans((prev) =>
-      prev.map((p) => p.id === paidPlanId ? { ...p, status: "approved" } : p)
-    );
     setJustPaidIds((prev) => {
       const next = new Set(prev);
       next.add(paidPlanId);
+      // Persist so second click works after a page refresh in the same session
+      try { sessionStorage.setItem("decomp-paid-plans", JSON.stringify([...next])); } catch { /* ignore */ }
       return next;
     });
     setPaymentPlan(null);
+    kickoffActionMutation.mutate(paidPlanId, {
+      onError: () => {
+        kickoffActionMutation.reset();
+      },
+    });
   };
 
   function handleSort(field: SortField) {
@@ -389,6 +421,25 @@ export default function DecompositionPlansPage() {
   /* ── Service-unavailable banner (shown above empty state, not a hard block) ── */
   const isServiceDown = plansError && plansErrorObj instanceof ApiError && plansErrorObj.status >= 500;
 
+  const handleApproveKickoffConfirm = () => {
+    if (!approveKickoffPlan) return;
+    setApproveKickoffError("");
+    const planId = approveKickoffPlan.id;
+    approveKickoffMutation.mutate(planId, {
+      onSuccess: () => {
+        // Remove from paid override now that the plan has advanced past this stage
+        setJustPaidIds((prev) => {
+          const next = new Set(prev);
+          next.delete(planId);
+          try { sessionStorage.setItem("decomp-paid-plans", JSON.stringify([...next])); } catch { /* ignore */ }
+          return next;
+        });
+        setApproveKickoffPlan(null);
+      },
+      onError: (err) => setApproveKickoffError(err instanceof Error ? err.message : "Failed to initiate AI task breakdown. Please try again."),
+    });
+  };
+
   return (
     <>
     {paymentPlan && (
@@ -400,6 +451,84 @@ export default function DecompositionPlansPage() {
         onSuccess={() => handlePaymentSuccess(paymentPlan!.id)}
         onClose={() => setPaymentPlan(null)}
       />
+    )}
+
+    {/* ── Approve Kickoff Confirmation Modal ── */}
+    {approveKickoffPlan && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        onClick={() => { if (!approveKickoffMutation.isPending) setApproveKickoffPlan(null); }}
+      >
+        <div
+          className="bg-white rounded-2xl shadow-2xl w-[460px] mx-4 overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header gradient bar */}
+          <div className="h-[3px] w-full bg-gradient-to-r from-teal-400 via-forest-500 to-teal-400" />
+
+          <div className="px-7 pt-6 pb-7">
+            {/* Icon + Title */}
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-teal-500 to-forest-600 flex items-center justify-center shrink-0 shadow-md">
+                <BrainCircuit className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-teal-600 uppercase tracking-widest">AI Task Decomposition</p>
+                <h2 className="text-[17px] font-bold text-gray-900 leading-snug">Initiate AI Task Breakdown?</h2>
+              </div>
+            </div>
+
+            {/* Body */}
+            <p className="text-[13px] text-gray-600 leading-relaxed mb-3">
+              You are about to initiate the AI-powered task decomposition process for:
+            </p>
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border border-teal-100 bg-teal-50/60 mb-4">
+              <Sparkles className="w-4 h-4 text-teal-600 shrink-0" />
+              <span className="text-[13px] font-semibold text-teal-800 truncate">{approveKickoffPlan.title}</span>
+            </div>
+            <p className="text-[12.5px] text-gray-500 leading-relaxed mb-1">
+              Once confirmed, the system will automatically analyse your project scope and generate structured task breakdowns, milestones, and resource assignments. <span className="font-semibold text-gray-700">This process cannot be interrupted once started.</span>
+            </p>
+
+            {approveKickoffError && (
+              <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                <p className="text-[11.5px] text-red-600">{approveKickoffError}</p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center gap-2.5 justify-end mt-6">
+              <button
+                onClick={() => setApproveKickoffPlan(null)}
+                disabled={approveKickoffMutation.isPending}
+                className="px-4 py-2 rounded-lg text-[12.5px] font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                No, Cancel
+              </button>
+              <button
+                onClick={handleApproveKickoffConfirm}
+                disabled={approveKickoffMutation.isPending}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-[12.5px] font-bold text-white bg-gradient-to-r from-teal-500 to-forest-600 hover:from-teal-600 hover:to-forest-700 transition-all shadow-sm disabled:opacity-60"
+              >
+                {approveKickoffMutation.isPending ? (
+                  <>
+                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </motion.div>
+                    Initiating…
+                  </>
+                ) : (
+                  <>
+                    <BrainCircuit className="w-3.5 h-3.5" />
+                    Yes, Initiate Breakdown
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     )}
     <motion.div variants={stagger} initial="hidden" animate="show">
 
@@ -567,6 +696,7 @@ export default function DecompositionPlansPage() {
                         }}
                         onKickoff={() => handleKickoff(plan)}
                         onWithdraw={(id) => withdrawMutation.mutate(id)}
+                        onApproveKickoff={(p) => { setApproveKickoffError(""); setApproveKickoffPlan(p); }}
                       />
                     </td>
 

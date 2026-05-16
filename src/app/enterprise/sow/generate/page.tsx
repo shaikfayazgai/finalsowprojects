@@ -1564,13 +1564,14 @@ function SOWGenerateWizardPageInner() {
   const [generationComplete, setGenerationComplete] = React.useState(() => draft.current?.generationComplete ?? false);
   const [generatedSowId, setGeneratedSowId] = React.useState<string | null>(() => draft.current?.generatedSowId ?? null);
   const [showGenerateConfirm, setShowGenerateConfirm] = React.useState(false);
+  const [wizardSubmitted, setWizardSubmitted] = React.useState(false);
   const uploadStore = useSOWUploadStore();
 
   // Navigation guard — block leaving while the wizard has in-progress data
   const navGuard = useNavigationGuard({
-    isActive: currentStep > 0 || Object.values(formData).some((v) =>
+    isActive: !wizardSubmitted && (currentStep > 0 || Object.values(formData).some((v) =>
       typeof v === "string" ? v.trim().length > 0 : Array.isArray(v) ? v.length > 0 : false
-    ),
+    )),
     allowedPathPrefixes: ["/enterprise/sow/generate"],
   });
 
@@ -2107,14 +2108,20 @@ function SOWGenerateWizardPageInner() {
 
   if (generationComplete) {
     return (
+      <>
       <SOWAIDraftReviewPage
         sowId={generatedSowId}
         flow="ai"
         detailsOverride={wizardFormDataToDetails(formData as unknown as Record<string, any>)}
+        onSubmitComplete={() => {
+          try {
+            sessionStorage.removeItem("sow-generator-draft");
+            sessionStorage.removeItem("sow-wizard-id");
+            sessionStorage.removeItem("sow-ai-review-active");
+          } catch { /* ignore */ }
+          setWizardSubmitted(true);
+        }}
         onBack={() => {
-          // Return to the wizard form. Keep generatedSowId/reviewData so the
-          // user can regenerate without losing prior API results until they
-          // explicitly click "Generate SOW with AI" again.
           setGenerationComplete(false);
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
@@ -2125,6 +2132,18 @@ function SOWGenerateWizardPageInner() {
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
       />
+      <NavigationGuardModal
+        open={navGuard.showModal}
+        onStay={navGuard.onStay}
+        onSaveAndLeave={navGuard.onConfirmLeave}
+        onDiscardAndLeave={() => {
+          sessionStorage.removeItem("sow-generator-draft");
+          sessionStorage.removeItem("sow-wizard-id");
+          navGuard.onConfirmLeave();
+        }}
+        flowLabel="the AI SOW Wizard (Review & Submit SOW)"
+      />
+      </>
     );
   }
 
