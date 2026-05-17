@@ -456,6 +456,12 @@ export function useSetApprovalAuthorities(sowId: string | null) {
 
 // ── Generate manual SOW (with polling) ───────────────────────────────────
 
+const GENERATION_IN_PROGRESS_STATUSES = new Set([
+  "pending", "processing", "in_progress",
+  "assembling", "applying", "compliance", "generating", "finalizing",
+  "uploading", "extracting", "extraction", "analyzing", "detecting", "scoring",
+]);
+
 export function useGenerationStatus(sowId: string | null, enabled = true) {
   return useQuery({
     queryKey: manualSowKeys.generationStatus(sowId ?? ""),
@@ -464,11 +470,9 @@ export function useGenerationStatus(sowId: string | null, enabled = true) {
     retry: false,
     refetchInterval: (query) => {
       if (query.state.error) return false;
-      const raw = query.state.data as { data?: { status?: string } } | undefined;
-      const status = raw?.data?.status;
-      // Keep polling only while the API explicitly signals in-progress
-      const inProgress = status === "pending" || status === "processing" || status === "in_progress";
-      if (raw && !inProgress) return false;
+      const raw = query.state.data as Record<string, unknown> | undefined;
+      const status = String(raw?.status ?? raw?.data?.status ?? "");
+      if (raw && status && !GENERATION_IN_PROGRESS_STATUSES.has(status)) return false;
       return 3000;
     },
   });
@@ -492,11 +496,11 @@ export function useGenerateManualSOW(sowId: string | null) {
 
 // ── SOW preview ───────────────────────────────────────────────────────────
 
-export function useSOWPreview(sowId: string | null) {
+export function useSOWPreview(sowId: string | null, enabled = true) {
   return useQuery({
     queryKey: manualSowKeys.sowPreview(sowId ?? ""),
     queryFn: () => sowApi.getSOWPreview(sowId!),
-    enabled: !!sowId,
+    enabled: !!sowId && enabled,
   });
 }
 

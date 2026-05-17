@@ -12,11 +12,9 @@ import {
   ClipboardCheck, Plus, X, Zap, Check, Loader2, SkipForward, Circle, Lightbulb, Info,
   Link2, Scale, Gavel, Upload, Eye, Pencil, Trash2, ChevronDown,
 } from "lucide-react";
-import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils/cn";
 import { isValidLanguageName, canonicalLanguageName, suggestLanguages } from "@/lib/utils/language-validation";
-
-const SOWAIDraftReviewPage = dynamic(() => import("../upload/generate/page"), { ssr: false });
+import { GeneratePreviewContent as SOWAIDraftReviewPage } from "@/components/enterprise/sow/GeneratePreviewContent";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { validateStep, validateField, type StepErrors } from "@/lib/validations/sow-generate";
 import {

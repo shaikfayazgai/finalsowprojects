@@ -680,7 +680,6 @@ export default function SOWListPage() {
     { field: "client" as SortField, label: "Client", align: "left", minW: 120 },
     { field: "status" as SortField, label: "Status", align: "left", minW: 130 },
     { field: "sensitivity" as SortField, label: "Sensitivity", align: "left", minW: 100 },
-    { field: "risk" as SortField, label: "Risk", align: "center", minW: 110 },
     { field: "version" as SortField, label: "Version", align: "center", minW: 70 },
     { field: "modified" as SortField, label: "Modified", align: "left", minW: 100 },
   ];
@@ -903,13 +902,12 @@ export default function SOWListPage() {
           {/* ═══ TABLE ═══ */}
           <table className="w-full table-fixed">
             <colgroup>
-              <col style={{ width: "27%" }} />
+              <col style={{ width: "30%" }} />
+              <col style={{ width: "16%" }} />
               <col style={{ width: "15%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "8%" }} />
               <col style={{ width: "14%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "7%" }} />
-              <col style={{ width: "10%" }} />
               <col style={{ width: "5%" }} />
             </colgroup>
             <thead>
@@ -947,8 +945,8 @@ export default function SOWListPage() {
                   <td style={{ padding: "13px 14px" }}>
                     <div className="animate-pulse rounded" style={{ height: 12, width: "65%", background: "var(--color-beige-100)" }} />
                   </td>
-                  {[80, 60, 60, 24, 50, 0].map((w, j) => (
-                    <td key={j} style={{ padding: "13px 14px", textAlign: j === 3 ? "center" : "left" }}>
+                  {[80, 60, 24, 50, 0].map((w, j) => (
+                    <td key={j} style={{ padding: "13px 14px", textAlign: j === 2 ? "center" : "left" }}>
                       {w > 0 && <div className="animate-pulse rounded-full" style={{ height: 20, width: w, background: "var(--color-beige-100)" }} />}
                     </td>
                   ))}
@@ -958,7 +956,7 @@ export default function SOWListPage() {
               {/* Empty state */}
               {!isFetchingAny && paginated.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ padding: "56px 16px", textAlign: "center" }}>
+                  <td colSpan={7} style={{ padding: "56px 16px", textAlign: "center" }}>
                     <div className="flex flex-col items-center gap-3">
                       <div className="flex items-center justify-center w-12 h-12 rounded-2xl" style={{ background: "var(--color-brown-50)", border: "1px solid var(--color-brown-100)" }}>
                         <FileText className="w-5 h-5" style={{ color: "var(--color-brown-400)" }} />
@@ -1029,11 +1027,6 @@ export default function SOWListPage() {
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sens.color }} />
                         {sens.label}
                       </span>
-                    </td>
-
-                    {/* Risk */}
-                    <td style={{ padding: "12px 14px", verticalAlign: "middle", textAlign: "center" }}>
-                      <RiskBar score={sow.riskScore?.overall ?? 0} />
                     </td>
 
                     {/* Version */}

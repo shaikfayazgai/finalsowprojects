@@ -228,7 +228,7 @@ export default function SOWUploadPage() {
     const stages: ParsingStage[] = ["uploading", "extracting", "analyzing", "detecting", "scoring"];
     stages.forEach((stage, i) => { setTimeout(() => setParsingStage(stage), i * 600); });
 
-    /* Call the real upload API */
+    /* Call the real upload API — navigate to report page as soon as sowId is received */
     try {
       const res = await sowApi.uploadSOW(selectedFile, {
         projectTitle,
@@ -243,11 +243,14 @@ export default function SOWUploadPage() {
         ?? ((raw.data as Record<string, unknown> | null)?.sow_id as string | undefined)
         ?? ((raw.data as Record<string, unknown> | null)?.id as string | undefined)
         ?? null;
-      if (sowId) store.setUploadedSowId(sowId);
+      if (sowId) {
+        store.setUploadedSowId(sowId);
+        store.setFlowStep(2);
+        router.push("/enterprise/sow/upload/report");
+      }
     } catch {
       /* Non-fatal — store won't have a real ID but the flow can continue without API data */
     }
-    // "complete" is now set by the API status polling effect above
   };
 
   return (

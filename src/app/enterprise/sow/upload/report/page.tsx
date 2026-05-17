@@ -8,7 +8,6 @@ import {
   LayoutList, Sparkles, ShieldCheck, AlertTriangle, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { Skeleton } from "@/components/ui";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { KpiRow } from "@/components/enterprise/sow/KpiRow";
@@ -103,58 +102,118 @@ export default function ExtractionReportPage() {
     router.push("/enterprise/sow/upload");
   };
 
-  // ── Processing / loading skeleton ──
+  // ── Processing / loading UI — wired to upload status API ──
+  const UPLOAD_STAGES = [
+    { key: "uploading",  label: "Detecting Document Type",       description: "Identifying format and structure" },
+    { key: "extracting", label: "Running OCR",                   description: "OCR & content extraction" },
+    { key: "analyzing",  label: "Reading Document Structure",    description: "Layout & hierarchy parsing" },
+    { key: "detecting",  label: "Extracting Clauses & Sections", description: "Scope, budget, timeline, risks" },
+    { key: "scoring",    label: "Tagging Clause Types",          description: "Legal & commercial classification" },
+  ] as const;
+
+  const STATUS_TO_IDX: Record<string, number> = {
+    uploading: 0, extracting: 1, extraction: 1,
+    analyzing: 2, detecting: 3, scoring: 4,
+  };
+
+  const activeStageIdx = uploadStatus ? (STATUS_TO_IDX[uploadStatus] ?? -1) : -1;
+  const progressPct = activeStageIdx < 0 ? 5
+    : Math.round(((activeStageIdx + 0.5) / UPLOAD_STAGES.length) * 100);
+
   if (isProcessing || reportLoading) {
     return (
       <>
       <div>
         <div className="mb-6"><FlowStepProgress currentStep={2} /></div>
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 mb-6">
-          <div className="space-y-2">
-            <Skeleton className="h-7 w-72" />
-            <Skeleton className="h-3.5 w-56" />
-          </div>
-          <Skeleton className="h-6 w-36 rounded-full" />
+
+        <div className="mb-6">
+          <h1 className="font-heading text-[28px] font-semibold text-gray-900 tracking-tight">AI Report</h1>
+          <p className="mt-1.5 text-[13px] text-gray-500">Processing your document — this usually takes under a minute.</p>
         </div>
-        {/* Card */}
-        <div className="card-parchment overflow-hidden">
-          {/* KPI row */}
-          <div className="px-5 py-5 border-b border-gray-100">
-            <div className="grid grid-cols-4 gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
-                  <div className="space-y-1.5">
-                    <Skeleton className="h-2.5 w-20" />
-                    <Skeleton className="h-5 w-10" />
+
+        <div
+          className="rounded-2xl overflow-hidden"
+          style={{
+            background: "linear-gradient(160deg, #FFFFFF 0%, #FAF7F4 100%)",
+            boxShadow: "0 8px 32px rgba(166,119,99,0.12), 0 2px 8px rgba(0,0,0,0.06), 0 0 0 1px rgba(229,221,212,0.8)",
+          }}
+        >
+          {/* Header */}
+          <div className="flex items-center gap-5 px-7 pt-7 pb-6" style={{ borderBottom: "1px solid #F0EBE5" }}>
+            <div className="relative shrink-0">
+              <div
+                className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center"
+                style={{ boxShadow: "0 6px 20px rgba(42,96,104,0.30), inset 0 1px 0 rgba(255,255,255,0.2)" }}
+              >
+                <Loader2 className="w-7 h-7 text-white animate-spin" />
+              </div>
+              <div
+                className="absolute inset-0 rounded-2xl animate-ping"
+                style={{ border: "2px solid rgba(42,96,104,0.30)", animationDuration: "2s" }}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-[19px] font-extrabold text-gray-900 uppercase tracking-tight leading-tight">
+                AI Extraction Engine Active
+              </h2>
+              <p className="text-[12.5px] text-gray-400 mt-1">
+                {activeStageIdx >= 0
+                  ? UPLOAD_STAGES[activeStageIdx].description
+                  : "Preparing your document for extraction"}
+              </p>
+            </div>
+            <div
+              className="shrink-0 px-3.5 py-1.5 rounded-full"
+              style={{ background: "linear-gradient(135deg, #2A606814, #2A606808)", border: "1px solid #2A606825" }}
+            >
+              <span className="num-display text-[16px] font-bold" style={{ color: "#2A6068" }}>
+                {progressPct}%
+              </span>
+            </div>
+          </div>
+
+          {/* Stage grid */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3.5 px-7 py-6">
+            {UPLOAD_STAGES.map((stage, i) => {
+              const isActive = i === activeStageIdx;
+              const isDone   = i < activeStageIdx || activeStageIdx < 0;
+              return (
+                <div key={stage.key} className="flex items-center gap-3 min-w-0" style={{ opacity: isDone || isActive ? 1 : 0.35, transition: "opacity 0.3s" }}>
+                  <div className="relative shrink-0 w-3 h-3 flex items-center justify-center">
+                    {isActive && (
+                      <div className="absolute inset-0 rounded-full bg-teal-400 animate-ping" style={{ animationDuration: "1.4s" }} />
+                    )}
+                    <div className={cn(
+                      "w-2.5 h-2.5 rounded-full transition-all duration-300",
+                      isDone ? "bg-forest-500" : isActive ? "bg-teal-500" : "bg-gray-300",
+                    )} />
                   </div>
+                  <span className={cn(
+                    "text-[11px] font-bold tracking-widest uppercase truncate transition-colors duration-300",
+                    isDone ? "text-gray-400" : isActive ? "text-gray-900" : "text-gray-400",
+                  )}>
+                    {stage.label}...
+                  </span>
+                  {isDone && activeStageIdx >= 0 && (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-forest-500 ml-auto shrink-0" />
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
-          {/* Context Detection + Sensitive Data */}
-          <div className="grid grid-cols-2 divide-x divide-gray-100 border-b border-gray-100">
-            <div className="px-5 py-4 space-y-3">
-              <Skeleton className="h-2.5 w-28" />
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 py-2">
-                  <Skeleton className="w-3.5 h-3.5 rounded shrink-0" />
-                  <Skeleton className="h-3 w-28 flex-1" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
-              ))}
+
+          {/* Progress bar */}
+          <div className="mx-7" style={{ borderTop: "1px solid #EDE8E3" }} />
+          <div className="px-7 py-5">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400">Overall Extraction Progress</span>
             </div>
-            <div className="px-5 py-4 space-y-3">
-              <Skeleton className="h-2.5 w-28" />
-              <Skeleton className="h-5 w-20 rounded-full" />
-              <Skeleton className="h-3 w-40" />
+            <div className="h-2.5 rounded-full overflow-hidden bg-gray-100">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-brown-400 to-brown-600 transition-all duration-500 ease-out"
+                style={{ width: `${progressPct}%`, boxShadow: "0 0 12px rgba(166,119,99,0.45)" }}
+              />
             </div>
-          </div>
-          {/* Action row */}
-          <div className="px-5 py-4 flex justify-end gap-3">
-            <Skeleton className="h-10 w-32 rounded-xl" />
-            <Skeleton className="h-10 w-40 rounded-xl" />
           </div>
         </div>
       </div>
