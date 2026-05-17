@@ -403,23 +403,6 @@ function SowRow({ sow }: { sow: SOW }) {
             Needs sign-off
           </p>
         )}
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {([
-            ["BO", sow.approvalStageStatuses?.business_owner],
-            ["CO", sow.approvalStageStatuses?.commercial],
-            ["LE", sow.approvalStageStatuses?.legal],
-            ["SE", sow.approvalStageStatuses?.security],
-            ["FA", sow.approvalStageStatuses?.final_approver],
-          ] as const).map(([label, status]) => (
-            <span
-              key={label}
-              className="inline-flex items-center rounded-md border border-beige-200 bg-beige-50 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-beige-500"
-              title={`${label}: ${status ?? "pending"}`}
-            >
-              {label}:{status ?? "pending"}
-            </span>
-          ))}
-        </div>
       </td>
 
       {/* Updated */}

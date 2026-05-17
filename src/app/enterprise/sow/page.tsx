@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Search, Plus, DollarSign, Shield, Upload, Sparkles, AlertTriangle,
   ArrowUp, ArrowDown, Clock,
-  MoreVertical, Eye, Download, Archive, CheckCircle2, X, PlayCircle, Trash2,
+  MoreVertical, Eye, Archive, CheckCircle2, X, PlayCircle, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn, getInitialVariant } from "@/lib/utils/motion-variants";
@@ -329,7 +329,6 @@ function RowKebab({ sow, onAction }: { sow: import("@/types/enterprise").SOW; on
   const items: { label: string; action: string; show: boolean; danger?: boolean }[] = [
     { label: "View Detail",            action: "view",     show: true },
     { label: "Edit",                   action: "edit",     show: sow.status === "draft" },
-    { label: "Download PDF",           action: "download", show: true },
     { label: "View Approval Progress", action: "approval", show: ["approval", "review", "pending_commercial_review"].includes(sow.status) },
     { label: "Delete",                 action: "delete",   show: true, danger: true },
   ];
@@ -350,8 +349,7 @@ function RowKebab({ sow, onAction }: { sow: import("@/types/enterprise").SOW; on
               style={{ color: item.danger ? "var(--danger)" : undefined }}>
               {item.action === "view" && <Eye className="w-3.5 h-3.5" />}
               {item.action === "edit" && <FileText className="w-3.5 h-3.5" />}
-              {item.action === "download" && <Download className="w-3.5 h-3.5" />}
-              {item.action === "approval" && <CheckCircle2 className="w-3.5 h-3.5" />}
+{item.action === "approval" && <CheckCircle2 className="w-3.5 h-3.5" />}
               {item.action === "delete" && <Archive className="w-3.5 h-3.5" />}
               {item.label}
             </button>
@@ -667,7 +665,6 @@ export default function SOWListPage() {
     switch (action) {
       case "view": router.push(`/enterprise/sow/${sowId}`); break;
       case "edit": router.push(`/enterprise/sow/${sowId}`); break;
-      case "download": break;
       case "approval": router.push(`/enterprise/sow/approval`); break;
       case "delete":
         if (sow) setDeleteTarget({ id: sow.id, title: sow.title, intakeMode: sow.intakeMode });

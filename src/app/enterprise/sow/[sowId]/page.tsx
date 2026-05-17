@@ -303,7 +303,6 @@ export default function SOWDetailPage() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const [isDecomposing, setIsDecomposing] = React.useState(false);
-  const [decompositionStarted, setDecompositionStarted] = React.useState(false);
   const allSows = useSowStore((s) => s.sows);
   const addSow = useSowStore((s) => s.addSow);
   const updateSow = useSowStore((s) => s.updateSow);
@@ -530,7 +529,7 @@ export default function SOWDetailPage() {
       );
       await queryClient.invalidateQueries({ queryKey: ["enterprise", "decomposition", "plans"] });
       addSow({ ...sow, planId: planId || sowId });
-      setDecompositionStarted(true);
+      router.push("/enterprise/decomposition");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to start decomposition";
       toast.error("Decomposition failed", msg);
@@ -2331,14 +2330,14 @@ export default function SOWDetailPage() {
                       </div>
                       {sow.planId ? (
                         <Link
-                          href={`/enterprise/decomposition`}
+                          href="/enterprise/decomposition"
                           className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all"
                           style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
                         >
                           <GitBranch className="w-3.5 h-3.5" />
                           View Decomposition
                         </Link>
-                      ) : sow.intakeMode === "ai_generated" ? (
+                      ) : (
                         <button
                           onClick={handleStartDecomposition}
                           disabled={isDecomposing}
@@ -2346,17 +2345,8 @@ export default function SOWDetailPage() {
                           style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
                         >
                           <GitBranch className="w-3.5 h-3.5" />
-                          {isDecomposing ? "Starting…" : decompositionStarted ? "View Decomposition" : "Start Decomposition"}
+                          {isDecomposing ? "Starting…" : "Start Decomposition"}
                         </button>
-                      ) : (
-                        <Link
-                          href={`/enterprise/decomposition?sowId=${sow.id}`}
-                          className="flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all"
-                          style={{ background: "linear-gradient(135deg,#2A6068,#1D4A50)", boxShadow: "0 2px 8px rgba(42,96,104,0.30)" }}
-                        >
-                          <GitBranch className="w-3.5 h-3.5" />
-                          Start Decomposition
-                        </Link>
                       )}
                     </div>
                   )}

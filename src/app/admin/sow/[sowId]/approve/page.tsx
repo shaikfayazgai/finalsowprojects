@@ -299,9 +299,9 @@ const COMMERCIAL_CHECKLIST = [
 
 const TABS = [
   { id: "overview",  label: "Overview",  icon: LayoutGrid },
-  { id: "details",   label: "SOW Details", icon: ClipboardList },
   { id: "sections",  label: "Sections",  icon: BookOpen },
   { id: "pipeline",  label: "Pipeline",  icon: GitBranch },
+  { id: "details",   label: "Details",   icon: FileText },
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
