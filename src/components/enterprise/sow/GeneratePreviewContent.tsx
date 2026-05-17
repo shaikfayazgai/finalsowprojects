@@ -209,7 +209,7 @@ export function GeneratePreviewContent({
   // no useEffect delay needed.
   const isQueryComplete = React.useMemo(() => {
     if (!generationStatusQuery.data) return false;
-    const raw = generationStatusQuery.data as Record<string, unknown>;
+    const raw = generationStatusQuery.data as unknown as Record<string, unknown>;
     const inner = (raw?.data && typeof raw.data === "object")
       ? (raw.data as Record<string, unknown>)
       : raw;
@@ -261,7 +261,7 @@ export function GeneratePreviewContent({
 
   React.useEffect(() => {
     if (!generationStatusQuery.isSuccess || !generationStatusQuery.data) return;
-    const raw = generationStatusQuery.data as Record<string, unknown> & { data?: Record<string, unknown> };
+    const raw = generationStatusQuery.data as unknown as Record<string, unknown> & { data?: Record<string, unknown> };
     const inner = raw?.data ?? raw;
     const status = String(inner?.status ?? "");
 

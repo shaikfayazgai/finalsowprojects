@@ -471,7 +471,8 @@ export function useGenerationStatus(sowId: string | null, enabled = true) {
     refetchInterval: (query) => {
       if (query.state.error) return false;
       const raw = query.state.data as Record<string, unknown> | undefined;
-      const status = String(raw?.status ?? raw?.data?.status ?? "");
+      const nested = (raw?.data && typeof raw.data === "object") ? (raw.data as Record<string, unknown>) : null;
+      const status = String(raw?.status ?? nested?.status ?? "");
       if (raw && status && !GENERATION_IN_PROGRESS_STATUSES.has(status)) return false;
       return 3000;
     },
