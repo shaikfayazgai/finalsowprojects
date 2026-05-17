@@ -6,13 +6,12 @@ import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
   Search, Layers, Clock, CheckCircle2, Sparkles,
-  Inbox, GraduationCap, ArrowUp, ArrowDown, X,
+  Inbox, ArrowUp, ArrowDown, X,
   ChevronLeft, ChevronRight, Pause, AlertTriangle, RefreshCw, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
-import { mockContributorProfile } from "@/mocks/data/contributor";
 import { useProjectHoldStore } from "@/lib/stores/project-hold-store";
 import { useTaskStore } from "@/lib/stores/task-store";
 import {
@@ -88,7 +87,6 @@ const columns: { field: SortField; label: string; align: string }[] = [
   { field: "project",  label: "Project",  align: "left"   },
   { field: "status",   label: "Status",   align: "left"   },
   { field: "priority", label: "Priority", align: "left"   },
-  { field: "match",    label: "Match",    align: "center" },
   { field: "dueDate",  label: "Due Date", align: "left"   },
   { field: "pricing",  label: "Effort",   align: "right"  },
 ];
@@ -98,7 +96,7 @@ const columns: { field: SortField; label: string; align: string }[] = [
 function SkeletonRow() {
   return (
     <tr style={{ borderBottom: "1px solid var(--border-hair)" }}>
-      {[280, 160, 90, 70, 60, 100, 60].map((w, i) => (
+      {[280, 160, 90, 70, 100, 60].map((w, i) => (
         <td key={i} style={{ padding: "14px 16px" }}>
           <div className="h-4 rounded-md bg-gray-100 animate-pulse" style={{ width: w }} />
         </td>
@@ -112,7 +110,7 @@ function SkeletonRow() {
 export default function ContributorTasksPage() {
   const router = useRouter();
   const { heldProjects } = useProjectHoldStore();
-  const { setSelectedTask } = useTaskStore();
+  const { setSelectedTask, statusOverrides } = useTaskStore();
   const { data: session, status: sessionStatus } = useSession();
   const token = getContributorAccessToken(session);
 
@@ -392,9 +390,9 @@ export default function ContributorTasksPage() {
       })()}
 
       {/* ═══ STUDENT TRACK BANNER ═══ */}
-      {mockContributorProfile.track === "student" && (
+      {false && (
         <motion.div variants={fadeUp} className="flex items-center gap-3 bg-teal-50 rounded-xl px-4 py-3 mb-5">
-          <GraduationCap className="w-5 h-5 text-teal-500 shrink-0" />
+          <span className="w-5 h-5 shrink-0" />
           <p className="text-[12px] text-teal-700">
             <span className="font-semibold">Student Track</span> — You&apos;re seeing tasks appropriate for your academic level. Tasks have supervised review and count toward academic credits.
           </p>
@@ -547,19 +545,19 @@ export default function ContributorTasksPage() {
 
               {/* Task rows */}
               {!tasksLoading && !tasksError && tasks.map((task) => {
-                const sc = statusConfig[task.status] || statusConfig.available;
+                const effectiveStatus = statusOverrides[task.id] ?? task.status;
+                const sc = statusConfig[effectiveStatus] || statusConfig.available;
                 const pr = priorityConfig[task.priority] || priorityConfig.medium;
                 const days = daysUntil(task.due_date);
                 const isOverdue = days < 0;
                 const isUrgent = days >= 0 && days <= 3;
                 const isProjectHeld = Boolean(task.project_id && heldProjects[task.project_id]);
-
                 return (
                   <tr
                     key={task.id}
                     onClick={() => {
                       if (isProjectHeld) return;
-                      setSelectedTask(task);
+                      setSelectedTask({ ...task, status: effectiveStatus });
                       router.push(`/contributor/tasks/${task.id}`);
                     }}
                     className={cn(
@@ -603,29 +601,6 @@ export default function ContributorTasksPage() {
                     {/* PRIORITY */}
                     <td style={{ padding: "13px 16px" }}>
                       <Pill bg={pr.bg} color={pr.color}>{pr.label}</Pill>
-                    </td>
-
-                    {/* MATCH */}
-                    <td style={{ padding: "13px 16px", textAlign: "center" }}>
-                      <div className="flex items-center gap-2 justify-center">
-                        <div className="w-10 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${task.match_score}%`,
-                              background:
-                                task.match_score >= 90
-                                  ? "var(--color-forest-500)"
-                                  : task.match_score >= 75
-                                    ? "var(--color-gold-500)"
-                                    : "var(--color-brown-500)",
-                            }}
-                          />
-                        </div>
-                        <span className="font-mono text-[11px] font-semibold text-gray-600 w-8 text-right">
-                          {task.match_score}%
-                        </span>
-                      </div>
                     </td>
 
                     {/* DUE DATE */}

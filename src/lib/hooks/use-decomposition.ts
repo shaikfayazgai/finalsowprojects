@@ -15,6 +15,8 @@ import {
   postEnterpriseSubtask,
   patchEnterpriseSubtask,
   deleteEnterpriseSubtask,
+  postEnterpriseKickoffAction,
+  postEnterpriseApproveKickoff,
   type TaskPayload,
   type SubtaskPayload,
 } from "@/lib/api/decomposition-plans";
@@ -406,6 +408,29 @@ export function useWithdraw() {
     mutationFn: (planId: string) => decompositionApi.withdraw(planId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: decompositionKeys.plans() });
+      qc.invalidateQueries({ queryKey: ["enterprise", "decomposition", "plans"] });
+    },
+  });
+}
+
+export function useKickoffAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (planId: string) => postEnterpriseKickoffAction(planId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: decompositionKeys.plans() });
+      qc.invalidateQueries({ queryKey: ["enterprise", "decomposition", "plans"] });
+    },
+  });
+}
+
+export function useApproveKickoff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (planId: string) => postEnterpriseApproveKickoff(planId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: decompositionKeys.plans() });
+      qc.invalidateQueries({ queryKey: ["enterprise", "decomposition", "plans"] });
     },
   });
 }

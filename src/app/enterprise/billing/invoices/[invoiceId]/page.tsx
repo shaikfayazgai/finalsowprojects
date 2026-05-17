@@ -72,38 +72,175 @@ export default function InvoiceDetailPage() {
   const total = subtotal + tax;
   const balanceDue = total - invoice.paidAmount;
 
+  const handlePrint = () => {
+    const win = window.open("", "_blank", "width=960,height=800");
+    if (!win) return;
+
+    const client = mockProjects.find((p) => p.id === invoice.projectId)?.client ?? "Client";
+
+    const lineItemRows = invoice.lineItems
+      .map(
+        (item) => `
+        <tr>
+          <td class="td">${item.description}</td>
+          <td class="td center">${item.quantity}</td>
+          <td class="td right mono">${formatCurrency(item.rate)}</td>
+          <td class="td right mono bold">${formatCurrency(item.amount)}</td>
+        </tr>`
+      )
+      .join("");
+
+    const paidRow =
+      invoice.paidAmount > 0
+        ? `<div class="total-row green"><span>Amount Paid</span><span class="mono">-${formatCurrency(invoice.paidAmount)}</span></div>`
+        : "";
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Invoice ${invoice.number}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff;color:#1a1613;padding:40px}
+    @page{margin:16mm}
+    @media print{body{padding:0}}
+    .wrap{max-width:760px;margin:0 auto}
+    .header{background:linear-gradient(135deg,#3d2b1f,#5c3d2a);color:#fff;padding:28px 32px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:flex-start}
+    .brand{font-size:18px;font-weight:700;letter-spacing:-.3px}
+    .brand-sub{font-size:11px;color:rgba(255,255,255,.6);margin-top:3px}
+    .inv-label{font-size:28px;font-weight:700;letter-spacing:1px;text-align:right}
+    .inv-num{font-size:15px;font-family:monospace;font-weight:600;color:rgba(255,255,255,.85);text-align:right;margin-top:4px}
+    .inv-dates{margin-top:8px;text-align:right;font-size:12px;color:rgba(255,255,255,.7);line-height:1.8}
+    .meta{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #ede8e3;border-top:none}
+    .meta-box{padding:20px 24px}
+    .meta-box+.meta-box{border-left:1px solid #ede8e3}
+    .meta-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9b8b7a;margin-bottom:6px}
+    .meta-val{font-size:14px;font-weight:600;color:#1a1613}
+    .meta-sub{font-size:12px;color:#9b8b7a;margin-top:3px;line-height:1.6}
+    .status-badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:600;background:#f0f9f6;color:#1a7a5e;border:1px solid #c6ebe0;margin-top:4px}
+    table{width:100%;border-collapse:collapse;margin-top:0;border:1px solid #ede8e3;border-top:none}
+    .th{background:#f7f4f0;padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9b8b7a;border-bottom:1px solid #ede8e3}
+    .td{padding:11px 14px;font-size:13px;color:#3d2b1f;border-bottom:1px solid #f5f1ec}
+    .center{text-align:center}
+    .right{text-align:right}
+    .mono{font-family:monospace}
+    .bold{font-weight:600}
+    .totals{border:1px solid #ede8e3;border-top:none;padding:16px 24px;display:flex;justify-content:flex-end}
+    .totals-inner{width:280px}
+    .total-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:#7a6a5a;border-bottom:1px solid #f5f1ec}
+    .total-row.green{color:#1a7a5e;font-weight:600}
+    .total-row.grand{font-size:16px;font-weight:700;color:#1a1613;border:none;padding-top:10px}
+    .notes{background:#f7f4f0;border:1px solid #ede8e3;border-top:none;padding:16px 24px;border-radius:0 0 12px 12px;font-size:12px;color:#9b8b7a;line-height:1.6}
+    .footer{margin-top:32px;text-align:center;font-size:11px;color:#c0b0a0}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <div class="brand">GlimmoraTeam</div>
+      <div class="brand-sub">Powered by Baarez Technology Solutions</div>
+      <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,.65);line-height:1.8">
+        Dubai Internet City, Tower B, Suite 4200<br>
+        billing@glimmorateam.com &nbsp;|&nbsp; +971 4 XXX XXXX
+      </div>
+    </div>
+    <div>
+      <div class="inv-label">INVOICE</div>
+      <div class="inv-num">${invoice.number}</div>
+      <div class="inv-dates">
+        Issued: ${formatDate(invoice.issuedDate)}<br>
+        Due: ${formatDate(invoice.dueDate)}
+      </div>
+    </div>
+  </div>
+
+  <div class="meta">
+    <div class="meta-box">
+      <div class="meta-label">Bill To</div>
+      <div class="meta-val">${client}</div>
+      <div class="meta-sub">Accounts Payable Department<br>Mumbai, Maharashtra 400001, India</div>
+    </div>
+    <div class="meta-box">
+      <div class="meta-label">Project</div>
+      <div class="meta-val">${getProjectTitle(invoice.projectId)}</div>
+      <div class="meta-sub">
+        ${invoice.milestoneId ? `Milestone: ${invoice.milestoneId}<br>` : ""}
+        Currency: ${invoice.currency}
+        <br><span class="status-badge">${statusConfig[invoice.status].label}</span>
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="th" style="text-align:left">Description</th>
+        <th class="th" style="text-align:center">Qty</th>
+        <th class="th" style="text-align:right">Rate</th>
+        <th class="th" style="text-align:right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>${lineItemRows}</tbody>
+  </table>
+
+  <div class="totals">
+    <div class="totals-inner">
+      <div class="total-row"><span>Subtotal</span><span class="mono">${formatCurrency(subtotal)}</span></div>
+      <div class="total-row"><span>Tax (0%)</span><span class="mono">${formatCurrency(tax)}</span></div>
+      ${paidRow}
+      <div class="total-row grand"><span>Balance Due</span><span class="mono">${formatCurrency(Math.max(balanceDue, 0))}</span></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    Payment is due within the terms specified above. Late payments may incur additional fees as per the service agreement.
+    Please include the invoice number <strong>${invoice.number}</strong> as reference when making payment.
+  </div>
+
+  <div class="footer">GlimmoraTeam &nbsp;|&nbsp; Confidential &nbsp;|&nbsp; ${new Date().toISOString().split("T")[0]}</div>
+</div>
+<script>window.onload = function(){ window.focus(); window.print(); }<\/script>
+</body>
+</html>`);
+    win.document.close();
+  };
+
   const handleDownloadPdf = async () => {
     try {
+      const client = mockProjects.find((p) => p.id === invoice.projectId)?.client ?? "Client";
       await downloadPdf(`invoice-${invoice.number}.pdf`, {
         title: `Invoice ${invoice.number}`,
-        subtitle: "Invoice",
+        subtitle: `Status: ${statusConfig[invoice.status].label}`,
         meta: {
-          Status: statusConfig[invoice.status].label,
-          "Bill To": mockProjects.find((p) => p.id === invoice.projectId)?.client ?? "Client",
-          Project: getProjectTitle(invoice.projectId),
-          Issued: formatDate(invoice.issuedDate),
-          Due: formatDate(invoice.dueDate),
-          Currency: invoice.currency,
+          "Issued By": "GlimmoraTeam  |  Dubai Internet City, Tower B, Suite 4200",
+          "Bill To": `${client}  |  Accounts Payable Department, Mumbai, India`,
+          "Project": getProjectTitle(invoice.projectId),
+          "Issue Date": formatDate(invoice.issuedDate),
+          "Due Date": formatDate(invoice.dueDate),
+          "Currency": invoice.currency,
+          ...(invoice.milestoneId ? { "Milestone": invoice.milestoneId } : {}),
+        },
+        table: {
+          headers: ["Description", "Qty", "Rate (USD)", "Amount (USD)"],
+          rows: invoice.lineItems.map((item) => [
+            item.description,
+            String(item.quantity),
+            formatCurrency(item.rate),
+            formatCurrency(item.amount),
+          ]),
+          colWeights: [3.5, 0.7, 1.4, 1.4],
         },
         summary: [
           { label: "Subtotal", value: formatCurrency(subtotal) },
           { label: "Tax (0%)", value: formatCurrency(tax) },
           { label: "Total", value: formatCurrency(total) },
-          { label: "Amount Paid", value: formatCurrency(invoice.paidAmount) },
+          ...(invoice.paidAmount > 0 ? [{ label: "Amount Paid", value: `-${formatCurrency(invoice.paidAmount)}` }] : []),
           { label: "Balance Due", value: formatCurrency(Math.max(balanceDue, 0)) },
         ],
-        table: {
-          headers: ["Description", "Qty", "Rate", "Amount"],
-          rows: invoice.lineItems.map((item) => [
-            item.description,
-            item.quantity,
-            formatCurrency(item.rate),
-            formatCurrency(item.amount),
-          ]),
-          colWeights: [3.5, 0.8, 1.2, 1.2],
-        },
         footerNote:
-          "Payment is due within the terms specified above. Late payments may incur additional fees as per the service agreement.",
+          "Payment is due within the terms specified above. Late payments may incur additional fees as per the service agreement. Include the invoice number as payment reference.",
       });
       toast.success("Download Complete", `Invoice ${invoice.number} downloaded as PDF.`);
     } catch {
@@ -161,7 +298,7 @@ export default function InvoiceDetailPage() {
             <Download className="w-3.5 h-3.5" />
             Download PDF
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => window.print()}>
+          <Button variant="ghost" size="icon-sm" onClick={handlePrint}>
             <Printer className="w-4 h-4" />
           </Button>
         </div>
@@ -169,6 +306,7 @@ export default function InvoiceDetailPage() {
 
       {/* Invoice Document */}
       <motion.div
+        id="invoice-print-area"
         variants={fadeUp}
         className="rounded-2xl border border-beige-200/50 bg-white backdrop-blur-sm shadow-sm overflow-hidden"
       >

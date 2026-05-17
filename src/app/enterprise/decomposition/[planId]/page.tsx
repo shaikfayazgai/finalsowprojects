@@ -489,7 +489,7 @@ export default function PlanDetailPage() {
     if (raw && (raw._id || raw.id || raw.plan_id)) {
       return {
         id: (raw.plan_id ?? raw.id ?? raw._id ?? planId) as string,
-        sowId: (raw.sow_id ?? raw.sowId ?? raw.sow_reference ?? "") as string,
+        sowId: (raw.sow_id ?? raw.sowId ?? raw.sow_reference ?? searchParams.get("sowId") ?? "") as string,
         title: (raw.title ?? raw.project_name ?? "Untitled Plan") as string,
         status: normalizeStatus((raw.status ?? "draft") as string),
         createdAt: (raw.created_at ?? raw.createdAt ?? new Date().toISOString()) as string,

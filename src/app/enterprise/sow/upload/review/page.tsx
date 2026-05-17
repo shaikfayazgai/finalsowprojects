@@ -21,6 +21,7 @@ import {
   useReviewExtractionItem,
   useAcceptAllExtractionItems,
 } from "@/lib/hooks/use-manual-sow";
+import { SOWUploadGuard } from "@/components/enterprise/sow/SOWUploadGuard";
 import type { ExtractionCategory, ExtractionReviewState } from "@/types/enterprise";
 
 /* ── Types ── */
@@ -220,6 +221,7 @@ export default function ParsedSOWReviewPage() {
   /* ── Loading skeleton ── */
   if (isLoading) {
     return (
+      <>
       <div className="flex flex-col h-full min-h-0">
         <div className="mb-5"><FlowStepProgress currentStep={3} /></div>
         {/* Header */}
@@ -272,11 +274,14 @@ export default function ParsedSOWReviewPage() {
           </div>
         </div>
       </div>
+      <SOWUploadGuard />
+      </>
     );
   }
 
   /* ═══ RENDER ═══ */
   return (
+    <>
     <motion.div variants={stagger} initial="hidden" animate="show" className="flex flex-col h-full min-h-0">
       {/* Step indicator */}
       <motion.div variants={fadeUp} className="mb-5">
@@ -517,5 +522,7 @@ export default function ParsedSOWReviewPage() {
         )}
       </AnimatePresence>
     </motion.div>
+    <SOWUploadGuard />
+    </>
   );
 }

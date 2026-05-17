@@ -21,7 +21,7 @@ export interface FlowStep {
 
 const DEFAULT_STEPS: FlowStep[] = [
   { label: "Upload",    icon: Upload },
-  { label: "EI Report", icon: FileSearch },
+  { label: "AI Report", icon: FileSearch },
   { label: "Review",    icon: Eye },
   { label: "Gaps",      icon: AlertTriangle },
   { label: "Details",   icon: PenLine },

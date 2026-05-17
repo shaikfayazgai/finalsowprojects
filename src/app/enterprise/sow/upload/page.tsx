@@ -15,7 +15,8 @@ import { WhatHappensNext } from "./components/WhatHappensNext";
 import { RecentUploads } from "./components/RecentUploads";
 import { aiPoweredFeatures } from "@/mocks/data/sow-upload-flow";
 import { useSOWUploadStore, setFileObjectUrl } from "@/lib/stores/sow-upload-store";
-import { useManualSOWList, useManualSowStatusPolling } from "@/lib/hooks/use-manual-sow";
+import { SOWUploadGuard } from "@/components/enterprise/sow/SOWUploadGuard";
+import { useManualSOWList, useUploadStatus } from "@/lib/hooks/use-manual-sow";
 import { validateSOWUploadFields, validateSOWField, type SOWUploadFieldErrors } from "@/lib/validations/sow-upload";
 import { sowApi } from "@/lib/api/sow";
 
@@ -110,16 +111,16 @@ export default function SOWUploadPage() {
   const isParsing = parsingStage !== null && parsingStage !== "complete";
   const isComplete = parsingStage === "complete";
 
-  /* Poll GET /api/v1/sow/{sowId} while parsing — drive stage from real status */
+  /* Poll GET /api/v1/sow/{sowId}/upload-status while parsing — drive stage from real status */
   const uploadedSowId = store.uploadedSowId ?? null;
-  const { data: statusData } = useManualSowStatusPolling(
+  const { data: statusData } = useUploadStatus(
     isParsing ? uploadedSowId : null,
   );
 
   React.useEffect(() => {
     if (!statusData) return;
-    const raw = statusData as { data?: Record<string, unknown> };
-    const status = String(raw?.data?.status ?? "");
+    const raw = statusData as { processing_state?: string; data?: Record<string, unknown> };
+    const status = String(raw?.processing_state ?? raw?.data?.status ?? "");
     if (!status) return;
     const mapped = STATUS_TO_PARSING_STAGE[status];
     if (mapped) {
@@ -135,6 +136,32 @@ export default function SOWUploadPage() {
       router.push("/enterprise/sow/upload/report");
     }
   }, [isComplete]);
+
+  /* Resume in-progress session: if the user previously uploaded a file or
+     advanced past step 1, returning to this entry page (e.g. after
+     "Continue my progress") sends them back to wherever they left off.
+     For step 1 with an uploaded file (parse-in-progress when they left),
+     resume at step 2 — the report page will poll the API for status. */
+  React.useEffect(() => {
+    const s = useSOWUploadStore.getState();
+    const stepUrls: Record<number, string> = {
+      2: "/enterprise/sow/upload/report",
+      3: "/enterprise/sow/upload/review",
+      4: "/enterprise/sow/upload/gaps",
+      5: "/enterprise/sow/upload/details",
+      6: "/enterprise/sow/upload/generate",
+      7: "/enterprise/sow/upload/preview-confirm",
+    };
+    let target: string | null = null;
+    if (s.currentFlowStep > 1 && stepUrls[s.currentFlowStep]) {
+      target = stepUrls[s.currentFlowStep];
+    } else if (s.uploadedFile !== null && s.uploadedSowId) {
+      // Step 1 with a file already uploaded to the API — jump to the report
+      target = stepUrls[2];
+    }
+    if (target) router.replace(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: sowListRes } = useManualSOWList();
   const existingSows = React.useMemo(() => {
@@ -201,7 +228,7 @@ export default function SOWUploadPage() {
     const stages: ParsingStage[] = ["uploading", "extracting", "analyzing", "detecting", "scoring"];
     stages.forEach((stage, i) => { setTimeout(() => setParsingStage(stage), i * 600); });
 
-    /* Call the real upload API */
+    /* Call the real upload API — navigate to report page as soon as sowId is received */
     try {
       const res = await sowApi.uploadSOW(selectedFile, {
         projectTitle,
@@ -216,14 +243,18 @@ export default function SOWUploadPage() {
         ?? ((raw.data as Record<string, unknown> | null)?.sow_id as string | undefined)
         ?? ((raw.data as Record<string, unknown> | null)?.id as string | undefined)
         ?? null;
-      if (sowId) store.setUploadedSowId(sowId);
+      if (sowId) {
+        store.setUploadedSowId(sowId);
+        store.setFlowStep(2);
+        router.push("/enterprise/sow/upload/report");
+      }
     } catch {
       /* Non-fatal — store won't have a real ID but the flow can continue without API data */
     }
-    // "complete" is now set by the API status polling effect above
   };
 
   return (
+    <>
     <motion.div variants={stagger} initial="hidden" animate="show">
       <input ref={fileInputRef} type="file" accept={ACCEPTED_EXTENSIONS} onChange={handleInputChange} className="hidden" aria-hidden="true" />
 
@@ -596,5 +627,7 @@ export default function SOWUploadPage() {
         </div>
       </div>
     </motion.div>
+    <SOWUploadGuard />
+    </>
   );
 }

@@ -15,12 +15,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp, scaleIn } from "@/lib/utils/motion-variants";
-import { mockSubmissions } from "@/mocks/data/contributor";
 import type { ContributorTaskStatus } from "@/types/contributor";
 import { useTaskStore } from "@/lib/stores/task-store";
-import { fetchTask, fetchAcceptImpact, acceptTask, declineTask, startTask, requestExtension, fetchTaskTimeline, fetchWorkroom, fetchWorkroomTemplates, fetchWorkroomLinks, postWorkroomMessage, fetchWorkroomMessages, uploadWorkroomFile, deleteWorkroomUpload, patchChecklistItem, type TaskDetail, type AcceptImpact, type TaskTimelineEvent, type Workroom, type WorkroomChecklistItem, type WorkroomTemplate, type WorkroomLink } from "@/lib/api/contributor";
+import { fetchTask, fetchAcceptImpact, acceptTask, declineTask, startTask, requestExtension, fetchTaskTimeline, fetchWorkroom, fetchWorkroomTemplates, fetchWorkroomLinks, postWorkroomMessage, fetchWorkroomMessages, uploadWorkroomFile, deleteWorkroomUpload, patchChecklistItem, fetchLatestSubmission, type TaskDetail, type AcceptImpact, type TaskTimelineEvent, type Workroom, type WorkroomChecklistItem, type WorkroomTemplate, type WorkroomLink } from "@/lib/api/contributor";
 import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
+
+const SHOW_CONTRIBUTOR_LEARNING = false;
 
 /* ═══ Helpers ═══ */
 
@@ -129,6 +130,8 @@ export default function ContributorTaskDetailPage() {
 
   /* Store task used as instant preview while API loads */
   const storeTask = useTaskStore((s) => s.selectedTask);
+  const statusOverride = useTaskStore((s) => s.statusOverrides[taskId]);
+  const setTaskStatusOverride = useTaskStore((s) => s.setTaskStatusOverride);
 
   /* ── API fetch ── */
   const [taskDetail, setTaskDetail] = React.useState<TaskDetail | null>(null);
@@ -160,12 +163,15 @@ export default function ContributorTaskDetailPage() {
 
   /* Use API data when ready; fall back to store for instant display */
   const task: Record<string, any> | null = React.useMemo(() => {
-    if (taskDetail) return normalise(taskDetail);
+    if (taskDetail) {
+      const normalized = normalise(taskDetail);
+      return statusOverride ? { ...normalized, status: statusOverride } : normalized;
+    }
     if (storeTask && storeTask.id === taskId) {
       return {
         id: storeTask.id, title: storeTask.title,
         projectTitle: storeTask.project_title, milestoneTitle: storeTask.milestone_title,
-        status: storeTask.status, priority: storeTask.priority,
+        status: statusOverride ?? storeTask.status, priority: storeTask.priority,
         skillsRequired: storeTask.skills_required, estimatedHours: storeTask.estimated_hours,
         pricing: storeTask.pricing, matchScore: storeTask.match_score,
         matchReason: storeTask.match_reason, dueDate: storeTask.due_date,
@@ -173,7 +179,7 @@ export default function ContributorTaskDetailPage() {
       };
     }
     return null;
-  }, [taskDetail, storeTask, taskId]);
+  }, [taskDetail, storeTask, taskId, statusOverride]);
 
   /* Hooks must run unconditionally before any early return */
   const [taskStatus, setTaskStatus] = React.useState<ContributorTaskStatus>("available");
@@ -420,6 +426,28 @@ export default function ContributorTaskDetailPage() {
   }, [token, taskId, sessionStatus]);
 
   /* ── Loading state ── */
+  const [latestSubmission, setLatestSubmission] = React.useState<any | null>(null);
+
+  React.useEffect(() => {
+    if (sessionStatus === "loading") return;
+    if (!token || !task?.id || !["submitted", "in_review", "accepted", "rework", "rejected"].includes(taskStatus)) {
+      setLatestSubmission(null);
+      return;
+    }
+    let live = true;
+    const sk = sessionKeyFragment(token);
+    void dedupeAsync(`contrib:latest-submission:${task.id}:${sk}`, () => fetchLatestSubmission(token, task.id))
+      .then((data) => {
+        if (live) setLatestSubmission(data);
+      })
+      .catch(() => {
+        if (live) setLatestSubmission(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [token, sessionStatus, task?.id, taskStatus]);
+
   if (taskLoading && !task) {
     return (
       <motion.div variants={stagger} initial="hidden" animate="show">
@@ -479,8 +507,6 @@ export default function ContributorTaskDetailPage() {
   }
 
   const workroom = workroomData;
-  const submissions = mockSubmissions.filter((s) => s.taskId === task.id);
-  const latestSubmission = submissions.length > 0 ? submissions.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0] : null;
 
   const sc = statusCfg[taskStatus] || statusCfg.available;
   const pc = prioCfg[task.priority] || prioCfg.medium;
@@ -732,6 +758,7 @@ export default function ContributorTaskDetailPage() {
                       await startTask(token, taskId, {
                         started_at: new Date().toISOString(),
                       });
+                      setTaskStatusOverride(taskId, "in_progress");
                       setTaskStatus("in_progress");
                     } catch (err: any) {
                       setStartError(err?.message ?? "Failed to start task. Please try again.");
@@ -1434,9 +1461,9 @@ export default function ContributorTaskDetailPage() {
               </div>
               <p className="text-[11px] text-gray-500 leading-relaxed mb-3">Consider taking related tasks at a lower complexity to build confidence.</p>
               <div className="flex gap-2">
-                <Link href="/contributor/learning">
+                {SHOW_CONTRIBUTOR_LEARNING && <Link href="/contributor/learning">
                   <button className="flex items-center gap-1.5 text-[11px] font-medium text-teal-600 bg-white/60 hover:bg-white px-3 py-2 rounded-lg transition-all"><TrendingUp className="w-3 h-3" /> Learning</button>
-                </Link>
+                </Link>}
                 <Link href="/contributor/tasks">
                   <button className="flex items-center gap-1.5 text-[11px] font-medium text-brown-600 bg-white/60 hover:bg-white px-3 py-2 rounded-lg transition-all"><Sparkles className="w-3 h-3" /> Browse Tasks</button>
                 </Link>
@@ -1680,7 +1707,8 @@ export default function ContributorTaskDetailPage() {
                       accepted_at: new Date().toISOString(),
                       ...(acceptNote.trim() ? { note: acceptNote.trim() } : {}),
                     });
-                    setTaskStatus("assigned");
+                    setTaskStatusOverride(taskId, "in_progress");
+                    setTaskStatus("in_progress");
                     setShowAcceptDialog(false);
                     setAcceptNote("");
                   } catch (err: any) {

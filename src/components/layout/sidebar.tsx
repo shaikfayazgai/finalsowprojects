@@ -8,13 +8,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   PanelLeftClose,
   PanelLeftOpen,
-  Sparkles,
   X,
   ChevronDown,
   AlertCircle,
   Settings,
   LogOut,
 } from "lucide-react";
+import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils/cn";
@@ -118,61 +118,40 @@ React.useEffect(() => {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Brand */}
-      <div
+      <div   
         className={cn(
-          "flex items-center shrink-0",
-          isCollapsed ? "px-3 justify-center" : "px-5"
+          "flex items-center justify-between shrink-0",
+          isCollapsed ? "pl-0 pr-3" : "px-4"
         )}
-        style={{ height: 52 }}
+        style={{ height: 116 }}
       >
-        <div className="flex items-center justify-between w-full">
-          <Link href="/" className="flex items-center gap-2.5 min-w-0">
-            <div
-              className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0"
-              style={{
-                background: "linear-gradient(135deg, #A67763, #D0B060)",
-                boxShadow:
-                  "0 2px 8px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.2)",
-              }}
-            >
-              <Sparkles className="w-[14px] h-[14px] text-white" />
-            </div>
-            <AnimatePresence>
-              {!isCollapsed && (
-                <motion.div
-                  initial={{ opacity: 0, x: -4 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -4 }}
-                  transition={{ duration: 0.12 }}
-                  className="min-w-0"
-                >
-                  <p className="text-[13.5px] font-semibold tracking-[-0.02em] leading-tight text-gray-900">
-                    Glimmora
-                  </p>
-                  <p className="text-[8px] tracking-[0.14em] uppercase leading-tight text-gray-400">
-                    {config.shortName}
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </Link>
+        <Link href="/" className="flex-1 min-w-0 flex items-center">
           {!isCollapsed && (
-            <button
-              onClick={toggle}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-white/50 transition-all shrink-0"
-            >
-              <PanelLeftClose className="w-[14px] h-[14px]" />
-            </button>
+            <div className="flex flex-col min-w-0 w-full">
+              <div className="relative w-full overflow-hidden" style={{ height: 150, marginLeft: "-16px", width: "calc(100% + 16px)" }}>
+                <Image
+                  src="/logo.png"
+                  alt="Glimmora Team"
+                  fill
+                  className="object-contain object-left"
+                  priority
+                />
+              </div>
+              <p className="text-[8px] tracking-[0.14em] uppercase leading-tight text-gray-400 pl-0.5">
+                {config.shortName}
+              </p>
+            </div>
           )}
-          {isCollapsed && (
-            <button
-              onClick={toggle}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-white/50 transition-all shrink-0"
-            >
-              <PanelLeftOpen className="w-[14px] h-[14px]" />
-            </button>
-          )}
-        </div>
+        </Link>
+        <button
+          onClick={toggle}
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-white/50 transition-all shrink-0"
+        >
+          {isCollapsed
+            ? <PanelLeftOpen className="w-[14px] h-[14px]" />
+            : <PanelLeftClose className="w-[14px] h-[14px]" />
+          }
+        </button>
       </div>
 
       {/* Navigation — flex-1 so footer stays at bottom */}

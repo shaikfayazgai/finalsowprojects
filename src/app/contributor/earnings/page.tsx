@@ -17,9 +17,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui";
 import { toast } from "@/lib/stores/toast-store";
 import {
-  mockEarnings, mockPayouts, mockContributorProfile, mockContributorTasks,
-} from "@/mocks/data/contributor";
-import {
   fetchEarningsSummary, fetchEarningsOverview, fetchEarningsChart, fetchEarnings,
   fetchKycStatus, startKyc, fetchEarningById, fetchPayoutById, fetchPayouts, fetchPayoutReceipt,
   fetchPayoutPreferences, updatePayoutPreferences,
@@ -39,7 +36,9 @@ function Pill({ bg, color, children }: { bg: string; color: string; children: Re
 
 const earnCfg: Record<string, { color: string; bg: string; label: string }> = {
   pending:    { color: "var(--color-gold-700)",   bg: "var(--color-gold-50)",    label: "Pending" },
+  earned:     { color: "var(--color-teal-700)",   bg: "var(--color-teal-50)",    label: "Earned" },
   eligible:   { color: "var(--color-teal-700)",   bg: "var(--color-teal-50)",    label: "Eligible" },
+  on_hold:    { color: "var(--color-gold-700)",   bg: "var(--color-gold-50)",    label: "On Hold" },
   processing: { color: "var(--color-brown-700)",  bg: "var(--color-brown-50)",   label: "Processing" },
   paid:       { color: "var(--color-forest-700)", bg: "var(--color-forest-50)",  label: "Paid" },
   failed:     { color: "var(--danger)",           bg: "var(--danger-light)",     label: "Failed" },
@@ -55,8 +54,7 @@ const methodLabel: Record<string, string> = { bank_transfer: "Bank Transfer", mo
 function fmt$(n: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n); }
 function fmtDate(iso: string) { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
 
-const taskMap = new Map(mockContributorTasks.map((t) => [t.id, t]));
-function getTask(id: string) { return taskMap.get(id); }
+function getTask(_id: string): Record<string, any> | null { return null; }
 
 type EarnSortField = "task" | "amount" | "status" | "date";
 type PayoutSortField = "reference" | "amount" | "method" | "status" | "date";
@@ -93,7 +91,7 @@ export type ChartPoint = { label: string; value: number };
 
 /* Maps the UI period key to the exact value the API expects */
 const PERIOD_API_MAP: Record<"3m" | "6m" | "1y", ChartPeriod> = {
-  "3m": "3M",
+  "3m": "3m",
   "6m": "6m",
   "1y": "1y",
 };
@@ -485,9 +483,6 @@ export default function EarningsPage() {
     }
   }, [kycRaw]);
 
-  const allPayouts = mockPayouts;
-  const profile = mockContributorProfile;
-
   /* Drawers */
   const [earningDrawer, setEarningDrawer] = React.useState<any>(null);
   const [payoutDrawer, setPayoutDrawer] = React.useState<any>(null);
@@ -786,7 +781,7 @@ export default function EarningsPage() {
   }, [token, sessionStatus]);
 
   const hasPayoutMethod = !prefsLoading && !!prefs?.preferred_method && prefs.preferred_method !== "none";
-  const isWomenTrack = profile.track === "women";
+  const isWomenTrack = false;
 
   /* ── Payout Preferences Edit Drawer ─────────────────────────── */
   const [prefsDrawerOpen, setPrefsDrawerOpen] = React.useState(false);
@@ -1016,8 +1011,10 @@ export default function EarningsPage() {
                   <FilterSelect value={earnStatusFilter} onValueChange={setEarnStatusFilter} placeholder="All Status"
                     options={[
                       { value: "all", label: "All Status" },
+                      { value: "earned", label: "Earned" },
                       { value: "eligible", label: "Eligible" },
                       { value: "pending", label: "Pending" },
+                      { value: "on_hold", label: "On Hold" },
                       { value: "paid", label: "Paid" },
                       { value: "processing", label: "Processing" },
                     ]} />

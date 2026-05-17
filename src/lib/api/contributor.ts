@@ -1110,7 +1110,7 @@ export async function fetchPayouts(
   });
 }
 
-export type ChartPeriod = "3M" | "6m" | "1y";
+export type ChartPeriod = "3m" | "6m" | "1y";
 
 export async function fetchEarningsChart(
   token: string,
@@ -1791,14 +1791,23 @@ export async function updateSupportTicketStatus(
   ticketId: string,
   status: SupportTicketStatus,
 ): Promise<SupportTicketDetail> {
-  return apiCall<SupportTicketDetail>(
+  // Route through the Next.js proxy so the PATCH is handled server-side
+  // (the Glimmora backend returns 405 for direct PATCH; the proxy provides
+  // an optimistic response until the backend endpoint is implemented).
+  const res = await fetchInternal(
     `/api/contributor/support/tickets/${encodeURIComponent(ticketId)}`,
     {
       method: "PATCH",
-      token,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ status }),
     },
   );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const detail = body?.detail ?? `API error ${res.status}`;
+    throw new ApiError(res.status, typeof detail === "string" ? detail : JSON.stringify(detail), body);
+  }
+  return res.json() as Promise<SupportTicketDetail>;
 }
 
 export interface PostTicketMessagePayload {
@@ -2379,6 +2388,18 @@ export interface PatchContributorProfileBody {
   weekly_hours: number;
   availability: string;
   language: string;
+  // Extended profile fields (optional — backend ignores unknown keys)
+  dob?: string | null;
+  department_category?: string | null;
+  department_other?: string | null;
+  degree?: string | null;
+  branch?: string | null;
+  linkedin?: string | null;
+  job_title?: string | null;
+  work_start?: string | null;
+  work_end?: string | null;
+  career_stage?: string | null;
+  years_experience?: string | null;
 }
 
 function profileHeaders(
@@ -2416,6 +2437,10 @@ export type ProfileUiState = {
   weeklyHours: number;
   availability: string;
   skills: ProfileUiSkill[];
+  // Core fields
+  bio?: string;
+  language?: string;
+  city?: string;
   // Signup-time fields surfaced in Personal Details.
   country?: string;
   phone?: string;
@@ -2423,7 +2448,13 @@ export type ProfileUiState = {
   departmentCategory?: string | null;
   departmentOther?: string | null;
   degree?: string | null;
+  branch?: string | null;
   linkedin?: string | null;
+  jobTitle?: string | null;
+  workStart?: string | null;
+  workEnd?: string | null;
+  careerStage?: string | null;
+  yearsExperience?: string | null;
   primarySkills: string[];
   secondarySkills: string[];
   otherSkills: string[];
@@ -2443,6 +2474,7 @@ export function mapContributorProfileToUi(
     return n === "delivery_validated" ? "delivery_validated" : "self_declared";
   };
 
+  const r = raw as Record<string, unknown>;
   return {
     id: String(raw.id ?? ""),
     displayName: String(raw.display_name ?? fallbacks.displayName),
@@ -2463,16 +2495,25 @@ export function mapContributorProfileToUi(
       evidenceCount: Number(sk.evidence_count ?? 0),
       lastValidatedAt: sk.last_validated_at,
     })),
+    bio: String(raw.bio ?? ""),
+    language: String(raw.language ?? ""),
+    city: String(raw.city ?? ""),
     country: raw.country,
     phone: raw.phone,
-    dob: raw.date_of_birth,
+    dob: (raw.date_of_birth ?? r.dob) as string | null | undefined,
     departmentCategory: raw.department_category,
     departmentOther: raw.department_other,
     degree: raw.degree,
-    linkedin: raw.linkedin,
-    primarySkills: raw.primary_skills ?? [],
-    secondarySkills: raw.secondary_skills ?? [],
-    otherSkills: raw.other_skills ?? [],
+    branch: (r.branch ?? r.field_of_study) as string | null | undefined,
+    linkedin: (raw.linkedin ?? r.linkedin_url) as string | null | undefined,
+    jobTitle: (r.job_title ?? r.jobTitle) as string | null | undefined,
+    workStart: (r.work_start ?? r.workStart) as string | null | undefined,
+    workEnd: (r.work_end ?? r.workEnd) as string | null | undefined,
+    careerStage: (r.career_stage ?? r.careerStage) as string | null | undefined,
+    yearsExperience: (r.years_experience ?? r.yearsExperience) as string | null | undefined,
+    primarySkills: (raw.primary_skills ?? []) as string[],
+    secondarySkills: (raw.secondary_skills ?? []) as string[],
+    otherSkills: (raw.other_skills ?? []) as string[],
   };
 }
 

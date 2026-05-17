@@ -77,31 +77,38 @@ async function getToken(): Promise<string> {
 }
 
 
-// ── Direct API call helper ────────────────────────────────────────────────
+// ── Base URL ──────────────────────────────────────────────────────────────
 
-// Used only by file upload / blob methods that can't go through the JSON proxy.
 const BASE_URL = process.env.NEXT_PUBLIC_GLIMMORA_API_URL || "";
 
-// Route all JSON API calls through the Next.js proxy (/api/sow/proxy) so
-// requests go server-side → Render, avoiding browser CORS restrictions and
-// cold-start timeouts on the Render free tier.
+// ── Direct API call helper ────────────────────────────────────────────────
+
 async function sowCall<T>(
   path: string,
   method: string = "GET",
   payload?: unknown,
   _retry = false,
-  asEnterprise = false,
+  _asEnterprise = false,
 ): Promise<T> {
-  const res = await fetch("/api/sow/proxy", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path, method, payload, enterprise: asEnterprise }),
+  const token = await getToken();
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    ...(payload ? { body: JSON.stringify(payload) } : {}),
   });
 
   const data = await res.json().catch(() => ({}));
 
+  if (res.status === 401) {
+    _cachedToken = null;
+    throw new ApiError(res.status, "Session expired. Please refresh the page.");
+  }
+
   if (!res.ok) {
-    // Format field-level validation errors nicely
     if (data?.errors && Array.isArray(data.errors)) {
       const fieldErrors = data.errors
         .map((e: { field?: string; message?: string }) => {

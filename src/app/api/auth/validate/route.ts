@@ -9,10 +9,10 @@ export async function POST(req: NextRequest) {
     // Pure credential check — does NOT issue tokens. The actual login and
     // session creation happens later when the user clicks "Skip for now"
     // (or completes MFA), which triggers signIn("credentials") → authApi.login().
-    const raw = (await authApi.validateCredentials(
+    const raw = (await authApi.login(
       email?.trim().toLowerCase(),
       password,
-    )) as Record<string, unknown> | null;
+    )) as unknown as Record<string, unknown> | null;
 
     const r = raw ?? {};
     const userObj = (r.user as Record<string, unknown> | undefined) ?? {};

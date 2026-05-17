@@ -12,6 +12,7 @@ import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
 import { useGapItems, useUpdateGapItem } from "@/lib/hooks/use-manual-sow";
+import { SOWUploadGuard } from "@/components/enterprise/sow/SOWUploadGuard";
 import type { GapItem, GapSeverity } from "@/types/enterprise";
 import { Skeleton } from "@/components/ui";
 
@@ -872,6 +873,7 @@ export default function GapAnalysisPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      <SOWUploadGuard />
     </>
   );
 }

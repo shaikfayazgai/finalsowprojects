@@ -4,7 +4,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.API_BASE_URL ?? "http://localhost:8000";
+  process.env.GLIMMORA_API_URL ??
+  process.env.NEXT_PUBLIC_GLIMMORA_API_URL ??
+  process.env.API_BASE_URL ??
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  "http://localhost:8000";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));

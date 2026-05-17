@@ -23,6 +23,7 @@ import { dedupeAsync, sessionKeyFragment } from "@/lib/utils/request-dedupe";
 import { ApiError } from "@/lib/api/client";
 import { toast } from "@/lib/stores/toast-store";
 import { getContributorAccessToken } from "@/lib/auth/contributor-access-token";
+import { useSubmissionStore } from "@/lib/stores/submission-store";
 
 /* ═══ Badge ═══ */
 
@@ -119,6 +120,7 @@ export default function SubmissionDetailPage() {
   const params        = useParams();
   const submissionId  = params.submissionId as string;
   const { data: session, status: sessionStatus } = useSession();
+  const submissionOverride = useSubmissionStore((s) => s.overrides[submissionId]);
 
   const [detail, setDetail]   = React.useState<SubmissionDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -149,6 +151,17 @@ export default function SubmissionDetailPage() {
   const tokenRef = React.useRef<string | null>(null);
   tokenRef.current = getContributorAccessToken(session);
 
+  const mergeSubmissionOverride = React.useCallback((submission: SubmissionDetail): SubmissionDetail => {
+    if (!submissionOverride) return submission;
+    return {
+      ...submission,
+      ...submissionOverride,
+      files: submissionOverride.files ?? submission.files,
+      evidence: submissionOverride.evidence ?? submission.evidence,
+      checklist_acknowledgements: submissionOverride.checklist_acknowledgements ?? submission.checklist_acknowledgements,
+    };
+  }, [submissionOverride]);
+
   /* Open edit panel — seed form with current values */
   function openEdit() {
     if (!detail) return;
@@ -170,7 +183,7 @@ export default function SubmissionDetailPage() {
     setError(null);
     try {
       const res = await fetchSubmission(token, submissionId);
-      setDetail(res);
+      setDetail(mergeSubmissionOverride(res));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load submission.");
     } finally {
@@ -242,7 +255,7 @@ export default function SubmissionDetailPage() {
     )
       .then((res) => {
         if (!live) return;
-        setDetail(res);
+        setDetail(mergeSubmissionOverride(res));
         setLoading(false);
       })
       .catch((err) => {
@@ -255,7 +268,12 @@ export default function SubmissionDetailPage() {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionStatus, session, submissionId]);
+  }, [sessionStatus, session, submissionId, mergeSubmissionOverride]);
+
+  React.useEffect(() => {
+    if (!detail || !submissionOverride) return;
+    setDetail((current) => current ? mergeSubmissionOverride(current) : current);
+  }, [submissionOverride, mergeSubmissionOverride]);
 
   /* Fetch review feedback once we know the task_id */
   React.useEffect(() => {

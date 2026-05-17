@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils/cn";
 import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { Button, Badge, Textarea } from "@/components/ui";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { SOWUploadGuard } from "@/components/enterprise/sow/SOWUploadGuard";
 import { useSubmitSOW, useSOWPreview, useHallucinationLayers, useManualSOW } from "@/lib/hooks/use-manual-sow";
 
 /* ═══════════════════════════════════════════════════════════
@@ -420,6 +421,7 @@ export default function PreviewConfirmPage() {
   const allFlagsResolved = unresolvedCount === 0;
 
   return (
+    <>
     <motion.div variants={stagger} initial="hidden" animate="show" className="pb-24">
       {/* ═══ AI GENERATED DRAFT READY BANNER ═══ */}
       <motion.div
@@ -741,5 +743,7 @@ export default function PreviewConfirmPage() {
         </div>
       </motion.div>
     </motion.div>
+    <SOWUploadGuard />
+    </>
   );
 }

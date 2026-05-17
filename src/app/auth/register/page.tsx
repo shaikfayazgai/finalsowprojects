@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
@@ -149,13 +150,10 @@ function LeftContent({ role }: { role?: "contributor" | "enterprise" }) {
     <div className="hidden lg:flex flex-col flex-1 max-w-lg pt-8 pb-8 pr-10 gap-14">
       {/* TOP — Branding + Headline */}
       <div>
-        <Link href="/" className="flex items-center gap-2 mb-8 group w-fit">
-          <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brown-500 to-brown-700 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-white" />
+        <Link href="/" className="mb-8 w-fit block">
+          <div className="relative h-36 w-96 -my-10 -ml-8">
+            <Image src="/logo.png" alt="GlimmoraTeam" fill className="object-contain object-left" priority />
           </div>
-          <span className="font-heading font-semibold text-brown-950 group-hover:text-brown-700 transition-colors">
-            GlimmoraTeam
-          </span>
         </Link>
 
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-600 mb-4 flex items-center gap-2">
@@ -708,13 +706,10 @@ function ContributorRegisterContent() {
   const showLeftContent = uiState === "picker" || uiState === "authOptions";
 
   const logo = (
-    <Link href="/" className="flex items-center gap-2 group w-fit">
-      <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brown-500 to-brown-700 flex items-center justify-center">
-        <Sparkles className="w-4 h-4 text-white" />
+    <Link href="/" className="w-fit block">
+      <div className="relative h-36 w-96 -my-10 -ml-8">
+        <Image src="/logo.png" alt="GlimmoraTeam" fill className="object-contain object-left" priority />
       </div>
-      <span className="font-heading font-semibold text-brown-950 group-hover:text-brown-700 transition-colors">
-        GlimmoraTeam
-      </span>
     </Link>
   );
 

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
@@ -112,11 +113,10 @@ export default function HomePage() {
       {/* ── Nav ─────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 w-full border-b border-beige-200/60 bg-white/80 backdrop-blur-xl shadow-sm transition-all duration-300">
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brown-500 to-brown-700 flex items-center justify-center shadow-md shadow-brown-500/20 group-hover:scale-105 transition-transform duration-300">
-              <Sparkles className="w-5 h-5 text-white" />
+          <Link href="/" className="block group">
+            <div className="relative h-28 w-72 -my-8 -ml-6">
+              <Image src="/logo.png" alt="GlimmoraTeam" fill className="object-contain object-left" priority />
             </div>
-            <span className="font-heading font-semibold text-brown-950 text-xl tracking-tight group-hover:text-brown-700 transition-colors">GlimmoraTeam™</span>
           </Link>
           
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-beige-600">
@@ -376,11 +376,10 @@ export default function HomePage() {
             
             {/* Brand Column */}
             <div className="col-span-1 md:col-span-1">
-              <Link href="/" className="flex items-center gap-2.5 group mb-4">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brown-500 to-brown-700 flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-white" />
+              <Link href="/" className="block group mb-4 w-fit">
+                <div className="relative h-24 w-64 -my-7 -ml-5">
+                  <Image src="/logo.png" alt="GlimmoraTeam" fill className="object-contain object-left" priority />
                 </div>
-                <span className="font-heading font-semibold text-brown-950 text-lg group-hover:text-brown-700 transition-colors">GlimmoraTeam™</span>
               </Link>
               <p className="text-sm text-beige-600 leading-relaxed mb-6">
                 The global workforce intelligence platform. AI-governed delivery for distributed teams with measurable outcomes, built-in governance, and trusted scale.

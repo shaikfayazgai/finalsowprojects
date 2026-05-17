@@ -8,7 +8,6 @@ import { signIn, getSession } from "next-auth/react";
 import { authApi } from "@/lib/api/auth";
 import { ApiError, fetchInternal } from "@/lib/api/client";
 import {
-  Sparkles,
   ArrowRight,
   ArrowLeft,
   Shield,
@@ -22,6 +21,7 @@ import {
   Star,
 } from "lucide-react";
 import { GlassCard, GlassCardContent, Button, Input, Label, Badge } from "@/components/ui";
+import Image from "next/image";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { loginSchema } from "@/lib/validations/login";
 
@@ -504,13 +504,10 @@ function LoginPageContent() {
 
         {/* TOP — Branding + Headline */}
         <div>
-          <Link href="/" className="flex items-center gap-2 mb-8 group w-fit">
-            <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brown-500 to-brown-700 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
+          <Link href="/" className="mb-8 w-fit block">
+            <div className="relative h-36 w-96 -my-10 -ml-8">
+              <Image src="/logo.png" alt="GlimmoraTeam" fill className="object-contain object-left" priority />
             </div>
-            <span className="font-heading font-semibold text-brown-950 group-hover:text-brown-700 transition-colors">
-              GlimmoraTeam
-            </span>
           </Link>
 
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-600 mb-4 flex items-center gap-2">
@@ -561,13 +558,10 @@ function LoginPageContent() {
       <div className="w-full max-w-[440px] flex flex-col justify-center">
 
         {/* Mobile logo */}
-        <Link href="/" className="lg:hidden inline-flex items-center gap-2 mb-6 group">
-          <div className="w-8 h-8 rounded-lg bg-linear-to-br from-brown-500 to-brown-700 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-white" />
+        <Link href="/" className="lg:hidden mb-6 block">
+          <div className="relative h-12 w-40">
+            <Image src="/logo.png" alt="GlimmoraTeam" fill className="object-contain object-left" priority />
           </div>
-          <span className="font-heading font-semibold text-brown-950 group-hover:text-brown-700 transition-colors">
-            GlimmoraTeam
-          </span>
         </Link>
 
         {/* ── Step: credentials ── */}

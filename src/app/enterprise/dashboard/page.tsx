@@ -77,16 +77,7 @@ export default function EnterpriseDashboardPage() {
     return () => clearTimeout(t);
   }, []);
 
-  // 60-second auto-refresh cycle
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      setIsLoading(true);
-      setTimeout(() => setIsLoading(false), 300);
-    }, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  if (isLoading) return <DashboardSkeleton />;
+if (isLoading) return <DashboardSkeleton />;
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">

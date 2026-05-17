@@ -13,9 +13,9 @@ import type { SowReviewData } from "@/components/enterprise/sow/SowReviewPanel/t
 const EMPTY_METRICS = { confidence: 0, riskScore: 0, hallucinationFlags: 0, completeness: 0 };
 const EMPTY_RISK    = { riskLevel: "", riskScore: 0, factors: [] };
 
-export function useManualSowReview(sowId: string | null): SowReviewData {
+export function useManualSowReview(sowId: string | null, previewEnabled = true): SowReviewData {
   const manualSowQuery       = useManualSOW(sowId);
-  const manualPreviewQuery   = useSOWPreview(sowId);
+  const manualPreviewQuery   = useSOWPreview(sowId, previewEnabled);
   const hallucinationQuery   = useHallucinationLayers(sowId);
   const sectionsQuery        = useSOWSections(sowId);
 

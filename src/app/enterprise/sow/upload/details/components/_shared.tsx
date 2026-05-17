@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, ArrowLeft, Info, Sparkles, Loader2, ChevronDown, FileText, FlaskConical } from "lucide-react";
+import { ArrowRight, ArrowLeft, Info, Sparkles, Loader2, ChevronDown, FileText, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 /* ── Section header bar ── */
@@ -207,7 +207,7 @@ export function SectionFooter({
             "flex items-center gap-2 text-[12px] font-semibold px-5 py-2.5 rounded-xl transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed",
             variant === "generate"
               ? "text-white bg-gradient-to-r from-brown-500 to-brown-700 hover:from-brown-600 hover:to-brown-800"
-              : "text-white bg-gradient-to-r from-forest-500 to-forest-600 hover:from-forest-600 hover:to-forest-700"
+              : "text-white bg-gradient-to-r from-brown-400 to-brown-600 hover:from-brown-500 hover:to-brown-700"
           )}>
           {loading ? (
             <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -217,7 +217,7 @@ export function SectionFooter({
           ) : variant === "generate" ? (
             <FileText className="w-3.5 h-3.5" />
           ) : (
-            <CheckCircle2 className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3.5 h-3.5" />
           )}
           {loading ? "Generating…" : completeLabel}
         </button>

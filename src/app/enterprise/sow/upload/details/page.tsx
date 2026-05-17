@@ -8,6 +8,7 @@ import { stagger, fadeUp } from "@/lib/utils/motion-variants";
 import { FlowStepProgress } from "@/components/enterprise/sow/FlowStepProgress";
 import { SectionNavigator } from "@/components/enterprise/sow/SectionNavigator";
 import { useSOWUploadStore } from "@/lib/stores/sow-upload-store";
+import { SOWUploadGuard } from "@/components/enterprise/sow/SOWUploadGuard";
 import type { CommercialSectionKey } from "@/types/enterprise";
 import { validateSection as validateSectionData } from "@/lib/validations/sow-upload-details";
 import {
@@ -44,9 +45,10 @@ const SECTION_ORDER: CommercialSectionKey[] = [
 ];
 
 /* ── Normalize section data before sending to the API ── */
-function toISO(d: unknown): unknown {
-  if (typeof d === "string" && d && !d.includes("T")) return `${d}T00:00:00Z`;
-  return d;
+function toISO(d: unknown): string | undefined {
+  if (typeof d === "string" && d.trim() && d.includes("T")) return d;
+  if (typeof d === "string" && d.trim()) return `${d}T00:00:00Z`;
+  return undefined;
 }
 
 function boolToYesNo(v: unknown): "yes" | "no" {
@@ -64,20 +66,21 @@ function normalizeSectionData(
   data: Record<string, unknown>,
 ): Record<string, unknown> {
   if (section === "timelineTeam") {
-    return {
-      ...data,
-      startDate: toISO(data.startDate),
-      targetEndDate: toISO(data.targetEndDate),
-      uatSignOffConfirmed: Boolean(data.uatSignOffConfirmed),
-    };
+    const startDate = toISO(data.startDate);
+    const targetEndDate = toISO(data.targetEndDate);
+    const out: Record<string, unknown> = { ...data, uatSignOffConfirmed: Boolean(data.uatSignOffConfirmed) };
+    if (startDate !== undefined) out.startDate = startDate; else delete out.startDate;
+    if (targetEndDate !== undefined) out.targetEndDate = targetEndDate; else delete out.targetEndDate;
+    return out;
   }
   if (section === "governance") {
-    return {
-      ...data,
-      nonDiscriminationConfirmed: data.nonDiscriminationConfirmed === true,
-      dataSensitivityLevel: data.dataSensitivityLevel ?? "",
-      personalDataInvolved: data.personalDataInvolved === true ? "yes" : (data.personalDataInvolved ?? ""),
-    };
+    const out: Record<string, unknown> = { ...data };
+    out.nonDiscriminationConfirmed = data.nonDiscriminationConfirmed === true || data.nonDiscriminationConfirmed === "true";
+    const dataSensitivityLevel = allowedOrUndefined(data.dataSensitivityLevel, ["public", "internal", "confidential", "restricted"]);
+    if (dataSensitivityLevel !== undefined) out.dataSensitivityLevel = dataSensitivityLevel; else delete out.dataSensitivityLevel;
+    const personalDataInvolved = allowedOrUndefined(data.personalDataInvolved, ["yes", "no"]);
+    if (personalDataInvolved !== undefined) out.personalDataInvolved = personalDataInvolved; else delete out.personalDataInvolved;
+    return out;
   }
   if (section === "commercialLegal") {
     return {
@@ -89,11 +92,14 @@ function normalizeSectionData(
     };
   }
   if (section === "budgetRisk") {
-    return {
-      ...data,
-      budgetMinimum: Number(data.budgetMinimum) || 0,
-      budgetMaximum: Number(data.budgetMaximum) || 0,
-    };
+    const out: Record<string, unknown> = { ...data };
+    const minVal = Number(data.budgetMinimum);
+    const maxVal = Number(data.budgetMaximum);
+    if (minVal > 0) out.budgetMinimum = minVal; else delete out.budgetMinimum;
+    if (maxVal > 0) out.budgetMaximum = maxVal; else delete out.budgetMaximum;
+    const pricingModel = allowedOrUndefined(data.pricingModel, ["fixed_price", "time_and_materials", "outcome_based", "hybrid"]);
+    if (pricingModel !== undefined) out.pricingModel = pricingModel; else delete out.pricingModel;
+    return out;
   }
   return data;
 }
@@ -135,13 +141,16 @@ export default function CommercialDetailsPage() {
   const handleSectionComplete = () => {
     store.markSectionComplete(activeSection);
 
-    /* Persist section data to API */
+    /* Persist section data to API — only if local validation passes */
     if (sowId) {
       const raw = store.commercialDetails[activeSection] as unknown as Record<string, unknown>;
+      const localErrs = validateSectionData(activeSection, raw);
+      if (Object.keys(localErrs).length > 0) return;
       const sectionData = normalizeSectionData(activeSection, raw);
-      saveSection.mutate({ section: activeSection, data: sectionData });
+      saveSection.mutate({ section: activeSection, data: sectionData }, {
+        onSuccess: () => markSectionComplete.mutate(activeSection),
+      });
       validateSection.mutate({ section: activeSection, data: sectionData });
-      markSectionComplete.mutate(activeSection);
     }
 
     const idx = SECTION_ORDER.indexOf(activeSection);
@@ -153,8 +162,11 @@ export default function CommercialDetailsPage() {
   const completedCount = SECTION_ORDER.filter((k) => store.commercialSectionStatus[k] === "complete").length;
 
   const [generateError, setGenerateError] = React.useState<string>("");
+  const [isGenerating, setIsGenerating] = React.useState(false);
 
   const handleGenerate = async () => {
+    setIsGenerating(true);
+    setGenerateError("");
     store.markSectionComplete("commercialLegal");
 
     if (sowId) {
@@ -185,6 +197,7 @@ export default function CommercialDetailsPage() {
           );
           store.markSectionInProgress(k);
           setActiveSection(k);
+          setIsGenerating(false);
           return;
         }
       }
@@ -208,6 +221,7 @@ export default function CommercialDetailsPage() {
         await markSectionComplete.mutateAsync("commercialLegal");
       } catch {
         setGenerateError("Failed to save section. Please try again.");
+        setIsGenerating(false);
         return;
       }
 
@@ -223,6 +237,7 @@ export default function CommercialDetailsPage() {
         });
       } catch {
         setGenerateError("Failed to set approval authorities. Please try again.");
+        setIsGenerating(false);
         return;
       }
 
@@ -230,6 +245,7 @@ export default function CommercialDetailsPage() {
         await generateSOW.mutateAsync();
       } catch {
         setGenerateError("Failed to generate SOW. Please try again.");
+        setIsGenerating(false);
         return;
       }
     }
@@ -241,6 +257,7 @@ export default function CommercialDetailsPage() {
   const ActiveSectionComponent = SECTION_COMPONENTS[activeSection];
 
   return (
+    <>
     <motion.div variants={stagger} initial="hidden" animate="show">
       {/* Flow step progress */}
       <motion.div variants={fadeUp} className="mb-6">
@@ -297,11 +314,13 @@ export default function CommercialDetailsPage() {
                 ? handleSectionBack
                 : () => router.push("/enterprise/sow/upload/gaps")
             }
-            {...(activeSection === "commercialLegal" ? { loading: generateSOW.isPending } : {})}
+            {...(activeSection === "commercialLegal" ? { loading: isGenerating } : {})}
           />
         </div>
       </motion.div>
 
     </motion.div>
+    <SOWUploadGuard />
+    </>
   );
 }

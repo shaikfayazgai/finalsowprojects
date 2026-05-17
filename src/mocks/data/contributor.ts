@@ -63,10 +63,41 @@ export const mockSubmissions: Array<Record<string, any>> = [
 
 /* 4. Earnings records */
 export const mockEarnings: Array<Record<string, any>> = [
-  { id: "earn-4001", taskId: "task-505", amount: 30, currency: "USD", status: "paid", earnedAt: "2026-04-20T13:25:00.000Z", payoutReference: "PO-77421" },
-  { id: "earn-4002", taskId: "task-503", amount: 42, currency: "USD", status: "eligible", earnedAt: "2026-04-23T15:35:00.000Z", payoutReference: null },
-  { id: "earn-4003", taskId: "task-504", amount: 55, currency: "USD", status: "pending", earnedAt: "2026-04-24T10:45:00.000Z", payoutReference: null },
-  { id: "earn-4004", taskId: "task-501", amount: 48, currency: "USD", status: "pending", earnedAt: "2026-04-24T12:10:00.000Z", payoutReference: null },
+  {
+    id: "ern_003", task_id: "tsk_c3", task_title: "Audio transcription QC",
+    project_title: "Speech", amount: "44.00", currency: "USD", status: "earned",
+    acceptance_date: "2026-04-01", earned_at: "2026-04-01T16:45:00Z",
+    paid_at: null, estimated_eligible_date: "2026-04-10",
+    expected_payment_date: "2026-04-14", payment_reference: null, payout_id: null,
+  },
+  {
+    id: "ern_004", task_id: "tsk_d4", task_title: "Edge case tagging",
+    project_title: "Vision QA", amount: "200.00", currency: "USD", status: "on_hold",
+    acceptance_date: "2026-04-02", earned_at: "2026-04-02T10:00:00Z",
+    paid_at: null, estimated_eligible_date: "2026-04-08",
+    expected_payment_date: "2026-04-16", payment_reference: null, payout_id: "po_002",
+  },
+  {
+    id: "ern_001", task_id: "tsk_a1", task_title: "Label dataset batch 12",
+    project_title: "Vision QA", amount: "120.00", currency: "USD", status: "paid",
+    acceptance_date: "2026-03-10", earned_at: "2026-03-10T14:30:00Z",
+    paid_at: "2026-03-15T09:00:00Z", estimated_eligible_date: null,
+    expected_payment_date: null, payment_reference: "PO-2026-0001", payout_id: "po_001",
+  },
+  {
+    id: "ern_demo_extra", task_id: "tsk_006", task_title: "Large migration script (over-cap test)",
+    project_title: "Finance", amount: "95.25", currency: "USD", status: "earned",
+    acceptance_date: "2026-04-05", earned_at: "2026-04-05T09:00:00Z",
+    paid_at: null, estimated_eligible_date: "2026-04-12",
+    expected_payment_date: "2026-04-18", payment_reference: null, payout_id: null,
+  },
+  {
+    id: "ern_002", task_id: "tsk_b2", task_title: "Review annotations",
+    project_title: "NLP Assist", amount: "85.50", currency: "USD", status: "earned",
+    acceptance_date: "2026-03-28", earned_at: "2026-03-28T11:00:00Z",
+    paid_at: null, estimated_eligible_date: "2026-04-05",
+    expected_payment_date: "2026-04-09", payment_reference: null, payout_id: null,
+  },
 ];
 
 /* 5. Payouts */
@@ -77,16 +108,16 @@ export const mockPayouts: Array<Record<string, any>> = [
 
 /* 6. Earnings summary */
 export const mockEarningsSummary = {
-  totalEarned: 175,
-  eligible: 42,
-  pending: 103,
-  processing: 42,
-  paidOut: 30,
+  totalEarned: 544.75,
+  eligible: 224.75,
+  pending: 200,
+  processing: 0,
+  paidOut: 120,
   currency: "USD",
-  currentMonth: 145,
+  currentMonth: 424.75,
   previousMonth: 112,
-  lifetimeTasksCompleted: 19,
-  averagePerTask: 39.6,
+  lifetimeTasksCompleted: 5,
+  averagePerTask: 108.95,
 };
 
 /* 7. Credentials */

@@ -258,6 +258,24 @@ export async function confirmEnterpriseDecompositionPlan(planId: string, confirm
   return data as ListPlansResponse;
 }
 
+export async function postEnterpriseKickoffAction(planId: string): Promise<ListPlansResponse> {
+  const token = await getEnterpriseToken();
+  const res = await fetch(`${BASE_URL}/api/v1/enterprise/decomposition/plans/actions/kickoff?plan_id=${encodeURIComponent(planId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+  });
+  return handleResponse(res);
+}
+
+export async function postEnterpriseApproveKickoff(planId: string): Promise<ListPlansResponse> {
+  const token = await getEnterpriseToken();
+  const res = await fetch(`${BASE_URL}/api/v1/enterprise/decomposition/plans/actions/approve-kickoff?plan_id=${encodeURIComponent(planId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+  });
+  return handleResponse(res);
+}
+
 /* ── Helper ─────────────────────────────────────────────────────────── */
 
 async function handleResponse(res: Response): Promise<ListPlansResponse> {
