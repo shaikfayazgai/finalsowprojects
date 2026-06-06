@@ -1,0 +1,380 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "Skip to main content" [ref=e3] [cursor=pointer]:
+      - /url: "#meridian-main"
+    - complementary "Enterprise navigation" [ref=e4]:
+      - link "Glimmora" [ref=e6] [cursor=pointer]:
+        - /url: /enterprise/dashboard
+        - generic [ref=e7]: G
+        - generic [ref=e8]:
+          - paragraph [ref=e9]: Glimmora
+          - paragraph [ref=e10]: Enterprise · Glimmora HQ
+      - navigation "Primary" [ref=e11]:
+        - generic [ref=e12]:
+          - paragraph [ref=e13]: Overview
+          - list [ref=e14]:
+            - listitem [ref=e15]:
+              - link "Dashboard" [ref=e16] [cursor=pointer]:
+                - /url: /enterprise/dashboard
+                - img [ref=e17]
+                - generic [ref=e22]: Dashboard
+        - generic [ref=e23]:
+          - paragraph [ref=e24]: Origination
+          - list [ref=e25]:
+            - listitem [ref=e26]:
+              - link "SOW Workspace" [ref=e27] [cursor=pointer]:
+                - /url: /enterprise/sow
+                - img [ref=e28]
+                - generic [ref=e31]: SOW Workspace
+            - listitem [ref=e32]:
+              - link "Decomposition" [ref=e33] [cursor=pointer]:
+                - /url: /enterprise/decomposition
+                - img [ref=e34]
+                - generic [ref=e44]: Decomposition
+        - generic [ref=e45]:
+          - paragraph [ref=e46]: Delivery
+          - list [ref=e47]:
+            - listitem [ref=e48]:
+              - link "Projects" [ref=e49] [cursor=pointer]:
+                - /url: /enterprise/projects
+                - img [ref=e50]
+                - generic [ref=e52]: Projects
+            - listitem [ref=e53]:
+              - link "Acceptance" [ref=e54] [cursor=pointer]:
+                - /url: /enterprise/review
+                - img [ref=e55]
+                - generic [ref=e58]: Acceptance
+            - listitem [ref=e59]:
+              - link "QA Review" [ref=e60] [cursor=pointer]:
+                - /url: /enterprise/reviewer
+                - img [ref=e61]
+                - generic [ref=e65]: QA Review
+        - generic [ref=e66]:
+          - paragraph [ref=e67]: Finance
+          - list [ref=e68]:
+            - listitem [ref=e69]:
+              - link "Billing" [ref=e70] [cursor=pointer]:
+                - /url: /enterprise/billing
+                - img [ref=e71]
+                - generic [ref=e74]: Billing
+            - listitem [ref=e75]:
+              - link "Rate Cards" [ref=e76] [cursor=pointer]:
+                - /url: /enterprise/billing/rate-cards
+                - img [ref=e77]
+                - generic [ref=e80]: Rate Cards
+            - listitem [ref=e81]:
+              - link "Payouts" [ref=e82] [cursor=pointer]:
+                - /url: /enterprise/billing/payouts
+                - img [ref=e83]
+                - generic [ref=e86]: Payouts
+        - generic [ref=e87]:
+          - paragraph [ref=e88]: Governance
+          - list [ref=e89]:
+            - listitem [ref=e90]:
+              - link "Audit" [ref=e91] [cursor=pointer]:
+                - /url: /enterprise/audit
+                - img [ref=e92]
+                - generic [ref=e95]: Audit
+            - listitem [ref=e96]:
+              - link "Compliance" [ref=e97] [cursor=pointer]:
+                - /url: /enterprise/compliance
+                - img [ref=e98]
+                - generic [ref=e100]: Compliance
+        - generic [ref=e101]:
+          - paragraph [ref=e102]: Insights
+          - list [ref=e103]:
+            - listitem [ref=e104]:
+              - link "Analytics" [ref=e105] [cursor=pointer]:
+                - /url: /enterprise/analytics
+                - img [ref=e106]
+                - generic [ref=e108]: Analytics
+        - generic [ref=e109]:
+          - paragraph [ref=e110]: Settings
+          - list [ref=e111]:
+            - listitem [ref=e112]:
+              - link "Tenant & Roles" [ref=e113] [cursor=pointer]:
+                - /url: /enterprise/settings/tenant
+                - img [ref=e114]
+                - generic [ref=e118]: Tenant & Roles
+            - listitem [ref=e119]:
+              - link "Integrations" [ref=e120] [cursor=pointer]:
+                - /url: /enterprise/settings/integrations
+                - img [ref=e121]
+                - generic [ref=e124]: Integrations
+            - listitem [ref=e125]:
+              - link "Policies" [ref=e126] [cursor=pointer]:
+                - /url: /enterprise/settings/policies
+                - img [ref=e127]
+                - generic [ref=e130]: Policies
+            - listitem [ref=e131]:
+              - link "Security" [ref=e132] [cursor=pointer]:
+                - /url: /enterprise/settings/security
+                - img [ref=e133]
+                - generic [ref=e136]: Security
+      - list [ref=e139]:
+        - listitem [ref=e140]:
+          - link "Profile" [ref=e141] [cursor=pointer]:
+            - /url: /enterprise/profile
+            - img [ref=e142]
+            - generic [ref=e146]: Profile
+        - listitem [ref=e147]:
+          - link "Notifications" [ref=e148] [cursor=pointer]:
+            - /url: /enterprise/notifications
+            - img [ref=e149]
+            - generic [ref=e152]: Notifications
+      - button "Collapse sidebar" [pressed] [ref=e155]:
+        - img [ref=e156]
+    - generic [ref=e159]:
+      - banner [ref=e160]:
+        - button "Search or ask AI" [ref=e162]:
+          - img [ref=e163]
+          - generic [ref=e166]: Search SOWs, projects, contributors…
+          - generic [ref=e167]: ⌘K
+        - generic [ref=e168]:
+          - link "Notifications — 4 unread" [ref=e169] [cursor=pointer]:
+            - /url: /enterprise/notifications
+            - img [ref=e170]
+            - generic [ref=e173]: "4"
+          - button "Account menu — Sandeep Kulkarni" [ref=e175]: SK
+      - main [ref=e176]:
+        - generic [ref=e178]:
+          - generic [ref=e179]:
+            - paragraph [ref=e180]: Acme Corp
+            - heading "Good evening, Sandeep." [level=1] [ref=e181]
+            - paragraph [ref=e182]: 25 items need your decision·13 SOWs in approval·1 project in delivery
+          - generic [ref=e183]:
+            - generic [ref=e184]:
+              - generic [ref=e185]:
+                - heading "Needs your decision" [level=2] [ref=e186]
+                - generic [ref=e187]: "25"
+              - generic [ref=e188]:
+                - link "SOW queue" [ref=e189] [cursor=pointer]:
+                  - /url: /enterprise/sow?status=approval
+                - link "Acceptance queue" [ref=e190] [cursor=pointer]:
+                  - /url: /enterprise/review
+            - list [ref=e192]:
+              - listitem [ref=e193]:
+                - link "Browser audit flow SOW Business · updated 1m" [ref=e194] [cursor=pointer]:
+                  - /url: /enterprise/sow/sow-acme-mpprlida
+                  - img [ref=e195]
+                  - generic [ref=e199]:
+                    - paragraph [ref=e200]: Browser audit flow SOW
+                    - paragraph [ref=e201]: Business · updated 1m
+                  - img [ref=e202]
+              - listitem [ref=e204]:
+                - link "bvn m Business · updated 19m" [ref=e205] [cursor=pointer]:
+                  - /url: /enterprise/sow/sow-acme-mppqy10d
+                  - img [ref=e206]
+                  - generic [ref=e210]:
+                    - paragraph [ref=e211]: bvn m
+                    - paragraph [ref=e212]: Business · updated 19m
+                  - img [ref=e213]
+              - listitem [ref=e215]:
+                - link "API platform v3 redesign Business · updated 21m" [ref=e216] [cursor=pointer]:
+                  - /url: /enterprise/sow/sow-acme-mppqw2fn
+                  - img [ref=e217]
+                  - generic [ref=e221]:
+                    - paragraph [ref=e222]: API platform v3 redesign
+                    - paragraph [ref=e223]: Business · updated 21m
+                  - img [ref=e224]
+              - listitem [ref=e226]:
+                - link "Rule registry table Acceptance · Yusuf O. · v1" [ref=e227] [cursor=pointer]:
+                  - /url: /enterprise/review/sub-1012
+                  - img [ref=e228]
+                  - generic [ref=e231]:
+                    - paragraph [ref=e232]: Rule registry table
+                    - paragraph [ref=e233]: Acceptance · Yusuf O. · v1
+                  - img [ref=e234]
+              - listitem [ref=e236]:
+                - link "SCIM connector tests Acceptance · Suresh M. · v1" [ref=e237] [cursor=pointer]:
+                  - /url: /enterprise/review/sub-1011
+                  - img [ref=e238]
+                  - generic [ref=e241]:
+                    - paragraph [ref=e242]: SCIM connector tests
+                    - paragraph [ref=e243]: Acceptance · Suresh M. · v1
+                  - img [ref=e244]
+              - listitem [ref=e246]:
+                - link "/users POST endpoint Acceptance · Rahul G. · v1" [ref=e247] [cursor=pointer]:
+                  - /url: /enterprise/review/sub-1009
+                  - img [ref=e248]
+                  - generic [ref=e251]:
+                    - paragraph [ref=e252]: /users POST endpoint
+                    - paragraph [ref=e253]: Acceptance · Rahul G. · v1
+                  - img [ref=e254]
+          - generic [ref=e256]:
+            - link "SOWs in approval 13 5 stale >48h" [ref=e257] [cursor=pointer]:
+              - /url: /enterprise/sow?status=approval
+              - generic [ref=e259]:
+                - generic [ref=e260]:
+                  - img [ref=e262]
+                  - paragraph [ref=e266]: SOWs in approval
+                  - img [ref=e267]
+                - paragraph [ref=e269]: "13"
+                - paragraph [ref=e274]: 5 stale >48h
+            - link "Pipelines pending 2 awaiting PMO" [ref=e275] [cursor=pointer]:
+              - /url: /enterprise/decomposition?status=draft
+              - generic [ref=e277]:
+                - generic [ref=e278]:
+                  - img [ref=e280]
+                  - paragraph [ref=e285]: Pipelines pending
+                  - img [ref=e286]
+                - paragraph [ref=e288]: "2"
+                - paragraph [ref=e293]: awaiting PMO
+            - link "Projects in delivery 1 on track" [ref=e294] [cursor=pointer]:
+              - /url: /enterprise/projects
+              - generic [ref=e296]:
+                - generic [ref=e297]:
+                  - img [ref=e299]
+                  - paragraph [ref=e302]: Projects in delivery
+                  - img [ref=e303]
+                - paragraph [ref=e305]: "1"
+                - paragraph [ref=e310]: on track
+            - link "Acceptance queue 12 12 pending" [ref=e311] [cursor=pointer]:
+              - /url: /enterprise/review
+              - generic [ref=e313]:
+                - generic [ref=e314]:
+                  - img [ref=e316]
+                  - paragraph [ref=e319]: Acceptance queue
+                  - img [ref=e320]
+                - paragraph [ref=e322]: "12"
+                - paragraph [ref=e327]: 12 pending
+          - generic [ref=e328]:
+            - generic [ref=e329]:
+              - generic [ref=e330]:
+                - heading "SOW pipeline" [level=2] [ref=e331]
+                - paragraph [ref=e332]: 22 total · across the lifecycle
+              - link "All SOWs" [ref=e333] [cursor=pointer]:
+                - /url: /enterprise/sow
+                - text: All SOWs
+                - img [ref=e334]
+            - list [ref=e338]:
+              - listitem [ref=e339]:
+                - generic [ref=e340]: Draft
+                - generic [ref=e343]: "3"
+                - generic [ref=e344]: 14%
+              - listitem [ref=e345]:
+                - generic [ref=e346]: In approval
+                - generic [ref=e349]: "13"
+                - generic [ref=e350]: 59%
+              - listitem [ref=e351]:
+                - generic [ref=e352]: Approved
+                - generic [ref=e355]: "5"
+                - generic [ref=e356]: 23%
+              - listitem [ref=e357]:
+                - generic [ref=e358]: Active delivery
+                - generic [ref=e361]: "1"
+                - generic [ref=e362]: 5%
+              - listitem [ref=e363]:
+                - generic [ref=e364]: Archived
+                - generic [ref=e366]: "0"
+                - generic [ref=e367]: 0%
+          - generic [ref=e368]:
+            - generic [ref=e369]:
+              - generic [ref=e370]:
+                - generic [ref=e371]:
+                  - heading "Active projects" [level=2] [ref=e372]
+                  - paragraph [ref=e373]: Top deliveries in motion
+                - link "All" [ref=e374] [cursor=pointer]:
+                  - /url: /enterprise/projects
+                  - text: All
+                  - img [ref=e375]
+              - list [ref=e379]:
+                - listitem [ref=e380]:
+                  - link "Data platform observability rollout Ready · 6h" [ref=e381] [cursor=pointer]:
+                    - /url: /enterprise/projects/plan-acme-mppdwffl
+                    - generic [ref=e383]:
+                      - paragraph [ref=e384]: Data platform observability rollout
+                      - paragraph [ref=e385]: Ready · 6h
+                    - img [ref=e386]
+                - listitem [ref=e388]:
+                  - link "API redesign — Acme platform v3 Ready · 1d" [ref=e389] [cursor=pointer]:
+                    - /url: /enterprise/projects/plan-acme-1
+                    - generic [ref=e391]:
+                      - paragraph [ref=e392]: API redesign — Acme platform v3
+                      - paragraph [ref=e393]: Ready · 1d
+                    - img [ref=e394]
+                - listitem [ref=e396]:
+                  - link "Internal HR portal v2 On track · 2d" [ref=e397] [cursor=pointer]:
+                    - /url: /enterprise/projects/plan-acme-5
+                    - generic [ref=e399]:
+                      - paragraph [ref=e400]: Internal HR portal v2
+                      - paragraph [ref=e401]: On track · 2d
+                    - img [ref=e402]
+                - listitem [ref=e404]:
+                  - link "Self-serve user provisioning Ready · 8 Apr" [ref=e405] [cursor=pointer]:
+                    - /url: /enterprise/projects/plan-acme-10
+                    - generic [ref=e407]:
+                      - paragraph [ref=e408]: Self-serve user provisioning
+                      - paragraph [ref=e409]: Ready · 8 Apr
+                    - img [ref=e410]
+            - generic [ref=e412]:
+              - generic [ref=e413]:
+                - generic [ref=e414]:
+                  - heading "Recent activity" [level=2] [ref=e415]
+                  - paragraph [ref=e416]: Audited tenant actions
+                - link "Audit log" [ref=e417] [cursor=pointer]:
+                  - /url: /enterprise/audit
+                  - text: Audit log
+                  - img [ref=e418]
+              - list [ref=e422]:
+                - listitem [ref=e423]:
+                  - img [ref=e424]
+                  - generic [ref=e426]:
+                    - paragraph [ref=e427]: audit.export
+                    - paragraph [ref=e428]: glimmora_audit_tnt-acme-corp_2026-05-27T17-20-14.json
+                  - generic [ref=e429]: 1d
+                - listitem [ref=e430]:
+                  - img [ref=e431]
+                  - generic [ref=e433]:
+                    - paragraph [ref=e434]: audit.export
+                    - paragraph [ref=e435]: glimmora_audit_tnt-acme-corp_2026-05-27T17-20-15.json
+                  - generic [ref=e436]: 1d
+                - listitem [ref=e437]:
+                  - img [ref=e438]
+                  - generic [ref=e440]:
+                    - paragraph [ref=e441]: audit.export
+                    - paragraph [ref=e442]: glimmora_audit_tnt-acme-corp_2026-05-27T17-22-00.json
+                  - generic [ref=e443]: 1d
+                - listitem [ref=e444]:
+                  - img [ref=e445]
+                  - generic [ref=e447]:
+                    - paragraph [ref=e448]: audit.export
+                    - paragraph [ref=e449]: glimmora_audit_tnt-acme-corp_2026-05-27T17-22-00.json
+                  - generic [ref=e450]: 1d
+                - listitem [ref=e451]:
+                  - img [ref=e452]
+                  - generic [ref=e454]:
+                    - paragraph [ref=e455]: audit.export
+                    - paragraph [ref=e456]: glimmora_audit_tnt-acme-corp_2026-05-27T17-22-46.json
+                  - generic [ref=e457]: 1d
+                - listitem [ref=e458]:
+                  - img [ref=e459]
+                  - generic [ref=e461]:
+                    - paragraph [ref=e462]: audit.export
+                    - paragraph [ref=e463]: glimmora_audit_tnt-acme-corp_2026-05-27T17-26-05.json
+                  - generic [ref=e464]: 1d
+          - generic [ref=e465]:
+            - generic [ref=e466]:
+              - generic [ref=e467]:
+                - img [ref=e469]
+                - heading "AI signals" [level=2] [ref=e472]
+                - generic [ref=e473]: "2"
+              - paragraph [ref=e474]: Suggestions from your tenant's signal stream
+            - list [ref=e475]:
+              - listitem [ref=e476]:
+                - img [ref=e478]
+                - paragraph [ref=e481]: 5 SOWs have been awaiting approval for more than 48 hours.
+                - link "Open SOW queue" [ref=e482] [cursor=pointer]:
+                  - /url: /enterprise/sow?status=approval
+                  - text: Open SOW queue
+                  - img [ref=e483]
+              - listitem [ref=e485]:
+                - img [ref=e487]
+                - paragraph [ref=e491]: 12 acceptance reviews waiting — consider routing capacity.
+                - link "Open acceptance" [ref=e492] [cursor=pointer]:
+                  - /url: /enterprise/review
+                  - text: Open acceptance
+                  - img [ref=e493]
+  - button "Open Next.js Dev Tools" [ref=e500] [cursor=pointer]:
+    - img [ref=e501]
+  - alert [ref=e504]
