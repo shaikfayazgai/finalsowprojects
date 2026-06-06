@@ -13,4 +13,4 @@ COPY shared/ /app/shared/
 COPY services/women-service/ /app/
 
 EXPOSE 8000
-CMD ["uvicorn", "women_app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn women_app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

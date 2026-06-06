@@ -1,19 +1,32 @@
-"""Lightweight local API gateway — replaces Kong for no-Docker dev.
+"""Lightweight API gateway — replaces Kong for no-Docker dev AND cloud deploy.
 
-Listens on :9000 and reverse-proxies each path prefix to the matching FastAPI
-service running on its own local port (see SERVICE_PORTS). Mirrors the routing
-in gateway/kong/kong.yml. Run AFTER starting the services (run_local.py).
+Listens on :9000 (local) / $PORT (cloud) and reverse-proxies each path prefix to
+the matching FastAPI service. Mirrors the routing in gateway/kong/kong.yml.
+
+Target resolution per service, in order:
+  1. SERVICE_URL_<NAME> env var (full base URL) — set this on Railway/Render to the
+     service's private hostname, e.g. SERVICE_URL_AUTH=http://auth.railway.internal:8000
+  2. fallback http://127.0.0.1:<local port>  — for `run_local.ps1` dev with no env.
 """
 from __future__ import annotations
+import os
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 
-# service name → local port (must match run_local.py)
+# service name → local port (must match run_local.ps1)
 SERVICE_PORTS = {
     "auth": 8011, "contributor": 8012, "enterprise": 8013, "superadmin": 8014,
     "mentor": 8015, "universities": 8016, "women": 8017, "email": 8018, "file": 8019,
 }
+
+
+def _base_url(svc: str) -> str:
+    """Cloud: SERVICE_URL_<SVC> private hostname. Local: 127.0.0.1:<port>."""
+    env = os.getenv(f"SERVICE_URL_{svc.upper()}")
+    if env:
+        return env.rstrip("/")
+    return f"http://127.0.0.1:{SERVICE_PORTS[svc]}"
 
 # Longest-prefix-first so e.g. /api/superadmin wins over /api, and
 # /api/v1/users/reviewers (superadmin) wins over /api/v1/users (superadmin too).
@@ -74,8 +87,7 @@ async def proxy(full_path: str, request: Request):
     svc = _target(path)
     if not svc:
         return Response(content=b'{"detail":"No route"}', status_code=404, media_type="application/json")
-    port = SERVICE_PORTS[svc]
-    url = f"http://127.0.0.1:{port}{path}"
+    url = f"{_base_url(svc)}{path}"
     if request.url.query:
         url += "?" + request.url.query
     body = await request.body()
