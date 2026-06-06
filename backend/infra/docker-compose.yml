@@ -1,0 +1,157 @@
+# ============================================================================
+# Glimmora backend — full microservices stack.
+#
+#   Kong gateway        → http://localhost:9000   (single public entry)
+#   Kong admin          → http://localhost:9001
+#   Grafana             → http://localhost:3001   (admin / glimmora123)
+#   Prometheus          → http://localhost:9090
+#   Kafka               → kafka:9092 (internal)
+#
+# Postgres (Neon), MongoDB (Atlas) are cloud — configured via ../.env.
+# Redis + Kafka run locally in-cluster. Each service is internal-only;
+# only Kong's proxy port is published.
+#
+#   cd backend/infra && docker compose up --build
+# ============================================================================
+name: glimmora-backend
+
+x-service-base: &service-base
+  env_file: ../.env
+  restart: unless-stopped
+  depends_on:
+    redis: { condition: service_started }
+    kafka: { condition: service_started }
+  networks: [glimmora]
+
+services:
+  # ── Gateway ────────────────────────────────────────────────────────────────
+  kong:
+    image: kong:3.7
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+      KONG_LOG_LEVEL: notice
+      # Re-resolve Docker service DNS quickly so a rebuilt service (which gets a
+      # NEW container IP) is picked up automatically — no more stale-IP 404s
+      # after `docker compose up <service>`. Short TTLs + ignoring the record's
+      # own TTL force Kong to re-query Docker's embedded DNS every ~5s.
+      KONG_DNS_STALE_TTL: "5"
+      KONG_DNS_NOT_FOUND_TTL: "5"
+      KONG_DNS_ERROR_TTL: "5"
+      KONG_DNS_RESOLVER: "127.0.0.11"
+      KONG_DNS_ORDER: "A,CNAME,LAST,SRV"
+    volumes:
+      - ../gateway/kong:/kong:ro
+    ports:
+      - "9000:8000"   # public proxy → frontend NEXT_PUBLIC_GLIMMORA_API_URL
+      - "9001:8001"   # admin API
+    networks: [glimmora]
+    restart: unless-stopped
+
+  # ── Infra: Redis, Zookeeper, Kafka ──────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    networks: [glimmora]
+    restart: unless-stopped
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks: [glimmora]
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    depends_on: [zookeeper]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks: [glimmora]
+    restart: unless-stopped
+
+  # ── Observability ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks: [glimmora]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: glimmora123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on: [prometheus]
+    networks: [glimmora]
+    restart: unless-stopped
+
+  # ── Application services (internal only; reached via Kong) ──────────────────
+  auth-service:
+    <<: *service-base
+    build: { context: .., dockerfile: services/auth-service/Dockerfile }
+    environment: { SERVICE_NAME: auth-service }
+
+  contributor-service:
+    <<: *service-base
+    build: { context: .., dockerfile: services/contributor-service/Dockerfile }
+    environment: { SERVICE_NAME: contributor-service }
+
+  enterprise-service:
+    <<: *service-base
+    build: { context: .., dockerfile: services/enterprise-service/Dockerfile }
+    environment: { SERVICE_NAME: enterprise-service }
+
+  superadmin-service:
+    <<: *service-base
+    build: { context: .., dockerfile: services/superadmin-service/Dockerfile }
+    environment: { SERVICE_NAME: superadmin-service }
+
+  universities-service:
+    <<: *service-base
+    build: { context: .., dockerfile: services/universities-service/Dockerfile }
+    environment: { SERVICE_NAME: universities-service }
+
+  women-service:
+    <<: *service-base
+    build: { context: .., dockerfile: services/women-service/Dockerfile }
+    environment: { SERVICE_NAME: women-service }
+
+  mentor-service:
+    <<: *service-base
+    build: { context: .., dockerfile: services/mentor-service/Dockerfile }
+    environment: { SERVICE_NAME: mentor-service }
+
+  email-service:
+    <<: *service-base
+    build: { context: .., dockerfile: services/email-service/Dockerfile }
+    environment: { SERVICE_NAME: email-service }
+
+  file-service:
+    <<: *service-base
+    build: { context: .., dockerfile: services/file-service/Dockerfile }
+    environment: { SERVICE_NAME: file-service }
+
+networks:
+  glimmora:
+    driver: bridge
+
+volumes:
+  grafana-data:

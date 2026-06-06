@@ -1,0 +1,96 @@
+"""AI-generated SOWs — /api/v1/sows/**  (wrapped envelope)."""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
+
+from shared.deps import get_current_user
+
+from enterprise_app import db
+from enterprise_app.responses import ok
+from enterprise_app.seed import ensure_demo_data
+
+router = APIRouter(prefix="/api/v1/sows", tags=["sows"])
+
+
+def _load(sow_id: str, owner_id: str | None = None) -> dict:
+    row = db.get_row("sow", sow_id, owner_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="SOW not found")
+    return row
+
+
+@router.get("")
+def list_sows(user: Annotated[dict, Depends(get_current_user)]):
+    ensure_demo_data(user)
+    return ok(db.list_rows("sow", user["id"]))
+
+
+@router.get("/enterprise/all")
+def list_enterprise_sows(user: Annotated[dict, Depends(get_current_user)]):
+    """All SOWs visible to the enterprise (scoped to the owner here)."""
+    ensure_demo_data(user)
+    return ok(db.list_rows("sow", user["id"]))
+
+
+@router.get("/{sow_id}")
+def get_sow(sow_id: str, user: Annotated[dict, Depends(get_current_user)]):
+    ensure_demo_data(user)
+    return ok(_load(sow_id, user["id"]))
+
+
+@router.get("/enterprise/{sow_id}")
+def get_enterprise_sow(sow_id: str, user: Annotated[dict, Depends(get_current_user)]):
+    ensure_demo_data(user)
+    return ok(_load(sow_id, user["id"]))
+
+
+@router.post("/{sow_id}/action")
+def sow_action(sow_id: str, user: Annotated[dict, Depends(get_current_user)],
+               body: dict = Body(default={})):
+    row = _load(sow_id, user["id"])
+    action = (body or {}).get("action") or "noop"
+    history = row.setdefault("actionHistory", [])
+    history.append({"action": action, "at": db.now_iso(), "payload": body})
+    status_map = {"approve": "approved", "reject": "rejected", "submit": "submitted",
+                  "archive": "archived"}
+    if action in status_map:
+        row["status"] = status_map[action]
+    row["updatedAt"] = db.now_iso()
+    saved = db.update_row("sow", sow_id, row, user["id"])
+    return ok(saved)
+
+
+@router.get("/{sow_id}/hallucination-analysis")
+def hallucination_analysis(sow_id: str, user: Annotated[dict, Depends(get_current_user)]):
+    row = _load(sow_id, user["id"])
+    return ok({
+        "sowId": sow_id,
+        "layers": row.get("hallucinationLayers", []),
+        "overallConfidence": 0.9,
+    })
+
+
+@router.get("/{sow_id}/risk-assessment")
+def risk_assessment(sow_id: str, user: Annotated[dict, Depends(get_current_user)]):
+    row = _load(sow_id, user["id"])
+    return ok(row.get("riskAssessment", {"overall": "low", "factors": []}))
+
+
+@router.get("/{sow_id}/export/{fmt}")
+def export_sow(sow_id: str, fmt: str, user: Annotated[dict, Depends(get_current_user)]):
+    row = _load(sow_id, user["id"])
+    fmt = (fmt or "").lower()
+    title = row.get("projectTitle") or "SOW"
+    if fmt in ("txt", "text", "md", "markdown"):
+        lines = [f"# {title}", ""]
+        for sec in row.get("sections", []):
+            lines.append(f"## {sec.get('title')}")
+            lines.append(str(sec.get("content", "")))
+            lines.append("")
+        return PlainTextResponse("\n".join(lines), media_type="text/plain")
+    # json / pdf / docx fall back to the structured payload in the envelope.
+    return ok({"sowId": sow_id, "format": fmt, "document": row})

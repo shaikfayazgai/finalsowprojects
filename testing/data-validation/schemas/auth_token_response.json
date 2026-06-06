@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Auth Token Response",
+  "type": "object",
+  "required": ["access_token", "token_type"],
+  "properties": {
+    "access_token": {
+      "type": "string"
+    },
+    "token_type": {
+      "type": "string",
+      "enum": ["Bearer"]
+    },
+    "expires_in": {
+      "type": "integer"
+    },
+    "user": {
+      "type": "object",
+      "required": ["id", "email", "role"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["superadmin", "admin", "reviewer", "enterprise", "contributor", "mentor"]
+        },
+        "full_name": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
