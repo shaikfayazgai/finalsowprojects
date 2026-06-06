@@ -76,6 +76,13 @@ def _target(path: str) -> str | None:
     return None
 
 
+@app.get("/")
+async def root():
+    # Render/Render-style port scans hit "/"; return 200 so the open port is
+    # detected immediately (instead of a 404 that looks like a missing route).
+    return {"ok": True, "service": "gtproject-gateway"}
+
+
 @app.get("/healthz")
 async def healthz():
     return {"ok": True, "gateway": "local"}

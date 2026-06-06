@@ -10,12 +10,18 @@ WORKDIR /app
 COPY shared/requirements.txt /app/shared/requirements.txt
 RUN pip install --no-cache-dir -r /app/shared/requirements.txt
 
-# Everything the launcher needs: shared lib, all services, gateway, launcher.
+# Everything the unified app needs: shared lib, all 9 services, the unified front.
 COPY shared/ /app/shared/
 COPY services/ /app/services/
 COPY local_gateway.py /app/local_gateway.py
-COPY run_all_in_one.py /app/run_all_in_one.py
+COPY unified_app.py /app/unified_app.py
 
-# Gateway binds $PORT (platform-injected); default 9000 for local `docker run`.
+# Each service package lives under services/<svc>-service/; put them all on the
+# import path so `import auth_app`, `import contributor_app`, ... resolve in the
+# single unified process.
+ENV PYTHONPATH="/app:/app/services/auth-service:/app/services/contributor-service:/app/services/enterprise-service:/app/services/superadmin-service:/app/services/mentor-service:/app/services/universities-service:/app/services/women-service:/app/services/email-service:/app/services/file-service"
+
+# ONE uvicorn worker = all 9 services in-process (fits Render Free 512 MB).
+# Binds $PORT (platform-injected); default 9000 for local `docker run`.
 EXPOSE 9000
-CMD ["python", "run_all_in_one.py"]
+CMD ["sh", "-c", "uvicorn unified_app:app --host 0.0.0.0 --port ${PORT:-9000}"]
