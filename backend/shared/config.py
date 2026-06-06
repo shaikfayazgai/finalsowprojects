@@ -77,7 +77,9 @@ class Settings(BaseSettings):
         return (self.email_from or self.email_user).strip()
 
     # ── Kafka event bus ───────────────────────────────────────────────────────
-    kafka_enabled: bool = True
+    # Off by default: cloud deploys (Render/Vercel) have no broker, and events are
+    # fail-open (dropped). Set KAFKA_ENABLED=true + KAFKA_BOOTSTRAP_SERVERS to use.
+    kafka_enabled: bool = False
     kafka_bootstrap_servers: str = "kafka:9092"
 
     # ── Super admin (the Glimmora admin) ──────────────────────────────────────
