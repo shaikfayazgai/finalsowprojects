@@ -112,6 +112,10 @@ def _resend_invite(existing: dict[str, Any], actor: dict, request: Request,
     out = repo.user_out(refreshed or existing)
     out["emailSent"] = sent
     out["resent"] = True
+    # Surface the fresh temp password when we couldn't email it, so the admin can
+    # copy it from the UI (cloud deploys have no SMTP).
+    if not sent:
+        out["tempPassword"] = temp
     return out
 
 

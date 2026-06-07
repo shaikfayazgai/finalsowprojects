@@ -127,6 +127,11 @@ export function MentorDetailWorkspace() {
   const provisionedTempPassword = searchParams.get("tempPassword");
   const provisioned = searchParams.get("provisioned") === "1";
 
+  // Only render searchParam-driven credential banners after mount so SSR (which
+  // has no query string) and the client agree → no hydration mismatch.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+
   const [modal, setModal] = React.useState<ModalKind>(null);
   const [toast, setToast] = React.useState<string | null>(() => {
     if (provisioned) return "Mentor created — share the temporary password below.";
@@ -158,6 +163,49 @@ export function MentorDetailWorkspace() {
     },
     [router, searchParams, params.mentorId],
   );
+
+  // Resend credentials for a pending mentor — re-provisions, which the backend
+  // treats as a resend (fresh temp password). Shows the new password (email off).
+  const [resending, setResending] = React.useState(false);
+  const [resentPassword, setResentPassword] = React.useState<string | null>(null);
+  const resendCredentials = React.useCallback(() => {
+    if (!mentor?.email) return;
+    void (async () => {
+      setResending(true);
+      try {
+        const res = await fetch("/api/superadmin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: mentor.email,
+            role: "mentor",
+            sendCredentials: true,
+          }),
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          tempPassword?: string;
+          emailSent?: boolean;
+          error?: string;
+        };
+        if (!res.ok) {
+          setToast(body.error ?? "Could not resend credentials.");
+          return;
+        }
+        if (body.tempPassword) {
+          setResentPassword(body.tempPassword);
+          setToast("Fresh temporary password generated — share it below.");
+        } else if (body.emailSent) {
+          setToast("Credentials re-emailed to the mentor.");
+        } else {
+          setToast("Credentials resent.");
+        }
+      } catch {
+        setToast("Could not resend credentials.");
+      } finally {
+        setResending(false);
+      }
+    })();
+  }, [mentor?.email]);
 
   if (!mentor) {
     return (
@@ -194,7 +242,7 @@ export function MentorDetailWorkspace() {
     <div className="space-y-5 pb-12 animate-fade-in">
       <MentorToast message={toast} onDismiss={() => setToast(null)} />
 
-      {provisioned && provisionedTempPassword && (
+      {mounted && (resentPassword || (provisioned && provisionedTempPassword)) && (
         <div className="rounded-xl border border-brand-border/40 bg-brand-subtle/15 px-4 py-3 space-y-1.5">
           <p className="font-body text-[12px] font-semibold text-foreground">
             Temporary password — share with the mentor
@@ -206,7 +254,7 @@ export function MentorDetailWorkspace() {
               : " (Email delivery is off — copy it manually.)"}
           </p>
           <code className="block font-mono text-[13px] font-semibold text-foreground bg-surface border border-stroke rounded-md px-3 py-2 w-fit select-all">
-            {provisionedTempPassword}
+            {resentPassword ?? provisionedTempPassword}
           </code>
           <p className="font-body text-[11px] text-text-tertiary">
             Login at <span className="font-mono">/mentor/login</span> · first sign-in forces a password reset.
@@ -215,7 +263,7 @@ export function MentorDetailWorkspace() {
       )}
 
       {/* Legacy invite-link banner (only if an old invite flow was used). */}
-      {searchParams.get("invited") === "1" && inviteCode && (
+      {mounted && searchParams.get("invited") === "1" && inviteCode && (
         <div className="rounded-xl border border-brand-border/40 bg-brand-subtle/15 px-4 py-3 space-y-1">
           <p className="font-body text-[12px] font-semibold text-foreground">Self-register link</p>
           <p className="font-body text-[12px] text-text-secondary">
@@ -269,13 +317,28 @@ export function MentorDetailWorkspace() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {mentor.status === "pending" && (
+            <button
+              type="button"
+              onClick={resendCredentials}
+              disabled={resending}
+              className={cn(
+                "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md",
+                "bg-brand text-on-brand font-body text-[13px] font-semibold shadow-xs",
+                "hover:bg-brand-hover transition-colors duration-fast",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
+              )}
+            >
+              {resending ? "Resending…" : "Resend credentials"}
+            </button>
+          )}
           {needsAdminSetup && (
             <Link
               href={`/admin/mentors/${mentor.id}/competency`}
               className={cn(
                 "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md",
-                "bg-brand text-on-brand font-body text-[13px] font-semibold shadow-xs",
-                "hover:bg-brand-hover transition-colors duration-fast",
+                "bg-surface border border-stroke text-foreground font-body text-[13px] font-semibold",
+                "hover:bg-bg-subtle transition-colors duration-fast",
               )}
             >
               Complete setup →
