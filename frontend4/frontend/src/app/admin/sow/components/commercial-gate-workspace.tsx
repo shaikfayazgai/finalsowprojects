@@ -168,7 +168,7 @@ export function CommercialGateWorkspace() {
   const listDescription =
     sorted.length === 0
       ? "No SOWs match"
-      : `${sorted.length} SOW${sorted.length === 1 ? "" : "s"} · stage 5 of 5`;
+      : `${sorted.length} SOW${sorted.length === 1 ? "" : "s"} · awaiting stage 5 (Commercial)`;
 
   return (
     <div className="space-y-5 pb-12 animate-fade-in">
@@ -385,7 +385,7 @@ function QueueRow({ sow }: { sow: SowSummary }) {
           </div>
           <p className="mt-0.5 font-body text-[11.5px] text-text-secondary truncate">{rowMeta(sow)}</p>
           <p className="mt-0.5 font-mono text-[10px] text-text-tertiary tabular-nums truncate">
-            {sow.id} · Enterprise gates ✓ · Stage 5/5 (Commercial)
+            {sow.id} · Enterprise gates ✓ · Stage 4/5 · Commercial pending
           </p>
         </div>
         <ChevronRight

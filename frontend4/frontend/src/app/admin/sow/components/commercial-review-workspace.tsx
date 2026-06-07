@@ -162,7 +162,7 @@ export function CommercialReviewWorkspace() {
       <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-text-tertiary mb-1.5">
-            Commercial gate · Stage 5 of 5 · v{sow.activeVersion}
+            Commercial gate · Final stage (5 of 5) · awaiting your sign-off · v{sow.activeVersion}
           </p>
           <h1 className="font-body text-[22px] font-semibold text-foreground tracking-[-0.015em] leading-tight">
             {sow.title}
