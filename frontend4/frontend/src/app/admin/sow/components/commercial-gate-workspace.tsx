@@ -15,7 +15,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, ChevronRight, Inbox, Search, X } from "lucide-react";
 import { Skeleton } from "@/components/meridian";
 import { DashboardSection } from "@/components/meridian/dashboard";
-import { useSowList } from "@/lib/hooks/use-sow-v2";
+import { useAdminSowList } from "@/lib/hooks/use-sow-v2";
 import { useAdminSectionGuard } from "@/lib/hooks/use-admin-section-guard";
 import type { SowSummary } from "@/lib/sow/types";
 import { cn } from "@/lib/utils/cn";
@@ -92,7 +92,7 @@ export function CommercialGateWorkspace() {
   const page = Number(searchParams.get("page") ?? "1");
   const msg = searchParams.get("msg");
 
-  const { data, isLoading } = useSowList({ status: "approval", limit: 200 });
+  const { data, isLoading } = useAdminSowList({ status: "approval", limit: 200 });
   const [toast, setToast] = React.useState<string | null>(
     msg && MSG_COPY[msg] ? MSG_COPY[msg] : null,
   );

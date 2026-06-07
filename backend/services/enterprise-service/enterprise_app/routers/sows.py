@@ -36,6 +36,27 @@ def list_enterprise_sows(user: Annotated[dict, Depends(get_current_user)]):
     return ok(db.list_rows("sow", user["id"]))
 
 
+_ADMIN_ROLES = {"admin", "superadmin", "super_admin", "plat", "platform"}
+
+
+def _is_admin(user: dict) -> bool:
+    return (user.get("role") or "").lower() in _ADMIN_ROLES
+
+
+@router.get("/admin/all")
+def list_all_sows_admin(user: Annotated[dict, Depends(get_current_user)]):
+    """ALL SOWs across every owner — Glimmora platform admins only.
+
+    Owner-scoped lists (/api/v1/sows) only show the caller's own SOWs, so the
+    Super Admin Commercial gate couldn't see SOWs raised by enterprise tenants.
+    This returns the full set (owner_id=None) so the admin queue can pick up any
+    SOW that has reached the Commercial stage, regardless of who created it.
+    """
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    return ok(db.list_rows("sow", None))
+
+
 @router.get("/{sow_id}")
 def get_sow(sow_id: str, user: Annotated[dict, Depends(get_current_user)]):
     ensure_demo_data(user)

@@ -22,6 +22,7 @@ import {
   declineSow,
   getSow,
   listSows,
+  listAllSowsAdmin,
   rejectSow,
   sendBackSow,
   submitSow,
@@ -40,6 +41,7 @@ import type {
 const sowKeys = {
   all: ["sow"] as const,
   list: (params: ListSowsParams) => ["sow", "list", params] as const,
+  adminList: (params: ListSowsParams) => ["sow", "admin-list", params] as const,
   detail: (sowId: string) => ["sow", "detail", sowId] as const,
 };
 
@@ -49,6 +51,17 @@ export function useSowList(params: ListSowsParams = {}) {
   return useQuery({
     queryKey: sowKeys.list(params),
     queryFn: () => listSows(params),
+  });
+}
+
+/**
+ * Admin-scoped list — ALL SOWs across every owner. Used by the Super Admin
+ * Commercial gate so it sees SOWs raised by any enterprise tenant.
+ */
+export function useAdminSowList(params: ListSowsParams = {}) {
+  return useQuery({
+    queryKey: sowKeys.adminList(params),
+    queryFn: () => listAllSowsAdmin(params),
   });
 }
 
