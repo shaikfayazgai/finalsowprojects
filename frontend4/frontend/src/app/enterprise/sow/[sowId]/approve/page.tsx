@@ -555,10 +555,10 @@ function DecisionPanel({
           disabled={isPending}
           className={cn(
             "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md",
-            "bg-foreground text-background font-body text-[13px] font-semibold",
-            "hover:opacity-90 transition-opacity duration-fast",
+            "bg-brand text-on-brand font-body text-[13px] font-semibold",
+            "hover:bg-brand-hover transition-colors duration-fast",
             "disabled:opacity-50 disabled:cursor-not-allowed",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stroke-focus",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25",
           )}
         >
           {isPending ? (
