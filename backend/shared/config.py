@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     rate_limit_key_prefix: str = "glimmora:ratelimit"
 
     # ── Email / SMTP (Gmail) ──────────────────────────────────────────────────
+    # EMAIL_ENABLED=false on cloud deploys where outbound SMTP (port 587) is
+    # blocked — keeps OTP / credential flows fast (they return a dev code instead
+    # of hanging on an unreachable mail server).
+    email_enabled: bool = True
     email_user: str = ""
     email_app_password: str = ""
     email_from: str = ""

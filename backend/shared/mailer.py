@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 def email_is_configured() -> bool:
+    # EMAIL_ENABLED=false (cloud deploys where outbound SMTP is blocked) forces
+    # email OFF so OTP / credential flows fall through to their dev-code response
+    # INSTANTLY instead of hanging ~30s on an unreachable SMTP server.
+    if not getattr(settings, "email_enabled", True):
+        return False
     return bool(settings.email_user.strip() and settings.email_app_password_for_smtp)
 
 
@@ -40,7 +45,7 @@ def send_email(
         msg.add_alternative(html, subtype="html")
 
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=8) as smtp:
             if settings.smtp_use_tls:
                 smtp.starttls()
             smtp.login(settings.email_user, settings.email_app_password_for_smtp)
@@ -66,7 +71,7 @@ def send_bulk_email(
         return [{"to_email": m.get("to_email"), "sent": False} for m in messages]
 
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=8) as smtp:
             if settings.smtp_use_tls:
                 smtp.starttls()
             smtp.login(settings.email_user, settings.email_app_password_for_smtp)
