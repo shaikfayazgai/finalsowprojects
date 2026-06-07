@@ -262,15 +262,15 @@ function SowDetailView({ sow }: { sow: SowDetail }) {
 
       {commercialWait && (
         <ContextBanner tone="brand" title="Awaiting Glimmora Commercial">
-          Business approval is complete. Commercial confirms staffing, rates, and scope viability before
-          Legal and Security continue on the enterprise side.
+          All enterprise gates are signed off. Glimmora Commercial does the final
+          confirmation of staffing, rates, and scope viability to close the SOW.
         </ContextBanner>
       )}
 
       {/* Approval progress */}
       <DashboardSection
         title="Approval progress"
-        description="Finance → Legal → Security → Commercial → Final sign-off"
+        description="Finance → Legal → Security → Final sign-off → Commercial"
       >
         <ApprovalStepper
           approvals={sow.approvals}

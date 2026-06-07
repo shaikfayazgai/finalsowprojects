@@ -189,8 +189,9 @@ export function CommercialGateWorkspace() {
           SOW Commercial gate
         </h1>
         <p className="mt-1.5 font-body text-[12.5px] text-text-tertiary max-w-2xl">
-          Enterprise Business has signed off. Glimmora Commercial confirms staffing viability,
-          rate alignment, and scope fit — then the SOW advances to Legal on the enterprise side.
+          All enterprise gates (Finance, Legal, Security, Final sign-off) have cleared.
+          Glimmora Commercial does the final confirmation of staffing viability, rate
+          alignment, and scope fit — then the SOW is closed.
         </p>
       </header>
 

@@ -129,15 +129,15 @@ _TABLES = {
 # Canonical 5-stage SOW approval pipeline (Fayaz's flow):
 #   Business (enterprise) → Commercial (Glimmora platform admin) → Legal →
 #   Security → Final. Any stage can reject back to draft.
-# Glimmora's Commercial gate runs LAST among the substantive gates — after the
-# enterprise's own Business/Legal/Security reviews — and right before the
-# enterprise Final sign-off.
+# Glimmora's Commercial gate is the VERY LAST step — it runs only after ALL the
+# enterprise gates (Business/Legal/Security + the enterprise Final sign-off) have
+# cleared. Glimmora closes the SOW.
 SOW_APPROVAL_STAGES = [
     {"key": "business",   "title": "Business Owner Review",       "owner": "enterprise"},
     {"key": "legal",      "title": "Legal / Compliance Review",   "owner": "enterprise"},
     {"key": "security",   "title": "Security Review",             "owner": "enterprise"},
-    {"key": "commercial", "title": "GlimmoraTeam Commercial Review", "owner": "platform"},
     {"key": "final",      "title": "Final Sign-off",              "owner": "enterprise"},
+    {"key": "commercial", "title": "GlimmoraTeam Commercial Review", "owner": "platform"},
 ]
 
 

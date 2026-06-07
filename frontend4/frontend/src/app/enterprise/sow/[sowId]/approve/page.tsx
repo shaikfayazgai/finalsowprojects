@@ -294,7 +294,7 @@ export default function SowApprovePage() {
       {isDraft && (
         <DashboardSection
           title="Submit for approval"
-          description="Starts the five-stage pipeline: Finance → Legal → Security → Commercial → Final sign-off."
+          description="Starts the five-stage pipeline: Finance → Legal → Security → Final sign-off → Commercial."
         >
           <SubmitPanel
             onSubmit={onSubmitDraft}
@@ -327,7 +327,7 @@ export default function SowApprovePage() {
       {commercialWait && (
         <WaitBanner
           title="Awaiting Glimmora Commercial"
-          body="Business approval is complete. Glimmora Commercial confirms staffing, rates, and scope viability — you’ll be notified when Legal can continue on the enterprise side."
+          body="All enterprise gates are signed off. Glimmora Commercial does the final confirmation of staffing, rates, and scope viability to close the SOW."
         />
       )}
 
@@ -379,7 +379,7 @@ export default function SowApprovePage() {
 
       <DashboardSection
         title="Pipeline progress"
-        description="Finance → Legal → Security → Commercial → Final sign-off"
+        description="Finance → Legal → Security → Final sign-off → Commercial"
       >
         <ApprovalStepper
           approvals={sow.approvals}

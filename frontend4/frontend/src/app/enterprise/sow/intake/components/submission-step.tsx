@@ -23,8 +23,8 @@ import {
 import { cn } from "@/lib/utils/cn";
 
 // Order must match APPROVAL_STAGE_ORDER in lib/sow/types: Glimmora's Commercial
-// gate runs after the enterprise Finance/Legal/Security gates, before Final.
-const STAGES: SowApprovalStageKey[] = ["business", "legal", "security", "commercial", "final"];
+// gate is the very last step, after the enterprise's Final sign-off.
+const STAGES: SowApprovalStageKey[] = ["business", "legal", "security", "final", "commercial"];
 
 const selectCls = cn(
   "w-full h-9 px-3 rounded-md bg-surface border font-body text-[13px] text-foreground",

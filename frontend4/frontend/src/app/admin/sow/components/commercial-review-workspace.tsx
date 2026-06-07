@@ -285,7 +285,7 @@ export function CommercialReviewWorkspace() {
 
       <DashboardSection
         title="Pipeline progress"
-        description="Finance → Legal → Security → Commercial → Final sign-off"
+        description="Finance → Legal → Security → Final sign-off → Commercial"
       >
         <PipelineStepper sow={sow} />
       </DashboardSection>

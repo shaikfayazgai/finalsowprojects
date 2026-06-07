@@ -33,7 +33,7 @@ export function defaultApproverForStage(stage: SowApprovalStageKey): ApproverCan
 }
 
 export function defaultApproversByStage(): Record<SowApprovalStageKey, ApproverCandidate> {
-  const stages: SowApprovalStageKey[] = ["business", "legal", "security", "commercial", "final"];
+  const stages: SowApprovalStageKey[] = ["business", "legal", "security", "final", "commercial"];
   return Object.fromEntries(stages.map((s) => [s, defaultApproverForStage(s)])) as Record<
     SowApprovalStageKey,
     ApproverCandidate

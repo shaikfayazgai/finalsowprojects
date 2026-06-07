@@ -53,7 +53,7 @@ const ACTION_COPY: Record<
   approve: {
     title: "Approve Commercial stage",
     description:
-      "Confirm staffing viability, rate alignment, and scope fit. The SOW advances to Legal on the enterprise side.",
+      "Confirm staffing viability, rate alignment, and scope fit. This is the final gate — approving closes the SOW.",
     submit: "Approve Commercial",
     minComment: 10,
   },
