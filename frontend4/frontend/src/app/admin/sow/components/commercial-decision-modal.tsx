@@ -113,7 +113,30 @@ export function CommercialDecisionModal({
   submitting,
 }: CommercialDecisionModalProps) {
   const copy = ACTION_COPY[action];
-  const mentors = React.useMemo(() => listAdminMentors(), []);
+  // Real provisioned mentors from the backend (login_accounts role LIKE
+  // 'mentor%'); falls back to the mock roster only if the fetch fails.
+  const [mentors, setMentors] = React.useState<Array<{ id: string; name: string }>>(
+    () => listAdminMentors().map((m) => ({ id: m.id, name: m.name })),
+  );
+  React.useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/superadmin/mentors", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { mentors?: Array<{ id: string; name: string }> };
+        if (!cancelled && Array.isArray(data.mentors) && data.mentors.length > 0) {
+          setMentors(data.mentors.map((m) => ({ id: m.id, name: m.name })));
+        }
+      } catch {
+        // keep mock fallback
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
   const [comment, setComment] = React.useState("");
   const [notifySponsor, setNotifySponsor] = React.useState(true);
   const [checklist, setChecklist] = React.useState<Record<string, boolean>>({});
