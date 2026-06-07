@@ -167,7 +167,6 @@ export function MentorDetailWorkspace() {
   // Resend credentials for a pending mentor — re-provisions, which the backend
   // treats as a resend (fresh temp password). Shows the new password (email off).
   const [resending, setResending] = React.useState(false);
-  const [resentPassword, setResentPassword] = React.useState<string | null>(null);
   const resendCredentials = React.useCallback(() => {
     if (!mentor?.email) return;
     void (async () => {
@@ -191,14 +190,7 @@ export function MentorDetailWorkspace() {
           setToast(body.error ?? "Could not resend credentials.");
           return;
         }
-        if (body.tempPassword) {
-          setResentPassword(body.tempPassword);
-          setToast("Fresh temporary password generated — share it below.");
-        } else if (body.emailSent) {
-          setToast("Credentials re-emailed to the mentor.");
-        } else {
-          setToast("Credentials resent.");
-        }
+        setToast("Credentials resent — the mentor sets a new password on first sign-in.");
       } catch {
         setToast("Could not resend credentials.");
       } finally {
@@ -241,26 +233,6 @@ export function MentorDetailWorkspace() {
   return (
     <div className="space-y-5 pb-12 animate-fade-in">
       <MentorToast message={toast} onDismiss={() => setToast(null)} />
-
-      {mounted && (resentPassword || (provisioned && provisionedTempPassword)) && (
-        <div className="rounded-xl border border-brand-border/40 bg-brand-subtle/15 px-4 py-3 space-y-1.5">
-          <p className="font-body text-[12px] font-semibold text-foreground">
-            Temporary password — share with the mentor
-          </p>
-          <p className="font-body text-[12px] text-text-secondary">
-            The mentor signs in with this once, then sets their own password.
-            {searchParams.get("emailSent") === "1"
-              ? " (Also emailed to them.)"
-              : " (Email delivery is off — copy it manually.)"}
-          </p>
-          <code className="block font-mono text-[13px] font-semibold text-foreground bg-surface border border-stroke rounded-md px-3 py-2 w-fit select-all">
-            {resentPassword ?? provisionedTempPassword}
-          </code>
-          <p className="font-body text-[11px] text-text-tertiary">
-            Login at <span className="font-mono">/mentor/login</span> · first sign-in forces a password reset.
-          </p>
-        </div>
-      )}
 
       {/* Legacy invite-link banner (only if an old invite flow was used). */}
       {mounted && searchParams.get("invited") === "1" && inviteCode && (

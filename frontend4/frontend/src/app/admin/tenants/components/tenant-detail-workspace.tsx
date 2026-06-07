@@ -222,19 +222,16 @@ export function TenantDetailWorkspace() {
   // Resend credentials for the tenant's primary admin (re-provisions → fresh
   // temp password; shown here since email may be off). Works until first sign-in.
   const [resending, setResending] = React.useState(false);
-  const [resentPassword, setResentPassword] = React.useState<string | null>(null);
   function resendPrimaryAdmin() {
     if (!inviteEmail) return;
     void (async () => {
       setResending(true);
       try {
-        const res = await fetch("/api/superadmin/users", {
+        await fetch("/api/superadmin/users", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: inviteEmail, role: "enterprise", sendCredentials: true }),
         });
-        const body = (await res.json().catch(() => ({}))) as { tempPassword?: string };
-        if (res.ok && body.tempPassword) setResentPassword(body.tempPassword);
       } catch {
         // ignore
       } finally {
@@ -548,16 +545,6 @@ export function TenantDetailWorkspace() {
                     </span>
                   </header>
                   <div className="px-5 py-4 space-y-3">
-                    {resentPassword && (
-                      <div className="rounded-lg border border-brand-border/40 bg-brand-subtle/15 px-3 py-2.5 space-y-1">
-                        <p className="font-body text-[11.5px] font-semibold text-foreground">
-                          New temporary password — share with {inviteName}
-                        </p>
-                        <code className="block font-mono text-[13px] font-semibold text-foreground bg-surface border border-stroke rounded-md px-3 py-2 w-fit select-all">
-                          {resentPassword}
-                        </code>
-                      </div>
-                    )}
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="flex-1 min-w-0 font-body text-[11.5px] text-text-tertiary">
                         No invite links — credential-based onboarding · forced reset on first sign-in · audited.
