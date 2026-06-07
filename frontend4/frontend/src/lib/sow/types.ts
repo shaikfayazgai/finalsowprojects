@@ -19,11 +19,15 @@ export type SowStage =
   | "security"
   | "final";
 
+// Glimmora's Commercial gate runs LAST among the substantive gates — after the
+// enterprise-side Finance/Legal/Security — and immediately before the enterprise's
+// Final sign-off. (Previously Commercial sat 2nd; moved per the locked flow so
+// Glimmora signs off only once the enterprise's own gates have cleared.)
 export const APPROVAL_STAGE_ORDER: readonly SowStage[] = [
   "business",
-  "commercial",
   "legal",
   "security",
+  "commercial",
   "final",
 ];
 

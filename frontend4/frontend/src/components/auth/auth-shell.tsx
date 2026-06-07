@@ -75,14 +75,15 @@ export function PrimaryButton({
   type?: "button" | "submit";
   loading?: boolean;
 }) {
+  const isDisabled = Boolean(disabled || loading);
   return (
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled || loading}
+      disabled={isDisabled}
       className={cn(
         "w-full inline-flex items-center justify-center h-11 px-4 rounded-lg font-body text-[14px] font-semibold transition-colors duration-fast",
-        disabled || loading
+        isDisabled
           ? "bg-bg-subtle text-text-tertiary cursor-not-allowed"
           : "bg-brand text-on-brand hover:bg-brand-hover shadow-xs",
       )}

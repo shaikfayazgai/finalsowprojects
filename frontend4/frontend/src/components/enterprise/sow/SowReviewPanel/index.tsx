@@ -551,7 +551,7 @@ export function SowReviewPanel({
                     <div className="px-5 pb-4">
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-3">Approval Stages</p>
                       <div className="space-y-1.5">
-                        {["Business Owner Review", "GlimmoraTeam Commercial", "Legal Review", "Security Compliance", "Final Sign-off"].map((label, i) => (
+                        {["Business Owner Review", "Legal Review", "Security Compliance", "GlimmoraTeam Commercial", "Final Sign-off"].map((label, i) => (
                           <div key={label} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-gray-100 bg-gray-50/70">
                             <span className="w-5 h-5 rounded-full bg-gradient-to-br from-brown-400 to-brown-600 flex items-center justify-center text-[9px] font-extrabold text-white shrink-0">
                               {i + 1}

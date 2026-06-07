@@ -119,7 +119,7 @@ function deriveSow(
 
   // Build gate list: prefer store overrides, fall back to legacy mock.
   const gates: ApprovalGate[] = (
-    ["business", "commercial", "legal", "security"] as ApprovalGateId[]
+    ["business", "legal", "security", "commercial"] as ApprovalGateId[]
   ).map((id) => {
     const storeGate = meta?.gates.find((g) => g.id === id);
     if (storeGate) return storeGate;
