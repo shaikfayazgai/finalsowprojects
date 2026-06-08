@@ -3,3 +3,8 @@ frontend4/.git_backup_phase1/
 # Per-role app secrets (shared DB url etc.)
 apps/**/.env
 apps/**/__pycache__/
+apps/**/frontend/node_modules/
+apps/**/frontend/.next/
+apps/**/frontend/.env.local
+apps/**/frontend/*.db
+apps/**/frontend/dev*.log
