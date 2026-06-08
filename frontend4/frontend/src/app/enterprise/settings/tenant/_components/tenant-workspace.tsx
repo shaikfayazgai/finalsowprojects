@@ -150,16 +150,12 @@ export function TenantWorkspace() {
   }, [refreshMembers]);
 
   const members = React.useMemo(() => {
-    const seed = getTenantMembersMock();
-    const seedEmails = new Set(seed.map((m) => m.email.toLowerCase()));
-    // Real accounts first (newest provisioned on top), then seed demo members
-    // that aren't duplicated by a real account.
-    const merged = [
-      ...realMembers,
-      ...seed.filter((m) => !realMembers.some((r) => r.email.toLowerCase() === m.email.toLowerCase())),
-    ];
-    void seedEmails;
-    return merged;
+    // When this tenant has its OWN provisioned members, show only those — the
+    // list is now tenant-scoped on the backend (each enterprise sees just its
+    // own people). The seed demo members are a fallback for a brand-new /
+    // unprovisioned workspace so the table isn't empty.
+    if (realMembers.length > 0) return realMembers;
+    return getTenantMembersMock();
   }, [realMembers]);
   // Real, provisioned accounts (have a backend id) — only these can be deleted.
   const realMemberIds = React.useMemo(

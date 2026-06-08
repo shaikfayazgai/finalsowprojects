@@ -42,6 +42,10 @@ class CreateUserRequest(BaseModel):
     # Used by the /api/v1/users reviewer-invite proxy: if the email already
     # exists, behave like a resend rather than 409.
     resendExisting: bool | None = None
+    # Inviter-based tenant scoping: the enterprise proxy passes the inviting
+    # admin's email so the new member inherits that admin's tenant_id (and thus
+    # only appears in that enterprise's tenant registry).
+    callerEmail: str | None = None
 
 
 def _split_name(body: CreateUserRequest) -> tuple[str, str]:
@@ -152,6 +156,15 @@ def _create_user(body: CreateUserRequest, actor: dict, request: Request) -> dict
     first, last = _split_name(body)
     role = (body.role or "member").lower()
 
+    # Inheriting the inviter's tenant: if no explicit tenantId was given but a
+    # callerEmail was, stamp the new account with the inviting admin's tenant_id
+    # so it shows up only in that enterprise's member registry.
+    tenant_id = body.tenantId
+    if not tenant_id and body.callerEmail:
+        caller = repo.find_account_by_email(body.callerEmail)
+        if caller and caller.get("tenant_id"):
+            tenant_id = caller["tenant_id"]
+
     temp_password = body.password or generate_temp_password()
     password_hash = hash_password(temp_password)
     # If no explicit password was supplied, the user must change it on first login.
@@ -160,7 +173,7 @@ def _create_user(body: CreateUserRequest, actor: dict, request: Request) -> dict
     row = repo.create_account(
         email=body.email, password_hash=password_hash,
         first_name=first, last_name=last, role=role,
-        phone=body.phone, department=body.department, tenant_id=body.tenantId,
+        phone=body.phone, department=body.department, tenant_id=tenant_id,
         must_change_password=must_change,
     )
 

@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
   const secureCookie = req.nextUrl.protocol === "https:";
   const jwt = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
   const callerRole = (jwt as { role?: string } | null)?.role ?? "";
+  const callerEmail = (jwt as { email?: string } | null)?.email ?? "";
   const isSuperAdmin = callerRole === "super_admin" || callerRole === "superadmin";
   // Super admins call the backend with their own token. Enterprise admins can't
   // (the backend endpoint is admin-only), so we use the platform admin service
@@ -106,6 +107,11 @@ export async function POST(req: NextRequest) {
         { error: "Enterprise admins can only invite reviewer/member roles." },
         { status: 403 },
       );
+    }
+    // Inviter-based tenant scoping: stamp the new member with the inviting
+    // admin's tenant so it appears only in this enterprise's registry.
+    if (callerEmail && body.callerEmail === undefined) {
+      body.callerEmail = callerEmail;
     }
   }
 

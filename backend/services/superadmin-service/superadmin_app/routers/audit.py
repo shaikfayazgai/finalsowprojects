@@ -420,16 +420,44 @@ async def list_reviewers(admin: Annotated[dict, Depends(get_current_admin)]):
 
 
 @router.get("/api/superadmin/all-users")
-async def list_all_users(admin: Annotated[dict, Depends(get_current_admin)]):
-    """All provisioned accounts (for the enterprise member registry). status:
+async def list_all_users(
+    admin: Annotated[dict, Depends(get_current_admin)],
+    tenant_id: str | None = None,
+    caller_email: str | None = None,
+):
+    """Provisioned accounts (for the enterprise member registry). status:
     'invited' = never signed in / must change password; 'active' = has signed in;
-    'suspended' = is_active false."""
+    'suspended' = is_active false.
+
+    TENANT SCOPING (inviter-based): when the enterprise proxy passes the caller's
+    email (or tenant_id), the list is filtered to that tenant only, so each
+    enterprise workspace sees ONLY its own members — not every account on the
+    platform. Super admins (no tenant filter) still get everything.
+    """
     conn = get_pg_connection()
+    # Resolve the tenant to scope to. caller_email takes priority — we look up the
+    # caller's own account and use ITS tenant_id (can't be spoofed by the client).
+    scope_tenant = tenant_id
+    if caller_email:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT tenant_id FROM login_accounts WHERE lower(email)=lower(%s) LIMIT 1",
+                        (caller_email,))
+            row = cur.fetchone()
+            if row:
+                scope_tenant = row.get("tenant_id")
+
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(
-            "SELECT id, email, first_name, last_name, role, is_active, "
-            "must_change_password, last_login_at, created_at "
-            "FROM login_accounts ORDER BY created_at DESC")
+        if scope_tenant:
+            cur.execute(
+                "SELECT id, email, first_name, last_name, role, tenant_id, is_active, "
+                "must_change_password, last_login_at, created_at "
+                "FROM login_accounts WHERE tenant_id = %s ORDER BY created_at DESC",
+                (scope_tenant,))
+        else:
+            cur.execute(
+                "SELECT id, email, first_name, last_name, role, tenant_id, is_active, "
+                "must_change_password, last_login_at, created_at "
+                "FROM login_accounts ORDER BY created_at DESC")
         users = []
         for r in cur.fetchall():
             if r.get("is_active") is False:
@@ -443,11 +471,11 @@ async def list_all_users(admin: Annotated[dict, Depends(get_current_admin)]):
             users.append({
                 "id": str(r["id"]), "email": r["email"],
                 "name": (f"{r.get('first_name','') or ''} {r.get('last_name','') or ''}".strip() or r["email"]),
-                "role": r["role"], "status": status,
+                "role": r["role"], "status": status, "tenantId": r.get("tenant_id"),
                 "lastLoginAt": r["last_login_at"].isoformat() if r.get("last_login_at") else None,
                 "createdAt": r["created_at"].isoformat() if r.get("created_at") else None,
             })
-    return {"users": users, "total": len(users)}
+    return {"users": users, "total": len(users), "tenantScope": scope_tenant}
 
 
 @router.get("/api/superadmin/sows/{sow_id}/mentor")

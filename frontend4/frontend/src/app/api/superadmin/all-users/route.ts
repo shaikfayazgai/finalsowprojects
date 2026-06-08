@@ -45,7 +45,15 @@ export async function GET(_req: NextRequest) {
   const token = (await getAdminToken()) ?? undefined;
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const upstream = `${GLIMMORA_API}/api/superadmin/all-users`;
+  // Tenant scoping: enterprise admins see ONLY their own tenant's members. We
+  // pass the caller's email and the backend resolves their tenant_id (so it
+  // can't be spoofed). Super admins pass nothing → they see every account.
+  const isSuperAdmin = guard.role === "super_admin";
+  const qs =
+    !isSuperAdmin && guard.email
+      ? `?caller_email=${encodeURIComponent(guard.email)}`
+      : "";
+  const upstream = `${GLIMMORA_API}/api/superadmin/all-users${qs}`;
   const send = (bearer: string) => fetch(upstream, { headers: { Authorization: `Bearer ${bearer}` } });
 
   let res = await send(token);
