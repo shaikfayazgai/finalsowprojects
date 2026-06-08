@@ -118,7 +118,7 @@ function rowMeta(m: MockAdminMentor, poolLabel: string): string {
 export function MentorsWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const mentors = useAdminMentorsList();
+  const seedMentors = useAdminMentorsList();
   const pools = useAdminPoolsList();
 
   // The mentor list is hydrated from a localStorage overlay, so counts differ
@@ -126,6 +126,50 @@ export function MentorsWorkspace() {
   // to avoid a hydration mismatch.
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
+
+  // Merge REAL provisioned mentor accounts (deduped by email) so the registry +
+  // counts reflect actual mentors, not just the mock/overlay seed.
+  const [realMentors, setRealMentors] = React.useState<MockAdminMentor[]>([]);
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/superadmin/mentors", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          mentors?: Array<{ id: string; name: string; email: string; role: string }>;
+        };
+        if (cancelled) return;
+        setRealMentors(
+          (data.mentors ?? []).map((m) => ({
+            id: m.id,
+            name: m.name,
+            email: m.email,
+            country: "—",
+            roles: [m.role.includes(".") ? m.role : "mentor"],
+            status: "active",
+            pools: [],
+            reviews30d: 0,
+            slaHitRate: null,
+            joinedAt: new Date().toISOString(),
+          } as unknown as MockAdminMentor)),
+        );
+      } catch {
+        // keep seed-only on failure
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const mentors = React.useMemo(() => {
+    const realEmails = new Set(realMentors.map((m) => m.email.toLowerCase()));
+    return [
+      ...realMentors,
+      ...seedMentors.filter((m) => !realEmails.has(m.email.toLowerCase())),
+    ];
+  }, [realMentors, seedMentors]);
 
   const statusFilter: StatusFilter =
     (searchParams.get("status") as StatusFilter | null) ?? "all";
