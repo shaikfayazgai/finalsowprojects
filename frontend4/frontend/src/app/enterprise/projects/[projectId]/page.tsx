@@ -124,9 +124,13 @@ function resolveTab(raw: string | null): Tab {
 }
 
 function canAssignTask(t: ProjectTaskRow): boolean {
+  // An unassigned task is assignable once it's published/ready/matched. The
+  // backend creates decomposed tasks in the "published" state, so that must be
+  // included (the old mock only used ready/matched → no Assign button on real
+  // DB-backed projects).
   return (
     (t.assignee === "Unassigned" || !t.assignee) &&
-    (t.state === "ready" || t.state === "matched")
+    (t.state === "published" || t.state === "ready" || t.state === "matched")
   );
 }
 
