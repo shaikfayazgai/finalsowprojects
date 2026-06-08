@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { requireRole } from "@/lib/auth/require-role";
+import { backendBaseForPath } from "@/lib/api/backend-router";
 
 /**
  * Returns a valid Glimmora API Bearer token for the current user.
@@ -9,8 +10,7 @@ import { requireRole } from "@/lib/auth/require-role";
  * direct calls to the Glimmora API endpoints.
  */
 
-const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
-
+const GLIMMORA_API = backendBaseForPath("/api/v1/auth/login");
 const SERVICE_EMAIL = process.env.GLIMMORA_SERVICE_EMAIL || "sow-test-user@glimmora.com";
 const SERVICE_PASSWORD = process.env.GLIMMORA_SERVICE_PASSWORD || "Test@12345";
 

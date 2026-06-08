@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/require-role";
+import { backendBaseForPath } from "@/lib/api/backend-router";
 import { getAdminToken, invalidateAdminToken } from "@/lib/api/admin-token";
 
 /**
@@ -11,7 +12,7 @@ import { getAdminToken, invalidateAdminToken } from "@/lib/api/admin-token";
  * session token may not be admin-scoped at the backend); retry on 401/403.
  */
 
-const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
+const GLIMMORA_API = backendBaseForPath("/api/v1/auth/login");
 const ADMIN_EMAIL = process.env.GLIMMORA_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.GLIMMORA_ADMIN_PASSWORD;
 

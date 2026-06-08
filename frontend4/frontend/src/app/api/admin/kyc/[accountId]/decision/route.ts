@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { backendBaseForPath } from "@/lib/api/backend-router";
 import { getToken } from "next-auth/jwt";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
-
+const GLIMMORA_API = backendBaseForPath("/api/v1/auth/login");
 // POST /api/admin/kyc/{accountId}/decision  body: { decision, note }
 // Flips contributor_kyc.status + login_accounts.approval_status in the backend
 // (so the applicant can actually log in after approval).

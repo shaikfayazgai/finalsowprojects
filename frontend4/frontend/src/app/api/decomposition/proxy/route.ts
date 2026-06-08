@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { requireRole } from "@/lib/auth/require-role";
+import { backendUrl } from "@/lib/api/backend-router";
 import { requireSubscriptionFeature } from "@/lib/subscription/require-subscription";
 import { incrementUsageCounter } from "@/lib/subscription/service";
 
@@ -16,8 +17,8 @@ import { incrementUsageCounter } from "@/lib/subscription/service";
  * on first use. Its TOTP secret is stored in memory for future logins.
  */
 
-const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
-
+// Decomposition endpoints live on the enterprise backend; auth/login resolves
+// to a backend that serves it too. Resolve per-path at call time below.
 // Use the SAME service account as /api/sow/token so plans created by one
 // route are accessible by the other (same enterprise tenant). Override via
 // env vars in production.
@@ -57,7 +58,7 @@ function saveMfaSecret(secret: string) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function glimmoraFetch(path: string, opts?: RequestInit): Promise<Record<string, any>> {
-  const res = await fetch(`${GLIMMORA_API}${path}`, {
+  const res = await fetch(backendUrl(path), {
     ...opts,
     headers: { "Content-Type": "application/json", ...opts?.headers },
   });
@@ -310,7 +311,7 @@ export async function POST(req: NextRequest) {
     }
 
     const backendFetch = (t: string) =>
-      fetch(`${GLIMMORA_API}${path}`, {
+      fetch(backendUrl(path), {
         method: method || "GET",
         headers: {
           "Content-Type": "application/json",

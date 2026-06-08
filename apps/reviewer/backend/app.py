@@ -18,6 +18,7 @@ from shared.init_schema import init_schema
 
 from superadmin_app.routers import reviewer
 from superadmin_app.schema import init_superadmin_schema
+from auth_app.routers import auth as auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -30,4 +31,6 @@ def _startup() -> None:
         logger.warning("reviewer backend startup tasks failed: %s", exc)
 
 
-app = create_service_app("reviewer-service", routers=[reviewer.router], on_startup=_startup)
+app = create_service_app(
+    "reviewer-service", routers=[auth_router.router, reviewer.router], on_startup=_startup
+)

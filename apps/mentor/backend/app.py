@@ -17,6 +17,7 @@ from shared.init_schema import init_schema
 
 from mentor_app.db_schema import init_mentor_schema
 from mentor_app.routers import mentor
+from auth_app.routers import auth as auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -29,4 +30,6 @@ def _startup() -> None:
         logger.warning("mentor backend startup tasks failed: %s", exc)
 
 
-app = create_service_app("mentor-service", routers=[mentor.router], on_startup=_startup)
+app = create_service_app(
+    "mentor-service", routers=[auth_router.router, mentor.router], on_startup=_startup
+)

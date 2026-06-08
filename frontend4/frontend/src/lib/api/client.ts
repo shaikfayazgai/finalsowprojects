@@ -49,7 +49,13 @@ export async function apiCall<T>(
     : timeoutSignal;
 
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_GLIMMORA_API_URL ?? process.env.GLIMMORA_API_URL;
+    // Route to the correct per-role backend by path (no shared gateway). On the
+    // client (no server env), this falls back to NEXT_PUBLIC_GLIMMORA_API_URL.
+    const { backendBaseForPath } = await import("./backend-router");
+    const baseUrl =
+      backendBaseForPath(path) ??
+      process.env.NEXT_PUBLIC_GLIMMORA_API_URL ??
+      process.env.GLIMMORA_API_URL;
     const res = await fetch(`${baseUrl}${path}`, {
       ...rest,
       signal,

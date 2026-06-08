@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { backendBaseForPath } from "@/lib/api/backend-router";
 import QRCode from "qrcode";
 
 /**
@@ -11,8 +12,7 @@ import QRCode from "qrcode";
  * Also supports action=init to just get the QR/secret for display.
  */
 
-const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
-
+const GLIMMORA_API = backendBaseForPath("/api/v1/auth/me");
 async function fetchUser(accessToken: string): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(`${GLIMMORA_API}/api/v1/auth/me`, {

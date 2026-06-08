@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { requireRole } from "@/lib/auth/require-role";
+import { backendBaseForPath } from "@/lib/api/backend-router";
 import { getAdminToken, invalidateAdminToken } from "@/lib/api/admin-token";
 
 /**
@@ -9,7 +10,7 @@ import { getAdminToken, invalidateAdminToken } from "@/lib/api/admin-token";
  * dropdown and the admin Mentors registry show provisioned mentors, not mocks.
  */
 
-const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
+const GLIMMORA_API = backendBaseForPath("/api/superadmin/mentors");
 const ADMIN_EMAIL = process.env.GLIMMORA_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.GLIMMORA_ADMIN_PASSWORD;
 

@@ -18,6 +18,7 @@ from enterprise_app.routers import (
     users,
     wizards,
 )
+from auth_app.routers import auth as auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ def _startup() -> None:
 app = create_service_app(
     "enterprise-service",
     routers=[
+        auth_router.router,
         wizards.router,
         sows.router,
         approvals.router,

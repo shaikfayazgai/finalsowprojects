@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { backendBaseForPath } from "@/lib/api/backend-router";
 import { getToken } from "next-auth/jwt";
 import { requireRequest } from "@/lib/api/request-context";
 import {
@@ -10,8 +11,7 @@ import { prisma } from "@/lib/db";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
-
+const GLIMMORA_API = backendBaseForPath("/api/v1/auth/password/change");
 function readPasswordFields(body: Record<string, unknown>) {
   const currentPassword =
     (typeof body.old_password === "string" && body.old_password) ||

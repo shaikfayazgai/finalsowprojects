@@ -14,6 +14,7 @@ from shared.init_schema import init_schema
 
 from contributor_app.db import init_contributor_schema
 from contributor_app.routers import contributor, oauth
+from auth_app.routers import auth as auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,6 @@ def _startup() -> None:
 
 app = create_service_app(
     "contributor-service",
-    routers=[oauth.router, contributor.router, contributor.public_router],
+    routers=[auth_router.router, oauth.router, contributor.router, contributor.public_router],
     on_startup=_startup,
 )

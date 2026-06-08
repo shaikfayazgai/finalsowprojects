@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { requireRole } from "@/lib/auth/require-role";
+import { backendBaseForPath, backendUrl } from "@/lib/api/backend-router";
 import { requireSubscriptionFeature } from "@/lib/subscription/require-subscription";
 import { incrementUsageCounter } from "@/lib/subscription/service";
 
@@ -19,8 +20,6 @@ import { incrementUsageCounter } from "@/lib/subscription/service";
  *   body: { path: "/api/v1/wizards", method: "POST", payload: {...} }
  */
 
-const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
-
 // ── In-memory token cache (per server instance) ──────────────────────────
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -36,7 +35,7 @@ async function getGlimmoraToken(): Promise<string | null> {
   const password = process.env.GLIMMORA_SERVICE_PASSWORD || "Test@12345";
 
   try {
-    const res = await fetch(`${GLIMMORA_API}/api/v1/auth/login`, {
+    const res = await fetch(backendUrl(`/api/v1/auth/login`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -129,7 +128,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const backendFetch = (t: string) =>
-      fetch(`${GLIMMORA_API}${path}`, {
+      fetch(backendUrl(path), {
         method: method || "GET",
         headers: {
           "Content-Type": "application/json",

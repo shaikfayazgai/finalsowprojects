@@ -8,8 +8,10 @@
  * share one login instead of each doing their own.
  */
 
-const GLIMMORA_API =
-  process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
+import { backendBaseForPath } from "./backend-router";
+
+// Auth/login is served by every per-role backend; route it via the resolver.
+const GLIMMORA_API = backendBaseForPath("/api/v1/auth/login");
 const ADMIN_EMAIL = process.env.GLIMMORA_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.GLIMMORA_ADMIN_PASSWORD;
 

@@ -9,6 +9,7 @@ from shared.init_schema import init_schema
 
 from superadmin_app.routers import audit, bulk, kyc, reviewer, settings, users
 from superadmin_app.schema import init_superadmin_schema
+from auth_app.routers import auth as auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,6 @@ def _startup() -> None:
 
 app = create_service_app(
     "superadmin-service",
-    routers=[users.router, settings.router, reviewer.router, bulk.router, audit.router, kyc.router],
+    routers=[auth_router.router, users.router, settings.router, reviewer.router, bulk.router, audit.router, kyc.router],
     on_startup=_startup,
 )

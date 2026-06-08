@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { requireRole } from "@/lib/auth/require-role";
+import { backendBaseForPath } from "@/lib/api/backend-router";
 import { getAdminToken, invalidateAdminToken } from "@/lib/api/admin-token";
 
 export const runtime = "nodejs";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
  * backend scopes to exactly this mentor by account id.
  */
 
-const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
+const GLIMMORA_API = backendBaseForPath("/api/mentor/assigned-sows");
 const ADMIN_EMAIL = process.env.GLIMMORA_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.GLIMMORA_ADMIN_PASSWORD;
 
