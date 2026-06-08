@@ -121,15 +121,25 @@ export function TenantWorkspace() {
         users?: Array<{ id: string; name: string; email: string; role: string; status: string; lastLoginAt?: string | null; createdAt?: string | null }>;
       };
       setRealMembers(
-        (data.users ?? []).map((u) => ({
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          roles: [u.role],
-          status: (u.status === "suspended" ? "suspended" : u.status === "invited" ? "invited" : "active") as TenantMemberMock["status"],
-          invitedAt: u.status === "invited" ? u.createdAt ?? null : null,
-          lastActiveAt: u.lastLoginAt ?? null,
-        })),
+        (data.users ?? [])
+          // The tenant registry is the ENTERPRISE workspace roster — only show
+          // enterprise-workspace accounts. Reviewers are enterprise-assigned so
+          // they belong here too. Exclude platform/workforce roles (mentor,
+          // contributor, freelancer, women, student, employee, super admin,
+          // university admin) — those aren't tenant members.
+          .filter((u) => {
+            const scope = (u.role || "").toLowerCase().split(".")[0];
+            return scope === "enterprise" || scope === "ent" || scope === "reviewer";
+          })
+          .map((u) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            roles: [u.role],
+            status: (u.status === "suspended" ? "suspended" : u.status === "invited" ? "invited" : "active") as TenantMemberMock["status"],
+            invitedAt: u.status === "invited" ? u.createdAt ?? null : null,
+            lastActiveAt: u.lastLoginAt ?? null,
+          })),
       );
     } catch {
       // keep mock-only on failure
