@@ -9,7 +9,7 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowRight, AlertCircle } from "lucide-react";
 import type { MockMentorDecision } from "@/mocks/mentor";
-import { fetchMentorDecisions, MentorApiError } from "@/lib/api/mentor-mock";
+import { listMentorHistory, type MentorHistoryItem } from "@/lib/api/mentor";
 import { StatusChip } from "@/components/meridian";
 import { MentorListSkeleton } from "@/app/mentor/_components/mentor-skeletons";
 import {
@@ -38,6 +38,33 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+/** Map a real backend decided-review row → the MockMentorDecision the UI renders.
+ * Backend decisions are accept|rework|escalate; escalate shows as "reject". */
+function backendHistoryToDecision(h: MentorHistoryItem): MockMentorDecision {
+  const decided = h.decided_at ?? h.created_at ?? new Date().toISOString();
+  const decision: MockMentorDecision["decision"] =
+    h.decision === "accept" ? "accept"
+    : h.decision === "rework" ? "rework"
+    : h.decision === "escalate" || h.status === "escalated" ? "reject"
+    : (h.decision as MockMentorDecision["decision"]) ?? "rework";
+  return {
+    id: String(h.id),
+    reviewId: String(h.id),
+    taskTitle: h.title || "Submission",
+    contributorId: "",
+    contributorName: h.contributor_name || "Contributor",
+    project: "—",
+    round: 1,
+    totalRounds: 3,
+    decision,
+    decidedAt: decided,
+    reviewerConfidence: "comfortable",
+    finalComment: h.comments ?? undefined,
+    rubricOverall: typeof h.score === "number" ? h.score : undefined,
+    aiAlignment: "modified",
+  };
+}
+
 export default function MentorHistoryPage() {
   const [filter, setFilter] = React.useState<Filter>("all");
   const [items, setItems] = React.useState<MockMentorDecision[] | null>(null);
@@ -45,12 +72,20 @@ export default function MentorHistoryPage() {
 
   React.useEffect(() => {
     const c = new AbortController();
-    fetchMentorDecisions(c.signal)
-      .then((res) => setItems(res.items))
-      .catch((err: unknown) => {
-        if ((err as { name?: string }).name === "AbortError") return;
-        setError(err instanceof MentorApiError ? err.message : "Could not load history.");
-      });
+    // Load the REAL backend decision history (decided mentor_reviews for this
+    // mentor). On error, show an error banner with an empty list — no mock fallback.
+    void (async () => {
+      try {
+        const real = await listMentorHistory();
+        if (c.signal.aborted) return;
+        setItems(real.map(backendHistoryToDecision));
+        setError(null);
+      } catch (err: unknown) {
+        if (c.signal.aborted || (err as { name?: string }).name === "AbortError") return;
+        setItems([]);
+        setError("Could not load history.");
+      }
+    })();
     return () => c.abort();
   }, []);
 

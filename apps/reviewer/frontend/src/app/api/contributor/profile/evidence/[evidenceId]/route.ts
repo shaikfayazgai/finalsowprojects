@@ -50,13 +50,10 @@ export async function PATCH(
     const errBody = await backendRes.json().catch(() => ({ detail: `Backend error ${backendRes.status}` }));
     return NextResponse.json(errBody, { status: backendRes.status });
   } catch {
-    const { updateMockProfileEvidence } = await import("@/lib/contributor/profile-evidence-mock");
-    const item = updateMockProfileEvidence(
-      evidenceId,
-      body as Parameters<typeof updateMockProfileEvidence>[1],
+    return NextResponse.json(
+      { detail: "Unable to reach the evidence service." },
+      { status: 502 },
     );
-    if (!item) return NextResponse.json({ detail: "Evidence not found." }, { status: 404 });
-    return NextResponse.json(item, { status: 200 });
   }
 }
 
@@ -90,9 +87,9 @@ export async function DELETE(
     const errBody = await backendRes.json().catch(() => ({ detail: `Backend error ${backendRes.status}` }));
     return NextResponse.json(errBody, { status: backendRes.status });
   } catch {
-    const { deleteMockProfileEvidence } = await import("@/lib/contributor/profile-evidence-mock");
-    const ok = deleteMockProfileEvidence(evidenceId);
-    if (!ok) return NextResponse.json({ detail: "Evidence not found." }, { status: 404 });
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return NextResponse.json(
+      { detail: "Unable to reach the evidence service." },
+      { status: 502 },
+    );
   }
 }

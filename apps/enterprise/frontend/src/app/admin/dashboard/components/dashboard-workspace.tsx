@@ -11,8 +11,11 @@ import {
 import { StatusChip } from "@/components/meridian";
 import { DashboardSection, MetricTile } from "@/components/meridian/dashboard";
 import { useActiveAdmin } from "@/lib/hooks/use-active-admin";
-import { MOCK_ADMIN_DASHBOARD } from "@/mocks/admin/dashboard";
-import type { AdminAttentionKind, MockAdminAttentionItem } from "@/mocks/admin/dashboard";
+import type {
+  AdminAttentionKind,
+  MockAdminAttentionItem,
+  MockAdminDashboard,
+} from "@/mocks/admin/dashboard";
 import { cn } from "@/lib/utils/cn";
 import {
   ATTENTION_KIND_LABEL,
@@ -70,9 +73,30 @@ function signalIcon(tone: "positive" | "neutral" | "warning") {
   return <Sparkles className="h-3.5 w-3.5 text-brand-subtle-text shrink-0 mt-0.5" strokeWidth={2} aria-hidden />;
 }
 
+// No real platform-dashboard aggregate endpoint exists yet. Until one does,
+// render a clean empty state (zeroed KPIs, no attention items) rather than
+// fabricated demo numbers. The existing "all caught up" / empty-list UI below
+// handles every field being empty.
+const EMPTY_DASHBOARD: MockAdminDashboard = {
+  env: "PROD",
+  greetingFor: "",
+  kpis: { servicesUp: 0, servicesTotal: 0, tenants: 0, mentors: 0, activeSows: 0 },
+  pipeline: {
+    tenantsActive: 0,
+    commercialGate: 0,
+    governanceOpen: 0,
+    kycPending: 0,
+    mentorsActive: 0,
+  },
+  actionBreakdown: { resolved30d: 0, escalated: 0, onHold: 0 },
+  attention: [],
+  recent: [],
+  aiSignals: [],
+};
+
 export function AdminDashboardWorkspace() {
   const { role, profile } = useActiveAdmin();
-  const d = MOCK_ADMIN_DASHBOARD;
+  const d = EMPTY_DASHBOARD;
 
   const attention = React.useMemo(
     () => filterAttentionForRole(d.attention, role),
@@ -225,24 +249,35 @@ export function AdminDashboardWorkspace() {
           viewAllHref="/admin/audit"
           viewAllLabel="Audit log"
         >
-          <ul className="divide-y divide-stroke-subtle rounded-xl border border-stroke-subtle overflow-hidden">
-            {d.recent.map((ev, i) => (
-              <li key={i} className="px-4 py-3 flex items-start gap-3 bg-bg-subtle/10">
-                <span className="font-mono text-[10.5px] text-text-tertiary tabular-nums shrink-0 w-14 pt-0.5">
-                  {timeAgo(ev.at)}
-                </span>
-                <p className="font-body text-[12.5px] text-foreground leading-snug flex-1 min-w-0">
-                  {ev.text}
-                </p>
-              </li>
-            ))}
-          </ul>
+          {d.recent.length === 0 ? (
+            <div className="rounded-xl border border-stroke-subtle bg-bg-subtle/10 px-4 py-8 text-center">
+              <p className="font-body text-[12.5px] text-text-tertiary">No recent activity yet.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-stroke-subtle rounded-xl border border-stroke-subtle overflow-hidden">
+              {d.recent.map((ev, i) => (
+                <li key={i} className="px-4 py-3 flex items-start gap-3 bg-bg-subtle/10">
+                  <span className="font-mono text-[10.5px] text-text-tertiary tabular-nums shrink-0 w-14 pt-0.5">
+                    {timeAgo(ev.at)}
+                  </span>
+                  <p className="font-body text-[12.5px] text-foreground leading-snug flex-1 min-w-0">
+                    {ev.text}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
         </DashboardSection>
 
         <DashboardSection
           title="Platform signals"
           description="AI-assisted insights and trend flags"
         >
+          {d.aiSignals.length === 0 ? (
+            <div className="rounded-xl border border-stroke-subtle bg-bg-subtle/10 px-4 py-8 text-center">
+              <p className="font-body text-[12.5px] text-text-tertiary">No signals yet.</p>
+            </div>
+          ) : (
           <ul className="divide-y divide-stroke-subtle rounded-xl border border-stroke-subtle overflow-hidden">
             {d.aiSignals.map((sig) => (
               <li key={sig.id}>
@@ -266,6 +301,7 @@ export function AdminDashboardWorkspace() {
               </li>
             ))}
           </ul>
+          )}
         </DashboardSection>
       </div>
     </div>

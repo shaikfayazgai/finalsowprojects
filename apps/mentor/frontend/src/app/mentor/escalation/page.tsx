@@ -9,7 +9,7 @@ import * as React from "react";
 import { AlertTriangle, AlertCircle, CheckCircle2, Timer } from "lucide-react";
 import { useActiveMentor } from "@/lib/hooks/use-active-mentor";
 import type { MockEscalation } from "@/mocks/mentor";
-import { fetchMentorEscalations, MentorApiError } from "@/lib/api/mentor-mock";
+import { listMentorEscalations, type MentorEscalation } from "@/lib/api/mentor";
 import { StatusChip } from "@/components/meridian";
 import { DashboardSection, KeyMetricCard } from "@/components/meridian/dashboard";
 import { MentorListSkeleton } from "@/app/mentor/_components/mentor-skeletons";
@@ -25,6 +25,55 @@ import {
 type EscalationMetrics = { openCount: number; resolvedLast30: number; avgResolveHours: number };
 
 type Filter = "all" | "open" | "sla_breach" | "dispute" | "conflict";
+
+/** Map the backend escalation `category` → the UI's escalation type. */
+function categoryToType(category?: string): MockEscalation["type"] {
+  switch ((category ?? "").toLowerCase()) {
+    case "quality": return "sla_breach";
+    case "conduct": return "conflict";
+    case "technical": return "dispute";
+    default: return "dispute";
+  }
+}
+
+/** Map a real backend escalation row → the MockEscalation shape the UI renders. */
+function backendEscalationToMock(e: MentorEscalation): MockEscalation {
+  const created = e.created_at ?? new Date().toISOString();
+  const status: MockEscalation["status"] =
+    e.status === "in_progress" ? "in_review"
+    : e.status === "closed" ? "resolved"
+    : (e.status as MockEscalation["status"]) ?? "open";
+  return {
+    id: String(e.id),
+    type: categoryToType(e.category),
+    severity: (e.priority === "urgent" ? "critical" : e.priority === "high" ? "high" : e.priority === "low" ? "low" : "medium") as MockEscalation["severity"],
+    status,
+    openedAt: created,
+    resolvedAt: e.resolved_at ?? undefined,
+    assignedTo: e.assignee ?? undefined,
+    taskTitle: e.subject || "Escalation",
+    contributorName: "—",
+    contributorId: e.mentee_id ? String(e.mentee_id) : "",
+    project: e.review_id ? `Review #${e.review_id}` : "—",
+    originalMentorName: "",
+    originalDecision: "rework",
+    originalDecisionAt: created,
+    rejectReason: e.description ?? undefined,
+  };
+}
+
+/** Derive the header/KPI metrics from the real escalation list. */
+function deriveMetrics(items: MockEscalation[]): EscalationMetrics {
+  const open = items.filter((e) => e.status === "open" || e.status === "assigned" || e.status === "in_review").length;
+  const cutoff = Date.now() - 30 * 86_400_000;
+  const resolved30 = items.filter((e) => e.status === "resolved" && e.resolvedAt && new Date(e.resolvedAt).getTime() >= cutoff);
+  let avgHours = 0;
+  if (resolved30.length > 0) {
+    const total = resolved30.reduce((s, e) => s + (new Date(e.resolvedAt!).getTime() - new Date(e.openedAt).getTime()), 0);
+    avgHours = Math.round(total / resolved30.length / 3_600_000);
+  }
+  return { openCount: open, resolvedLast30: resolved30.length, avgResolveHours: avgHours };
+}
 
 function escalationTypeStatus(type: MockEscalation["type"]) {
   if (type === "sla_breach" || type === "plagiarism") return "error" as const;
@@ -51,15 +100,23 @@ export default function MentorEscalationPage() {
   React.useEffect(() => {
     if (!isSeniorOrLead) return;
     const c = new AbortController();
-    fetchMentorEscalations(c.signal)
-      .then((res) => {
-        setItems(res.items);
-        setMetrics(res.metrics);
-      })
-      .catch((err: unknown) => {
-        if ((err as { name?: string }).name === "AbortError") return;
-        setError(err instanceof MentorApiError ? err.message : "Could not load escalations.");
-      });
+    // Load the REAL backend escalations (scoped to this mentor). On error, show
+    // an error banner with an empty list — no mock fallback.
+    void (async () => {
+      try {
+        const real = await listMentorEscalations();
+        if (c.signal.aborted) return;
+        const mapped = real.map(backendEscalationToMock);
+        setItems(mapped);
+        setMetrics(deriveMetrics(mapped));
+        setError(null);
+      } catch (err: unknown) {
+        if (c.signal.aborted || (err as { name?: string }).name === "AbortError") return;
+        setItems([]);
+        setMetrics(null);
+        setError("Could not load escalations.");
+      }
+    })();
     return () => c.abort();
   }, [isSeniorOrLead]);
 

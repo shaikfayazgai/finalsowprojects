@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, ClipboardCheck, FileText, Search } from "lucide-react";
 import type { MockReviewerItem, SlaTier } from "@/mocks/reviewer";
-import { fetchReviewerQueue, ReviewerApiError } from "@/lib/api/reviewer-mock";
+import { ReviewerApiError } from "@/lib/api/reviewer-mock";
 import { listReviewerQueue } from "@/lib/api/reviewer";
 import { Skeleton } from "@/components/meridian";
 import { cn } from "@/lib/utils/cn";
@@ -185,9 +185,9 @@ export function ReviewerQueueWorkspace({
 
   React.useEffect(() => {
     const c = new AbortController();
-    // Prefer the REAL backend queue (assignments routed from mentor accept
-    // hand-off for SOWs assigned to this reviewer). Fall back to the mock roster
-    // only if the backend is unavailable, so the demo UI still renders.
+    // Load the REAL backend queue (assignments routed from mentor accept
+    // hand-off for SOWs assigned to this reviewer). On failure, surface an
+    // error and an empty queue — no mock fallback.
     void (async () => {
       try {
         const raw = (await listReviewerQueue(c.signal)) as
@@ -200,17 +200,13 @@ export function ReviewerQueueWorkspace({
           setError(null);
           return;
         }
-        // Backend reachable but empty → show an empty real queue (not mock).
+        // Backend reachable but empty → show an empty real queue.
         setItems([]);
         setError(null);
-      } catch {
-        // Backend unavailable → fall back to mock so the page still works.
-        fetchReviewerQueue(c.signal)
-          .then((res) => setItems(res.items))
-          .catch((err: unknown) => {
-            if ((err as { name?: string }).name === "AbortError") return;
-            setError(err instanceof ReviewerApiError ? err.message : "Could not load review queue.");
-          });
+      } catch (err: unknown) {
+        if ((err as { name?: string }).name === "AbortError") return;
+        setItems([]);
+        setError(err instanceof ReviewerApiError ? err.message : "Could not load review queue.");
       }
     })();
     return () => c.abort();

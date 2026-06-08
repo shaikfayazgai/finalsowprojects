@@ -10,7 +10,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { listCompletedProjectsMock } from "@/lib/projects/projects-mock";
+import type { ProjectSummary } from "@/lib/projects/projects-mock";
 import { cn } from "@/lib/utils/cn";
 
 function fmtDate(iso: string): string {
@@ -23,7 +23,8 @@ function fmtDate(iso: string): string {
 
 export default function CompletedProjectsPage() {
   const router = useRouter();
-  const projects = React.useMemo(() => listCompletedProjectsMock(), []);
+  // No projects API yet — show the empty state until the endpoint ships.
+  const projects = React.useMemo<ProjectSummary[]>(() => [], []);
 
   return (
     <div className="space-y-5 pb-12 animate-fade-in">

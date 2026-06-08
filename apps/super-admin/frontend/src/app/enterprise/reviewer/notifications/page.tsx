@@ -14,33 +14,6 @@ type ReviewerNotification = {
   at: string;
 };
 
-const MOCK_NOTIFICATIONS: ReviewerNotification[] = [
-  {
-    id: "rn-1",
-    title: "SLA at risk — Date Picker · FocusScope",
-    body: "Review due in under 2 hours. Mentor sign-off recorded 12 minutes ago.",
-    kind: "sla",
-    read: false,
-    at: new Date(Date.now() - 12 * 60_000).toISOString(),
-  },
-  {
-    id: "rn-2",
-    title: "New QA assignment — CSV export",
-    body: "Yusuf Okeke's submission is ready for second-stage review on Reporting V2.",
-    kind: "assignment",
-    read: false,
-    at: new Date(Date.now() - 20 * 60_000).toISOString(),
-  },
-  {
-    id: "rn-3",
-    title: "Decision recorded — Audit log timestamp fix",
-    body: "Your accept decision was forwarded to enterprise acceptance.",
-    kind: "decision",
-    read: true,
-    at: new Date(Date.now() - 24 * 3600_000).toISOString(),
-  },
-];
-
 function fmtRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   if (diff < 60_000) return "Just now";
@@ -72,7 +45,7 @@ function kindStyle(kind: ReviewerNotification["kind"]) {
 }
 
 export default function ReviewerNotificationsPage() {
-  const [items, setItems] = React.useState(MOCK_NOTIFICATIONS);
+  const [items, setItems] = React.useState<ReviewerNotification[]>([]);
 
   const unread = items.filter((n) => !n.read).length;
 
@@ -125,6 +98,15 @@ export default function ReviewerNotificationsPage() {
           </p>
         </div>
 
+        {items.length === 0 ? (
+          <div className="px-5 py-14 text-center">
+            <Bell className="h-7 w-7 text-text-tertiary mx-auto mb-2" strokeWidth={1.75} aria-hidden />
+            <p className="font-body text-[13.5px] font-semibold text-foreground">No notifications yet</p>
+            <p className="mt-1 font-body text-[12px] text-text-tertiary max-w-md mx-auto">
+              QA alerts, SLA warnings, and review assignment updates will appear here.
+            </p>
+          </div>
+        ) : (
         <ul className="divide-y divide-stroke-subtle">
           {items.map((n) => {
             const Icon = kindIcon(n.kind);
@@ -167,6 +149,7 @@ export default function ReviewerNotificationsPage() {
             );
           })}
         </ul>
+        )}
       </section>
     </div>
   );

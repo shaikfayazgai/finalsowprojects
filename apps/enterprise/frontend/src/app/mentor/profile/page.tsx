@@ -27,7 +27,7 @@ import { DashboardSection, KeyMetricCard } from "@/components/meridian/dashboard
 import { Avatar, StatusChip } from "@/components/meridian";
 import { useActiveMentor } from "@/lib/hooks/use-active-mentor";
 import { fetchMentorDecisions, MentorApiError } from "@/lib/api/mentor-mock";
-import { MOCK_MENTOR_METRICS } from "@/mocks/mentor";
+import type { MOCK_MENTOR_METRICS } from "@/mocks/mentor";
 
 function fmtJoined(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric" });

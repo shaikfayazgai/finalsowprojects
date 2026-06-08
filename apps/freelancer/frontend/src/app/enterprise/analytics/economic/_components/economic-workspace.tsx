@@ -15,7 +15,40 @@ export function EconomicWorkspace() {
   const m = React.useMemo(() => getEconomicMetricsMock(), []);
   const totalCostBySkill = m.costBySkill.reduce((a, b) => a + b.amountMinor, 0);
   const maxByProject = Math.max(...m.costByProject.map((p) => p.amountMinor), 1);
-  const paidPct = Math.round((m.totalPaidMinor / m.totalCommittedMinor) * 100);
+  const paidPct =
+    m.totalCommittedMinor > 0
+      ? Math.round((m.totalPaidMinor / m.totalCommittedMinor) * 100)
+      : 0;
+
+  const isEmpty =
+    m.totalCommittedMinor === 0 &&
+    m.costBySkill.length === 0 &&
+    m.costByProject.length === 0;
+
+  if (isEmpty) {
+    return (
+      <div className="space-y-5 pb-12 animate-fade-in">
+        <BackLink />
+        <header>
+          <p className="font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-text-tertiary mb-1.5">
+            Enterprise · Insights · Analytics · Economic
+          </p>
+          <h1 className="font-body text-[22px] font-semibold text-foreground tracking-[-0.015em] leading-tight">
+            Economic
+          </h1>
+          <RecordLinks />
+        </header>
+        <div className="rounded-lg border border-stroke bg-surface shadow-xs px-4 py-10 text-center">
+          <p className="font-body text-[13px] font-semibold text-foreground">
+            No economic data yet
+          </p>
+          <p className="mt-1 font-body text-[12.5px] text-text-tertiary">
+            Spend and cost analytics will appear here once billing activity is recorded.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 pb-12 animate-fade-in">

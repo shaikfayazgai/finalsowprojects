@@ -10,7 +10,7 @@
 import * as React from "react";
 import { Info, AlertCircle } from "lucide-react";
 import { fetchMentorDecisions, MentorApiError } from "@/lib/api/mentor-mock";
-import { MOCK_MENTOR_METRICS } from "@/mocks/mentor";
+import type { MOCK_MENTOR_METRICS } from "@/mocks/mentor";
 import { DashboardSection } from "@/components/meridian/dashboard";
 import {
   MentorPage,

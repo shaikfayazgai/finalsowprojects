@@ -6,7 +6,6 @@ import { ArrowLeft } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useHydrated } from "@/lib/utils/use-hydrated";
 import { useSessions } from "@/lib/hooks/use-auth";
-import { MOCK_REVIEWER_PROFILE } from "@/mocks/reviewer";
 import { AccountMfaSection } from "@/components/enterprise/account-security/account-mfa-section";
 import { AccountPasswordSection } from "@/components/enterprise/account-security/account-password-section";
 import { AccountSessionsSection } from "@/components/enterprise/account-security/account-sessions-section";
@@ -23,8 +22,8 @@ export default function ReviewerProfilePage() {
   const { data: session } = useSession();
   const { data: sessions } = useSessions();
 
-  const displayName = session?.user?.name ?? MOCK_REVIEWER_PROFILE.name;
-  const email = session?.user?.email ?? MOCK_REVIEWER_PROFILE.email;
+  const displayName = session?.user?.name ?? session?.user?.email ?? "Your profile";
+  const email = session?.user?.email ?? "—";
   const sessionCount = sessions?.length ?? 0;
 
   return (
@@ -63,7 +62,7 @@ export default function ReviewerProfilePage() {
             </p>
             <p className="font-body text-[12.5px] text-text-secondary truncate">{email}</p>
             <p className="font-body text-[11.5px] text-text-tertiary mt-0.5">
-              {MOCK_REVIEWER_PROFILE.title}
+              Enterprise Reviewer
             </p>
           </div>
         </div>
@@ -85,12 +84,7 @@ export default function ReviewerProfilePage() {
             <dt className="font-body text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-tertiary">
               Member since
             </dt>
-            <dd className="mt-1 font-body text-[13px] text-foreground">
-              {new Date(MOCK_REVIEWER_PROFILE.joinedAt).toLocaleDateString("en-GB", {
-                month: "short",
-                year: "numeric",
-              })}
-            </dd>
+            <dd className="mt-1 font-body text-[13px] text-foreground">—</dd>
           </div>
           <div>
             <dt className="font-body text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-tertiary">

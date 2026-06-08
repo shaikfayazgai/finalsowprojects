@@ -7,7 +7,6 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { MOCK_REVIEWER_PROFILE } from "@/mocks/reviewer";
 
 function subtitleForPath(pathname: string, firstName: string): string {
   if (pathname.includes("/queue")) {
@@ -45,7 +44,7 @@ export default function ReviewerLayout({
       const local = email.split("@")[0];
       return local.charAt(0).toUpperCase() + local.slice(1);
     }
-    return MOCK_REVIEWER_PROFILE.firstName;
+    return "?";
   }, [session?.user?.name, session?.user?.email]);
 
   if (!shouldShowPortalHeader(pathname)) {

@@ -26,7 +26,6 @@ import {
   Send,
 } from "lucide-react";
 import {
-  getProjectMock,
   acceptProjectMilestoneMock,
   payProjectMilestoneMock,
   projectOverlay,
@@ -159,7 +158,9 @@ export default function ProjectDetailPage() {
   const searchParams = useSearchParams();
   useOverlayVersion(projectOverlay);
 
-  const project = params?.projectId ? getProjectMock(params.projectId) : undefined;
+  // No projects API yet — without a real fetch there is no project to show,
+  // so the not-found state below renders until the endpoint ships.
+  const project: ProjectDetail | undefined = undefined;
   const tabFromUrl = resolveTab(searchParams.get("tab"));
   const [tab, setTab] = React.useState<Tab>(tabFromUrl);
 

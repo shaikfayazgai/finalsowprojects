@@ -24,7 +24,6 @@ import {
   useWithdrawSubmission,
 } from "@/lib/hooks/use-contributor-tasks";
 import { ContributorApiError } from "@/lib/api/contributor-tasks";
-import { getMockSubmissionMeta } from "@/lib/contributor/mock-task-bridge";
 import { DashboardSection } from "@/components/meridian/dashboard";
 import { Skeleton, StatusChip } from "@/components/meridian";
 import { fmtMentorReviewWindow } from "@/app/contributor/tasks/lib/task-list-utils";
@@ -55,11 +54,6 @@ export function SubmissionDetailView({ submissionId }: SubmissionDetailViewProps
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
 
-  const mockMeta = React.useMemo(
-    () => (submission ? getMockSubmissionMeta(submission.id) : null),
-    [submission],
-  );
-
   if (isLoading && !submission) {
     return <DetailSkeleton />;
   }
@@ -77,14 +71,13 @@ export function SubmissionDetailView({ submissionId }: SubmissionDetailViewProps
   const taskTitle = task?.title ?? "Submission";
   const taskId = submission.taskDefinitionId;
   const criteria = splitCriteria(task?.acceptanceCriteria ?? null);
-  const mentor = reviewerLabel(mockMeta?.reviewerName, submission.reviewerId);
+  const mentor = reviewerLabel(null, submission.reviewerId);
   const sla = fmtMentorReviewWindow(submission.submittedAt, submission.status);
   const canWithdraw =
     submission.status === "submitted" ||
     submission.status === "under_review" ||
     submission.status === "resubmitted";
-  const routingLabel =
-    mockMeta?.routing === "mentor_client" ? "Mentor → Client" : "Mentor review";
+  const routingLabel = "Mentor review";
 
   const doWithdraw = async () => {
     setActionError(null);

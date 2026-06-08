@@ -127,19 +127,22 @@ export function MentorsWorkspace() {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
-  // Merge REAL provisioned mentor accounts (deduped by email) so the registry +
-  // counts reflect actual mentors, not just the mock/overlay seed.
+  // Show ONLY real provisioned mentor accounts from the backend. On failure we
+  // surface an error and leave the list empty — never silently fall back to the
+  // mock/overlay seed roster (that would show fabricated mentors).
   const [realMentors, setRealMentors] = React.useState<MockAdminMentor[]>([]);
+  const [loadError, setLoadError] = React.useState(false);
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const res = await fetch("/api/superadmin/mentors", { cache: "no-store" });
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(`mentors fetch failed (${res.status})`);
         const data = (await res.json()) as {
           mentors?: Array<{ id: string; name: string; email: string; role: string }>;
         };
         if (cancelled) return;
+        setLoadError(false);
         setRealMentors(
           (data.mentors ?? []).map((m) => ({
             id: m.id,
@@ -155,7 +158,9 @@ export function MentorsWorkspace() {
           } as unknown as MockAdminMentor)),
         );
       } catch {
-        // keep seed-only on failure
+        if (cancelled) return;
+        setRealMentors([]);
+        setLoadError(true);
       }
     })();
     return () => {
@@ -316,6 +321,15 @@ export function MentorsWorkspace() {
           </Link>
         </div>
       </header>
+
+      {loadError && (
+        <div
+          role="alert"
+          className="rounded-xl border border-error-border bg-error-subtle px-4 py-3 font-body text-[12.5px] text-error-text"
+        >
+          Could not load the mentor registry. Showing no mentors — refresh to retry.
+        </div>
+      )}
 
       {mounted && pendingHero && statusFilter !== "pending" && counts.pending > 0 && (
         <ContextBanner

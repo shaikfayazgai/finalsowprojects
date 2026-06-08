@@ -92,30 +92,17 @@ export function getWorkforceMetricsMock(): WorkforceMetrics {
 }
 
 export function getEconomicMetricsMock(): EconomicMetrics {
+  // No real /api/analytics endpoint yet — return zeroed/empty metrics so end
+  // users see a clean empty state instead of fabricated spend figures.
   return {
     windowDays: 90,
-    totalCommittedMinor: 484_000_000,
-    totalPaidMinor: 428_000_000,
-    platformFeesMinor: 60_600_000,
-    platformFeesPct: 15,
-    costBySkill: [
-      { skill: "Backend (Python/Node)", amountMinor: 142_000_000 },
-      { skill: "Frontend (React/TS)", amountMinor: 124_000_000 },
-      { skill: "Design (Figma)", amountMinor: 78_000_000 },
-      { skill: "Data (SQL/dbt)", amountMinor: 56_000_000 },
-      { skill: "DevOps (AWS/K8s)", amountMinor: 42_000_000 },
-      { skill: "QA / Test", amountMinor: 22_000_000 },
-      { skill: "PM", amountMinor: 14_000_000 },
-      { skill: "Other", amountMinor: 6_000_000 },
-    ],
-    costByProject: [
-      { project: "Reporting V2", amountMinor: 144_000_000 },
-      { project: "Helios Q3", amountMinor: 128_000_000 },
-      { project: "Auth modernize", amountMinor: 64_000_000 },
-      { project: "Pricing refresh", amountMinor: 38_000_000 },
-      { project: "Onboarding revamp", amountMinor: 32_000_000 },
-    ],
-    savingsVsSalariedPct: 34,
+    totalCommittedMinor: 0,
+    totalPaidMinor: 0,
+    platformFeesMinor: 0,
+    platformFeesPct: 0,
+    costBySkill: [],
+    costByProject: [],
+    savingsVsSalariedPct: 0,
   };
 }
 

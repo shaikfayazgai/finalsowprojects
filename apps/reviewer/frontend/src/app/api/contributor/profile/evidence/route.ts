@@ -50,8 +50,10 @@ export async function GET(req: NextRequest) {
     const errBody = await backendRes.json().catch(() => ({ detail: `Backend error ${backendRes.status}` }));
     return NextResponse.json(errBody, { status: backendRes.status });
   } catch {
-    const { listMockProfileEvidence } = await import("@/lib/contributor/profile-evidence-mock");
-    return NextResponse.json(listMockProfileEvidence(params));
+    return NextResponse.json(
+      { detail: "Unable to reach the evidence service.", items: [], total: 0 },
+      { status: 502 },
+    );
   }
 }
 
@@ -88,8 +90,9 @@ export async function POST(req: NextRequest) {
     const errBody = await backendRes.json().catch(() => ({ detail: `Backend error ${backendRes.status}` }));
     return NextResponse.json(errBody, { status: backendRes.status });
   } catch {
-    const { createMockProfileEvidence } = await import("@/lib/contributor/profile-evidence-mock");
-    const item = createMockProfileEvidence(body as Parameters<typeof createMockProfileEvidence>[0]);
-    return NextResponse.json(item, { status: 201 });
+    return NextResponse.json(
+      { detail: "Unable to reach the evidence service." },
+      { status: 502 },
+    );
   }
 }

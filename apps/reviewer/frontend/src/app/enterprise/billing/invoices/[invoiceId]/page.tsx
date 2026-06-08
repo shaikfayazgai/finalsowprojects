@@ -17,7 +17,7 @@ import {
   Search,
   Shield,
 } from "lucide-react";
-import { getInvoiceMock, type InvoiceDetail } from "@/lib/billing/invoices-mock";
+import type { InvoiceDetail } from "@/lib/billing/invoices-mock";
 import { DashboardSection } from "@/components/meridian/dashboard";
 import {
   fmtINR,
@@ -38,8 +38,10 @@ export default function InvoiceDetailPage() {
   const [lineSearch, setLineSearch] = React.useState("");
   const [payOpen, setPayOpen] = React.useState(false);
 
-  const invoice: InvoiceDetail | undefined = React.useMemo(
-    () => (invoiceId ? getInvoiceMock(invoiceId) : undefined),
+  // No invoices API yet — without a real fetch there is no invoice to show, so
+  // the not-found state below renders until the endpoint ships.
+  const invoice = React.useMemo<InvoiceDetail | undefined>(
+    () => undefined,
     [invoiceId, overlayVersion],
   );
 

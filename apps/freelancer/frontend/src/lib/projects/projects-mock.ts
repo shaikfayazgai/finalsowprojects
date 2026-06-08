@@ -553,31 +553,6 @@ const PROJECTS: ProjectDetail[] = [
   },
 ];
 
-const COMPLETED_PROJECTS: ProjectSummary[] = [
-  {
-    id: "prj-onboarding-revamp",
-    name: "Onboarding revamp",
-    sponsor: "Lakshmi M.",
-    pmo: "Anjali Rao",
-    startedAt: "2026-01-10T00:00:00Z",
-    dueAt: "2026-03-31T00:00:00Z",
-    completedAt: "2026-03-28T00:00:00Z",
-    progress: 1,
-    health: "done",
-  },
-  {
-    id: "prj-pricing-page",
-    name: "Pricing page refresh",
-    sponsor: "Sandeep Kumar",
-    pmo: "Anjali Rao",
-    startedAt: "2026-02-15T00:00:00Z",
-    dueAt: "2026-04-30T00:00:00Z",
-    completedAt: "2026-04-22T00:00:00Z",
-    progress: 1,
-    health: "done",
-  },
-];
-
 /* ───────────────────────────── store ───────────────────────────── */
 
 const overlay = createOverlayStore<ProjectDetail>("glimmora.mock.projects.v1");
@@ -630,7 +605,9 @@ export function listProjectsMock(): ProjectSummary[] {
 }
 
 export function listCompletedProjectsMock(): ProjectSummary[] {
-  return COMPLETED_PROJECTS;
+  // No real /api/projects endpoint yet — return empty so end users see a clean
+  // empty state instead of fabricated completed projects.
+  return [];
 }
 
 export function getProjectMock(id: string): ProjectDetail | undefined {

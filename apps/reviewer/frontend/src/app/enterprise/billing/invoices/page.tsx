@@ -12,11 +12,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import {
-  listInvoicesMock,
-  type InvoiceStatus,
-  type InvoiceSummary,
-} from "@/lib/billing/invoices-mock";
+import type { InvoiceStatus, InvoiceSummary } from "@/lib/billing/invoices-mock";
 import { cn } from "@/lib/utils/cn";
 
 const ROWS_PER_PAGE = 20;
@@ -60,7 +56,8 @@ export default function InvoicesListPage() {
   const search = searchParams.get("q") ?? "";
   const page = Number(searchParams.get("page") ?? "1");
 
-  const all = React.useMemo(() => listInvoicesMock(), []);
+  // No invoices API yet — render the empty state until the endpoint ships.
+  const all = React.useMemo<InvoiceSummary[]>(() => [], []);
 
   const counts = React.useMemo(() => {
     const c = { paid: 0, pending: 0, overdue: 0 } as Record<

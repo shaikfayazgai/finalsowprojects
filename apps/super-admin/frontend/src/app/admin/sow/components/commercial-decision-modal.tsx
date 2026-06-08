@@ -8,7 +8,6 @@ import * as React from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Modal } from "@/components/meridian";
 import { cn } from "@/lib/utils/cn";
-import { listAdminMentors } from "@/lib/admin/mocks/mentors-service";
 
 export const COMMERCIAL_CHECKLIST = [
   {
@@ -115,23 +114,27 @@ export function CommercialDecisionModal({
 }: CommercialDecisionModalProps) {
   const copy = ACTION_COPY[action];
   // Real provisioned mentors from the backend (login_accounts role LIKE
-  // 'mentor%'); falls back to the mock roster only if the fetch fails.
-  const [mentors, setMentors] = React.useState<Array<{ id: string; name: string; email?: string }>>(
-    () => listAdminMentors().map((m) => ({ id: m.id, name: m.name, email: m.email })),
-  );
+  // 'mentor%'). No mock fallback — if the fetch fails we surface an error and
+  // leave the roster empty so the operator cannot approve against fake data.
+  const [mentors, setMentors] = React.useState<Array<{ id: string; name: string; email?: string }>>([]);
   React.useEffect(() => {
     if (!open) return;
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch("/api/superadmin/mentors", { cache: "no-store" });
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(`mentors fetch failed (${res.status})`);
         const data = (await res.json()) as { mentors?: Array<{ id: string; name: string; email?: string }> };
-        if (!cancelled && Array.isArray(data.mentors) && data.mentors.length > 0) {
-          setMentors(data.mentors.map((m) => ({ id: m.id, name: m.name, email: m.email })));
-        }
+        if (cancelled) return;
+        setMentors(
+          Array.isArray(data.mentors)
+            ? data.mentors.map((m) => ({ id: m.id, name: m.name, email: m.email }))
+            : [],
+        );
       } catch {
-        // keep mock fallback
+        if (cancelled) return;
+        setMentors([]);
+        setError("Could not load the mentor roster. Retry before approving.");
       }
     })();
     return () => {
@@ -144,15 +147,20 @@ export function CommercialDecisionModal({
   const [mentorId, setMentorId] = React.useState("");
   const [error, setError] = React.useState("");
 
+  // Reset the form ONLY on the closed→open transition. Depending on `action`
+  // (or anything that changes while open) here would wipe the user's input on a
+  // parent re-render mid-typing — the "drops all but the first char" bug.
+  const wasOpen = React.useRef(false);
   React.useEffect(() => {
-    if (open) {
+    if (open && !wasOpen.current) {
       setComment("");
       setNotifySponsor(true);
       setChecklist({});
       setMentorId("");
       setError("");
     }
-  }, [open, action]);
+    wasOpen.current = open;
+  }, [open]);
 
   const allChecked =
     action !== "approve" ||

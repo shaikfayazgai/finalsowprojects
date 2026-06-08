@@ -12,12 +12,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Briefcase, Search } from "lucide-react";
-import {
-  listProjectsMock,
-  listCompletedProjectsMock,
-  type ProjectSummary,
-  type ProjectHealth,
-} from "@/lib/projects/projects-mock";
+import type { ProjectSummary, ProjectHealth } from "@/lib/projects/projects-mock";
 import { cn } from "@/lib/utils/cn";
 
 const ROWS_PER_PAGE = 10;
@@ -112,8 +107,9 @@ export default function ProjectsListPage() {
   const search = searchParams.get("q") ?? "";
   const page = Number(searchParams.get("page") ?? "1");
 
-  const active = React.useMemo(() => listProjectsMock(), []);
-  const completed = React.useMemo(() => listCompletedProjectsMock(), []);
+  // No projects API yet — render an empty workspace until the endpoint ships.
+  const active = React.useMemo<ProjectSummary[]>(() => [], []);
+  const completed = React.useMemo<ProjectSummary[]>(() => [], []);
 
   const counts = React.useMemo(() => {
     let atRisk = 0;

@@ -11,8 +11,11 @@ import {
 import { StatusChip } from "@/components/meridian";
 import { DashboardSection, MetricTile } from "@/components/meridian/dashboard";
 import { useActiveAdmin } from "@/lib/hooks/use-active-admin";
-import { MOCK_ADMIN_DASHBOARD } from "@/mocks/admin/dashboard";
-import type { AdminAttentionKind, MockAdminAttentionItem } from "@/mocks/admin/dashboard";
+import type {
+  AdminAttentionKind,
+  MockAdminAttentionItem,
+  MockAdminDashboard,
+} from "@/mocks/admin/dashboard";
 import { cn } from "@/lib/utils/cn";
 import {
   ATTENTION_KIND_LABEL,
@@ -70,9 +73,28 @@ function signalIcon(tone: "positive" | "neutral" | "warning") {
   return <Sparkles className="h-3.5 w-3.5 text-brand-subtle-text shrink-0 mt-0.5" strokeWidth={2} aria-hidden />;
 }
 
+// No admin dashboard aggregate endpoint yet — render an empty command center
+// (zeroed KPIs, empty queues → "all caught up") until the API ships.
+const EMPTY_ADMIN_DASHBOARD: MockAdminDashboard = {
+  env: "PROD",
+  greetingFor: "",
+  kpis: { servicesUp: 0, servicesTotal: 0, tenants: 0, mentors: 0, activeSows: 0 },
+  pipeline: {
+    tenantsActive: 0,
+    commercialGate: 0,
+    governanceOpen: 0,
+    kycPending: 0,
+    mentorsActive: 0,
+  },
+  actionBreakdown: { resolved30d: 0, escalated: 0, onHold: 0 },
+  attention: [],
+  recent: [],
+  aiSignals: [],
+};
+
 export function AdminDashboardWorkspace() {
   const { role, profile } = useActiveAdmin();
-  const d = MOCK_ADMIN_DASHBOARD;
+  const d = EMPTY_ADMIN_DASHBOARD;
 
   const attention = React.useMemo(
     () => filterAttentionForRole(d.attention, role),

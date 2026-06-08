@@ -11,7 +11,7 @@ import { ArrowLeft } from "lucide-react";
 import { Select } from "@/components/meridian";
 import { createAdminPool } from "@/lib/admin/mocks/mentors-service";
 import { useAdminMentorsList } from "@/lib/hooks/use-admin-mentors";
-import { MOCK_TENANTS } from "@/mocks/admin/tenants";
+import type { MockTenant } from "@/mocks/admin/tenants";
 import { cn } from "@/lib/utils/cn";
 
 export function NewPoolWorkspace() {
@@ -20,9 +20,13 @@ export function NewPoolWorkspace() {
     (m) => m.status === "active" || m.status === "pending",
   );
 
+  // No real tenant registry endpoint exists yet — start empty rather than
+  // seeding a fabricated tenant list. The tenant picker shows an empty state
+  // until a backend source is connected.
+  const [tenants] = React.useState<MockTenant[]>([]);
   const [name, setName] = React.useState("");
   const [scope, setScope] = React.useState<"tenant" | "cross-tenant">("tenant");
-  const [tenantId, setTenantId] = React.useState(MOCK_TENANTS[0]?.id ?? "");
+  const [tenantId, setTenantId] = React.useState("");
   const [leadMentorId, setLeadMentorId] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -36,7 +40,7 @@ export function NewPoolWorkspace() {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
-    const tenant = MOCK_TENANTS.find((t) => t.id === tenantId);
+    const tenant = tenants.find((t) => t.id === tenantId);
     const pool = createAdminPool({
       name: name.trim(),
       scope,
@@ -119,18 +123,24 @@ export function NewPoolWorkspace() {
 
           {scope === "tenant" && (
             <Field label="Tenant" required>
-              <Select
-                variant="outline"
-                size="sm"
-                value={tenantId}
-                onChange={(e) => setTenantId(e.target.value)}
-              >
-                {MOCK_TENANTS.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </Select>
+              {tenants.length === 0 ? (
+                <p className="rounded-md border border-stroke-subtle bg-bg-subtle/40 px-3 py-2 font-body text-[12px] text-text-tertiary">
+                  No tenants available yet. Provision a tenant before creating a tenant-scoped pool, or choose cross-tenant scope.
+                </p>
+              ) : (
+                <Select
+                  variant="outline"
+                  size="sm"
+                  value={tenantId}
+                  onChange={(e) => setTenantId(e.target.value)}
+                >
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
             </Field>
           )}
 

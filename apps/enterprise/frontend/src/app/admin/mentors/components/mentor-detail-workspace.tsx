@@ -33,14 +33,13 @@ import {
   useMentorCompetency,
 } from "@/lib/hooks/use-admin-mentors";
 import {
-  MOCK_MENTOR_ACTIVITY,
   type AdminMentorStatus,
   type MockAdminMentor,
   type MockCompetencyRow,
   type MockMentorActivityItem,
   type MockMentorPool,
 } from "@/mocks/admin/mentors";
-import { MOCK_ADMIN_AUDIT_EVENTS } from "@/mocks/admin/audit";
+import type { MockAdminAuditEvent } from "@/mocks/admin/audit";
 import { isMentorAdminSetupComplete } from "@/lib/admin/mocks/mentors-service";
 import { cn } from "@/lib/utils/cn";
 
@@ -280,10 +279,11 @@ export function MentorDetailWorkspace() {
   const mentorPools = mentor.pools
     .map((id) => pools.find((p) => p.id === id))
     .filter((p): p is MockMentorPool => Boolean(p));
-  const activity = MOCK_MENTOR_ACTIVITY[mentor.id] ?? [];
-  const auditEvents = MOCK_ADMIN_AUDIT_EVENTS.filter(
-    (e) => e.resourceId === mentor.id || e.actor === mentor.name,
-  ).slice(0, 12);
+  // No real per-mentor activity-feed or audit-trail endpoint exists yet, so show
+  // a clean empty state (the Activity/Audit panels render their own empty UI)
+  // rather than fabricated demo events.
+  const activity: MockMentorActivityItem[] = [];
+  const auditEvents: MockAdminAuditEvent[] = [];
 
   const sinceLabel =
     mentor.status === "pending"
@@ -813,7 +813,7 @@ function AuditPanel({
   events,
 }: {
   mentorId: string;
-  events: typeof MOCK_ADMIN_AUDIT_EVENTS;
+  events: MockAdminAuditEvent[];
 }) {
   return (
     <>

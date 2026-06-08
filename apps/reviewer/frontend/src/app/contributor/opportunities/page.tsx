@@ -11,7 +11,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { CheckCircle2, Clock, IndianRupee, Layers } from "lucide-react";
-import { listPublishedTasksMock, type PublishedTask } from "@/lib/projects/projects-mock";
+import type { PublishedTask } from "@/lib/projects/projects-mock";
 import { useTaskInterestStore } from "@/lib/stores/task-interest-store";
 import { quote as priceQuote, inr } from "@/lib/pricing/pricing-engine";
 import { cn } from "@/lib/utils/cn";
@@ -42,11 +42,8 @@ export default function ContributorOpportunitiesPage() {
   const interestsByTask = useTaskInterestStore((s) => s.interestsByTask);
   const selectedByTask = useTaskInterestStore((s) => s.selectedByTask);
 
-  // Read once on mount — the mock is synchronous + localStorage-backed.
-  const [tasks, setTasks] = React.useState<PublishedTask[]>([]);
-  React.useEffect(() => {
-    setTasks(listPublishedTasksMock());
-  }, []);
+  // No published-tasks API yet — render the empty state until the endpoint ships.
+  const [tasks] = React.useState<PublishedTask[]>([]);
 
   const hasInterest = (taskId: string) =>
     (interestsByTask[taskId] ?? []).some((x) => x.contributorId === contributorId);

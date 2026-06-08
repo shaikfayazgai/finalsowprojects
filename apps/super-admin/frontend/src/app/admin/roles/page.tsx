@@ -8,7 +8,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { Plus, ShieldCheck } from "lucide-react";
-import { MOCK_ROLES, type RoleScope } from "@/mocks/admin/roles";
+import { type MockRoleDef, type RoleScope } from "@/mocks/admin/roles";
 import { useAdminSectionCanEdit } from "@/lib/hooks/use-admin-section-edit";
 import { cn } from "@/lib/utils/cn";
 
@@ -33,15 +33,19 @@ export default function AdminRolesPage() {
   const [filter, setFilter] = React.useState<Filter>("all");
   const [phaseToast, setPhaseToast] = React.useState(false);
 
-  const counts = React.useMemo(() => ({
-    all: MOCK_ROLES.length,
-    plat: MOCK_ROLES.filter((r) => r.scope === "plat").length,
-    ent: MOCK_ROLES.filter((r) => r.scope === "ent").length,
-    mentor: MOCK_ROLES.filter((r) => r.scope === "mentor").length,
-    contributor: MOCK_ROLES.filter((r) => r.scope === "contributor").length,
-  }), []);
+  // No backend role catalog endpoint exists yet — render an empty catalog
+  // rather than a fabricated mock list. Populate once a real source ships.
+  const roles: MockRoleDef[] = [];
 
-  const rows = filter === "all" ? MOCK_ROLES : MOCK_ROLES.filter((r) => r.scope === filter);
+  const counts = React.useMemo(() => ({
+    all: roles.length,
+    plat: roles.filter((r) => r.scope === "plat").length,
+    ent: roles.filter((r) => r.scope === "ent").length,
+    mentor: roles.filter((r) => r.scope === "mentor").length,
+    contributor: roles.filter((r) => r.scope === "contributor").length,
+  }), [roles]);
+
+  const rows = filter === "all" ? roles : roles.filter((r) => r.scope === filter);
 
   function onAddRole() {
     setPhaseToast(true);
@@ -92,6 +96,15 @@ export default function AdminRolesPage() {
         <Chip on={filter === "contributor"} onClick={() => setFilter("contributor")} label="Contributor"  n={counts.contributor} />
       </div>
 
+      {rows.length === 0 ? (
+        <div className="rounded-lg border border-stroke bg-surface px-5 py-14 text-center">
+          <ShieldCheck className="h-7 w-7 text-text-tertiary mx-auto mb-2" strokeWidth={1.75} aria-hidden />
+          <p className="font-body text-[13.5px] font-semibold text-foreground">No roles to show</p>
+          <p className="mt-1 font-body text-[12px] text-text-tertiary max-w-md mx-auto">
+            The role catalog is not available yet. Role definitions will appear here once the RBAC source is connected.
+          </p>
+        </div>
+      ) : (
       <ul className="space-y-3">
         {rows.map((r) => (
           <li key={r.code} className="rounded-lg border border-stroke bg-surface shadow-xs">
@@ -115,6 +128,7 @@ export default function AdminRolesPage() {
           </li>
         ))}
       </ul>
+      )}
     </div>
   );
 }
