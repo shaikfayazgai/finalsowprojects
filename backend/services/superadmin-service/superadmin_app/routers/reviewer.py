@@ -59,11 +59,20 @@ async def reviewer_dashboard(user: Annotated[dict, Depends(get_current_user)]):
 # ── GET /assigned-sows ────────────────────────────────────────────────────────
 
 @router.get("/assigned-sows")
-async def reviewer_assigned_sows(user: Annotated[dict, Depends(get_current_user)]):
+async def reviewer_assigned_sows(
+    user: Annotated[dict, Depends(get_current_user)],
+    reviewer_email: str | None = None,
+):
     """SOWs this reviewer was assigned to at intake (admin_records kind=sow_reviewer).
     Shown in the reviewer portal immediately — BEFORE any delivery — so the
     reviewer can see what they're responsible for. Delivered tasks for QA still
-    flow through reviewer_assignments separately."""
+    flow through reviewer_assignments separately.
+
+    reviewer_email override: when an admin/superadmin caller passes it (e.g. the
+    Next.js proxy fell back to the platform admin token because the reviewer's own
+    session token had expired), we resolve the assigned SOWs for THAT reviewer
+    straight from the DB instead of the admin's own (empty) set. Non-admin callers
+    cannot use the override — they always see only their own assignments."""
     _require_reviewer(user)
     import json as _json
     from shared.db import get_pg_connection
@@ -71,6 +80,11 @@ async def reviewer_assigned_sows(user: Annotated[dict, Depends(get_current_user)
 
     rid = str(user.get("id") or "")
     email = (user.get("email") or "").lower()
+    # Admin-on-behalf-of override: trust reviewer_email only for admin callers.
+    is_admin = (user.get("role") or "").lower() in {"admin", "superadmin", "super_admin"}
+    if is_admin and reviewer_email:
+        email = reviewer_email.strip().lower()
+        rid = ""  # match by email only when impersonating
     conn = get_pg_connection()
     sows = []
     with conn.cursor(cursor_factory=RealDictCursor) as cur:

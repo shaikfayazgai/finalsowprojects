@@ -25,23 +25,38 @@ export async function GET(req: NextRequest) {
 
   const secureCookie = req.nextUrl.protocol === "https:";
   const jwt = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
-  let token = (jwt as { glimmoraAccessToken?: string } | null)?.glimmoraAccessToken;
-  if (!token) token = (await getAdminToken()) ?? undefined;
+  const sessionToken = (jwt as { glimmoraAccessToken?: string } | null)?.glimmoraAccessToken;
+  const sessionEmail = guard.email || (jwt as { email?: string } | null)?.email || "";
+
+  // When we have to use the platform admin token (the reviewer's own session
+  // token is missing/expired), the backend would otherwise resolve the ADMIN's
+  // assigned SOWs (empty). Pass the reviewer's session email so the backend reads
+  // THIS reviewer's assignments straight from the DB.
+  let token = sessionToken;
+  let usingAdminToken = false;
+  if (!token) {
+    token = (await getAdminToken()) ?? undefined;
+    usingAdminToken = true;
+  }
 
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const upstream = `${GLIMMORA_API}/api/v1/reviewer/assigned-sows`;
-  const send = (bearer: string) =>
-    fetch(upstream, { headers: { Authorization: `Bearer ${bearer}` } });
+  const buildUrl = (asAdmin: boolean) =>
+    asAdmin && sessionEmail
+      ? `${GLIMMORA_API}/api/v1/reviewer/assigned-sows?reviewer_email=${encodeURIComponent(sessionEmail)}`
+      : `${GLIMMORA_API}/api/v1/reviewer/assigned-sows`;
+  const send = (bearer: string, asAdmin: boolean) =>
+    fetch(buildUrl(asAdmin), { headers: { Authorization: `Bearer ${bearer}` } });
 
-  let res = await send(token);
+  let res = await send(token, usingAdminToken);
   let data = await res.json().catch(() => ({} as Record<string, unknown>));
 
   if (res.status === 401 && ADMIN_EMAIL && ADMIN_PASSWORD) {
     invalidateAdminToken();
     const fresh = await getAdminToken();
     if (fresh) {
-      res = await send(fresh);
+      usingAdminToken = true;
+      res = await send(fresh, true);
       data = await res.json().catch(() => ({} as Record<string, unknown>));
     }
   }
