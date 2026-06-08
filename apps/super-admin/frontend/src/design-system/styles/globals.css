@@ -1,0 +1,20 @@
+/* ============================================================
+ *   MERIDIAN — Design system globals (aggregator)
+ *
+ *   Import this single file from the app shell to load the entire
+ *   Meridian foundation:
+ *
+ *     @import "@/design-system/styles/globals.css";
+ *
+ *   Order matters:
+ *     1. tokens.css   — primitive color ramps + radii + font families + z-index
+ *     2. themes.css   — Daybook + Nocturne semantic CSS variables
+ *     3. motion.css   — durations, easings, keyframes, reduced-motion contract
+ *
+ *   The actual root-level base styles (body, html) live in the app's
+ *   own globals.css. This file is design-system-only.
+ * ============================================================ */
+
+@import "./tokens.css";
+@import "./themes.css";
+@import "./motion.css";
