@@ -14,13 +14,13 @@ end user        frontend route        backend (this folder)        DB
 super-admin  →  /admin            →   apps/super-admin/backend :8102  ┐
 enterprise   →  /enterprise       →   apps/enterprise/backend  :8103  │ shared
 mentor       →  /mentor           →   apps/mentor/backend      :8101  ├ Neon
-reviewer     →  /reviewer         →   apps/super-admin/backend :8102  │  DB
+reviewer     →  /reviewer         →   apps/reviewer/backend    :8105  │  DB
 freelancer   →  /contributor      →   apps/freelancer/backend  :8104  ┘
 ```
 
-> Reviewer endpoints currently live inside the super-admin service
-> (`superadmin_app/routers/reviewer.py`), so the reviewer portal uses the
-> super-admin backend (:8102). Split out later if needed.
+> The reviewer backend bundles `superadmin_app` (where the reviewer router +
+> repo + schema originated) but mounts ONLY the reviewer router — it exposes no
+> admin/users/audit endpoints.
 
 ## Each backend is self-contained
 - `<pkg>_app/` — the role's routers + schema (copied from `backend/services/*`)
@@ -44,6 +44,7 @@ python -m uvicorn app:app --host 127.0.0.1 --port 8101
 | super-admin | 8102 |
 | enterprise  | 8103 |
 | freelancer  | 8104 |
+| reviewer    | 8105 |
 
 The shared monolith gateway (`backend/local_gateway.py`, :9000) still works and
 is used for auth/login (one shared login endpoint for all roles).

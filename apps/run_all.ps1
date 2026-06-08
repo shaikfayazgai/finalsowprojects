@@ -7,7 +7,8 @@ $Apps = @(
   @{ role = "mentor";      port = 8101 },
   @{ role = "super-admin"; port = 8102 },
   @{ role = "enterprise";  port = 8103 },
-  @{ role = "freelancer";  port = 8104 }
+  @{ role = "freelancer";  port = 8104 },
+  @{ role = "reviewer";    port = 8105 }
 )
 
 foreach ($a in $Apps) {
