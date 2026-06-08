@@ -16,12 +16,13 @@ import {
   AlertCircle,
   AlertTriangle,
   ClipboardList,
+  FileText,
   Filter,
   Search,
 } from "lucide-react";
 import type { MockReview, SlaTier } from "@/mocks/mentor";
 import { fetchMentorReviews, MentorApiError } from "@/lib/api/mentor-mock";
-import { listMentorQueue } from "@/lib/api/mentor";
+import { listMentorQueue, fetchMentorAssignedSows, type MentorAssignedSow } from "@/lib/api/mentor";
 import { Skeleton } from "@/components/meridian";
 import { Drawer } from "@/components/meridian/overlays";
 import { mentorPrimaryBtn, mentorSecondaryBtn } from "@/app/mentor/_components/mentor-ui";
@@ -212,6 +213,15 @@ export function MentorQueueWorkspace() {
   const [items, setItems] = React.useState<MockReview[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const [assignedSows, setAssignedSows] = React.useState<MentorAssignedSow[]>([]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    fetchMentorAssignedSows()
+      .then((s) => { if (!cancelled) setAssignedSows(s); })
+      .catch(() => { /* supplementary to the review queue */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const defaults = defaultAdvancedFilters();
   const [slaTiers, setSlaTiers] = React.useState(defaults.slaTiers);
@@ -383,6 +393,36 @@ export function MentorQueueWorkspace() {
             Your queue is over SLA. A senior mentor has been notified.
           </p>
         </div>
+      )}
+
+      {assignedSows.length > 0 && (
+        <section className="rounded-xl border border-stroke-subtle bg-surface overflow-hidden">
+          <div className="px-5 pt-4 pb-3 border-b border-stroke-subtle">
+            <h2 className="font-body text-[15.5px] font-semibold text-foreground tracking-[-0.01em]">
+              Assigned SOWs
+            </h2>
+            <p className="mt-1 font-body text-[12.5px] text-text-secondary">
+              {assignedSows.length} SOW{assignedSows.length === 1 ? "" : "s"} assigned to you by Glimmora. Reviews appear below as contributors submit work on these SOWs.
+            </p>
+          </div>
+          <ul className="divide-y divide-stroke-subtle">
+            {assignedSows.map((s) => (
+              <li key={s.sowId} className="px-5 py-3 flex items-center gap-3">
+                <FileText className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={2} aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="font-body text-[13px] font-medium text-foreground truncate">{s.title}</p>
+                  <p className="font-body text-[11.5px] text-text-tertiary truncate">
+                    {s.ownerEmail ? `From ${s.ownerEmail}` : s.sowId}
+                    {s.status ? ` · ${s.status}` : ""}
+                  </p>
+                </div>
+                <span className="font-body text-[10.5px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand-subtle text-brand-subtle-text shrink-0">
+                  {s.assignmentStatus || "assigned"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <section className="rounded-xl border border-stroke-subtle bg-surface overflow-hidden">
