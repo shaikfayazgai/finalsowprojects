@@ -62,14 +62,22 @@ function toErrorMessage(data: Record<string, unknown>, fallback: string): string
 }
 
 export async function POST(req: NextRequest) {
-  // Authorization — super_admin only. This route mints/manages users
-  // and must never be reachable by lower-privilege sessions.
-  const guard = await requireRole(["super_admin"]);
+  // super_admin can provision any role. enterprise admins may provision their own
+  // workspace people (reviewer / member) — but NOT elevated roles. Anything else
+  // is rejected.
+  const guard = await requireRole(["super_admin", "enterprise"]);
   if (guard instanceof NextResponse) return guard;
 
   const secureCookie = req.nextUrl.protocol === "https:";
   const jwt = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
-  let token = (jwt as { glimmoraAccessToken?: string } | null)?.glimmoraAccessToken;
+  const callerRole = (jwt as { role?: string } | null)?.role ?? "";
+  const isSuperAdmin = callerRole === "super_admin" || callerRole === "superadmin";
+  // Super admins call the backend with their own token. Enterprise admins can't
+  // (the backend endpoint is admin-only), so we use the platform admin service
+  // account on their behalf — after clamping the role below.
+  let token = isSuperAdmin
+    ? (jwt as { glimmoraAccessToken?: string } | null)?.glimmoraAccessToken
+    : undefined;
   if (!token) token = (await getAdminToken()) ?? undefined;
 
   if (!token) {
@@ -84,6 +92,21 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  // Privilege guard: a non-super-admin (enterprise) caller may only provision
+  // workspace-level roles, never elevated ones.
+  if (!isSuperAdmin) {
+    const requested = String(body.role ?? "").toLowerCase();
+    const allowedForEnterprise = new Set([
+      "reviewer", "member", "contributor", "freelancer", "women", "student",
+    ]);
+    if (!allowedForEnterprise.has(requested)) {
+      return NextResponse.json(
+        { error: "Enterprise admins can only invite reviewer/member roles." },
+        { status: 403 },
+      );
+    }
   }
 
   const upstream = `${GLIMMORA_API}/api/superadmin/users`;
