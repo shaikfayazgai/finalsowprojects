@@ -130,18 +130,23 @@ export default function MentorDashboardPage() {
             <DashboardSection title={`Assigned SOWs (${assignedSows.length})`}>
               <ul className="divide-y divide-stroke-subtle -mx-5 -mb-5">
                 {assignedSows.map((s) => (
-                  <li key={s.sowId} className="px-5 py-3 flex items-center gap-3">
-                    <FileText className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={2} aria-hidden />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-body text-[13px] font-medium text-foreground truncate">{s.title}</p>
-                      <p className="font-body text-[11.5px] text-text-tertiary truncate">
-                        {s.ownerEmail ? `From ${s.ownerEmail}` : s.sowId}
-                        {s.stage ? ` · ${s.stage}` : ""}
-                      </p>
-                    </div>
-                    <span className="font-body text-[10.5px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand-subtle text-brand-subtle-text shrink-0">
-                      {s.assignmentStatus || "assigned"}
-                    </span>
+                  <li key={s.sowId}>
+                    <Link
+                      href={`/mentor/sow/${encodeURIComponent(s.sowId)}`}
+                      className="px-5 py-3 flex items-center gap-3 hover:bg-surface-hover transition-colors duration-fast"
+                    >
+                      <FileText className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={2} aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-body text-[13px] font-medium text-foreground truncate">{s.title}</p>
+                        <p className="font-body text-[11.5px] text-text-tertiary truncate">
+                          {s.ownerEmail ? `From ${s.ownerEmail}` : s.sowId}
+                          {s.stage ? ` · ${s.stage}` : ""}
+                        </p>
+                      </div>
+                      <span className="font-body text-[10.5px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand-subtle text-brand-subtle-text shrink-0">
+                        {s.assignmentStatus || "assigned"}
+                      </span>
+                    </Link>
                   </li>
                 ))}
               </ul>
