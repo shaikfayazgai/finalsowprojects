@@ -35,7 +35,9 @@ export interface SubmissionConfig {
   approvers: Record<SowApprovalStageKey, ApproverCandidate>;
   notify: boolean;
   coverNote: string;
-  /** Enterprise reviewer assigned at intake (optional — reviewer is NOT a stage). */
+  /** Enterprise reviewer assigned at intake. REQUIRED on submit (validated in
+   * the submission step); still optional on the type so a draft can omit it.
+   * The reviewer is NOT an approval stage — it routes delivered work to QA. */
   reviewer?: { id: string; email?: string; name?: string };
 }
 
@@ -130,6 +132,16 @@ export function SubmissionStep({ title, saving, error, onBack, onCancel, onCommi
         );
         return;
       }
+      // A reviewer is mandatory at intake — accepted submissions must have a
+      // QA reviewer to route to before the SOW can be submitted.
+      if (!reviewerId) {
+        setValidationError(
+          reviewers.length === 0
+            ? "No reviewer accounts exist yet. Add a reviewer in Settings → Tenant before submitting."
+            : "Select a reviewer before submitting.",
+        );
+        return;
+      }
     }
     setValidationError(null);
     const reviewer = reviewers.find((r) => r.id === reviewerId);
@@ -203,17 +215,23 @@ export function SubmissionStep({ title, saving, error, onBack, onCancel, onCommi
             className="block font-body text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-tertiary mb-1.5"
           >
             Reviewer{" "}
-            <span className="font-normal normal-case tracking-normal text-text-tertiary">
-              · optional · second-stage QA on delivered work
+            <span className="font-normal normal-case tracking-normal text-danger">
+              · required · second-stage QA on delivered work
             </span>
           </label>
           <select
             id="sow-reviewer"
             value={reviewerId}
-            onChange={(e) => setReviewerId(e.target.value)}
-            className={selectCls}
+            onChange={(e) => {
+              setReviewerId(e.target.value);
+              setValidationError(null);
+            }}
+            className={cn(
+              selectCls,
+              validationError !== null && !reviewerId && "border-danger ring-1 ring-danger/30",
+            )}
           >
-            <option value="">No reviewer (assign later)</option>
+            <option value="">Select a reviewer…</option>
             {reviewers.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name || r.email || r.id}
