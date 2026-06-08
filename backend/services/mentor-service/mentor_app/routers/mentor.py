@@ -126,6 +126,55 @@ def dashboard(user: MentorDep):
     })
 
 
+# ── assigned SOWs (mapped from admin_records.sow_mentor) ──────────────────────
+
+@router.get("/assigned-sows")
+def assigned_sows(user: MentorDep):
+    """SOWs this mentor was assigned to at the Commercial gate. Maps:
+        admin_records (kind=sow_mentor, data.mentorId/email = this mentor)
+          → enterprise_sows (by id)
+    Shown immediately in the mentor portal so the assigned SOW is visible even
+    before any contributor submits work. All joins are by UNIQUE id."""
+    import json as _json
+    mentor_id = str(user.get("id") or "")
+    email = (user.get("email") or "").lower()
+    conn = _conn()
+    out = []
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT ar.name AS sow_id, ar.status AS assign_status, ar.data AS assign_data,
+                   ar.updated_at AS assigned_at, s.data AS sow_data, s.owner_email
+            FROM admin_records ar
+            LEFT JOIN enterprise_sows s ON s.id = ar.name
+            WHERE ar.kind = 'sow_mentor' AND ar.deleted_at IS NULL
+              AND (ar.data->>'mentorId' = %s OR lower(ar.data->>'mentorEmail') = %s)
+            ORDER BY ar.updated_at DESC
+            """,
+            (mentor_id, email),
+        )
+        for r in cur.fetchall():
+            sd = r["sow_data"] or {}
+            if isinstance(sd, str):
+                try:
+                    sd = _json.loads(sd)
+                except (ValueError, TypeError):
+                    sd = {}
+            title = None
+            if isinstance(sd, dict):
+                title = sd.get("projectTitle") or sd.get("title") or sd.get("fileName")
+            out.append({
+                "sowId": r["sow_id"],
+                "title": title or r["sow_id"],
+                "status": sd.get("status") if isinstance(sd, dict) else None,
+                "stage": sd.get("status") if isinstance(sd, dict) else None,
+                "ownerEmail": r.get("owner_email"),
+                "assignmentStatus": r["assign_status"],
+                "assignedAt": r["assigned_at"].isoformat() if r.get("assigned_at") else None,
+            })
+    return _ok({"sows": out, "total": len(out)})
+
+
 # ── review queue ─────────────────────────────────────────────────────────────
 
 @router.get("/queue")

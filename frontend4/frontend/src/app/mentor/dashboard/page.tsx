@@ -8,12 +8,17 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Clock, AlertCircle, ClipboardList, TrendingUp, Users } from "lucide-react";
+import { Clock, AlertCircle, ClipboardList, TrendingUp, Users, FileText } from "lucide-react";
 import { StatusChip } from "@/components/meridian";
 import { DashboardSection, KeyMetricCard } from "@/components/meridian/dashboard";
 import { SplitPanel } from "@/components/meridian/layout";
 import { useActiveMentor } from "@/lib/hooks/use-active-mentor";
-import { fetchMentorDashboardReal, type MentorDashboardReal } from "@/lib/api/mentor";
+import {
+  fetchMentorDashboardReal,
+  fetchMentorAssignedSows,
+  type MentorDashboardReal,
+  type MentorAssignedSow,
+} from "@/lib/api/mentor";
 import { MentorDashboardSkeleton } from "@/app/mentor/_components/mentor-skeletons";
 import {
   MentorPage,
@@ -48,6 +53,7 @@ export default function MentorDashboardPage() {
   const { profile } = useActiveMentor();
   const [data, setData] = React.useState<MentorDashboardReal | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [assignedSows, setAssignedSows] = React.useState<MentorAssignedSow[]>([]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -57,6 +63,9 @@ export default function MentorDashboardPage() {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Could not load dashboard.");
       });
+    fetchMentorAssignedSows()
+      .then((s) => { if (!cancelled) setAssignedSows(s); })
+      .catch(() => { /* supplementary */ });
     return () => { cancelled = true; };
   }, []);
 
@@ -117,6 +126,27 @@ export default function MentorDashboardPage() {
         }
       >
         <div className="space-y-5">
+          {assignedSows.length > 0 && (
+            <DashboardSection title={`Assigned SOWs (${assignedSows.length})`}>
+              <ul className="divide-y divide-stroke-subtle -mx-5 -mb-5">
+                {assignedSows.map((s) => (
+                  <li key={s.sowId} className="px-5 py-3 flex items-center gap-3">
+                    <FileText className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={2} aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-body text-[13px] font-medium text-foreground truncate">{s.title}</p>
+                      <p className="font-body text-[11.5px] text-text-tertiary truncate">
+                        {s.ownerEmail ? `From ${s.ownerEmail}` : s.sowId}
+                        {s.stage ? ` · ${s.stage}` : ""}
+                      </p>
+                    </div>
+                    <span className="font-body text-[10.5px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand-subtle text-brand-subtle-text shrink-0">
+                      {s.assignmentStatus || "assigned"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </DashboardSection>
+          )}
           {hero ? (
             <DashboardSection eyebrow="Priority" title="Next review">
               <div className="flex items-start justify-between gap-4 flex-wrap">

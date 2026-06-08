@@ -100,11 +100,14 @@ async def reviewer_assigned_sows(user: Annotated[dict, Depends(get_current_user)
                     sd = _json.loads(sd)
                 except (ValueError, TypeError):
                     sd = {}
+            title = None
+            if isinstance(sd, dict):
+                title = sd.get("projectTitle") or sd.get("title") or sd.get("fileName")
             sows.append({
                 "sowId": r["sow_id"],
-                "title": (sd.get("title") if isinstance(sd, dict) else None) or r["sow_id"],
+                "title": title or r["sow_id"],
                 "status": sd.get("status") if isinstance(sd, dict) else None,
-                "stage": sd.get("currentStage") if isinstance(sd, dict) else None,
+                "stage": sd.get("status") if isinstance(sd, dict) else None,
                 "ownerEmail": r.get("owner_email"),
                 "assignmentStatus": r["assign_status"],
                 "assignedAt": r["assigned_at"].isoformat() if r.get("assigned_at") else None,

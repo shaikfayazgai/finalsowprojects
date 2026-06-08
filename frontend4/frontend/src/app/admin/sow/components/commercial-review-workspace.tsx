@@ -111,8 +111,27 @@ export function CommercialReviewWorkspace() {
     try {
       const suffix = payload.notifySponsor ? " · Sponsor notified (demo)" : "";
       if (action === "approve") {
-        // Glimmora assigns the mentor at this Commercial/platform stage — record
-        // it in the approval comment (audit trail) per the locked flow.
+        // Glimmora assigns the mentor at this Commercial/platform stage. PERSIST
+        // the assignment (admin_records kind=sow_mentor) so it reaches the
+        // mentor's queue/registry — BEFORE approving, so a failure surfaces.
+        if (payload.mentorId) {
+          const res = await fetch(
+            `/api/superadmin/sows/${encodeURIComponent(sowId)}/mentor`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                mentorId: payload.mentorId,
+                mentorEmail: payload.mentorEmail,
+                mentorName: payload.mentorName,
+              }),
+            },
+          );
+          if (!res.ok) {
+            const b = (await res.json().catch(() => ({}))) as { error?: string };
+            throw new Error(b.error ?? "Could not assign the mentor. Approval cancelled.");
+          }
+        }
         const mentorNote = payload.mentorName
           ? ` · Mentor assigned by Glimmora: ${payload.mentorName}`
           : "";

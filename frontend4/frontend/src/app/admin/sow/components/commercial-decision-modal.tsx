@@ -35,6 +35,7 @@ export interface CommercialDecisionPayload {
    *  assigned by Glimmora at the platform/Commercial approval stage). */
   mentorId?: string;
   mentorName?: string;
+  mentorEmail?: string;
 }
 
 interface CommercialDecisionModalProps {
@@ -115,8 +116,8 @@ export function CommercialDecisionModal({
   const copy = ACTION_COPY[action];
   // Real provisioned mentors from the backend (login_accounts role LIKE
   // 'mentor%'); falls back to the mock roster only if the fetch fails.
-  const [mentors, setMentors] = React.useState<Array<{ id: string; name: string }>>(
-    () => listAdminMentors().map((m) => ({ id: m.id, name: m.name })),
+  const [mentors, setMentors] = React.useState<Array<{ id: string; name: string; email?: string }>>(
+    () => listAdminMentors().map((m) => ({ id: m.id, name: m.name, email: m.email })),
   );
   React.useEffect(() => {
     if (!open) return;
@@ -125,9 +126,9 @@ export function CommercialDecisionModal({
       try {
         const res = await fetch("/api/superadmin/mentors", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { mentors?: Array<{ id: string; name: string }> };
+        const data = (await res.json()) as { mentors?: Array<{ id: string; name: string; email?: string }> };
         if (!cancelled && Array.isArray(data.mentors) && data.mentors.length > 0) {
-          setMentors(data.mentors.map((m) => ({ id: m.id, name: m.name })));
+          setMentors(data.mentors.map((m) => ({ id: m.id, name: m.name, email: m.email })));
         }
       } catch {
         // keep mock fallback
@@ -179,6 +180,7 @@ export function CommercialDecisionModal({
       checklist,
       mentorId: mentorId || undefined,
       mentorName: mentor?.name,
+      mentorEmail: mentor?.email,
     });
   }
 

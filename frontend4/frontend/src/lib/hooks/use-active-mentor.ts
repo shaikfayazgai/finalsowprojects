@@ -26,7 +26,7 @@ export function useActiveMentor(): {
   refresh: () => void;
 } {
   const sp = useSearchParams();
-  const { status } = useSession();
+  const { status, data: session } = useSession();
   const demoRole = sp.get("role");
   const [data, setData] = React.useState<MentorMeResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -68,9 +68,37 @@ export function useActiveMentor(): {
   const fallbackRole: MentorRole =
     DEMO_BYPASS && isMentorRole(demoRole) ? demoRole : "mentor.senior";
 
+  // Fallback profile (while the real /me loads or if it errors): use the REAL
+  // signed-in identity from the session — NEVER the mock persona's name (which
+  // is why "Priya"/"Amelia" leaked through). Only the non-identity template
+  // fields (avatar style, etc.) come from the persona.
+  const fallbackProfile: MentorProfile = React.useMemo(() => {
+    const su = session?.user as { name?: string | null; email?: string | null } | undefined;
+    const realName = (su?.name ?? "").trim();
+    const email = su?.email ?? "";
+    const displayName =
+      (realName && !realName.includes("@") ? realName : "") ||
+      (email ? email.split("@")[0]! : "") ||
+      MOCK_MENTORS[fallbackRole].displayName;
+    const firstName = displayName.split(/\s+/)[0] || displayName;
+    const initials = displayName
+      .split(/\s+/)
+      .map((p) => p[0] ?? "")
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+    return {
+      ...MOCK_MENTORS[fallbackRole],
+      displayName,
+      firstName,
+      email: email || MOCK_MENTORS[fallbackRole].email,
+      avatarInitials: initials || MOCK_MENTORS[fallbackRole].avatarInitials,
+    };
+  }, [session?.user, fallbackRole]);
+
   return {
     role: data?.role ?? fallbackRole,
-    profile: data?.profile ?? MOCK_MENTORS[fallbackRole],
+    profile: data?.profile ?? fallbackProfile,
     isSeniorOrLead: data?.isSeniorOrLead ?? fallbackRole !== "mentor",
     onboardingComplete: data?.onboardingComplete ?? false,
     loading: status === "loading" || (status === "authenticated" && !data && !error),

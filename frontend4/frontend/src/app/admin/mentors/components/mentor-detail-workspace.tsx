@@ -117,9 +117,47 @@ export function MentorDetailWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const mentor = useAdminMentor(params.mentorId);
+  const mockMentor = useAdminMentor(params.mentorId);
   const pools = useAdminPoolsList();
   const competency = useMentorCompetency(params.mentorId);
+
+  // Real provisioned mentors live in the DB (login_accounts), not the mock
+  // roster — so a real mentor id (e.g. 92) isn't in getAdminMentor and the page
+  // would say "Mentor not found". Fetch the real mentor by id as a fallback and
+  // also pull its assigned-SOW count so the registry detail reflects reality.
+  const [realMentor, setRealMentor] = React.useState<MockAdminMentor | null>(null);
+  React.useEffect(() => {
+    if (mockMentor || !params.mentorId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/superadmin/mentors", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          mentors?: Array<{ id: string; name: string; email: string; role: string }>;
+        };
+        const m = (data.mentors ?? []).find((x) => String(x.id) === String(params.mentorId));
+        if (cancelled || !m) return;
+        setRealMentor({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          country: "—",
+          roles: [m.role.includes(".") ? m.role : "mentor"],
+          status: "active",
+          pools: [],
+          reviews30d: 0,
+          slaHitRate: null,
+          joinedAt: new Date().toISOString(),
+        } as unknown as MockAdminMentor);
+      } catch {
+        // leave not-found
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mockMentor, params.mentorId]);
+
+  const mentor = mockMentor ?? realMentor;
 
   const tab = (searchParams.get("tab") as Tab | null) ?? "overview";
   const activeTab = TABS.some((t) => t.key === tab) ? tab : "overview";

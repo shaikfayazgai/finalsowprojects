@@ -140,6 +140,26 @@ export async function fetchMentorDashboardReal(): Promise<MentorDashboardReal> {
   };
 }
 
+export interface MentorAssignedSow {
+  sowId: string;
+  title: string;
+  status?: string | null;
+  stage?: string | null;
+  ownerEmail?: string | null;
+  assignmentStatus?: string | null;
+  assignedAt?: string | null;
+}
+
+/** SOWs assigned to the signed-in mentor at the Commercial gate (mapped from
+ * admin_records.sow_mentor → enterprise_sows by unique id). Visible immediately. */
+export async function fetchMentorAssignedSows(): Promise<MentorAssignedSow[]> {
+  const res = await fetchInternal("/api/mentor/assigned-sows");
+  if (!res.ok) return [];
+  const raw = (await res.json()) as { data?: { sows?: MentorAssignedSow[] }; sows?: MentorAssignedSow[] };
+  const sows = raw.data?.sows ?? raw.sows ?? [];
+  return Array.isArray(sows) ? sows : [];
+}
+
 export interface MentorSowTask {
   id: string;
   title: string;
