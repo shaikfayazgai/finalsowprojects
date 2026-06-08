@@ -21,7 +21,7 @@ import {
   Search,
 } from "lucide-react";
 import type { MockReview, SlaTier } from "@/mocks/mentor";
-import { fetchMentorReviews, MentorApiError } from "@/lib/api/mentor-mock";
+import { MentorApiError } from "@/lib/api/mentor-mock";
 import { listMentorQueue, fetchMentorAssignedSows, type MentorAssignedSow } from "@/lib/api/mentor";
 import { Skeleton } from "@/components/meridian";
 import { Drawer } from "@/components/meridian/overlays";
@@ -232,9 +232,9 @@ export function MentorQueueWorkspace() {
   const extraFilters = advancedFilterCount(slaTiers, stages, roundFilter, flagFilters);
 
   const loadQueue = React.useCallback((signal?: AbortSignal) => {
-    // Prefer the REAL backend queue (reviews routed from contributor submissions
-    // on SOWs assigned to this mentor). Fall back to the mock roster only if the
-    // backend is unavailable, so the demo UI still renders.
+    // REAL backend queue only (reviews routed from contributor submissions on
+    // SOWs assigned to this mentor). No mock fallback — the queue shows only real
+    // data that flowed through the process; empty means an empty queue.
     void (async () => {
       try {
         const raw = (await listMentorQueue()) as
@@ -242,22 +242,13 @@ export function MentorQueueWorkspace() {
           | undefined;
         const rows = raw?.data?.items ?? raw?.items ?? [];
         if (signal?.aborted) return;
-        if (Array.isArray(rows) && rows.length > 0) {
-          setItems(rows.map(backendRowToReview));
-          setError(null);
-          return;
-        }
-        // Backend reachable but empty → show an empty real queue (not mock).
-        setItems([]);
+        setItems(Array.isArray(rows) ? rows.map(backendRowToReview) : []);
         setError(null);
-      } catch {
-        // Backend unavailable → fall back to mock so the page still works.
-        fetchMentorReviews(signal)
-          .then((res) => setItems(res.items))
-          .catch((err: unknown) => {
-            if ((err as { name?: string }).name === "AbortError") return;
-            setError(err instanceof MentorApiError ? err.message : "Could not load queue.");
-          });
+      } catch (err: unknown) {
+        if (signal?.aborted || (err as { name?: string }).name === "AbortError") return;
+        // Backend unavailable → show an empty queue with an error, never mock data.
+        setItems([]);
+        setError(err instanceof MentorApiError ? err.message : "Could not load queue.");
       }
     })();
   }, []);

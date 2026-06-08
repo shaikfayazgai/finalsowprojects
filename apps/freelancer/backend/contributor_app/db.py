@@ -301,6 +301,29 @@ CREATE INDEX IF NOT EXISTS idx_contrib_education_acct ON contributor_education(a
 ALTER TABLE contributor_profiles ADD COLUMN IF NOT EXISTS expertise_areas TEXT[] DEFAULT '{}';
 ALTER TABLE contributor_profiles ADD COLUMN IF NOT EXISTS certifications  JSONB  DEFAULT '[]';
 ALTER TABLE contributor_profiles ADD COLUMN IF NOT EXISTS profile_completed BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ── Task-interest board (the "I'm interested" flow) ───────────────────────────
+-- SHARED table: the freelancer service writes interest rows for decomposed
+-- enterprise_plans tasks; the enterprise service reads them to pick one
+-- contributor per task. Keyed by (plan_id, task_id, account_id) so a contributor
+-- can express interest at most once per task.
+CREATE TABLE IF NOT EXISTS task_interests (
+    id                BIGSERIAL PRIMARY KEY,
+    plan_id           TEXT NOT NULL,
+    task_id           TEXT NOT NULL,
+    sow_id            TEXT,
+    account_id        BIGINT NOT NULL,
+    contributor_name  TEXT,
+    contributor_email TEXT,
+    status            TEXT NOT NULL DEFAULT 'interested',  -- interested|withdrawn|selected|rejected
+    data              JSONB NOT NULL DEFAULT '{}',
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_task_interests_plan_task_acct
+    ON task_interests(plan_id, task_id, account_id);
+CREATE INDEX IF NOT EXISTS idx_task_interests_plan_task ON task_interests(plan_id, task_id);
+CREATE INDEX IF NOT EXISTS idx_task_interests_acct ON task_interests(account_id);
 """
 
 
@@ -415,6 +438,110 @@ def create_oauth_account(*, email: str, first_name: str, last_name: str, provide
     return row
 
 
+# ── opportunity discovery (read shared enterprise_plans, read-only) ───────────
+
+# A plan task is "open" (visible on the opportunity board) when it has no
+# assignee yet and its status is one of these. Anything assigned/in-review/done
+# is hidden.
+_OPEN_TASK_STATUSES = {"todo", "open", "available", "unassigned", "backlog", "ready", "new"}
+
+
+def fetch_open_plan_tasks() -> list[dict[str, Any]]:
+    """Read every enterprise plan's decomposed tasks and return the OPEN ones
+    (no assignee, open-ish status) flattened with plan/sow context. Read-only
+    against the shared `enterprise_plans` table — the freelancer service never
+    writes there. Returns [] if the table doesn't exist yet (enterprise not run).
+    """
+    c = conn()
+    rows: list[dict[str, Any]] = []
+    try:
+        with c.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, owner_id, owner_email, data, updated_at "
+                "FROM enterprise_plans ORDER BY updated_at DESC"
+            )
+            plans = cur.fetchall()
+    except Exception:  # noqa: BLE001 — table may not exist; surface an empty board
+        ensure_pg_clean()
+        return []
+
+    for plan in plans:
+        data = plan.get("data") or {}
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:  # noqa: BLE001
+                data = {}
+        sow_id = data.get("sowId") or data.get("sow_id")
+        project_name = data.get("projectTitle") or data.get("title") or data.get("name") or "Project"
+        tasks = data.get("tasks") or []
+        if not isinstance(tasks, list):
+            continue
+        for t in tasks:
+            if not isinstance(t, dict):
+                continue
+            status = str(t.get("status") or "todo").lower()
+            assignee = t.get("assigneeId") or t.get("assignee_id") or t.get("contributorTaskId")
+            if assignee:
+                continue
+            if status not in _OPEN_TASK_STATUSES:
+                continue
+            detail = t.get("detail") if isinstance(t.get("detail"), dict) else {}
+            rows.append({
+                "plan_id": plan["id"],
+                "task_id": str(t.get("id") or ""),
+                "sow_id": sow_id,
+                "project_name": project_name,
+                "milestone": t.get("milestone") or t.get("milestoneName") or detail.get("milestone") or "",
+                "title": t.get("title") or "Untitled task",
+                "description": detail.get("description") or t.get("description") or "",
+                "technologies": (t.get("skills") or t.get("technologies")
+                                 or detail.get("skills") or detail.get("technologies") or []),
+                "effort_hours": (t.get("estimatedHours") or t.get("effortHours")
+                                 or detail.get("estimatedHours") or detail.get("hours") or 0),
+                "priority": t.get("priority") or "medium",
+                "deadline": t.get("dueDate") or t.get("deadline") or detail.get("dueDate"),
+                "owner_email": plan.get("owner_email"),
+            })
+    return rows
+
+
+def fetch_plan_task(plan_id: str, task_id: str) -> dict[str, Any] | None:
+    """Return a single open/any plan task (flattened) by plan+task id, or None."""
+    for row in fetch_open_plan_tasks():
+        if row["plan_id"] == plan_id and row["task_id"] == task_id:
+            return row
+    # Even if no longer "open" (e.g. already selected), allow interest lookups.
+    c = conn()
+    try:
+        with c.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, data FROM enterprise_plans WHERE id=%s", (plan_id,))
+            plan = cur.fetchone()
+    except Exception:  # noqa: BLE001
+        ensure_pg_clean()
+        return None
+    if not plan:
+        return None
+    data = plan.get("data") or {}
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except Exception:  # noqa: BLE001
+            data = {}
+    for t in (data.get("tasks") or []):
+        if isinstance(t, dict) and str(t.get("id")) == str(task_id):
+            detail = t.get("detail") if isinstance(t.get("detail"), dict) else {}
+            return {
+                "plan_id": plan_id, "task_id": task_id,
+                "sow_id": data.get("sowId") or data.get("sow_id"),
+                "project_name": data.get("projectTitle") or data.get("title") or "Project",
+                "title": t.get("title") or "Untitled task",
+                "description": detail.get("description") or "",
+                "effort_hours": (t.get("estimatedHours") or t.get("effortHours") or 0),
+            }
+    return None
+
+
 # ── seeding (idempotent, keyed by account_id) ─────────────────────────────────
 
 def _count(table: str, account_id: int) -> int:
@@ -425,7 +552,15 @@ def _count(table: str, account_id: int) -> int:
 
 
 def seed_demo_data(account_id: int) -> None:
-    """Create a couple of demo rows the first time a contributor reads anything."""
+    """Create a couple of demo rows the first time a contributor reads anything.
+
+    DISABLED by default: this auto-seeded fake tasks/earnings/payouts/credentials
+    on every contributor read, so users saw demo data instead of only what really
+    flowed through the process. Set CONTRIBUTOR_DEMO_SEED=1 to re-enable for a
+    fresh demo workspace."""
+    import os
+    if os.environ.get("CONTRIBUTOR_DEMO_SEED") != "1":
+        return
     try:
         _seed(account_id)
     except Exception as exc:  # noqa: BLE001
