@@ -1,4 +1,15 @@
-import { apiCall, ApiError } from "./client";
+import { apiCall, ApiError, fetchInternal } from "./client";
+
+/**
+ * Session-aware reviewer queue fetch (real backend, via the Next proxy at
+ * /api/reviewer/queue → GET /api/v1/reviewer/dashboard). Returns the raw
+ * dashboard payload; the queue workspace maps `assignments` to its row shape.
+ */
+export async function listReviewerQueue(signal?: AbortSignal): Promise<unknown> {
+  const res = await fetchInternal("/api/reviewer/queue", { signal });
+  if (!res.ok) throw new Error(`Could not load reviewer queue (${res.status})`);
+  return res.json();
+}
 
 export interface ReviewerDashboardData {
   assignedTaskCount: number;

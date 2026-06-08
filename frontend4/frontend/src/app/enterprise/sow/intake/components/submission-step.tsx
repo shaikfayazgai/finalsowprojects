@@ -35,6 +35,14 @@ export interface SubmissionConfig {
   approvers: Record<SowApprovalStageKey, ApproverCandidate>;
   notify: boolean;
   coverNote: string;
+  /** Enterprise reviewer assigned at intake (optional — reviewer is NOT a stage). */
+  reviewer?: { id: string; email?: string; name?: string };
+}
+
+interface ReviewerOption {
+  id: string;
+  email?: string;
+  name?: string;
 }
 
 export interface CommitArgs {
@@ -85,6 +93,30 @@ export function SubmissionStep({ title, saving, error, onBack, onCancel, onCommi
   const [coverNote, setCoverNote] = React.useState("");
   const [validationError, setValidationError] = React.useState<string | null>(null);
 
+  // Reviewer is assigned at intake but is NOT a pipeline stage — it routes the
+  // SOW's accepted submissions to a specific enterprise reviewer (two-stage QA).
+  // Populated from real reviewer accounts; selection is optional.
+  const [reviewers, setReviewers] = React.useState<ReviewerOption[]>([]);
+  const [reviewerId, setReviewerId] = React.useState("");
+
+  React.useEffect(() => {
+    const c = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch("/api/superadmin/reviewers", {
+          signal: c.signal,
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { reviewers?: ReviewerOption[] };
+        if (Array.isArray(data.reviewers)) setReviewers(data.reviewers);
+      } catch {
+        // Reviewer is optional — silently leave the picker empty on failure.
+      }
+    })();
+    return () => c.abort();
+  }, []);
+
   const slaHours = STAGES.map((s) => STAGE_SLA_HOURS[s]);
   const slaUniform = slaHours.every((h) => h === slaHours[0]);
   const slaLabel = slaUniform ? `${slaHours[0]}h per stage` : slaHours.map((h, i) => `${STAGE_LABEL[STAGES[i]!]} ${h}h`).join(" · ");
@@ -100,12 +132,14 @@ export function SubmissionStep({ title, saving, error, onBack, onCancel, onCommi
       }
     }
     setValidationError(null);
+    const reviewer = reviewers.find((r) => r.id === reviewerId);
     onCommit({
       kind,
       config: {
         approvers: buildApproversRecord(selectedIds),
         notify,
         coverNote,
+        reviewer: reviewer ? { id: reviewer.id, email: reviewer.email, name: reviewer.name } : undefined,
       },
     });
   };
@@ -160,6 +194,35 @@ export function SubmissionStep({ title, saving, error, onBack, onCancel, onCommi
           <p className="mt-2.5 flex items-center gap-1.5 font-body text-[11px] text-text-tertiary">
             <Clock className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden />
             SLA per stage: {slaLabel} (from policy templates)
+          </p>
+        </div>
+
+        <div>
+          <label
+            htmlFor="sow-reviewer"
+            className="block font-body text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-tertiary mb-1.5"
+          >
+            Reviewer{" "}
+            <span className="font-normal normal-case tracking-normal text-text-tertiary">
+              · optional · second-stage QA on delivered work
+            </span>
+          </label>
+          <select
+            id="sow-reviewer"
+            value={reviewerId}
+            onChange={(e) => setReviewerId(e.target.value)}
+            className={selectCls}
+          >
+            <option value="">No reviewer (assign later)</option>
+            {reviewers.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name || r.email || r.id}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1.5 font-body text-[11px] text-text-tertiary">
+            Accepted submissions on this SOW route to the chosen reviewer&apos;s queue.
+            The reviewer is not part of the approval pipeline.
           </p>
         </div>
 

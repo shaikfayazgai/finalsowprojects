@@ -401,6 +401,24 @@ async def list_contributors(admin: Annotated[dict, Depends(get_current_admin)]):
     return {"contributors": contributors, "total": len(contributors)}
 
 
+@router.get("/api/superadmin/reviewers")
+async def list_reviewers(admin: Annotated[dict, Depends(get_current_admin)]):
+    """Reviewer accounts available for assignment to a SOW at intake (role in the
+    reviewer family). Used to populate the SOW intake reviewer picker with REAL
+    people instead of mock candidates."""
+    conn = get_pg_connection()
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT id, email, first_name, last_name, role FROM login_accounts "
+            "WHERE role LIKE 'reviewer%' AND COALESCE(is_active, TRUE) ORDER BY created_at DESC")
+        reviewers = [{
+            "id": str(r["id"]), "email": r["email"],
+            "name": (f"{r.get('first_name','') or ''} {r.get('last_name','') or ''}".strip() or r["email"]),
+            "role": r["role"],
+        } for r in cur.fetchall()]
+    return {"reviewers": reviewers, "total": len(reviewers)}
+
+
 @router.get("/api/superadmin/all-users")
 async def list_all_users(admin: Annotated[dict, Depends(get_current_admin)]):
     """All provisioned accounts (for the enterprise member registry). status:
@@ -481,6 +499,57 @@ async def assign_sow_mentor(sow_id: str, body: AssignMentor, request: Request,
                 ip_address=request.client.host if request.client else None,
                 extra={"mentorId": body.mentorId})
     return {"ok": True, "sowId": sow_id, "mentor": payload}
+
+
+@router.get("/api/superadmin/sows/{sow_id}/reviewer")
+async def get_sow_reviewer(sow_id: str, admin: Annotated[dict, Depends(get_current_admin)]):
+    """Currently-assigned reviewer for a SOW (if any)."""
+    conn = get_pg_connection()
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT data FROM admin_records WHERE kind='sow_reviewer' AND name=%s AND deleted_at IS NULL "
+            "ORDER BY updated_at DESC LIMIT 1", (sow_id,))
+        row = cur.fetchone()
+    data = (row or {}).get("data") or {}
+    if isinstance(data, str):
+        try:
+            data = _json_loads(data)
+        except Exception:  # noqa: BLE001
+            data = {}
+    return {"sowId": sow_id, "reviewer": data or None}
+
+
+class AssignReviewer(BaseModel):
+    reviewerId: str
+    reviewerEmail: str | None = None
+    reviewerName: str | None = None
+
+
+@router.post("/api/superadmin/sows/{sow_id}/assign-reviewer")
+async def assign_sow_reviewer(sow_id: str, body: AssignReviewer, request: Request,
+                             admin: Annotated[dict, Depends(get_current_admin)]):
+    """Assign (or re-assign) the enterprise reviewer for a SOW at intake. Stored in
+    admin_records (kind=sow_reviewer, name=sow_id). The reviewer queue (two-stage
+    review hand-off) routes this SOW's accepted submissions to this reviewer."""
+    conn = get_pg_connection()
+    rid = f"sow_reviewer_{sow_id}"
+    payload = {"reviewerId": body.reviewerId, "reviewerEmail": body.reviewerEmail, "reviewerName": body.reviewerName}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO admin_records (id, kind, name, status, data)
+            VALUES (%s, 'sow_reviewer', %s, 'assigned', %s)
+            ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, status='assigned',
+                                           deleted_at = NULL, updated_at = now()
+            """,
+            (rid, sow_id, Json(payload)))
+    conn.commit()
+    write_audit(actor_id=str(admin.get("id", "")), actor_email=admin.get("email"),
+                actor_role=admin.get("role"), action="assign_reviewer", target="sow",
+                target_id=sow_id, service="superadmin-service",
+                ip_address=request.client.host if request.client else None,
+                extra={"reviewerId": body.reviewerId})
+    return {"ok": True, "sowId": sow_id, "reviewer": payload}
 
 
 def _json_loads(s):

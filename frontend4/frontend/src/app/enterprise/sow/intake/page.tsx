@@ -99,6 +99,31 @@ const CONFIDENTIALITY_OPTIONS: Array<{
   },
 ];
 
+/**
+ * Persist the reviewer chosen at intake step 2 to the created SOW. Reviewer is
+ * optional — a missing selection is a no-op, and a failed POST never blocks the
+ * intake flow (the SOW is already created/submitted by this point).
+ */
+async function assignReviewerToSow(
+  sowId: string,
+  reviewer: { id: string; email?: string; name?: string } | undefined,
+): Promise<void> {
+  if (!reviewer?.id) return;
+  try {
+    await fetch(`/api/superadmin/sows/${encodeURIComponent(sowId)}/reviewer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reviewerId: reviewer.id,
+        reviewerEmail: reviewer.email,
+        reviewerName: reviewer.name,
+      }),
+    });
+  } catch {
+    // Reviewer assignment is best-effort and must not break intake.
+  }
+}
+
 /* ────────────────────────── page ────────────────────────── */
 
 export default function SowIntakePage() {
@@ -430,6 +455,10 @@ function UploadWizard({ onCancel }: { onCancel: () => void }) {
       setCreatedSowId(created.id);
       setCommittedKind(args.kind);
       clearUploadDraft();
+
+      // Persist the chosen reviewer once the SOW id is known. Reviewer is
+      // optional and never blocks the SOW from being created/submitted.
+      await assignReviewerToSow(created.id, args.config.reviewer);
 
       if (args.kind === "submit") {
         const { submitSow } = await import("@/lib/api/sow-v2");
@@ -1097,6 +1126,8 @@ function AuthorForm({ onCancel }: { onCancel: () => void }) {
       });
       setCreatedSowId(created.id);
       setCommittedKind(args.kind);
+      // Persist the chosen reviewer once the SOW id is known (optional).
+      await assignReviewerToSow(created.id, args.config.reviewer);
       if (args.kind === "submit") {
         const { submitSow } = await import("@/lib/api/sow-v2");
         await submitSow(created.id);
