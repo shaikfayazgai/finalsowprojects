@@ -78,7 +78,7 @@ export default function ReviewerProfilePage() {
             <dt className="font-body text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-tertiary">
               Workspace
             </dt>
-            <dd className="mt-1 font-body text-[13px] text-foreground">Glimmora HQ · Acme Corp</dd>
+            <dd className="mt-1 font-body text-[13px] text-foreground">—</dd>
           </div>
           <div>
             <dt className="font-body text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-tertiary">

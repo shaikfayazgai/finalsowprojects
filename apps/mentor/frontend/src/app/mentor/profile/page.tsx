@@ -159,14 +159,14 @@ export default function MentorProfilePage() {
             icon={Users}
             tone="amber"
             label="Sessions held"
-            value="12"
+            value="—"
             hint="Scheduled mentorship sessions completed"
           />
           <KeyMetricCard
             icon={Users}
             tone="green"
             label="Active mentees"
-            value="8"
+            value="—"
             hint="Contributors currently in your mentorship roster"
           />
         </div>

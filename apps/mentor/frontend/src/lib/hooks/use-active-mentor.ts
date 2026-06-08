@@ -13,6 +13,29 @@ import {
 
 const DEMO_BYPASS = process.env.NEXT_PUBLIC_MENTOR_DEMO === "1";
 
+/** Neutral, identity-free template used when no persona seed exists. */
+function emptyMentorProfile(role: MentorRole): MentorProfile {
+  return {
+    role,
+    id: "",
+    displayName: "",
+    firstName: "",
+    email: "",
+    avatarInitials: "",
+    title: "",
+    country: "",
+    timezone: "",
+    joinedAt: "",
+    bio: "",
+    mentorshipIntro: "",
+    languages: [],
+    competency: [],
+    pools: [],
+    capacityPerWeek: 0,
+    status: "available",
+  };
+}
+
 /**
  * Active mentor identity — session-backed with optional ?role= demo override.
  */
@@ -39,7 +62,7 @@ export function useActiveMentor(): {
     if (status === "unauthenticated") {
       if (DEMO_BYPASS && isMentorRole(demoRole)) {
         setData({
-          profile: MOCK_MENTORS[demoRole],
+          profile: MOCK_MENTORS[demoRole] ?? emptyMentorProfile(demoRole),
           role: demoRole,
           isSeniorOrLead: demoRole !== "mentor",
           onboardingComplete: true,
@@ -73,13 +96,14 @@ export function useActiveMentor(): {
   // is why "Priya"/"Amelia" leaked through). Only the non-identity template
   // fields (avatar style, etc.) come from the persona.
   const fallbackProfile: MentorProfile = React.useMemo(() => {
+    const base = MOCK_MENTORS[fallbackRole] ?? emptyMentorProfile(fallbackRole);
     const su = session?.user as { name?: string | null; email?: string | null } | undefined;
     const realName = (su?.name ?? "").trim();
     const email = su?.email ?? "";
     const displayName =
       (realName && !realName.includes("@") ? realName : "") ||
       (email ? email.split("@")[0]! : "") ||
-      MOCK_MENTORS[fallbackRole].displayName;
+      base.displayName;
     const firstName = displayName.split(/\s+/)[0] || displayName;
     const initials = displayName
       .split(/\s+/)
@@ -88,11 +112,11 @@ export function useActiveMentor(): {
       .join("")
       .toUpperCase();
     return {
-      ...MOCK_MENTORS[fallbackRole],
+      ...base,
       displayName,
       firstName,
-      email: email || MOCK_MENTORS[fallbackRole].email,
-      avatarInitials: initials || MOCK_MENTORS[fallbackRole].avatarInitials,
+      email: email || base.email,
+      avatarInitials: initials || base.avatarInitials,
     };
   }, [session?.user, fallbackRole]);
 

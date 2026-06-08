@@ -13,18 +13,7 @@ export interface RateCardData {
   status: "active" | "draft";
 }
 
-const SEED_RATE_CARDS: RateCardData[] = [
-  { id: "rc-1",  skill: "Frontend Development", level: "Junior", region: "South Asia",     hourlyRate: 25, dailyRate: 200, currency: "USD", effectiveFrom: "2026-01-15", status: "active" },
-  { id: "rc-2",  skill: "Frontend Development", level: "Mid",    region: "South Asia",     hourlyRate: 50, dailyRate: 400, currency: "USD", effectiveFrom: "2026-01-15", status: "active" },
-  { id: "rc-3",  skill: "Frontend Development", level: "Senior", region: "Global",         hourlyRate: 85, dailyRate: 680, currency: "USD", effectiveFrom: "2026-01-15", status: "active" },
-  { id: "rc-4",  skill: "Backend Development",  level: "Junior", region: "South Asia",     hourlyRate: 30, dailyRate: 240, currency: "USD", effectiveFrom: "2026-02-01", status: "active" },
-  { id: "rc-5",  skill: "Backend Development",  level: "Mid",    region: "Middle East",    hourlyRate: 55, dailyRate: 440, currency: "USD", effectiveFrom: "2026-02-01", status: "active" },
-  { id: "rc-6",  skill: "Backend Development",  level: "Senior", region: "Global",         hourlyRate: 95, dailyRate: 760, currency: "USD", effectiveFrom: "2026-02-01", status: "active" },
-  { id: "rc-7",  skill: "UI/UX Design",         level: "Junior", region: "Southeast Asia", hourlyRate: 28, dailyRate: 224, currency: "USD", effectiveFrom: "2026-01-20", status: "active" },
-  { id: "rc-8",  skill: "UI/UX Design",         level: "Mid",    region: "South Asia",     hourlyRate: 50, dailyRate: 400, currency: "USD", effectiveFrom: "2026-01-20", status: "active" },
-  { id: "rc-9",  skill: "UI/UX Design",         level: "Senior", region: "Global",         hourlyRate: 75, dailyRate: 600, currency: "USD", effectiveFrom: "2026-01-20", status: "active" },
-  { id: "rc-10", skill: "QA Engineering",       level: "Mid",    region: "Africa",         hourlyRate: 40, dailyRate: 320, currency: "USD", effectiveFrom: "2026-03-01", status: "draft" },
-];
+const SEED_RATE_CARDS: RateCardData[] = [];
 
 interface RateCardsStoreState {
   rateCards: RateCardData[];

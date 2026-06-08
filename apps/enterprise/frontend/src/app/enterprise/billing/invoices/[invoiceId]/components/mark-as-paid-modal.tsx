@@ -135,7 +135,7 @@ export function MarkAsPaidModal({
             type="text"
             value={method}
             onChange={(e) => setMethod(e.target.value)}
-            placeholder="Bank transfer to Acme corporate account"
+            placeholder="e.g. Bank transfer reference"
             className={inputCls}
           />
         </Field>

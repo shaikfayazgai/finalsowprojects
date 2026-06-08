@@ -127,4 +127,4 @@ export function computeGovSummary(cases: MockGovCase[], operator: string) {
 }
 
 /** T&S operators eligible for case assignment. */
-export const GOV_ASSIGNEES = ["Aishwarya Rao", "Sneha Pillai"] as const;
+export const GOV_ASSIGNEES = [] as const;

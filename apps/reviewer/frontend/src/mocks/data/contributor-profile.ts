@@ -197,7 +197,7 @@ export interface ContributorProfileMock {
 export const contributorProfile: ContributorProfileMock = {
   identity: {
     id: "ctr-7402",
-    fullName: "Amelia Stone",
+    fullName: "",
     initials: "AS",
     handle: "amelia.stone",
     email: "amelia.stone@glimmora.team",
@@ -284,7 +284,7 @@ export const contributorProfile: ContributorProfileMock = {
       "Recent submissions read more confident than 60 days ago.",
     ],
     representativeQuote: {
-      mentor: "Rajesh Verma",
+      mentor: "",
       quote:
         "Strong component composition. Idiomatic hooks. The v1 → v2 diff is tight and addresses prior feedback well.",
     },
@@ -296,7 +296,7 @@ export const contributorProfile: ContributorProfileMock = {
       name: "React",
       level: "L3",
       category: "Engineering",
-      verifiedBy: "Rajesh Verma",
+      verifiedBy: "",
       verifiedAt: "Mar 2026",
       evidenceCount: 14,
       nextLevelProgress: 62,
@@ -306,7 +306,7 @@ export const contributorProfile: ContributorProfileMock = {
       name: "TypeScript",
       level: "L3",
       category: "Engineering",
-      verifiedBy: "Priya Iyer",
+      verifiedBy: "",
       verifiedAt: "Feb 2026",
       evidenceCount: 18,
       nextLevelProgress: 71,
@@ -316,7 +316,7 @@ export const contributorProfile: ContributorProfileMock = {
       name: "Accessibility (WCAG 2.2)",
       level: "L3",
       category: "Engineering",
-      verifiedBy: "Rajesh Verma",
+      verifiedBy: "",
       verifiedAt: "Apr 2026",
       evidenceCount: 9,
       nextLevelProgress: 48,
@@ -326,7 +326,7 @@ export const contributorProfile: ContributorProfileMock = {
       name: "Design Systems",
       level: "L2",
       category: "Engineering",
-      verifiedBy: "Hana Park",
+      verifiedBy: "",
       verifiedAt: "Jan 2026",
       evidenceCount: 6,
       nextLevelProgress: 55,
@@ -336,7 +336,7 @@ export const contributorProfile: ContributorProfileMock = {
       name: "Frontend Testing",
       level: "L2",
       category: "Quality",
-      verifiedBy: "Rajesh Verma",
+      verifiedBy: "",
       verifiedAt: "Mar 2026",
       evidenceCount: 7,
       nextLevelProgress: 40,
@@ -346,7 +346,7 @@ export const contributorProfile: ContributorProfileMock = {
       name: "Component Documentation",
       level: "L1",
       category: "Documentation",
-      verifiedBy: "Hana Park",
+      verifiedBy: "",
       verifiedAt: "Feb 2026",
       evidenceCount: 4,
       nextLevelProgress: 80,
@@ -396,7 +396,7 @@ export const contributorProfile: ContributorProfileMock = {
       title: "Marked 2 corrections addressed on Date Picker",
       detail: "Ready for resubmission · round 2 of 3",
       project: "Acme-Helios",
-      mentor: "Rajesh Verma",
+      mentor: "",
     },
     {
       id: "h-2",
@@ -405,7 +405,7 @@ export const contributorProfile: ContributorProfileMock = {
       title: "Mentor acknowledgment from Rajesh",
       detail:
         "\"v1 → v2 diff is tight and addresses prior feedback well.\"",
-      mentor: "Rajesh Verma",
+      mentor: "",
     },
     {
       id: "h-3",
@@ -414,7 +414,7 @@ export const contributorProfile: ContributorProfileMock = {
       title: "Auth Modal accepted on first try",
       detail: "L3 React · single round, no revision",
       project: "Acme-Helios",
-      mentor: "Priya Iyer",
+      mentor: "",
       badge: "First-try accept",
     },
     {
@@ -429,7 +429,7 @@ export const contributorProfile: ContributorProfileMock = {
       at: "May 8, 2026",
       kind: "skill_levelup",
       title: "Leveled up · TypeScript to L3",
-      detail: "Verified by Priya Iyer · 18 evidence submissions",
+      detail: "",
       badge: "Skill levelup",
     },
     {
@@ -453,7 +453,7 @@ export const contributorProfile: ContributorProfileMock = {
       kind: "submission_accepted",
       title: "Helios button system accepted",
       project: "Acme-Helios",
-      mentor: "Hana Park",
+      mentor: "",
     },
   ],
 

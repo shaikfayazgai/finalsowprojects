@@ -16,7 +16,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DEFAULT_TENANT_ID = "tnt-acme-corp";
+const DEFAULT_TENANT_ID = "";
 
 const bodySchema = z.object({
   email: z.string().email(),

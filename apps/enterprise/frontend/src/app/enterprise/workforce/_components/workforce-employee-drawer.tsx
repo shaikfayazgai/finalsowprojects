@@ -26,13 +26,12 @@ import type { WorkforceMember } from "@/lib/workforce/types";
 import { cn } from "@/lib/utils/cn";
 
 /** Demo delivery stats — stable per userId until backend ships. */
-function mockDeliveryStats(userId: string) {
-  const n = userId.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+function mockDeliveryStats(_userId: string) {
   return {
-    activeTasks: n % 4,
-    completedTasks: 8 + (n % 22),
-    acceptanceRate: 88 + (n % 10),
-    lastActiveDays: 1 + (n % 6),
+    activeTasks: 0,
+    completedTasks: 0,
+    acceptanceRate: 0,
+    lastActiveDays: 0,
   };
 }
 
@@ -172,7 +171,7 @@ export function WorkforceEmployeeDrawer({
               <Building2 className="h-4 w-4 text-text-tertiary shrink-0 mt-0.5" strokeWidth={2} aria-hidden />
               <div>
                 <p className="font-body text-[12.5px] font-semibold text-foreground">
-                  Acme Corp tenant
+                  Tenant
                 </p>
                 <p className="font-body text-[11.5px] text-text-secondary mt-0.5">
                   Visible under My organization for direct assignment.

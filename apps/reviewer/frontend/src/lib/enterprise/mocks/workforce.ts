@@ -20,34 +20,7 @@ const OVERLAY_KEY = "glimmora.mock.workforce";
 export const workforceOverlay = createOverlayStore<WorkforceMember>(OVERLAY_KEY);
 
 /** Seed internal employees for Acme Corp demos. */
-const BASE_WORKFORCE: WorkforceMember[] = [
-  {
-    userId: "wf-acme-001",
-    email: "aanya.sharma@acme.com",
-    displayName: "Aanya Sharma",
-    department: "Design org",
-    contribType: "internal",
-    primarySkills: ["Figma", "UX design"],
-    availability: "20",
-    employeeId: "EMP-100",
-    managerEmail: "rahul@acme.com",
-    costCenter: "CC-300",
-    status: "active",
-  },
-  {
-    userId: "wf-acme-002",
-    email: "rahul@acme.com",
-    displayName: "Rahul Mehta",
-    department: "Engineering",
-    contribType: "internal",
-    primarySkills: ["React", "TypeScript"],
-    availability: "15",
-    employeeId: "EMP-101",
-    managerEmail: "sandeep@acme.com",
-    costCenter: "CC-200",
-    status: "active",
-  },
-];
+const BASE_WORKFORCE: WorkforceMember[] = [];
 
 function memberIdForEmail(email: string): string {
   return `wf-import-${email.replace(/[^a-z0-9]/gi, "-")}`;
@@ -112,7 +85,7 @@ function existingMap() {
       lastName: parts.slice(1).join(" "),
       department: m.department ?? "",
       inactive: false,
-      tenantId: "tnt-acme-corp",
+      tenantId: "",
       role: "contributor",
       contribType: m.contribType,
     });

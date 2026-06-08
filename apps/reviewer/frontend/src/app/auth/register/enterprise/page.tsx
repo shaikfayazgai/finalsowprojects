@@ -84,14 +84,14 @@ export default function EnterpriseRegisterPage() {
               <FieldLabel htmlFor="contact">Your name</FieldLabel>
               <div className="relative">
                 <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-tertiary" strokeWidth={2} aria-hidden />
-                <input id="contact" value={contactName} onChange={(e) => setContactName(e.target.value)} className={cn(inputCls, "pl-9")} placeholder="Sandeep Kulkarni" autoComplete="name" required />
+                <input id="contact" value={contactName} onChange={(e) => setContactName(e.target.value)} className={cn(inputCls, "pl-9")} placeholder="Your full name" autoComplete="name" required />
               </div>
             </div>
             <div>
               <FieldLabel htmlFor="company">Company</FieldLabel>
               <div className="relative">
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-tertiary" strokeWidth={2} aria-hidden />
-                <input id="company" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className={cn(inputCls, "pl-9")} placeholder="Acme Corp" autoComplete="organization" required />
+                <input id="company" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className={cn(inputCls, "pl-9")} placeholder="Your company name" autoComplete="organization" required />
               </div>
             </div>
             <div>

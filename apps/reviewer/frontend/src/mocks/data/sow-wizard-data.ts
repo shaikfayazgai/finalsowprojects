@@ -352,7 +352,7 @@ const sow009Data: SOWWizardStepData = {
   knowledgeTransfer: "included",
   uatOwnership: "client_led",
   uatDuration: "3_weeks",
-  uatSignoffAuthority: "Kavita Sharma (VP Operations) & Anita Desai (CISO)",
+  uatSignoffAuthority: "",
   defectSLA:
     "Critical (portal down / data loss): 2-hour resolution. High (feature broken): 8-hour resolution. Medium: 3-business-day resolution. Low: next sprint.",
 
@@ -417,55 +417,14 @@ const sow009Data: SOWWizardStepData = {
   warrantyPeriod: "90_days",
   postWarrantySupport: "optional_retainer",
   changeRequestProcess: "formal_cr",
-  changeRequestApprover: "Kavita Sharma (VP Operations)",
+  changeRequestApprover: "",
   environmentCosts:
     "Dev: $900/month. Staging: $600/month. Production: $2,800/month. All via Terraform; environments are parity-matched to prevent environment-specific bugs.",
 
   /* Step 9 – Approvers (not applicable for manual upload, left blank) */
 };
 
-const sow009GeneratedSections = [
-  {
-    title: "1. Project Overview",
-    body: "This Statement of Work governs the design, development, and deployment of the Digital Insurance Claims Portal for AssureNow Insurance. The platform enables end-to-end digital claim processing from FNOL submission through settlement, targeting an 80% digital claim rate and ≤ 5-day average settlement time.",
-  },
-  {
-    title: "2. Functional Requirements",
-    body: "Core modules: FNOL digital submission with multi-document upload and camera capture; policyholder status tracking dashboard; AI-assisted OCR document classification; examiner unified workbench; ML-powered fraud risk scoring; multilingual notification engine (SMS, WhatsApp, email); IRDAI TAT compliance reporting; Digi-Locker and Aadhaar e-KYC integrations.",
-  },
-  {
-    title: "3. Delivery Scope",
-    body: "Full-stack development including Next.js frontend, NestJS backend, PostgreSQL 16 on RDS Aurora, and Python ML services on ECS Fargate. Phased go-live over 3 phases across Months 4–6. Complete UX design, WCAG 2.1 AA audit, and multilingual content for 5 languages.",
-  },
-  {
-    title: "4. Technical Architecture",
-    body: "Cloud-native on AWS ap-south-1. ECS Fargate for stateless services, RDS Aurora PostgreSQL for claims data, S3 + CloudFront for document storage and CDN, Redis ElastiCache for session and rate-limit state. AWS Textract for OCR. EventBridge for asynchronous workflow events. All services behind VPC with private subnets.",
-  },
-  {
-    title: "5. Timeline & Milestones",
-    body: "M1 – Discovery & Architecture (May 2026). M2 – Phase 1 Policyholder Portal go-live (August 2026). M3 – Phase 2 Examiner Workbench go-live (September 2026). M4 – Full go-live with Fraud Scoring & IRDAI Reporting (October 2026). Hypercare: 1 week post each phase go-live.",
-  },
-  {
-    title: "6. Team Composition",
-    body: "10–12 person cross-functional team: Project Manager, Solution Architect, 2 Senior Full-Stack Engineers, Frontend Engineer (mobile-first), Backend Engineer, ML Engineer, DevOps Engineer, QA Engineer, UX Designer, Business Analyst. Rate card per role as per Annexure A.",
-  },
-  {
-    title: "7. Budget & Payment Terms",
-    body: "Fixed-price contract at $310,000 USD. Payment schedule: 25% on project kickoff, 30% on Phase 1 go-live, 30% on Phase 2 go-live, 15% on final Phase 3 go-live and UAT sign-off. Net-15 payment terms.",
-  },
-  {
-    title: "8. Governance & Compliance",
-    body: "Bi-weekly steering committee meetings. JIRA for sprint tracking; Confluence for documentation. IRDAI data localisation (ap-south-1) strictly enforced. ISO 27001 and PDPB compliance throughout. Complete audit trail for all examiner decisions and AI-assisted actions.",
-  },
-  {
-    title: "9. Risk & Change Management",
-    body: "Top risks: legacy J2EE integration complexity, IRDAI approval timeline, data migration volume. All mitigations defined in risk register (shared JIRA board). Change requests follow formal CR process — minor changes within 10% contingency, larger changes require written CR with impact assessment.",
-  },
-  {
-    title: "10. Commercial & Legal",
-    body: "AssureNow Insurance owns all custom IP and source code. GlimmoraTeam retains rights to generic framework utilities under non-exclusive licence. Governing law: India. Arbitration: Mumbai. 90-day defect warranty post go-live. Optional maintenance retainer at ₹6,50,000/month post-warranty.",
-  },
-];
+const sow009GeneratedSections = [];
 
 /* ─────────────────────────────────────────────────────────────────
    sow-002 · Mobile Banking App Redesign (ai_generated)
@@ -661,7 +620,7 @@ const sow002Data: SOWWizardStepData = {
   knowledgeTransfer: "included",
   uatOwnership: "client_led",
   uatDuration: "2_weeks",
-  uatSignoffAuthority: "Priya Nair (Head of Digital) & Vikram Shah (CISO)",
+  uatSignoffAuthority: "",
   defectSLA:
     "Critical (app crash / data loss): 4-hour resolution. High (feature broken): 24-hour resolution. Medium: 3-business-day resolution. Low: next sprint.",
 
@@ -723,74 +682,20 @@ const sow002Data: SOWWizardStepData = {
   warrantyPeriod: "90_days",
   postWarrantySupport: "optional_retainer",
   changeRequestProcess: "formal_cr",
-  changeRequestApprover: "Priya Nair (Head of Digital)",
+  changeRequestApprover: "",
 
   /* Step 9 – Approvers */
-  businessOwnerApprover: "Priya Nair",
-  finalApprover: "Vikram Shah",
-  legalReviewer: "Kavita Sharma",
+  businessOwnerApprover: "",
+  finalApprover: "",
+  legalReviewer: "",
   securityReviewer: "Arjun Reddy",
 };
 
-const sow002GeneratedSections = [
-  {
-    title: "1. Project Overview",
-    body: "This SOW defines the full redesign of the FinServe Global mobile banking application, targeting a 45% DAU increase and App Store rating of 4.5+ within 6 months of launch through a modern React Native 0.76 rebuild with biometric authentication and a cohesive design system.",
-  },
-  {
-    title: "2. Functional Requirements",
-    body: "Core features: biometric login (Face ID / fingerprint / PIN fallback), personalised home dashboard, fund transfers (NEFT/RTGS/IMPS/UPI), bill payments, card management (freeze/limit/virtual), loan & FD summaries, in-app support chat, transaction history with smart search, and push notification preferences.",
-  },
-  {
-    title: "3. Delivery Scope",
-    body: "React Native 0.76 mobile app (iOS 15+ and Android 10+). Full UX research, design system, and high-fidelity prototypes. Integration with existing BFSI REST middleware — no backend changes. Phased release via Firebase Remote Config (5% → 25% → 100%).",
-  },
-  {
-    title: "4. Technical Architecture",
-    body: "React Native 0.76 + TypeScript + Redux Toolkit + React Query. Animations via Reanimated 3. Biometric via iOS LocalAuthentication and Android BiometricPrompt. Local SQLite cache (SQLCipher). CI/CD via Bitrise. Analytics via Mixpanel. Crash reporting via Sentry.",
-  },
-  {
-    title: "5. Timeline & Milestones",
-    body: "M1 – UX Research & IA complete (June 2026). M2 – Design System approved (June 2026). M3 – Alpha build (July 2026). M4 – Beta 5% rollout (August 2026). M5 – Full 100% rollout (September 2026).",
-  },
-  {
-    title: "6. Team Composition",
-    body: "7–9 person team: Project Manager, 2 Senior React Native Engineers, React Native Engineer, UX Designer, UX Researcher, Mobile QA Engineer, DevOps / Release Engineer. Remote engagement.",
-  },
-  {
-    title: "7. Budget & Payment Terms",
-    body: "Fixed-price at $180,000 USD. Payment: 25% on kickoff, 35% on Alpha build delivery, 40% on full rollout sign-off. Net-15 terms. Any approved change requests billed at T&M rates per Annexure A.",
-  },
-  {
-    title: "8. Governance & Compliance",
-    body: "Weekly sprint reviews. PCI-DSS Level 1 and RBI Mobile Banking Guidelines 2023 compliance throughout. Certificate pinning and SQLCipher encryption mandatory. Full audit trail for all financial transactions in-app.",
-  },
-  {
-    title: "9. Risk & Change Management",
-    body: "Key risks: BFSI middleware edge cases, App Store review rejections, phased rollout crash spikes. Firebase Remote Config kill switch pre-configured for instant rollback. All CRs via formal change request with FinServe Head of Digital sign-off.",
-  },
-  {
-    title: "10. Commercial & Legal",
-    body: "FinServe Global owns all custom IP and source code. GlimmoraTeam retains generic framework utilities under non-exclusive licence. 90-day warranty post full rollout. Optional maintenance retainer available. Governing law: India. Arbitration: Mumbai.",
-  },
-];
+const sow002GeneratedSections = [];
 
 /* ─── Registry ────────────────────────────────────────────────── */
 
-export const sowWizardRegistry: Record<string, SOWWizardRecord> = {
-  "sow-009": {
-    sowId: "sow-009",
-    intakeMode: "manual_upload",
-    data: sow009Data,
-    generatedSections: sow009GeneratedSections,
-  },
-  "sow-002": {
-    sowId: "sow-002",
-    intakeMode: "ai_generated",
-    data: sow002Data,
-    generatedSections: sow002GeneratedSections,
-  },
-};
+export const sowWizardRegistry: Record<string, SOWWizardRecord> = {};
 
 /**
  * Falls back to the sow-009 data (manual) or sow-002 data (AI)

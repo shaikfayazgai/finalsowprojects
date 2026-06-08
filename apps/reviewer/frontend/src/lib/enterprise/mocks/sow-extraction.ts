@@ -80,94 +80,17 @@ export interface ExtractedSow {
 
 /* ───────────────────── lightweight content "AI" ─────────────────── */
 
-const TEMPLATES = [
-  {
-    keywords: ["pricing", "rate", "billing", "invoice", "payout"],
-    title: "Billing platform modernization",
-    initiative: "Finance · Billing v2",
-    deliverables: [
-      "Invoice list with status filtering",
-      "Mark-as-paid flow with bank reference capture",
-      "Payout ledger with batch release",
-      "Per-tenant rate-card editor (multi-card)",
-      "ERP CSV export pipeline",
-      "Audit log of every payment + payout decision",
-    ],
-    stakeholders: [
-      { role: "sponsor",         name: "Sandeep Kulkarni", email: "sandeep@acme.com"  },
-      { role: "pmo",             name: "Anjali Rao",       email: "anjali@acme.com"   },
-      { role: "finance_contact", name: "Vikram Patel",     email: "vikram@acme.com"   },
-      { role: "legal_contact",   name: "Meera Joshi",      email: "meera@acme.com"    },
-    ],
-    clauses: [
-      { kind: "dependency", text: "Razorpay X corporate sub-account provisioning by Finance before W3." },
-      { kind: "dependency", text: "Existing /api/payouts service remains available read-only during cutover." },
-      { kind: "assumption", text: "All in-flight invoices use INR currency; multi-currency deferred to Phase 2." },
-      { kind: "constraint", text: "Bank-transfer reference must be captured for every paid invoice (audit)." },
-      { kind: "constraint", text: "No production access without SoX-compliant access review per CTO policy." },
-    ],
-    risks: [
-      { severity: "medium" as const, category: "compliance", message: "Acceptance criteria for invoice-export-to-ERP not specified.", suggestion: "Add explicit row-count + integrity-hash assertions." },
-      { severity: "low"    as const, category: "scope",      message: "Multi-currency is mentioned in passing; could create scope creep.", suggestion: "Lock to INR for Phase 1 in the SOW body." },
-    ],
-  },
-  {
-    keywords: ["api", "platform", "v3", "redesign", "modernize"],
-    title: "API platform v3 redesign",
-    initiative: "Platform · API v3",
-    deliverables: [
-      "Audit v2 endpoint usage from access logs",
-      "Capture undocumented behaviors via shadow testing",
-      "Draft v3 resource schemas + OpenAPI 3.1 spec",
-      "Pagination + standard error model",
-      "Traffic-shift instrumentation (10% pilot)",
-      "Rollback runbook + deprecation comms plan",
-      "Developer migration guide + SDK shims",
-    ],
-    stakeholders: [
-      { role: "sponsor",         name: "Sandeep Kulkarni", email: "sandeep@acme.com" },
-      { role: "pmo",             name: "Anjali Rao",       email: "anjali@acme.com"  },
-      { role: "security_contact",name: "Rohit Banerjee",   email: "rohit@acme.com"   },
-      { role: "legal_contact",   name: "Meera Joshi",      email: "meera@acme.com"   },
-    ],
-    clauses: [
-      { kind: "dependency", text: "Snowflake access for usage analytics (Data Eng) by W1." },
-      { kind: "dependency", text: "10% traffic-shift requires SRE buy-in + load-test sign-off." },
-      { kind: "assumption", text: "v2 stays online for at least 6 months after v3 GA." },
-      { kind: "constraint", text: "No breaking changes shipped without explicit deprecation header for ≥90 days." },
-    ],
-    risks: [
-      { severity: "high"   as const, category: "security", message: "Auth changes affect every downstream service.", suggestion: "Run an external pen-test before cutover." },
-      { severity: "medium" as const, category: "scope",    message: "SDK shims for 3 languages may slip past timeline.", suggestion: "Stage TypeScript first; Python + Go in follow-on." },
-    ],
-  },
-  {
-    keywords: ["mobile", "ios", "android", "companion", "app"],
-    title: "Mobile companion app",
-    initiative: "Helios mobile",
-    deliverables: [
-      "iOS + Android skeleton (React Native)",
-      "Auth + biometric unlock",
-      "Home + notifications surface",
-      "Push delivery pipeline (FCM + APNs)",
-      "Offline-first sync model",
-      "App Store + Play Store submission packs",
-    ],
-    stakeholders: [
-      { role: "sponsor",         name: "Sandeep Kulkarni", email: "sandeep@acme.com" },
-      { role: "pmo",             name: "Anjali Rao",       email: "anjali@acme.com"  },
-      { role: "security_contact",name: "Rohit Banerjee",   email: "rohit@acme.com"   },
-    ],
-    clauses: [
-      { kind: "dependency", text: "Apple Developer + Google Play accounts provisioned by IT before sprint 1." },
-      { kind: "assumption", text: "Feature parity with web is NOT required for the MVP." },
-      { kind: "constraint", text: "Biometric unlock must use platform-native APIs only (no third-party SDK)." },
-    ],
-    risks: [
-      { severity: "medium" as const, category: "platform", message: "App Store review can add 1–2 weeks of slip per cycle.", suggestion: "Submit a TestFlight build by W6." },
-    ],
-  },
-];
+type ExtractionTemplate = {
+  keywords: string[];
+  title: string;
+  initiative: string | null;
+  deliverables: string[];
+  stakeholders: ExtractedStakeholder[];
+  clauses: { kind: string; text: string }[];
+  risks: { severity: "low" | "medium" | "high"; category: string; message: string; suggestion: string }[];
+};
+
+const TEMPLATES: ExtractionTemplate[] = [];
 
 const GENERIC = {
   title: "Engagement scope",
@@ -179,10 +102,7 @@ const GENERIC = {
     "User-acceptance testing with sign-off",
     "Production rollout + 30-day hypercare",
   ],
-  stakeholders: [
-    { role: "sponsor", name: "Sandeep Kulkarni", email: "sandeep@acme.com" },
-    { role: "pmo",     name: "Anjali Rao",       email: "anjali@acme.com"  },
-  ],
+  stakeholders: [],
   clauses: [
     { kind: "dependency", text: "Stakeholder availability for weekly steering committee." },
     { kind: "assumption", text: "All work performed in IST business hours unless otherwise agreed." },

@@ -410,7 +410,7 @@ export function resolveContributorMock(path: string, method: string, body?: stri
           last_message: t.messages[t.messages.length - 1]?.body ?? "",
           timestamp: t.updatedAt,
           unread_count: t.unreadCount,
-          avatar: "https://i.pravatar.cc/100?img=22",
+          avatar: "",
         })),
         page: 1,
         page_size: 20,
@@ -425,7 +425,7 @@ export function resolveContributorMock(path: string, method: string, body?: stri
       status: 200,
       body: {
         id: t.id,
-        participants: [{ id: "u-reviewer", name: t.participantName, role: "reviewer", avatar: "https://i.pravatar.cc/100?img=22" }],
+        participants: [{ id: "u-reviewer", name: t.participantName, role: "reviewer", avatar: "" }],
         project_name: "Contributor Program",
         task_id: "task-504",
         messages: t.messages.map((m1: Record<string, any>) => ({

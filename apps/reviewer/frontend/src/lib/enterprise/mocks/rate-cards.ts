@@ -51,113 +51,13 @@ function iso(daysAgo: number): string {
   return d.toISOString();
 }
 
-const STD: RateRow[] = [
-  { role: "Designer", skill: "Figma",      level: "L1", region: "India", rateMinorPerHour:  80_000 },
-  { role: "Designer", skill: "Figma",      level: "L2", region: "India", rateMinorPerHour: 120_000 },
-  { role: "Designer", skill: "Figma",      level: "L3", region: "India", rateMinorPerHour: 180_000 },
-  { role: "Backend",  skill: "Python",     level: "L2", region: "India", rateMinorPerHour: 150_000 },
-  { role: "Backend",  skill: "Python",     level: "L3", region: "India", rateMinorPerHour: 220_000 },
-  { role: "Backend",  skill: "SQL",        level: "L3", region: "India", rateMinorPerHour: 200_000 },
-  { role: "Frontend", skill: "TypeScript", level: "L2", region: "India", rateMinorPerHour: 140_000 },
-  { role: "Frontend", skill: "TypeScript", level: "L3", region: "India", rateMinorPerHour: 210_000 },
-  { role: "Data",     skill: "Python",     level: "L2", region: "India", rateMinorPerHour: 150_000 },
-  { role: "SRE",      skill: "AWS",        level: "L3", region: "India", rateMinorPerHour: 240_000 },
-  { role: "QA",       skill: "Playwright", level: "L2", region: "India", rateMinorPerHour: 110_000 },
-  { role: "PM",       skill: "Discovery",  level: "L3", region: "India", rateMinorPerHour: 250_000 },
-];
+const STD: RateRow[] = [];
 
-const HELIOS_ROWS: RateRow[] = [
-  ...STD,
-  { role: "Designer", skill: "Motion",     level: "L3", region: "India", rateMinorPerHour: 200_000 },
-  { role: "Backend",  skill: "Go",         level: "L3", region: "India", rateMinorPerHour: 230_000 },
-];
+const HELIOS_ROWS: RateRow[] = [];
 
-const REPORTING_DRAFT: RateRow[] = [
-  { role: "Data",     skill: "dbt",        level: "L3", region: "India", rateMinorPerHour: 220_000 },
-  { role: "Data",     skill: "Looker",     level: "L2", region: "India", rateMinorPerHour: 160_000 },
-  { role: "Backend",  skill: "Python",     level: "L3", region: "India", rateMinorPerHour: 220_000 },
-];
+const REPORTING_DRAFT: RateRow[] = [];
 
-const SEED: RateCardDetail[] = [
-  {
-    id: "rc-std-2026",
-    name: "Standard 2026",
-    scope: "tenant",
-    scopeLabel: "Tenant-wide",
-    effectiveFrom: "2026-01-01T00:00:00Z",
-    effectiveTo: null,
-    rowCount: STD.length,
-    status: "active",
-    currency: "INR",
-    rows: STD,
-    bySegment: {
-      general_workforce: 120_000,
-      women_workforce: 132_000,
-      student: 80_000,
-      internal: 240_000,
-    },
-  },
-  {
-    id: "rc-helios-q3",
-    name: "Helios Q3 special",
-    scope: "project",
-    scopeLabel: "Project · Helios Q3",
-    effectiveFrom: "2026-06-01T00:00:00Z",
-    effectiveTo: "2026-09-30T00:00:00Z",
-    rowCount: HELIOS_ROWS.length,
-    status: "active",
-    currency: "INR",
-    rows: HELIOS_ROWS,
-  },
-  {
-    id: "rc-reporting-draft",
-    name: "Reporting V2 spec",
-    scope: "project",
-    scopeLabel: "Project · Reporting V2",
-    effectiveFrom: "2026-07-15T00:00:00Z",
-    effectiveTo: "2026-08-31T00:00:00Z",
-    rowCount: REPORTING_DRAFT.length,
-    status: "draft",
-    currency: "INR",
-    rows: REPORTING_DRAFT,
-  },
-  {
-    id: "rc-std-2025",
-    name: "Standard 2025",
-    scope: "tenant",
-    scopeLabel: "Tenant-wide",
-    effectiveFrom: "2025-01-01T00:00:00Z",
-    effectiveTo: "2025-12-31T00:00:00Z",
-    rowCount: 76,
-    status: "expired",
-    currency: "INR",
-    rows: STD,
-  },
-  {
-    id: "rc-onboarding",
-    name: "Onboarding redesign",
-    scope: "sow",
-    scopeLabel: "SOW · sow-acme-2",
-    effectiveFrom: iso(7),
-    effectiveTo: null,
-    rowCount: 8,
-    status: "draft",
-    currency: "INR",
-    rows: STD.slice(0, 8),
-  },
-  {
-    id: "rc-hr-portal",
-    name: "HR portal v2",
-    scope: "project",
-    scopeLabel: "Project · HR Portal",
-    effectiveFrom: iso(60),
-    effectiveTo: null,
-    rowCount: 10,
-    status: "active",
-    currency: "INR",
-    rows: STD.slice(0, 10),
-  },
-];
+const SEED: RateCardDetail[] = [];
 
 const overlay = createOverlayStore<RateCardDetail>("glimmora.mock.rateCards.v1");
 
@@ -236,7 +136,7 @@ export function updateRateCardMock(
 export function getTenantDefaultRateCardMock() {
   const std = SEED[0]!;
   return {
-    tenantId: "tnt-acme-corp",
+    tenantId: "",
     tenantCurrency: "INR",
     rateCards: {
       currency: std.currency,

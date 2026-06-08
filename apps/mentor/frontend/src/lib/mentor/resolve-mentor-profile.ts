@@ -23,7 +23,25 @@ export function buildMentorProfile(input: {
   lastName?: string | null;
   role: MentorRole;
 }): MentorProfile {
-  const template = MOCK_MENTORS[input.role];
+  const template: MentorProfile = MOCK_MENTORS[input.role] ?? {
+    role: input.role,
+    id: "",
+    displayName: "",
+    firstName: "",
+    email: "",
+    avatarInitials: "",
+    title: "",
+    country: "",
+    timezone: "",
+    joinedAt: "",
+    bio: "",
+    mentorshipIntro: "",
+    languages: [],
+    competency: [],
+    pools: [],
+    capacityPerWeek: 0,
+    status: "available",
+  };
   const displayName =
     [input.firstName, input.lastName].filter(Boolean).join(" ").trim() ||
     input.name?.trim() ||

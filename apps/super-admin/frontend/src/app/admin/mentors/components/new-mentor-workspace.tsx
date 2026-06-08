@@ -352,7 +352,7 @@ export function NewMentorWorkspace() {
             onChange={(e) => setNote(e.target.value)}
             rows={3}
             className={textareaCls}
-            placeholder="e.g. Looking forward to having you on the Helios review pool."
+            placeholder="e.g. Looking forward to having you on the review pool."
           />
         </FormSection>
 

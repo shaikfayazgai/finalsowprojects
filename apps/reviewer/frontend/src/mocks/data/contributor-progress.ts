@@ -157,13 +157,13 @@ const cents = (n: number) => Math.round(n * 100);
 
 export const contributorProgress: ProgressMock = {
   earnings: {
-    lifetime: cents(11240),
-    thisYear: cents(4180),
-    thisQuarter: cents(2440),
-    thisMonth: cents(960),
-    pending: cents(820),
-    nextPayoutAmount: cents(820),
-    nextPayoutDate: "Jun 1, 2026",
+    lifetime: cents(0),
+    thisYear: cents(0),
+    thisQuarter: cents(0),
+    thisMonth: cents(0),
+    pending: cents(0),
+    nextPayoutAmount: cents(0),
+    nextPayoutDate: "",
     currency: "USD",
   },
 
@@ -484,7 +484,7 @@ export const contributorProgress: ProgressMock = {
       kind: "first_try",
       title: "First-try accept · Auth Modal",
       detail: "Single-round acceptance · counted toward Q2 bonus.",
-      fromMentor: "Priya Iyer",
+      fromMentor: "",
     },
     {
       id: "r-2",
@@ -499,15 +499,15 @@ export const contributorProgress: ProgressMock = {
       kind: "mentor_ack",
       title: "Mentor acknowledgment from Rajesh",
       detail: "\"Tight v1 → v2 diff. Addresses prior feedback well.\"",
-      fromMentor: "Rajesh Verma",
+      fromMentor: "",
     },
     {
       id: "r-4",
       at: "May 8, 2026",
       kind: "level_up",
       title: "TypeScript · L3",
-      detail: "Verified by Priya Iyer with 18 evidence submissions.",
-      fromMentor: "Priya Iyer",
+      detail: "",
+      fromMentor: "",
     },
     {
       id: "r-5",

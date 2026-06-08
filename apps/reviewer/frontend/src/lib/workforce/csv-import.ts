@@ -62,10 +62,7 @@ const HEADER_ALIASES: Record<string, keyof WorkforceImportRow | "status"> = {
   status: "status",
 };
 
-export const WORKFORCE_CSV_TEMPLATE = `employee_id,email,first_name,last_name,department,primary_skills,manager_email,cost_center,status
-EMP-101,amrita@acme.com,Amrita,Bose,Finance,"Figma, UX design",rahul@acme.com,CC-300,active
-EMP-102,karthik@acme.com,Karthik,Iyer,Engineering,"React, TypeScript",rahul@acme.com,CC-200,active
-EMP-103,engineer-1@acme.com,Hari,Krishnan,Engineering,"Node.js, APIs",rahul@acme.com,CC-200,active`;
+export const WORKFORCE_CSV_TEMPLATE = `employee_id,email,first_name,last_name,department,primary_skills,manager_email,cost_center,status`;
 
 function parseCsvLine(line: string): string[] {
   const out: string[] = [];

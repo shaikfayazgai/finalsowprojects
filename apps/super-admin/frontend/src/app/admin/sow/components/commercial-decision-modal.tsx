@@ -300,7 +300,7 @@ export function CommercialDecisionModal({
             rows={4}
             placeholder={
               action === "approve"
-                ? "e.g. Rates align with MSA-2026-0008; contributor pool confirmed for POS rollout."
+                ? "e.g. Rates align with the MSA; contributor pool confirmed."
                 : action === "send_back"
                   ? "Explain what the enterprise sponsor must revise before resubmission."
                   : "Document why Commercial cannot proceed — visible to enterprise and audit."

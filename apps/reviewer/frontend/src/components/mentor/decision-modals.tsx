@@ -266,10 +266,7 @@ export function RejectModal({
 
 // ── Reassign ────────────────────────────────────────────────────────────
 
-const REASSIGN_CANDIDATES = [
-  { id: "mentor-amelia", name: "Amelia Stone", note: "20% load · Accessibility expert" },
-  { id: "mentor-rajesh", name: "Rajesh Verma", note: "80% load · React focus" },
-];
+const REASSIGN_CANDIDATES: Array<{ id: string; name: string; note: string }> = [];
 
 export function ReassignModal({
   onClose,

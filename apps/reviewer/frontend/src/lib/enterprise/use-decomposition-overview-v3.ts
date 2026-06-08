@@ -43,9 +43,9 @@ const GATE_LABELS: Record<GateId, string> = {
 };
 
 const DEFAULT_APPROVERS: Record<GateId, { name: string; initials: string }> = {
-  architecture: { name: "Jordan Park", initials: "JP" },
-  workforce: { name: "Kavi Singh", initials: "KS" },
-  governance: { name: "Lara Hammond", initials: "LH" },
+  architecture: { name: "", initials: "" },
+  workforce: { name: "", initials: "" },
+  governance: { name: "", initials: "" },
 };
 
 function legacyToV3(plan: DecompositionPlan): PlanState {

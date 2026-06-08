@@ -50,83 +50,17 @@ export interface GovernanceThresholdMock {
 
 export function getTenantInfoMock(): TenantInfoMock {
   return {
-    name: "Glimmora HQ",
-    tenantId: "glimmora-hq",
-    domain: "glimmora.ai",
-    domainVerified: true,
-    subscription: "Enterprise",
-    renewsAt: "2026-12-31T00:00:00Z",
+    name: "",
+    tenantId: "",
+    domain: "",
+    domainVerified: false,
+    subscription: "",
+    renewsAt: "",
   };
 }
 
 export function getTenantMembersMock(): TenantMemberMock[] {
-  return [
-    {
-      id: "u1",
-      name: "Sandeep Kumar",
-      email: "sandeep@glimmora.ai",
-      roles: ["sponsor"],
-      status: "active",
-      lastActiveAt: "2026-05-27T09:15:00Z",
-    },
-    {
-      id: "u2",
-      name: "Anjali Reddy",
-      email: "anjali@glimmora.ai",
-      roles: ["pmo", "admin"],
-      status: "active",
-      lastActiveAt: "2026-05-28T08:42:00Z",
-    },
-    {
-      id: "u3",
-      name: "Karthik Iyer",
-      email: "karthik@glimmora.ai",
-      roles: ["reviewer", "it"],
-      status: "active",
-      lastActiveAt: "2026-05-26T14:20:00Z",
-    },
-    {
-      id: "u4",
-      name: "Priya Nair",
-      email: "priya@glimmora.ai",
-      roles: ["finance", "compliance"],
-      status: "active",
-      lastActiveAt: "2026-05-25T11:05:00Z",
-    },
-    {
-      id: "u5",
-      name: "Lakshmi M.",
-      email: "lakshmi@glimmora.ai",
-      roles: ["pmo"],
-      status: "invited",
-      invitedAt: "2026-05-20T10:00:00Z",
-    },
-    {
-      id: "u6",
-      name: "Rohit Menon",
-      email: "rohit@glimmora.ai",
-      roles: ["procurement"],
-      status: "active",
-      lastActiveAt: "2026-05-24T16:30:00Z",
-    },
-    {
-      id: "u7",
-      name: "Vikram Desai",
-      email: "vikram@glimmora.ai",
-      roles: ["finance", "procurement"],
-      status: "active",
-      lastActiveAt: "2026-05-22T09:00:00Z",
-    },
-    {
-      id: "u8",
-      name: "Deepa Rao",
-      email: "deepa@glimmora.ai",
-      roles: ["reviewer"],
-      status: "suspended",
-      lastActiveAt: "2026-04-10T08:00:00Z",
-      suspendedAt: "2026-05-01T12:00:00Z",
-    },
-  ];
+  return [];
 }
 
 export function computeTenantSummary(members: TenantMemberMock[]) {

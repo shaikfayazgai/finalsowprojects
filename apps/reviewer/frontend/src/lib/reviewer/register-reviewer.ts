@@ -8,7 +8,7 @@ import bcrypt from "bcryptjs";
 import { acceptReviewerInvite, getReviewerInvite } from "@/lib/reviewer/invite-store";
 
 const REVIEWER_ROLE = "ent.reviewer";
-const DEFAULT_TENANT_ID = "tnt-acme-corp";
+const DEFAULT_TENANT_ID = "";
 
 function prismaClient() {
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });

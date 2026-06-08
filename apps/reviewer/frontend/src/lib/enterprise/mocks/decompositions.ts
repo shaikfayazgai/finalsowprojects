@@ -21,7 +21,7 @@ import { applyOverlay, createOverlayStore } from "./overlay";
 import { getSowMock } from "./sows";
 import { provisionProjectFromPlanMock } from "@/lib/projects/projects-mock";
 
-const OWNER = "sandeep@acme.com";
+const OWNER = "";
 
 function iso(daysAgo: number, hours = 9): string {
   const d = new Date();

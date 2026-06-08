@@ -59,13 +59,7 @@ export interface MockDigitalTwin {
   aiInsights: string[];
 }
 
-export const MOCK_SKILLS: MockSkill[] = [
-  { id: "skill-react", name: "React", level: "L3", category: "engineering", tasksCompletedWithThisSkill: 8, evidenceCount: 3 },
-  { id: "skill-ts", name: "TypeScript", level: "L3", category: "engineering", tasksCompletedWithThisSkill: 11, evidenceCount: 4 },
-  { id: "skill-figma", name: "Figma", level: "L2", category: "design", tasksCompletedWithThisSkill: 5, evidenceCount: 2 },
-  { id: "skill-a11y", name: "Accessibility", level: "L2", category: "design", tasksCompletedWithThisSkill: 4, evidenceCount: 1 },
-  { id: "skill-postgres", name: "Postgres", level: "L2", category: "data", tasksCompletedWithThisSkill: 3, evidenceCount: 1 },
-];
+export const MOCK_SKILLS: MockSkill[] = [];
 
 const PROFILES: Record<Persona, MockDigitalTwin> = {
   internal: {

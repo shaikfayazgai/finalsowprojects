@@ -571,70 +571,7 @@ const STORAGE_KEY = "contributor-tasks-store-v1";
 /** Seeded historical activity backlog — gives the demo a believable past
  * before the contributor mutates anything. Newest first. */
 function buildSeedActivity(): ActivityEvent[] {
-  return [
-    {
-      id: "seed-a1",
-      taskId: "t-4821",
-      at: "an hour ago",
-      kind: "draft_saved",
-      detail: "Saved draft notes for Date Picker · FocusScope sketch",
-    },
-    {
-      id: "seed-a2",
-      taskId: "t-5209",
-      at: "5 hours ago",
-      kind: "clarification_sent",
-      detail: "Asked Hana about locale source on Reporting CSV export",
-      mentor: "Hana Park",
-    },
-    {
-      id: "seed-a3",
-      taskId: "t-4188",
-      at: "yesterday",
-      kind: "resubmitted",
-      detail: "Search shortcuts resubmitted (v2)",
-      mentor: "Rajesh Verma",
-    },
-    {
-      id: "seed-a4",
-      taskId: "t-3417",
-      at: "yesterday · 16:42",
-      kind: "feedback_received",
-      detail: "Mentor feedback received on Onboarding wizard · one correction",
-      mentor: "R. Verma",
-    },
-    {
-      id: "seed-a5",
-      taskId: "t-6033",
-      at: "2 days ago",
-      kind: "correction_resolved",
-      detail: "Marked file-naming correction addressed on Empty-state illustrations",
-    },
-    {
-      id: "seed-a6",
-      taskId: "t-4912",
-      at: "May 18, 2026",
-      kind: "approved",
-      detail: "Mentor accepted Auth Modal · first-try",
-      mentor: "Priya Iyer",
-    },
-    {
-      id: "seed-a7",
-      taskId: "t-4711",
-      at: "May 12, 2026",
-      kind: "approved",
-      detail: "Mentor accepted Helios button system",
-      mentor: "Hana Park",
-    },
-    {
-      id: "seed-a8",
-      taskId: "t-4622",
-      at: "May 8, 2026",
-      kind: "approved",
-      detail: "Mentor accepted Empty-state illustrations · credential issued",
-      mentor: "Priya Iyer",
-    },
-  ];
+  return [];
 }
 
 export const useContributorTasksStore = create<ContributorTasksState>()(

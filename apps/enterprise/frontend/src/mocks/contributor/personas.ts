@@ -12,12 +12,7 @@
 
 export type Persona = "internal" | "freelancer" | "student" | "women";
 
-export const PERSONAS: Array<{ key: Persona; label: string; shortLabel: string }> = [
-  { key: "internal", label: "Internal employee", shortLabel: "Internal" },
-  { key: "freelancer", label: "External freelancer", shortLabel: "Freelancer" },
-  { key: "student", label: "Student", shortLabel: "Student" },
-  { key: "women", label: "Women workforce", shortLabel: "Women workforce" },
-];
+export const PERSONAS: Array<{ key: Persona; label: string; shortLabel: string }> = [];
 
 export interface PersonaProfile {
   persona: Persona;

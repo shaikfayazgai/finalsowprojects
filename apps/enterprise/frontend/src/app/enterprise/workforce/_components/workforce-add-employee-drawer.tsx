@@ -156,7 +156,7 @@ export function WorkforceAddEmployeeDrawer({
               type="email"
               value={form.email}
               onChange={(e) => setField("email", e.target.value)}
-              placeholder="amrita@acme.com"
+              placeholder="name@company.com"
               className={glassInputCls}
               autoComplete="email"
             />
@@ -185,7 +185,7 @@ export function WorkforceAddEmployeeDrawer({
               type="email"
               value={form.managerEmail}
               onChange={(e) => setField("managerEmail", e.target.value)}
-              placeholder="rahul@acme.com"
+              placeholder="manager@company.com"
               className={glassInputCls}
             />
           </GlassField>

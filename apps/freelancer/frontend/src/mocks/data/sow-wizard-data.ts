@@ -777,20 +777,7 @@ const sow002GeneratedSections = [
 
 /* ─── Registry ────────────────────────────────────────────────── */
 
-export const sowWizardRegistry: Record<string, SOWWizardRecord> = {
-  "sow-009": {
-    sowId: "sow-009",
-    intakeMode: "manual_upload",
-    data: sow009Data,
-    generatedSections: sow009GeneratedSections,
-  },
-  "sow-002": {
-    sowId: "sow-002",
-    intakeMode: "ai_generated",
-    data: sow002Data,
-    generatedSections: sow002GeneratedSections,
-  },
-};
+export const sowWizardRegistry: Record<string, SOWWizardRecord> = {};
 
 /**
  * Falls back to the sow-009 data (manual) or sow-002 data (AI)

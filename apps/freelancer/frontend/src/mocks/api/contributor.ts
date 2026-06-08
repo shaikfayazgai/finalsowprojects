@@ -69,10 +69,10 @@ export function resolveContributorMock(path: string, method: string, body?: stri
       body: {
         greeting_name: mockContributorProfile.displayName.split(" ")[0],
         kpis: [
-          { key: "active_tasks", label: "Active Tasks", value: "4", trend: "up" },
-          { key: "total_earned", label: "Total Earned", value: `$${mockEarningsSummary.totalEarned}`, trend: "up" },
+          { key: "active_tasks", label: "Active Tasks", value: String(mockContributorTasks.length), trend: "flat" },
+          { key: "total_earned", label: "Total Earned", value: `$${mockEarningsSummary.totalEarned}`, trend: "flat" },
           { key: "credentials", label: "Credentials", value: String(mockCredentials.length), trend: "flat" },
-          { key: "skill_score", label: "Skill Score", value: "88", trend: "up" },
+          { key: "skill_score", label: "Skill Score", value: "—", trend: "flat" },
         ],
         earnings_snapshot: {
           currency: mockEarningsSummary.currency,
@@ -104,18 +104,7 @@ export function resolveContributorMock(path: string, method: string, body?: stri
             cta_href: "/contributor/earnings",
           },
         ],
-        system_banners: [
-          {
-            id: "banner-1",
-            variant: "amber",
-            title: "Reminder: Rework pending",
-            body: "One task needs revision before review SLA ends.",
-            cta_label: "Open submissions",
-            cta_href: "/contributor/tasks/submissions",
-            dismissible: true,
-            task_id: "task-504",
-          },
-        ],
+        system_banners: [],
         active_tasks: mockContributorTasks.map((t) => ({
           id: t.id,
           title: t.title,
@@ -244,8 +233,8 @@ export function resolveContributorMock(path: string, method: string, body?: stri
       ),
     };
   }
-  if (p === "/api/contributor/tasks/summary" && m === "GET") return { status: 200, body: { available: 2, in_progress: 1, submitted: 1, completed: 1, rework: 1, active_offers: 2 } };
-  if (p === "/api/contributor/tasks/discovery/summary" && m === "GET") return { status: 200, body: { active_offers: 2, server_time: new Date().toISOString() } };
+  if (p === "/api/contributor/tasks/summary" && m === "GET") return { status: 200, body: { available: 0, in_progress: 0, submitted: 0, completed: 0, rework: 0, active_offers: 0 } };
+  if (p === "/api/contributor/tasks/discovery/summary" && m === "GET") return { status: 200, body: { active_offers: 0, server_time: new Date().toISOString() } };
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+$/) && m === "GET") {
     const id = decodeURIComponent(p.split("/")[4] ?? "");
     const t = mockContributorTasks.find((x) => x.id === id) ?? mockContributorTasks[0];
@@ -291,15 +280,11 @@ export function resolveContributorMock(path: string, method: string, body?: stri
     };
   }
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/(start|accept|decline|request-extension)$/) && (m === "POST" || m === "PATCH")) return { status: 200, body: { ok: true } };
-  if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/accept-impact$/) && m === "GET") return { status: 200, body: { pricing: { amount: 48, currency: "USD" }, due_date: "2026-04-26T17:30:00.000Z", estimated_hours: 4 } };
+  if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/accept-impact$/) && m === "GET") return { status: 200, body: { pricing: { amount: 0, currency: "USD" }, due_date: null, estimated_hours: 0 } };
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/timeline$/) && m === "GET") {
     return {
       status: 200,
-      body: [
-        { id: "ev1", event_type: "task_assigned", timestamp: "2026-04-24T06:00:00.000Z", actor: "system", detail: "Task assigned to you." },
-        { id: "ev2", event_type: "task_started", timestamp: "2026-04-24T07:15:00.000Z", actor: "contributor", detail: "Work started in workroom." },
-        { id: "ev3", event_type: "extension_requested", timestamp: "2026-04-24T09:00:00.000Z", actor: "contributor", detail: "Requested deadline extension by 1 day." },
-      ],
+      body: [],
     };
   }
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/workroom$/) && m === "GET") return { status: 200, body: mockWorkroomData };
@@ -310,7 +295,7 @@ export function resolveContributorMock(path: string, method: string, body?: stri
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/workroom\/uploads/) && (m === "POST" || m === "DELETE")) return { status: 200, body: { ok: true } };
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/workroom\/checklist\/[^/]+$/) && m === "PATCH") return { status: 200, body: { ok: true } };
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/latest-submission$/) && m === "GET") return { status: 200, body: mockSubmissions[0] };
-  if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/review-feedback$/) && m === "GET") return { status: 200, body: { task_id: "task-504", submission_id: "sub-9002", reviewer_feedback: "Add edge cases", review_score: 71, rubric_score: 71, criteria: [{ criterion_id: "coverage", score: 7, max_score: 10, comment: "Increase edge-case count" }] } };
+  if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/review-feedback$/) && m === "GET") return { status: 200, body: { task_id: "", submission_id: "", reviewer_feedback: "", review_score: 0, rubric_score: 0, criteria: [] } };
   if (p.match(/^\/api\/contributor\/tasks\/[^/]+\/submissions$/) && m === "POST") {
     let parsed: Record<string, any> = {};
     try { parsed = body ? JSON.parse(body) : {}; } catch { /* ignore */ }
@@ -372,9 +357,9 @@ export function resolveContributorMock(path: string, method: string, body?: stri
     return { status: 200, body: JSON.stringify(found) };
   }
   if (p.match(/^\/api\/contributor\/payouts\/[^/]+\/receipt$/) && m === "GET") return { status: 200, body: JSON.stringify("https://example.com/receipt/mock.pdf") };
-  if (p === "/api/contributor/payout-preferences" && m === "GET") return { status: 200, body: { preferred_method: "upi", minimum_payout_amount: "25", auto_payout: true, account_name: null, account_number: null, bank_name: null, routing_code: null, country: "IN", provider: null, phone_number: null, paypal_email: null, upi_id: "chirag@upi", wallet_address: null, network: null, token: null } };
+  if (p === "/api/contributor/payout-preferences" && m === "GET") return { status: 200, body: { preferred_method: "upi", minimum_payout_amount: "25", auto_payout: true, account_name: null, account_number: null, bank_name: null, routing_code: null, country: "IN", provider: null, phone_number: null, paypal_email: null, upi_id: "", wallet_address: null, network: null, token: null } };
   if (p === "/api/contributor/payout-preferences" && m === "PUT") return resolveContributorMock("/api/contributor/payout-preferences", "GET");
-  if (p === "/api/contributor/earnings/chart" && m === "GET") return { status: 200, body: JSON.stringify([{ month: "Jan", earned: 120 }, { month: "Feb", earned: 165 }, { month: "Mar", earned: 138 }, { month: "Apr", earned: 175 }]) };
+  if (p === "/api/contributor/earnings/chart" && m === "GET") return { status: 200, body: JSON.stringify([]) };
 
   if (p === "/api/contributor/learning/recommendations" && m === "GET") {
     return {
@@ -472,10 +457,10 @@ export function resolveContributorMock(path: string, method: string, body?: stri
   // Support grievances: always hit the real backend (no mock interception).
   if (p === "/api/contributor/support/grievances") return null;
   if (p.match(/^\/api\/contributor\/support\/grievances\/[^/]+$/)) return null;
-  if (p === "/api/contributor/support/faqs" && m === "GET") return { status: 200, body: { items: [{ id: "faq-1", category: "payout", question: "When are payouts processed?", answer: "Payouts are processed every week." }, { id: "faq-2", category: "tasks", question: "How to request extension?", answer: "Open task details and use request extension." }], total: 2 } };
+  if (p === "/api/contributor/support/faqs" && m === "GET") return { status: 200, body: { items: [], total: 0 } };
   if (p === "/api/contributor/support/safety-reports" && m === "POST") return { status: 200, body: { id: "sr-1", category: "security", description: "Mock report", related_reference: null, attachment_ids: [], status: "submitted", created_at: new Date().toISOString() } };
 
-  if (p === "/api/contributor/credentials/wallet/summary" && m === "GET") return { status: 200, body: { total_credentials: mockCredentials.length, skills_verified: mockContributorProfile.skills.length, tasks_accepted: 19, acceptance_rate: 0.81 } };
+  if (p === "/api/contributor/credentials/wallet/summary" && m === "GET") return { status: 200, body: { total_credentials: mockCredentials.length, skills_verified: mockContributorProfile.skills.length, tasks_accepted: 0, acceptance_rate: 0 } };
   if (p === "/api/contributor/credentials/wallet/cards" && m === "GET") return { status: 200, body: listFromQuery(mockCredentials.map((c) => ({ credential_id: c.id, credential_title: c.name, task_type: "annotation", skill_tags: ["React", "QA"], designation: "Contributor", seniority: "Intermediate", acceptance_date: c.issuedAt, quality_indicator: "high", platform_verified: true, certificate_pdf_url: "https://example.com/certificate.pdf", shareable_link: `https://example.com/share/${c.id}` })), q) };
   if (p === "/api/contributor/credentials" && m === "GET") return { status: 200, body: listFromQuery(mockCredentials.map((c) => ({ id: c.id, title: c.name, skill: "React", level: c.level, issued_at: c.issuedAt, task_id: "task-505", task_title: "Entity extraction QA", project_title: "Invoice Parser", pod_hash: "0x123abc", verification_url: `https://example.com/verify/${c.id}`, review_score: 92, hours_validated: 14, academic_mapping: null, skill_tags: ["React", "QA"], designation: "Contributor", seniority: "Intermediate", acceptance_data: c.issuedAt, quality_indicator: "high", platform_verified: true })), q) };
   if (p === "/api/contributor/credentials/skills/verification" && m === "GET") return { status: 200, body: { items: mockContributorProfile.skills.map((s) => ({ skill_tag: s.name, status: "verified", credential_count: 1, evidence_source: "task_history", seniority_level: "intermediate" })) } };

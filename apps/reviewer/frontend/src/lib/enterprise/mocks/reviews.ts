@@ -18,7 +18,7 @@ import type {
 } from "@/lib/enterprise-review/types";
 import { applyOverlay, createOverlayStore } from "./overlay";
 
-const OWNER = "sandeep@acme.com";
+const OWNER = "";
 
 function iso(daysAgo: number, hours = 9): string {
   const d = new Date();
@@ -67,45 +67,10 @@ export interface EnterpriseReviewHistoryItem extends EnterpriseReviewQueueItem {
   note?: string | null;
 }
 
-const SEED: EnterpriseReviewQueueItem[] = [
-  mk({ id: "sub-1001", taskId: "task-1-t3", title: "Draft v3 resource schemas", contributor: { id: "u-amit", name: "Amit K." }, acceptedDaysAgo: 1 }),
-  mk({ id: "sub-1002", taskId: "task-1-t4", title: "Pagination + error model",  contributor: { id: "u-kavya", name: "Kavya S." }, acceptedDaysAgo: 1, claimedById: OWNER }),
-  mk({ id: "sub-1003", taskId: "task-5-t2", title: "Add-user wizard UX",        contributor: { id: "u-priya", name: "Priya R." }, acceptedDaysAgo: 2 }),
-  mk({ id: "sub-1004", taskId: "task-1-t5", title: "Traffic-shift instrumentation", contributor: { id: "u-divya", name: "Divya N." }, acceptedDaysAgo: 3 }),
-  mk({ id: "sub-1005", taskId: "task-1-t6", title: "Rollback runbook",          contributor: { id: "u-arjun", name: "Arjun T." }, acceptedDaysAgo: 4 }),
-  mk({ id: "sub-1006", taskId: "task-2-t1", title: "User interviews (n=8) report", contributor: { id: "u-meera", name: "Meera J." }, acceptedDaysAgo: 5 }),
-  mk({ id: "sub-1007", taskId: "task-7-t1", title: "Engine spec + ADR",         contributor: { id: "u-vikram", name: "Vikram P." }, acceptedDaysAgo: 6, claimedById: OWNER }),
-  mk({ id: "sub-1008", taskId: "task-10-t1", title: "RBAC policy doc",          contributor: { id: "u-anjali", name: "Anjali D." }, acceptedDaysAgo: 7 }),
-  mk({ id: "sub-1009", taskId: "task-10-t2", title: "/users POST endpoint",     contributor: { id: "u-rahul", name: "Rahul G." }, acceptedDaysAgo: 8 }),
-  mk({ id: "sub-1010", taskId: "task-2-t2", title: "Welcome modal design",      contributor: { id: "u-neha", name: "Neha C." }, acceptedDaysAgo: 8 }),
-  mk({ id: "sub-1011", taskId: "task-5-t3", title: "SCIM connector tests",      contributor: { id: "u-suresh", name: "Suresh M." }, acceptedDaysAgo: 9 }),
-  mk({ id: "sub-1012", taskId: "task-7-t2", title: "Rule registry table",       contributor: { id: "u-yusuf", name: "Yusuf O." }, acceptedDaysAgo: 10 }),
-];
+const SEED: EnterpriseReviewQueueItem[] = [];
 
 /** Pre-decided submissions for history / billing demo (not in active queue). */
-const HISTORY_SEED: EnterpriseReviewHistoryItem[] = [
-  {
-    ...mk({ id: "sub-9001", taskId: "task-1-t1", title: "OpenAPI spec v2.1", contributor: { id: "u-amit", name: "Amit K." }, acceptedDaysAgo: 14, artifacts: 4 }),
-    decision: "accept",
-    decidedAt: iso(12),
-    decisionId: "dec-seed-9001",
-    note: "Meets acceptance criteria — proceed to billing.",
-  },
-  {
-    ...mk({ id: "sub-9002", taskId: "task-2-t3", title: "Onboarding copy deck", contributor: { id: "u-priya", name: "Priya R." }, acceptedDaysAgo: 20, artifacts: 2 }),
-    decision: "accept",
-    decidedAt: iso(18),
-    decisionId: "dec-seed-9002",
-    note: null,
-  },
-  {
-    ...mk({ id: "sub-9003", taskId: "task-5-t1", title: "SSO integration spike", contributor: { id: "u-rahul", name: "Rahul G." }, acceptedDaysAgo: 25, artifacts: 5 }),
-    decision: "rework",
-    decidedAt: iso(22),
-    decisionId: "dec-seed-9003",
-    note: "Missing test evidence for edge cases — please resubmit.",
-  },
-];
+const HISTORY_SEED: EnterpriseReviewHistoryItem[] = [];
 
 const overlay = createOverlayStore<EnterpriseReviewQueueItem>("glimmora.mock.reviews.v1");
 const decisionsOverlay = createOverlayStore<DecisionRow>("glimmora.mock.reviewDecisions.v1");

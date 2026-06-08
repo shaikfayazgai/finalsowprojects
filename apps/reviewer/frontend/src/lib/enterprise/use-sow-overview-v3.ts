@@ -57,10 +57,10 @@ const DEFAULT_APPROVERS: Record<
   ApprovalGateId,
   { name: string; initials: string }
 > = {
-  business: { name: "Jordan Park", initials: "JP" },
-  commercial: { name: "Kavi Singh", initials: "KS" },
-  legal: { name: "Lara Hammond", initials: "LH" },
-  security: { name: "Maya Chen", initials: "MC" },
+  business: { name: "", initials: "" },
+  commercial: { name: "", initials: "" },
+  legal: { name: "", initials: "" },
+  security: { name: "", initials: "" },
 };
 
 const STALE_DAYS = 5;

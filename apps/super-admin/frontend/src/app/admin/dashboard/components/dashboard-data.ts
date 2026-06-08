@@ -111,7 +111,7 @@ export function pulseBandForRole(role: AdminRole, d: MockAdminDashboard): Linked
       id: "partners",
       key: "partners",
       label: "Partners",
-      value: 7,
+      value: 0,
       icon: GraduationCap,
       href: "/admin/partnerships/universities",
       section: "universities",
@@ -142,15 +142,7 @@ export function pulseBandForRole(role: AdminRole, d: MockAdminDashboard): Linked
 }
 
 export function roleBrief(role: AdminRole): { title: string; body: string; href: string } | null {
-  const map: Partial<Record<AdminRole, { title: string; body: string; href: string }>> = {
-    "plat.tsm": { title: "Tenants onboarding in progress", body: "3 tenants mid-flight · oldest idle 2 days", href: "/admin/tenants" },
-    "plat.mpm": { title: "Mentors awaiting first sign-in", body: "1 invited mentor · sent 3d ago", href: "/admin/mentors" },
-    "plat.tns": { title: "Cases awaiting you", body: "3 open assigned · oldest 4h", href: "/admin/governance" },
-    "plat.compliance": { title: "Audit volume + retention", body: "1,240 events in 24h · 0 retention breaches", href: "/admin/audit" },
-    "plat.payments": { title: "Payment rail health", body: "1 rail degraded · 42 payouts held", href: "/admin/payment-rails/rail-rzp-upi" },
-    "plat.ai": { title: "Agent activity + prompts", body: "4 agents enabled · review-assistant on v4", href: "/admin/ai" },
-    "plat.partnerships": { title: "Active partnerships", body: "3 universities · 4 women-workforce orgs", href: "/admin/partnerships/universities" },
-  };
+  const map: Partial<Record<AdminRole, { title: string; body: string; href: string }>> = {};
   return map[role] ?? null;
 }
 

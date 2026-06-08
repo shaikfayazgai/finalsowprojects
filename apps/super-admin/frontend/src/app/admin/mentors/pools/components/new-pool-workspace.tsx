@@ -99,7 +99,7 @@ export function NewPoolWorkspace() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={inputCls}
-              placeholder="e.g. Acme design review pool"
+              placeholder="e.g. Design review pool"
               required
             />
           </Field>

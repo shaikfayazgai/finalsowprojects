@@ -21,13 +21,7 @@ interface AdminNotice {
   unread: boolean;
 }
 
-const NOTICES: AdminNotice[] = [
-  { id: "n-1", category: "cases",   text: "GR-1042 (Safety report) assigned to you",                            href: "/admin/governance/GR-1042",                at: "2026-05-27T06:30:00Z", tone: "warning", unread: true },
-  { id: "n-2", category: "system",  text: "payment-router error rate elevated",                                  href: "/admin/system-health",                     at: "2026-05-27T05:00:00Z", tone: "warning", unread: true },
-  { id: "n-3", category: "tenants", text: "Reporting Inc. provisioning reached step 3/6",                       href: "/admin/tenants/t-reporting/provisioning",  at: "2026-05-27T03:00:00Z", tone: "info",    unread: false },
-  { id: "n-4", category: "cases",   text: "GR-1041 (Dispute) — new internal note added by Sneha",                href: "/admin/governance/GR-1041",                at: "2026-05-26T22:00:00Z", tone: "info",    unread: false },
-  { id: "n-5", category: "system",  text: "ai-orchestrator cold-start spike resolved",                            href: "/admin/system-health",                     at: "2026-05-26T11:00:00Z", tone: "info",    unread: false },
-];
+const NOTICES: AdminNotice[] = [];
 
 export default function AdminNotificationsPage() {
   const [cat, setCat] = React.useState<Category>("all");

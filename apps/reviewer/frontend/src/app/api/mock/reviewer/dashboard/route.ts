@@ -14,7 +14,7 @@ export async function GET() {
   return NextResponse.json({
     pending,
     slaRiskCount,
-    done7d: 12,
-    avgTimeMin: 28,
+    done7d: 0,
+    avgTimeMin: 0,
   });
 }

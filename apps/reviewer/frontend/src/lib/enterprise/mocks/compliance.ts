@@ -16,10 +16,10 @@ import { applyOverlay, createOverlayStore } from "./overlay";
 /* ───────────────────────── Compliance overview ────────────────────── */
 
 export function complianceOverviewMock() {
-  const total = 142;
-  const withConsent = 128;
+  const total = 0;
+  const withConsent = 0;
   return {
-    tenantId: "tnt-acme-corp",
+    tenantId: "",
     consent: {
       totalContributors: total,
       withConsent,
@@ -31,8 +31,8 @@ export function complianceOverviewMock() {
       withdrawnSubmissions: "90 days",
     },
     deletionRequests: {
-      pending: 3,
-      completedLast30Days: 7,
+      pending: 0,
+      completedLast30Days: 0,
     },
   };
 }
@@ -61,23 +61,7 @@ function iso(d: number): string {
   return dt.toISOString();
 }
 
-const NAMES: Array<{ id: string; email: string; name: string }> = [
-  { id: "u-sneha",   email: "sneha.m@example.com",     name: "Sneha M." },
-  { id: "u-yusuf",   email: "yusuf.o@example.com",     name: "Yusuf O." },
-  { id: "u-priya",   email: "priya.r@example.com",     name: "Priya R." },
-  { id: "u-amit",    email: "amit.k@example.com",      name: "Amit K." },
-  { id: "u-kavya",   email: "kavya.s@example.com",     name: "Kavya S." },
-  { id: "u-rohit",   email: "rohit.b@example.com",     name: "Rohit B." },
-  { id: "u-divya",   email: "divya.n@example.com",     name: "Divya N." },
-  { id: "u-arjun",   email: "arjun.t@example.com",     name: "Arjun T." },
-  { id: "u-meera",   email: "meera.j@example.com",     name: "Meera J." },
-  { id: "u-vikram",  email: "vikram.p@example.com",    name: "Vikram P." },
-  { id: "u-anjali",  email: "anjali.d@example.com",    name: "Anjali D." },
-  { id: "u-pooja",   email: "pooja.v@example.com",     name: "Pooja V." },
-  { id: "u-rahul",   email: "rahul.g@example.com",     name: "Rahul G." },
-  { id: "u-neha",    email: "neha.c@example.com",      name: "Neha C." },
-  { id: "u-suresh",  email: "suresh.m@example.com",    name: "Suresh M." },
-];
+const NAMES: Array<{ id: string; email: string; name: string }> = [];
 
 const CONSENT: MockConsentRow[] = NAMES.map((p, i) => {
   const missingTos = i === 11 || i === 13;
@@ -112,7 +96,7 @@ export function consentInventoryMock(q: { search?: string; missing?: boolean; li
   const complete = CONSENT.filter((r) => r.isComplete).length;
   if (q.limit) rows = rows.slice(0, q.limit);
   return {
-    tenantId: "tnt-acme-corp",
+    tenantId: "",
     total: CONSENT.length,
     complete,
     missing: CONSENT.length - complete,
@@ -136,7 +120,7 @@ function getRules(): RetentionRuleSet {
 
 export function retentionRulesMock() {
   return {
-    tenantId: "tnt-acme-corp",
+    tenantId: "",
     rules: getRules(),
     floors: RETENTION_FLOORS,
   };
@@ -144,7 +128,7 @@ export function retentionRulesMock() {
 
 export function updateRetentionRulesMock(rules: RetentionRuleSet) {
   overlay.insert("current", { id: "current", rules });
-  return { tenantId: "tnt-acme-corp", rules, floors: RETENTION_FLOORS };
+  return { tenantId: "", rules, floors: RETENTION_FLOORS };
 }
 
 export { overlay as complianceOverlay };

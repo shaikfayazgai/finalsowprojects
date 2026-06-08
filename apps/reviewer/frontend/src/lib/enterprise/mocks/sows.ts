@@ -31,9 +31,9 @@ import { APPROVAL_STAGE_ORDER } from "@/lib/sow/types";
 import { STAGE_SLA_HOURS } from "@/lib/enterprise/mocks/approvers";
 import { applyOverlay, createOverlayStore } from "./overlay";
 
-const OWNER = "sandeep@acme.com";
-const OWNER_NAME = "Sandeep Kulkarni";
-const DEFAULT_TENANT = { id: "t-acme", name: "Acme Corp" };
+const OWNER = "";
+const OWNER_NAME = "";
+const DEFAULT_TENANT = { id: "", name: "" };
 
 function isoFromNowHours(hours: number): string {
   const d = new Date();
@@ -55,155 +55,7 @@ interface MockSow extends SowDetail {
   project?: string;
 }
 
-const SEED: MockSow[] = [
-  mkSow({
-    id: "sow-acme-1",
-    title: "API redesign — Acme platform v3",
-    status: "approved",
-    stage: "final",
-    daysOld: 28,
-    submittedDaysAgo: 24,
-    approvedDaysAgo: 16,
-    approvals: stages(["approved", "approved", "approved", "approved", "approved"], 22, OWNER),
-  }),
-  mkSow({
-    id: "sow-acme-2",
-    title: "Customer onboarding redesign",
-    status: "approval",
-    stage: "business",
-    daysOld: 18,
-    submittedDaysAgo: 12,
-    approvals: stages(["pending", "pending", "pending", "pending", "pending"], 11, OWNER),
-  }),
-  mkSow({
-    id: "sow-acme-3",
-    title: "Helios mobile companion app",
-    status: "approval",
-    stage: "business",
-    daysOld: 7,
-    submittedDaysAgo: 3,
-    approvals: stages(["pending", "pending", "pending", "pending", "pending"], 3, OWNER),
-  }),
-  mkSow({
-    id: "sow-acme-4",
-    title: "Q4 marketing site refresh",
-    status: "draft",
-    stage: null,
-    daysOld: 2,
-  }),
-  mkSow({
-    id: "sow-acme-5",
-    title: "Internal HR portal v2",
-    status: "approved",
-    stage: "final",
-    daysOld: 45,
-    submittedDaysAgo: 40,
-    approvedDaysAgo: 34,
-    approvals: stages(["approved", "approved", "approved", "approved", "approved"], 39, OWNER),
-  }),
-  mkSow({
-    id: "sow-acme-6",
-    title: "Vendor reconciliation automation",
-    status: "rejected",
-    stage: "security",
-    daysOld: 21,
-    submittedDaysAgo: 19,
-    rejectedDaysAgo: 9,
-    approvals: stages(["approved", "approved", "approved", "rejected", "pending"], 19, OWNER),
-  }),
-  mkSow({
-    id: "sow-acme-7",
-    title: "Pricing API v2 + ledger sync",
-    status: "approval",
-    stage: "business",
-    daysOld: 14,
-    submittedDaysAgo: 11,
-    approvals: stages(["pending", "pending", "pending", "pending", "pending"], 11, OWNER),
-  }),
-  mkSow({
-    id: "sow-acme-8",
-    title: "Analytics warehouse migration",
-    status: "approval",
-    stage: "business",
-    daysOld: 30,
-    submittedDaysAgo: 25,
-    approvals: stages(["pending", "pending", "pending", "pending", "pending"], 25, OWNER),
-  }),
-  mkSow({
-    id: "sow-acme-9",
-    title: "Acme retail POS hardening",
-    status: "approval",
-    stage: "commercial",
-    daysOld: 8,
-    submittedDaysAgo: 6,
-    approvals: stages(["approved", "pending", "pending", "pending", "pending"], 6, OWNER),
-  }),
-  mkSow({
-    id: "sow-lighthouse-reporting",
-    title: "Lighthouse-Ops reporting platform",
-    status: "approval",
-    stage: "commercial",
-    tenantId: "t-reporting",
-    tenantName: "Reporting Inc.",
-    ownerId: "helios@reporting.tv",
-    ownerName: "Priya Sharma",
-    daysOld: 5,
-    submittedDaysAgo: 2,
-    approvals: stages(["approved", "pending", "pending", "pending", "pending"], 2, "helios@reporting.tv"),
-  }),
-  mkSow({
-    id: "sow-helios-14",
-    title: "Helios Q3 modernization — phase 2",
-    status: "approval",
-    stage: "commercial",
-    tenantId: "t-helios",
-    tenantName: "Helios Studios",
-    ownerId: "admin@helios.io",
-    ownerName: "Meera Bhat",
-    daysOld: 11,
-    submittedDaysAgo: 4,
-    approvals: stages(["approved", "pending", "pending", "pending", "pending"], 4, "admin@helios.io"),
-  }),
-  mkSow({
-    id: "sow-acme-10",
-    title: "Self-serve user provisioning",
-    status: "approved",
-    stage: "final",
-    daysOld: 60,
-    submittedDaysAgo: 55,
-    approvedDaysAgo: 50,
-    approvals: stages(["approved", "approved", "approved", "approved", "approved"], 54, OWNER),
-  }),
-  mkSow({
-    id: "sow-acme-11",
-    title: "Compliance reporting dashboard",
-    status: "withdrawn",
-    stage: "business",
-    daysOld: 32,
-    submittedDaysAgo: 28,
-    withdrawnDaysAgo: 18,
-    approvals: stages(["pending", "pending", "pending", "pending", "pending"], 28, OWNER),
-  }),
-  mkSow({
-    id: "sow-acme-12",
-    title: "Search relevance overhaul",
-    status: "approval",
-    stage: "business",
-    daysOld: 9,
-    submittedDaysAgo: 6,
-    approvals: stages(["pending", "pending", "pending", "pending", "pending"], 6, OWNER),
-  }),
-  mkSow({
-    id: "sow-acme-13",
-    title: "Data platform observability rollout",
-    status: "approved",
-    stage: "final",
-    daysOld: 12,
-    submittedDaysAgo: 8,
-    approvedDaysAgo: 2,
-    approvals: stages(["approved", "approved", "approved", "approved", "approved"], 7, OWNER),
-  }),
-];
+const SEED: MockSow[] = [];
 
 interface MkArgs {
   id: string;

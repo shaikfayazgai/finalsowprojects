@@ -450,100 +450,11 @@ export interface RevisionRoundSummary {
   changedAreas: string[];
 }
 
-export const correctionAiHints: CorrectionAiHint[] = [
-  {
-    correctionId: "fc1",
-    pattern: "Wrap popover in <FocusScope contain restoreFocus>",
-    detail:
-      "react-aria's FocusScope contains Tab inside the popover and restores focus to the trigger on Esc. This is the cleanest fit and works without extra ref plumbing.",
-    example:
-      "<FocusScope contain restoreFocus>\n  <Popover>{children}</Popover>\n</FocusScope>",
-    confidence: "high",
-    source: "Your accepted Auth Modal submission · May 10",
-  },
-  {
-    correctionId: "fc2",
-    pattern: "60–90 second JAWS screencast on the demo route",
-    detail:
-      "Short pass-through that opens the demo, navigates a few days with arrows, and selects a date. Capture the live-region announcement of the selected date.",
-    example:
-      "Open Windows VM → run `npm run demo` → start JAWS → screen-record 60–90s",
-    confidence: "high",
-    source: "Spec §5.3 acceptance language",
-  },
-];
+export const correctionAiHints: CorrectionAiHint[] = [];
 
-export const revisionComparisonRows: VersionComparisonRow[] = [
-  {
-    id: "vc1",
-    label: "Keyboard navigation (arrow / PgUp / PgDn / Home / End / Esc)",
-    kind: "criterion",
-    previous: { state: "partial", note: "Missing Home/End" },
-    updated: { state: "present", note: "All six keys handled" },
-    movement: "improved",
-  },
-  {
-    id: "vc2",
-    label: "Screen-reader announcements (VoiceOver + NVDA)",
-    kind: "criterion",
-    previous: { state: "missing", note: "No aria-live region" },
-    updated: { state: "present", note: "aria-live polite on selected-date label" },
-    movement: "improved",
-  },
-  {
-    id: "vc3",
-    label: "Focus trap inside popover",
-    kind: "criterion",
-    previous: { state: "missing" },
-    updated: { state: "missing", note: "Still open — addressing in v3" },
-    movement: "unchanged",
-  },
-  {
-    id: "vc4",
-    label: "JAWS verification recording",
-    kind: "evidence",
-    previous: { state: "missing" },
-    updated: { state: "missing", note: "Recording planned for v3" },
-    movement: "unchanged",
-  },
-  {
-    id: "vc5",
-    label: "Storybook stories (default · disabled · controlled)",
-    kind: "deliverable",
-    previous: { state: "partial", note: "default only" },
-    updated: { state: "partial", note: "default + disabled drafted" },
-    movement: "improved",
-  },
-  {
-    id: "vc6",
-    label: "Unit test coverage report",
-    kind: "evidence",
-    previous: { state: "missing" },
-    updated: { state: "missing", note: "Pending after focus trap merge" },
-    movement: "unchanged",
-  },
-];
+export const revisionComparisonRows: VersionComparisonRow[] = [];
 
-export const revisionHistory: RevisionRoundSummary[] = [
-  {
-    round: 1,
-    submittedAt: "two days ago · 14:08",
-    outcome: "failed",
-    mentorNote: "Strong start. Two required fixes: focus trap and JAWS recording.",
-    changedAreas: ["Component shell", "Keyboard navigation", "Stories (initial)"],
-  },
-  {
-    round: 2,
-    submittedAt: "yesterday · 18:32",
-    outcome: "in_revision",
-    mentorNote: "Big improvement on keyboard nav and announcements. Two corrections still open.",
-    changedAreas: [
-      "Added Home / End / PgUp / PgDn handling",
-      "aria-live polite for selected date",
-      "Disabled-dates story drafted",
-    ],
-  },
-];
+export const revisionHistory: RevisionRoundSummary[] = [];
 
 /* ─────────────────────── Helpers ─────────────────────── */
 

@@ -383,8 +383,8 @@ export function provisionProjectFromPlanMock(
   const project: ProjectDetail = {
     id,
     name: opts.sowTitle ?? `Project — ${plan.sowId}`,
-    sponsor: opts.sponsor ?? "Sandeep Kulkarni",
-    pmo: opts.pmo ?? "Anjali Rao",
+    sponsor: opts.sponsor ?? "",
+    pmo: opts.pmo ?? "",
     startedAt: now,
     dueAt: due,
     progress: 0,
@@ -454,7 +454,7 @@ export function acceptProjectMilestoneMock(projectId: string, milestoneId: strin
     return {
       ...p,
       milestones,
-      audit: [{ id: `aud-${projectId}-${Date.now()}`, ts: now, actor: "Sandeep Kulkarni", action: "milestone.accepted", resource: milestoneId }, ...p.audit],
+      audit: [{ id: `aud-${projectId}-${Date.now()}`, ts: now, actor: "", action: "milestone.accepted", resource: milestoneId }, ...p.audit],
     };
   });
 }
@@ -496,7 +496,7 @@ export function payProjectMilestoneMock(projectId: string, milestoneId: string):
       contributorId: li.assigneeId,
       taskDefinitionId: li.taskId,
       submissionId: `sub-${li.taskId}`,
-      tenantId: "tnt-acme-corp",
+      tenantId: "",
       amountMinor: li.amountMinor,
       currency: "INR",
       computation: {
@@ -535,7 +535,7 @@ export function payProjectMilestoneMock(projectId: string, milestoneId: string):
       milestones,
       budget: recomputeBudget(milestones, p.budgetTotalMinor),
       budgetBurnMinor: milestones.filter((m) => m.paymentStatus === "paid").reduce((s, m) => s + (m.amountMinor ?? 0), 0),
-      audit: [{ id: `aud-${projectId}-${Date.now()}`, ts: now, actor: "Sandeep Kulkarni", action: "milestone.paid", resource: milestoneId }, ...p.audit],
+      audit: [{ id: `aud-${projectId}-${Date.now()}`, ts: now, actor: "", action: "milestone.paid", resource: milestoneId }, ...p.audit],
     };
   });
 }
@@ -603,7 +603,7 @@ export function assignProjectTaskMock(
         {
           id: `aud-${projectId}-${Date.now()}`,
           ts: now,
-          actor: "Sandeep Kulkarni",
+          actor: "",
           action: "task.assign",
           resource: taskId,
         },
@@ -679,7 +679,7 @@ export function setTaskPriceMock(
       ...p,
       tasks,
       audit: [
-        { id: `aud-${projectId}-${Date.now()}`, ts: now, actor: "Sandeep Kulkarni", action: "task.price", resource: taskId },
+        { id: `aud-${projectId}-${Date.now()}`, ts: now, actor: "", action: "task.price", resource: taskId },
         ...p.audit,
       ],
     };
@@ -706,7 +706,7 @@ export function assignReviewerMock(
       {
         id: `aud-${projectId}-${Date.now()}`,
         ts: now,
-        actor: "Sandeep Kulkarni",
+        actor: "",
         action: "reviewer.assign",
         resource: taskId,
       },

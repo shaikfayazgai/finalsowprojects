@@ -220,7 +220,7 @@ export const sampleSOWFormData = {
   sitScope: "comprehensive",
   uatOwnership: "client_led",
   uatDuration: "3_weeks",
-  uatSignoffAuthority: "Priya Nair, VP of Operations",
+  uatSignoffAuthority: "",
   preProductionTesting: "included",
   performanceTesting: "included",
   securityTesting: "included",
@@ -300,15 +300,15 @@ export const sampleSOWFormData = {
   warrantyPeriod: "custom",
   postWarrantySupport: "optional_retainer",
   changeRequestProcess: "formal_cr",
-  changeRequestApprover: "Priya Nair (VP Operations) and Rajesh Kumar (CTO)",
+  changeRequestApprover: "",
   environmentCosts:
     "Development: $1,200/month. Staging: $800/month. Production: $3,500/month. All environments provisioned via Terraform and managed through CI/CD pipeline.",
 
   /* ═══════════════════════════════════════════
      Step 9: Review & Generate
      ═══════════════════════════════════════════ */
-  businessOwnerApprover: "Priya Nair",
-  finalApprover: "Rajesh Kumar",
-  legalReviewer: "Kavita Sharma",
+  businessOwnerApprover: "",
+  finalApprover: "",
+  legalReviewer: "",
   securityReviewer: "Arjun Reddy",
 };

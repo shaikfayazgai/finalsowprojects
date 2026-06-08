@@ -13,11 +13,7 @@ export interface MockMentor {
   responseSlaHours: number;
 }
 
-export const MOCK_MENTORS: MockMentor[] = [
-  { id: "mentor-priya", name: "Priya Iyer", initials: "PI", role: "Lead · Design Systems", email: "priya.iyer@helios.example", responseSlaHours: 24 },
-  { id: "mentor-karthik", name: "Karthik Iyer", initials: "KI", role: "Staff · Data", email: "karthik@helios.example", responseSlaHours: 36 },
-  { id: "mentor-anjali", name: "Anjali Reddy", initials: "AR", role: "Senior · Accessibility", email: "anjali@helios.example", responseSlaHours: 24 },
-];
+export const MOCK_MENTORS: MockMentor[] = [];
 
 export function getMockMentor(id: string): MockMentor | undefined {
   return MOCK_MENTORS.find((m) => m.id === id);

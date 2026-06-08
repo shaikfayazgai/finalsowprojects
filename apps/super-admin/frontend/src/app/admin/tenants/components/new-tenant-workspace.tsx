@@ -332,7 +332,7 @@ function StepTenantInfo({
         <Input
           value={d.name}
           onChange={(e) => onChange("name", e.target.value)}
-          placeholder="Acme Corp"
+          placeholder="Company name"
           size="sm"
           className="h-9 text-[13px]"
         />
@@ -411,7 +411,7 @@ function StepPrimaryAdmin({
         <Input
           value={d.adminName}
           onChange={(e) => onChange("adminName", e.target.value)}
-          placeholder="Sandeep Kulkarni"
+          placeholder="Full name"
           size="sm"
           className="h-9 text-[13px]"
         />
@@ -421,7 +421,7 @@ function StepPrimaryAdmin({
           type="email"
           value={d.adminEmail}
           onChange={(e) => onChange("adminEmail", e.target.value)}
-          placeholder="sandeep@acme.com"
+          placeholder="admin@company.com"
           size="sm"
           className="h-9 text-[13px]"
         />

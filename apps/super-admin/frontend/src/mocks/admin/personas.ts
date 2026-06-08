@@ -22,14 +22,14 @@ export interface AdminProfile {
 }
 
 export const MOCK_ADMINS: Record<AdminRole, AdminProfile> = {
-  "plat.admin":        { role: "plat.admin",        displayName: "Aishwarya Rao",    title: "Platform Admin",            initials: "AR", email: "aishwarya@glimmora.ai" },
-  "plat.tsm":          { role: "plat.tsm",          displayName: "Vikram Shenoy",    title: "Tenant Success Manager",    initials: "VS", email: "vikram@glimmora.ai" },
-  "plat.mpm":          { role: "plat.mpm",          displayName: "Anjali Rao",       title: "Mentor Program Manager",    initials: "AR", email: "anjali@glimmora.ai" },
-  "plat.tns":          { role: "plat.tns",          displayName: "Sneha Pillai",     title: "Trust & Safety Officer",    initials: "SP", email: "sneha@glimmora.ai" },
-  "plat.compliance":   { role: "plat.compliance",   displayName: "Rohit Menon",      title: "Compliance Officer",        initials: "RM", email: "rohit@glimmora.ai" },
-  "plat.payments":     { role: "plat.payments",     displayName: "Kavya Iyer",       title: "Payments Operator",         initials: "KI", email: "kavya@glimmora.ai" },
-  "plat.partnerships": { role: "plat.partnerships", displayName: "Deepak Sharma",    title: "Partnership Manager",       initials: "DS", email: "deepak@glimmora.ai" },
-  "plat.ai":           { role: "plat.ai",           displayName: "Priyanka Bansal",  title: "AI Operator",               initials: "PB", email: "priyanka@glimmora.ai" },
+  "plat.admin":        { role: "plat.admin",        displayName: "Platform Admin",         title: "Platform Admin",            initials: "—", email: "" },
+  "plat.tsm":          { role: "plat.tsm",          displayName: "Tenant Success Manager", title: "Tenant Success Manager",    initials: "—", email: "" },
+  "plat.mpm":          { role: "plat.mpm",          displayName: "Mentor Program Manager", title: "Mentor Program Manager",    initials: "—", email: "" },
+  "plat.tns":          { role: "plat.tns",          displayName: "Trust & Safety Officer", title: "Trust & Safety Officer",    initials: "—", email: "" },
+  "plat.compliance":   { role: "plat.compliance",   displayName: "Compliance Officer",     title: "Compliance Officer",        initials: "—", email: "" },
+  "plat.payments":     { role: "plat.payments",     displayName: "Payments Operator",      title: "Payments Operator",         initials: "—", email: "" },
+  "plat.partnerships": { role: "plat.partnerships", displayName: "Partnership Manager",    title: "Partnership Manager",       initials: "—", email: "" },
+  "plat.ai":           { role: "plat.ai",           displayName: "AI Operator",            title: "AI Operator",               initials: "—", email: "" },
 };
 
 export function isAdminRole(v: string | null): v is AdminRole {

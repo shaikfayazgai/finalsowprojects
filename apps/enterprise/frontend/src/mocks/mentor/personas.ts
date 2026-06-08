@@ -34,11 +34,7 @@ export interface MentorProfile {
   status: "available" | "ooo" | "off_today";
 }
 
-export const MENTOR_ROLES: Array<{ key: MentorRole; label: string }> = [
-  { key: "mentor",        label: "Mentor" },
-  { key: "mentor.senior", label: "Senior mentor" },
-  { key: "mentor.lead",   label: "Lead mentor" },
-];
+export const MENTOR_ROLES: Array<{ key: MentorRole; label: string }> = [];
 
 export const MOCK_MENTORS: Record<MentorRole, MentorProfile> = {
   "mentor": {

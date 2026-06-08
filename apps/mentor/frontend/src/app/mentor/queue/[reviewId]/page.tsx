@@ -711,7 +711,7 @@ function ContributorPanel({ review, decisions }: { review: MockReview; decisions
           {review.contributorTrack && (
             <span className="capitalize inline-flex items-center px-1.5 py-0.5 rounded-full bg-bg-subtle font-body text-[10.5px] font-semibold text-text-secondary mr-1.5">{review.contributorTrack.replace("_", " ")}</span>
           )}
-          Designer · L3 · India
+          —
         </p>
         <div>
           <p className="font-body text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-tertiary">Skills</p>
@@ -720,10 +720,10 @@ function ContributorPanel({ review, decisions }: { review: MockReview; decisions
         <div>
           <p className="font-body text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-tertiary">Reliability</p>
           <ul className="mt-0.5 space-y-0.5 font-body text-[12px] text-foreground">
-            <li>Tasks completed: <span className="font-mono tabular-nums">14</span></li>
-            <li>Acceptance rate: <span className="font-mono tabular-nums">92%</span></li>
-            <li>First-try: <span className="font-mono tabular-nums">71%</span></li>
-            <li>On-time: <span className="font-mono tabular-nums">89%</span></li>
+            <li>Tasks completed: <span className="font-mono tabular-nums">—</span></li>
+            <li>Acceptance rate: <span className="font-mono tabular-nums">—</span></li>
+            <li>First-try: <span className="font-mono tabular-nums">—</span></li>
+            <li>On-time: <span className="font-mono tabular-nums">—</span></li>
           </ul>
         </div>
         {decisions.length > 0 && (

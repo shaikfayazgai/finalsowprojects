@@ -7,11 +7,7 @@ import type { PayoutDetail, PayoutMethodDetail } from "@/lib/payouts/types";
 import { getPayoutMock, listTenantPayoutsMock, payoutOverlay } from "./payouts";
 
 /** Matching pool ids → login emails for the assignment demo. */
-export const DEMO_CONTRIBUTOR_EMAIL_TO_ID: Record<string, string> = {
-  "priya@glimmora.dev": "c-priya",
-  "meera@glimmora.dev": "c-meera",
-  "amit@glimmora.dev": "c-amit",
-};
+export const DEMO_CONTRIBUTOR_EMAIL_TO_ID: Record<string, string> = {};
 
 type ComputationWithEmail = PayoutDetail["computation"] & { contributorEmail?: string };
 
@@ -49,20 +45,7 @@ export function requestDemoPayoutWithdrawal(payoutId: string): PayoutDetail | un
 }
 
 export function getDemoPayoutMethods(_email: string | null | undefined): PayoutMethodDetail[] {
-  return [
-    {
-      id: "pm-demo-bank",
-      userId: "demo-contributor",
-      kind: "bank_in",
-      nickname: "HDFC Bank ****4821",
-      isDefault: true,
-      payload: { accountNumber: "****4821", ifsc: "HDFC0001234" },
-      verifiedAt: new Date().toISOString(),
-      verificationError: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ];
+  return [];
 }
 
 export function earningsSummaryFromPayouts(items: PayoutDetail[]) {
