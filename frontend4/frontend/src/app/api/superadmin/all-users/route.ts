@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
 import { requireRole } from "@/lib/auth/require-role";
 
 /** Proxy → backend GET /api/superadmin/all-users (real provisioned accounts +
@@ -36,14 +35,14 @@ async function getAdminToken(): Promise<string | null> {
   return null;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const guard = await requireRole(["super_admin", "enterprise"]);
   if (guard instanceof NextResponse) return guard;
 
-  const secureCookie = req.nextUrl.protocol === "https:";
-  const jwt = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
-  let token = (jwt as { glimmoraAccessToken?: string } | null)?.glimmoraAccessToken;
-  if (!token) token = (await getAdminToken()) ?? undefined;
+  // This is a superadmin-scoped endpoint. Enterprise admins are allowed to view
+  // it, but their own session token isn't admin-scoped (backend would 403), so
+  // always use the admin service token here.
+  const token = (await getAdminToken()) ?? undefined;
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const upstream = `${GLIMMORA_API}/api/superadmin/all-users`;
@@ -51,7 +50,7 @@ export async function GET(req: NextRequest) {
 
   let res = await send(token);
   let data = await res.json().catch(() => ({} as Record<string, unknown>));
-  if (res.status === 401 && ADMIN_EMAIL && ADMIN_PASSWORD) {
+  if ((res.status === 401 || res.status === 403) && ADMIN_EMAIL && ADMIN_PASSWORD) {
     cachedAdminToken = null;
     const fresh = await getAdminToken();
     if (fresh) {
