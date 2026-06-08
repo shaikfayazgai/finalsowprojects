@@ -53,11 +53,12 @@ def _conn():
 
 
 def _ensure_seeded(user: dict) -> None:
-    """Lazily seed demo data on first access so pages aren't empty."""
-    try:
-        seed_mentor_demo(user)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("mentor demo seed failed for %s: %s", user.get("id"), exc)
+    """No-op. Demo seeding is DISABLED — mentors must see only their own real
+    data (reviews/mentorships scoped to their account id). Each mentor starts
+    with an empty workspace until real submissions are routed to them. Kept as a
+    no-op so the many call sites don't need touching; seed_mentor_demo stays
+    importable for one-off local fixtures only."""
+    _ = (user, seed_mentor_demo)  # referenced to avoid unused-import churn
 
 
 def _serialize(row: dict) -> dict:

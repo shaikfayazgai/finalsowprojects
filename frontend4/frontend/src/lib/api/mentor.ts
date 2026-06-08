@@ -106,6 +106,40 @@ export async function listMentorQueue(params: MentorQueueParams = {}): Promise<u
   return res.json();
 }
 
+export interface MentorDashboardStats {
+  pending_reviews: number;
+  completed_reviews: number;
+  total_reviews: number;
+  mentees: number;
+  escalations: number;
+}
+export interface MentorDashboardQueueItem {
+  id: number;
+  title: string;
+  submission_type?: string | null;
+  contributor_name?: string | null;
+  priority?: string | null;
+  status: string;
+  created_at?: string | null;
+}
+export interface MentorDashboardReal {
+  stats: MentorDashboardStats;
+  recent_queue: MentorDashboardQueueItem[];
+}
+
+/** Real per-mentor dashboard (counts + recent queue, scoped to this mentor's
+ * account id). No mock/demo data. */
+export async function fetchMentorDashboardReal(): Promise<MentorDashboardReal> {
+  const res = await fetchInternal("/api/mentor/dashboard");
+  if (!res.ok) throw new Error(`Could not load mentor dashboard (${res.status})`);
+  const raw = (await res.json()) as { data?: MentorDashboardReal } | MentorDashboardReal;
+  const data = (raw as { data?: MentorDashboardReal }).data ?? (raw as MentorDashboardReal);
+  return {
+    stats: data.stats ?? { pending_reviews: 0, completed_reviews: 0, total_reviews: 0, mentees: 0, escalations: 0 },
+    recent_queue: Array.isArray(data.recent_queue) ? data.recent_queue : [],
+  };
+}
+
 export interface MentorSowTask {
   id: string;
   title: string;

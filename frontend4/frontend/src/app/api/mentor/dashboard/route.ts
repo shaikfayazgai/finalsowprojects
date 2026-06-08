@@ -6,9 +6,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Proxy → backend GET /api/mentor/queue. Real per-mentor review queue (own
- * assigned reviews + unclaimed 'pool' submissions), scoped via the mentor's
- * session token. No mock data.
+ * Proxy → backend GET /api/mentor/dashboard. Returns REAL per-mentor data
+ * (counts + recent queue scoped to the signed-in mentor's account id). The
+ * mentor's own session token carries their account id, so the backend scopes to
+ * exactly that mentor — no mixing, no mock data. Falls back to the admin service
+ * token only if the session token is missing (so the route still resolves).
  */
 
 const GLIMMORA_API = process.env.GLIMMORA_API_URL || process.env.NEXT_PUBLIC_GLIMMORA_API_URL;
@@ -52,13 +54,13 @@ export async function GET(req: NextRequest) {
   if (!token) token = (await getAdminToken()) ?? undefined;
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const qs = req.nextUrl.searchParams.toString();
-  const upstream = `${GLIMMORA_API}/api/mentor/queue${qs ? `?${qs}` : ""}`;
-  const res = await fetch(upstream, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(`${GLIMMORA_API}/api/mentor/dashboard`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   const data = await res.json().catch(() => ({} as Record<string, unknown>));
   if (!res.ok) {
     return NextResponse.json(
-      { error: (data as { detail?: string }).detail ?? "Failed to load mentor queue" },
+      { error: (data as { detail?: string }).detail ?? "Failed to load mentor dashboard" },
       { status: res.status },
     );
   }
