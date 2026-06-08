@@ -7,7 +7,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, CheckCircle2, ClipboardCheck, Search } from "lucide-react";
+import { AlertCircle, CheckCircle2, ClipboardCheck, FileText, Search } from "lucide-react";
 import type { MockReviewerItem, SlaTier } from "@/mocks/reviewer";
 import { fetchReviewerQueue, ReviewerApiError } from "@/lib/api/reviewer-mock";
 import { listReviewerQueue } from "@/lib/api/reviewer";
@@ -16,6 +16,16 @@ import { cn } from "@/lib/utils/cn";
 
 const ROWS_PER_PAGE = 10;
 const PREVIEW_PER_GROUP = 5;
+
+interface AssignedSow {
+  sowId: string;
+  title: string;
+  status?: string | null;
+  stage?: string | null;
+  ownerEmail?: string | null;
+  assignmentStatus?: string | null;
+  assignedAt?: string | null;
+}
 
 /**
  * Map a backend reviewer assignment (GET /api/v1/reviewer/dashboard →
@@ -154,6 +164,24 @@ export function ReviewerQueueWorkspace({
 
   const [items, setItems] = React.useState<MockReviewerItem[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [assignedSows, setAssignedSows] = React.useState<AssignedSow[]>([]);
+
+  // SOWs this reviewer was assigned to at intake — shown immediately, before any
+  // delivery, so they can see what they're responsible for.
+  React.useEffect(() => {
+    const c = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch("/api/reviewer/assigned-sows", { signal: c.signal, cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { sows?: AssignedSow[] };
+        if (!c.signal.aborted && Array.isArray(data.sows)) setAssignedSows(data.sows);
+      } catch {
+        // non-fatal — assigned SOWs are supplementary to the QA queue
+      }
+    })();
+    return () => c.abort();
+  }, []);
 
   React.useEffect(() => {
     const c = new AbortController();
@@ -256,6 +284,36 @@ export function ReviewerQueueWorkspace({
           <AlertCircle className="h-4 w-4 text-error-text shrink-0 mt-0.5" strokeWidth={2} aria-hidden />
           <p className="font-body text-[12.5px] text-error-text flex-1">{error}</p>
         </div>
+      )}
+
+      {assignedSows.length > 0 && (
+        <section className="rounded-xl border border-stroke-subtle bg-surface overflow-hidden">
+          <div className="px-5 pt-4 pb-3 border-b border-stroke-subtle">
+            <h2 className="font-body text-[15.5px] font-semibold text-foreground tracking-[-0.01em]">
+              Assigned SOWs
+            </h2>
+            <p className="mt-1 font-body text-[12.5px] text-text-secondary">
+              {assignedSows.length} SOW{assignedSows.length === 1 ? "" : "s"} routed to you for second-stage QA. Delivered tasks appear in your queue below as contributors submit work.
+            </p>
+          </div>
+          <ul className="divide-y divide-stroke-subtle">
+            {assignedSows.map((s) => (
+              <li key={s.sowId} className="px-5 py-3 flex items-center gap-3">
+                <FileText className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={2} aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="font-body text-[13px] font-medium text-foreground truncate">{s.title}</p>
+                  <p className="font-body text-[11.5px] text-text-tertiary truncate">
+                    {s.ownerEmail ? `From ${s.ownerEmail}` : s.sowId}
+                    {s.stage ? ` · stage: ${s.stage}` : ""}
+                  </p>
+                </div>
+                <span className="font-body text-[10.5px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand-subtle text-brand-subtle-text shrink-0">
+                  {s.assignmentStatus || "assigned"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <section className="rounded-xl border border-stroke-subtle bg-surface overflow-hidden">

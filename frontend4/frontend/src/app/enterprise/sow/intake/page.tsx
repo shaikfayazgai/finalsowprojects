@@ -110,7 +110,7 @@ async function assignReviewerToSow(
 ): Promise<void> {
   if (!reviewer?.id) return;
   try {
-    await fetch(`/api/superadmin/sows/${encodeURIComponent(sowId)}/reviewer`, {
+    const res = await fetch(`/api/superadmin/sows/${encodeURIComponent(sowId)}/reviewer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -119,8 +119,13 @@ async function assignReviewerToSow(
         reviewerName: reviewer.name,
       }),
     });
-  } catch {
-    // Reviewer assignment is best-effort and must not break intake.
+    if (!res.ok) {
+      // Don't break intake (SOW already created), but make the failure visible
+      // in the console so a broken assignment isn't silent.
+      console.error("Reviewer assignment failed", res.status, await res.text().catch(() => ""));
+    }
+  } catch (err) {
+    console.error("Reviewer assignment error", err);
   }
 }
 

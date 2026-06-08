@@ -56,6 +56,62 @@ async def reviewer_dashboard(user: Annotated[dict, Depends(get_current_user)]):
     }
 
 
+# ── GET /assigned-sows ────────────────────────────────────────────────────────
+
+@router.get("/assigned-sows")
+async def reviewer_assigned_sows(user: Annotated[dict, Depends(get_current_user)]):
+    """SOWs this reviewer was assigned to at intake (admin_records kind=sow_reviewer).
+    Shown in the reviewer portal immediately — BEFORE any delivery — so the
+    reviewer can see what they're responsible for. Delivered tasks for QA still
+    flow through reviewer_assignments separately."""
+    _require_reviewer(user)
+    import json as _json
+    from shared.db import get_pg_connection
+    from psycopg2.extras import RealDictCursor
+
+    rid = str(user.get("id") or "")
+    email = (user.get("email") or "").lower()
+    conn = get_pg_connection()
+    sows = []
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        # Match the reviewer by id OR email inside the JSONB payload.
+        cur.execute(
+            """
+            SELECT ar.name AS sow_id, ar.status AS assign_status, ar.data AS assign_data,
+                   ar.updated_at AS assigned_at, s.data AS sow_data, s.owner_email
+            FROM admin_records ar
+            LEFT JOIN enterprise_sows s ON s.id = ar.name
+            WHERE ar.kind = 'sow_reviewer' AND ar.deleted_at IS NULL
+              AND (ar.data->>'reviewerId' = %s OR lower(ar.data->>'reviewerEmail') = %s)
+            ORDER BY ar.updated_at DESC
+            """,
+            (rid, email),
+        )
+        for r in cur.fetchall():
+            ad = r["assign_data"]
+            if isinstance(ad, str):
+                try:
+                    ad = _json.loads(ad)
+                except (ValueError, TypeError):
+                    ad = {}
+            sd = r["sow_data"] or {}
+            if isinstance(sd, str):
+                try:
+                    sd = _json.loads(sd)
+                except (ValueError, TypeError):
+                    sd = {}
+            sows.append({
+                "sowId": r["sow_id"],
+                "title": (sd.get("title") if isinstance(sd, dict) else None) or r["sow_id"],
+                "status": sd.get("status") if isinstance(sd, dict) else None,
+                "stage": sd.get("currentStage") if isinstance(sd, dict) else None,
+                "ownerEmail": r.get("owner_email"),
+                "assignmentStatus": r["assign_status"],
+                "assignedAt": r["assigned_at"].isoformat() if r.get("assigned_at") else None,
+            })
+    return {"sows": sows, "total": len(sows)}
+
+
 # ── GET /projects ─────────────────────────────────────────────────────────────
 
 @router.get("/projects")

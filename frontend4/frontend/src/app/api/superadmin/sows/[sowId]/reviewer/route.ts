@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
 import { requireRole } from "@/lib/auth/require-role";
 
 /**
@@ -44,11 +43,11 @@ async function getAdminToken(): Promise<string | null> {
 }
 
 async function resolveToken(req: NextRequest): Promise<string | undefined> {
-  const secureCookie = req.nextUrl.protocol === "https:";
-  const jwt = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
-  let token = (jwt as { glimmoraAccessToken?: string } | null)?.glimmoraAccessToken;
-  if (!token) token = (await getAdminToken()) ?? undefined;
-  return token;
+  // These backend endpoints are admin-only. An enterprise admin's session token
+  // is NOT admin-scoped (backend returns 403), so always use the admin service
+  // token. (Kept the req param for signature stability.)
+  void req;
+  return (await getAdminToken()) ?? undefined;
 }
 
 export async function GET(
@@ -69,7 +68,7 @@ export async function GET(
   let res = await send(token);
   let data = await res.json().catch(() => ({} as Record<string, unknown>));
 
-  if (res.status === 401 && ADMIN_EMAIL && ADMIN_PASSWORD) {
+  if ((res.status === 401 || res.status === 403) && ADMIN_EMAIL && ADMIN_PASSWORD) {
     cachedAdminToken = null;
     const fresh = await getAdminToken();
     if (fresh) {
@@ -116,7 +115,7 @@ export async function POST(
   let res = await send(token);
   let data = await res.json().catch(() => ({} as Record<string, unknown>));
 
-  if (res.status === 401 && ADMIN_EMAIL && ADMIN_PASSWORD) {
+  if ((res.status === 401 || res.status === 403) && ADMIN_EMAIL && ADMIN_PASSWORD) {
     cachedAdminToken = null;
     const fresh = await getAdminToken();
     if (fresh) {
