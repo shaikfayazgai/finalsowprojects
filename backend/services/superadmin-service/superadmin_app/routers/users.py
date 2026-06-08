@@ -209,6 +209,38 @@ async def superadmin_create_user(
     return _create_user(body, admin, request)
 
 
+@router.delete("/api/superadmin/users/{user_id}")
+async def superadmin_delete_user(
+    user_id: str,
+    request: Request,
+    admin: Annotated[dict, Depends(get_current_admin)],
+):
+    """Hard-delete a provisioned account (mentor / reviewer / contributor / etc.).
+    Also clears any sow_mentor / sow_reviewer assignment records pointing at it."""
+    from shared.db import get_pg_connection
+    existing = repo.find_account_by_id(user_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Account not found")
+    conn = get_pg_connection()
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM login_accounts WHERE id = %s", (user_id,))
+        # Best-effort: drop assignment records that reference this account's email.
+        email = existing.get("email")
+        if email:
+            cur.execute(
+                "DELETE FROM admin_records WHERE kind IN ('sow_mentor','sow_reviewer') "
+                "AND data::text ILIKE %s",
+                (f"%{email}%",),
+            )
+    conn.commit()
+    write_audit(actor_id=admin.get("id"), actor_email=admin.get("email"), actor_role=admin.get("role"),
+                action="delete_user", target=existing.get("email"), target_id=str(user_id),
+                service="superadmin-service",
+                ip_address=request.client.host if request.client else None,
+                extra={"role": existing.get("role")})
+    return {"ok": True, "deletedId": str(user_id)}
+
+
 # ── Applications approval queue (women freelancers self-apply) ────────────────
 
 @router.get("/api/superadmin/applications")

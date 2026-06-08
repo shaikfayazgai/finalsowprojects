@@ -27,9 +27,11 @@ import { RoleCheckboxGrid } from "./role-checkbox-grid";
 export function InviteMemberDrawer({
   open,
   onClose,
+  onCreated,
 }: {
   open: boolean;
   onClose: () => void;
+  onCreated?: () => void;
 }) {
   const [email, setEmail] = React.useState("");
   const [selectedRoles, setSelectedRoles] = React.useState<Set<EnterpriseRole>>(
@@ -106,6 +108,7 @@ export function InviteMemberDrawer({
         throw new Error(body.error ?? "Could not create reviewer.");
       }
       setStep("success");
+      onCreated?.();
       toast.success(
         "Reviewer account created",
         body.emailSent

@@ -163,12 +163,11 @@ export function MentorsWorkspace() {
     };
   }, []);
 
+  // Registry shows ONLY real provisioned mentors (the mock seed roster is hidden).
+  // seedMentors is still referenced so the hook keeps running, but not displayed.
   const mentors = React.useMemo(() => {
-    const realEmails = new Set(realMentors.map((m) => m.email.toLowerCase()));
-    return [
-      ...realMentors,
-      ...seedMentors.filter((m) => !realEmails.has(m.email.toLowerCase())),
-    ];
+    void seedMentors;
+    return realMentors;
   }, [realMentors, seedMentors]);
 
   const statusFilter: StatusFilter =

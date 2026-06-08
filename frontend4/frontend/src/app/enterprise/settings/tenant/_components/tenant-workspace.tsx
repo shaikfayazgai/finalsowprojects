@@ -113,35 +113,31 @@ export function TenantWorkspace() {
   // Real provisioned accounts (merged with the seeded demo members, deduped by
   // email) so reviewers/admins created via Invite actually show up here.
   const [realMembers, setRealMembers] = React.useState<TenantMemberMock[]>([]);
-  React.useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/superadmin/all-users", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          users?: Array<{ id: string; name: string; email: string; role: string; status: string; lastLoginAt?: string | null; createdAt?: string | null }>;
-        };
-        if (cancelled) return;
-        setRealMembers(
-          (data.users ?? []).map((u) => ({
-            id: u.id,
-            name: u.name,
-            email: u.email,
-            roles: [u.role],
-            status: (u.status === "suspended" ? "suspended" : u.status === "invited" ? "invited" : "active") as TenantMemberMock["status"],
-            invitedAt: u.status === "invited" ? u.createdAt ?? null : null,
-            lastActiveAt: u.lastLoginAt ?? null,
-          })),
-        );
-      } catch {
-        // keep mock-only on failure
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const refreshMembers = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/superadmin/all-users", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        users?: Array<{ id: string; name: string; email: string; role: string; status: string; lastLoginAt?: string | null; createdAt?: string | null }>;
+      };
+      setRealMembers(
+        (data.users ?? []).map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          roles: [u.role],
+          status: (u.status === "suspended" ? "suspended" : u.status === "invited" ? "invited" : "active") as TenantMemberMock["status"],
+          invitedAt: u.status === "invited" ? u.createdAt ?? null : null,
+          lastActiveAt: u.lastLoginAt ?? null,
+        })),
+      );
+    } catch {
+      // keep mock-only on failure
+    }
   }, []);
+  React.useEffect(() => {
+    void refreshMembers();
+  }, [refreshMembers]);
 
   const members = React.useMemo(() => {
     const seed = getTenantMembersMock();
@@ -155,6 +151,11 @@ export function TenantWorkspace() {
     void seedEmails;
     return merged;
   }, [realMembers]);
+  // Real, provisioned accounts (have a backend id) — only these can be deleted.
+  const realMemberIds = React.useMemo(
+    () => new Set(realMembers.map((m) => m.id)),
+    [realMembers],
+  );
   const summary = React.useMemo(() => computeTenantSummary(members), [members]);
 
   const setParam = React.useCallback(
@@ -243,6 +244,28 @@ export function TenantWorkspace() {
     }
     if (action === "cancel-invite") {
       toast.warning("Invite cancelled", `The invitation for ${member.email} was revoked.`);
+      return;
+    }
+    if (action === "delete") {
+      if (!window.confirm(`Delete ${member.email}? This permanently removes the account and cannot be undone.`)) {
+        return;
+      }
+      void (async () => {
+        try {
+          const res = await fetch(`/api/superadmin/users/${encodeURIComponent(member.id)}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) {
+            const b = (await res.json().catch(() => ({}))) as { error?: string };
+            toast.error("Could not delete", b.error ?? "The account could not be removed.");
+            return;
+          }
+          setRealMembers((prev) => prev.filter((m) => m.id !== member.id));
+          toast.success("Member deleted", `${member.email} was removed from the workspace.`);
+        } catch {
+          toast.error("Could not delete", "Network error while removing the account.");
+        }
+      })();
     }
   };
 
@@ -443,6 +466,7 @@ export function TenantWorkspace() {
                   onManage={() => setManageMember(m)}
                   onResend={() => handleResendInvite(m)}
                   onAction={(action) => handleMemberAction(action, m)}
+                  canDelete={realMemberIds.has(m.id)}
                 />
               ))}
             </ul>
@@ -496,7 +520,11 @@ export function TenantWorkspace() {
         )}
       </section>
 
-      <InviteMemberDrawer open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <InviteMemberDrawer
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        onCreated={() => void refreshMembers()}
+      />
       <MemberRolesDrawer
         member={manageMember}
         members={members}
@@ -583,6 +611,7 @@ function MemberRow({
   onManage,
   onResend,
   onAction,
+  canDelete,
 }: {
   member: TenantMemberMock;
   menuOpen: boolean;
@@ -591,7 +620,8 @@ function MemberRow({
   onOpen: () => void;
   onManage: () => void;
   onResend: () => void;
-  onAction: (action: "suspend" | "reactivate" | "cancel-invite") => void;
+  onAction: (action: "suspend" | "reactivate" | "cancel-invite" | "delete") => void;
+  canDelete: boolean;
 }) {
   const sod = memberHasSod(member.roles);
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -715,6 +745,11 @@ function MemberRow({
                   Suspend member
                 </MenuItem>
               </>
+            )}
+            {canDelete && (
+              <MenuItem onClick={() => onAction("delete")} tone="danger">
+                Delete account
+              </MenuItem>
             )}
           </div>
         )}

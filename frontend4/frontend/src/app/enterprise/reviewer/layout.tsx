@@ -35,8 +35,18 @@ export default function ReviewerLayout({
 }) {
   const pathname = usePathname() ?? "";
   const { data: session } = useSession();
-  const firstName =
-    session?.user?.name?.split(" ")[0] ?? MOCK_REVIEWER_PROFILE.firstName;
+  // Provisioned reviewers may have no display name yet (just an email). Derive a
+  // readable first name from the name, else the email local-part, else the mock.
+  const firstName = React.useMemo(() => {
+    const raw = (session?.user?.name ?? "").trim();
+    if (raw && !raw.includes("@")) return raw.split(" ")[0];
+    const email = session?.user?.email ?? "";
+    if (email.includes("@")) {
+      const local = email.split("@")[0];
+      return local.charAt(0).toUpperCase() + local.slice(1);
+    }
+    return MOCK_REVIEWER_PROFILE.firstName;
+  }, [session?.user?.name, session?.user?.email]);
 
   if (!shouldShowPortalHeader(pathname)) {
     return <div className="animate-fade-in">{children}</div>;

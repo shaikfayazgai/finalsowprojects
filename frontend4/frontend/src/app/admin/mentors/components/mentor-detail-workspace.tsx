@@ -18,6 +18,7 @@ import {
   ExternalLink,
   Layers,
   Mail,
+  Trash2,
 } from "lucide-react";
 import { StatusChip } from "@/components/meridian";
 import { DashboardSection } from "@/components/meridian/dashboard";
@@ -199,6 +200,31 @@ export function MentorDetailWorkspace() {
     })();
   }, [mentor?.email]);
 
+  // Delete this mentor account (hard delete). After success, go back to the list.
+  const [deleting, setDeleting] = React.useState(false);
+  const deleteMentor = React.useCallback(() => {
+    if (!mentor?.id) return;
+    if (!window.confirm(`Delete mentor ${mentor.email}? This cannot be undone.`)) return;
+    void (async () => {
+      setDeleting(true);
+      try {
+        const res = await fetch(`/api/superadmin/users/${encodeURIComponent(mentor.id)}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const b = (await res.json().catch(() => ({}))) as { error?: string };
+          setToast(b.error ?? "Could not delete mentor.");
+          setDeleting(false);
+          return;
+        }
+        router.push("/admin/mentors");
+      } catch {
+        setToast("Could not delete mentor.");
+        setDeleting(false);
+      }
+    })();
+  }, [mentor?.id, mentor?.email, router]);
+
   if (!mentor) {
     return (
       <div className="space-y-5 pb-12 animate-fade-in">
@@ -337,6 +363,19 @@ export function MentorDetailWorkspace() {
             <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
             Audit
           </Link>
+          <button
+            type="button"
+            onClick={deleteMentor}
+            disabled={deleting}
+            className={cn(
+              "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md",
+              "bg-surface border border-danger/40 text-danger font-body text-[13px] font-semibold",
+              "hover:bg-danger/10 transition-colors duration-fast disabled:opacity-50",
+            )}
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
         </div>
       </header>
 
