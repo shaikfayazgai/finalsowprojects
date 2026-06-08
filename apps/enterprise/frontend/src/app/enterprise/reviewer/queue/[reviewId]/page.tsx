@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, AlertCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
 import type { MockReviewerItem } from "@/mocks/reviewer";
-import { fetchReviewerReview, ReviewerApiError, submitReviewerDecision } from "@/lib/api/reviewer-mock";
+import { ReviewerApiError, submitReviewerDecision } from "@/lib/api/reviewer-mock";
 import { ReviewNotFound } from "../../_components/review-not-found";
 import { DashboardSection } from "@/components/meridian/dashboard";
 import { ReviewerDetailSkeleton } from "@/components/enterprise/page-skeletons";
@@ -62,19 +62,10 @@ export default function ReviewerDetailPage() {
 
   React.useEffect(() => {
     if (!reviewId) return;
-    const c = new AbortController();
-    fetchReviewerReview(reviewId, c.signal)
-      .then((res) => setReview(res.review))
-      .catch((err: unknown) => {
-        if ((err as { name?: string }).name === "AbortError") return;
-        if (err instanceof ReviewerApiError && err.status === 404) setNf(true);
-        else if (err instanceof ReviewerApiError && err.status === 410) {
-          setLoadError("This review has already been decided.");
-        } else {
-          setLoadError(err instanceof Error ? err.message : "Could not load review.");
-        }
-      });
-    return () => c.abort();
+    // No mock review detail — real QA review detail isn't wired in this app yet,
+    // and the queue only lists real assignments. Show not-found rather than a
+    // fabricated review.
+    setNf(true);
   }, [reviewId]);
 
   const scanWorst = useScanWorstStatus(reviewId);

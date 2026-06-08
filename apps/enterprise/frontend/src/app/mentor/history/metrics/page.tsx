@@ -9,7 +9,6 @@
 
 import * as React from "react";
 import { Info, AlertCircle } from "lucide-react";
-import { fetchMentorDecisions, MentorApiError } from "@/lib/api/mentor-mock";
 import type { MOCK_MENTOR_METRICS } from "@/mocks/mentor";
 import { DashboardSection } from "@/components/meridian/dashboard";
 import {
@@ -24,25 +23,21 @@ import { MentorDetailSkeleton } from "@/app/mentor/_components/mentor-skeletons"
 
 export default function MentorMetricsPage() {
   const [m, setM] = React.useState<typeof MOCK_MENTOR_METRICS | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+  const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
-    const c = new AbortController();
-    fetchMentorDecisions(c.signal)
-      .then((res) => setM(res.metrics))
-      .catch((err: unknown) => {
-        if ((err as { name?: string }).name === "AbortError") return;
-        setError(err instanceof MentorApiError ? err.message : "Could not load metrics.");
-      });
-    return () => c.abort();
+    // No mock metrics — these reflect only the mentor's real reviewed work.
+    // Until a real metrics endpoint is wired here, show an empty state.
+    setM(null);
+    setReady(true);
   }, []);
 
-  if (error) {
+  if (ready && !m) {
     return (
       <MentorPage>
         <MentorBackLink href="/mentor/history">Back to history</MentorBackLink>
-        <MentorBanner tone="error" icon={<AlertCircle className="h-4 w-4" strokeWidth={2} aria-hidden />}>
-          {error}
+        <MentorBanner tone="brand" icon={<AlertCircle className="h-4 w-4" strokeWidth={2} aria-hidden />}>
+          No metrics yet — your review activity will appear here as you complete reviews.
         </MentorBanner>
       </MentorPage>
     );

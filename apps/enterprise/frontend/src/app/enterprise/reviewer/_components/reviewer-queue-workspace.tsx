@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, ClipboardCheck, FileText, Search } from "lucide-react";
 import type { MockReviewerItem, SlaTier } from "@/mocks/reviewer";
-import { fetchReviewerQueue, ReviewerApiError } from "@/lib/api/reviewer-mock";
+import { ReviewerApiError } from "@/lib/api/reviewer-mock";
 import { listReviewerQueue } from "@/lib/api/reviewer";
 import { Skeleton } from "@/components/meridian";
 import { cn } from "@/lib/utils/cn";
@@ -185,9 +185,9 @@ export function ReviewerQueueWorkspace({
 
   React.useEffect(() => {
     const c = new AbortController();
-    // Prefer the REAL backend queue (assignments routed from mentor accept
-    // hand-off for SOWs assigned to this reviewer). Fall back to the mock roster
-    // only if the backend is unavailable, so the demo UI still renders.
+    // REAL backend queue only (assignments routed from the mentor-accept hand-off
+    // for SOWs assigned to this reviewer). No mock fallback — the queue shows only
+    // real data that flowed through the process; empty means an empty queue.
     void (async () => {
       try {
         const raw = (await listReviewerQueue(c.signal)) as
@@ -195,22 +195,13 @@ export function ReviewerQueueWorkspace({
           | undefined;
         const rows = raw?.assignments ?? raw?.data?.assignments ?? [];
         if (c.signal.aborted) return;
-        if (Array.isArray(rows) && rows.length > 0) {
-          setItems(rows.map(backendRowToReviewer));
-          setError(null);
-          return;
-        }
-        // Backend reachable but empty → show an empty real queue (not mock).
-        setItems([]);
+        setItems(Array.isArray(rows) ? rows.map(backendRowToReviewer) : []);
         setError(null);
-      } catch {
-        // Backend unavailable → fall back to mock so the page still works.
-        fetchReviewerQueue(c.signal)
-          .then((res) => setItems(res.items))
-          .catch((err: unknown) => {
-            if ((err as { name?: string }).name === "AbortError") return;
-            setError(err instanceof ReviewerApiError ? err.message : "Could not load review queue.");
-          });
+      } catch (err: unknown) {
+        if (c.signal.aborted || (err as { name?: string }).name === "AbortError") return;
+        // Backend unavailable → show an empty queue with an error, never mock data.
+        setItems([]);
+        setError(err instanceof ReviewerApiError ? err.message : "Could not load review queue.");
       }
     })();
     return () => c.abort();

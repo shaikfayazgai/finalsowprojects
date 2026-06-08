@@ -9,7 +9,6 @@ import * as React from "react";
 import { AlertTriangle, AlertCircle, CheckCircle2, Timer } from "lucide-react";
 import { useActiveMentor } from "@/lib/hooks/use-active-mentor";
 import type { MockEscalation } from "@/mocks/mentor";
-import { fetchMentorEscalations, MentorApiError } from "@/lib/api/mentor-mock";
 import { StatusChip } from "@/components/meridian";
 import { DashboardSection, KeyMetricCard } from "@/components/meridian/dashboard";
 import { MentorListSkeleton } from "@/app/mentor/_components/mentor-skeletons";
@@ -50,17 +49,12 @@ export default function MentorEscalationPage() {
 
   React.useEffect(() => {
     if (!isSeniorOrLead) return;
-    const c = new AbortController();
-    fetchMentorEscalations(c.signal)
-      .then((res) => {
-        setItems(res.items);
-        setMetrics(res.metrics);
-      })
-      .catch((err: unknown) => {
-        if ((err as { name?: string }).name === "AbortError") return;
-        setError(err instanceof MentorApiError ? err.message : "Could not load escalations.");
-      });
-    return () => c.abort();
+    // No mock data — escalations come only from real adjudications routed
+    // through the process. Until a real escalations endpoint exists, show an
+    // empty queue (never fabricated escalations).
+    setItems([]);
+    setMetrics(null);
+    setError(null);
   }, [isSeniorOrLead]);
 
   const rows = React.useMemo(() => {

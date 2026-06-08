@@ -7,7 +7,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowLeft, AlertCircle, Info } from "lucide-react";
-import { fetchReviewerHistory, ReviewerApiError } from "@/lib/api/reviewer-mock";
 import type { MOCK_REVIEWER_METRICS } from "@/mocks/reviewer";
 import { DashboardSection } from "@/components/meridian/dashboard";
 import { ReviewerMetricsSkeleton } from "@/components/enterprise/page-skeletons";
@@ -15,26 +14,24 @@ import { cn } from "@/lib/utils/cn";
 
 export default function ReviewerMetricsPage() {
   const [m, setM] = React.useState<typeof MOCK_REVIEWER_METRICS | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+  const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
-    const c = new AbortController();
-    fetchReviewerHistory(c.signal)
-      .then((res) => setM(res.metrics))
-      .catch((err: unknown) => {
-        if ((err as { name?: string }).name === "AbortError") return;
-        setError(err instanceof ReviewerApiError ? err.message : "Could not load metrics.");
-      });
-    return () => c.abort();
+    // No mock metrics — these reflect only the reviewer's real QA decisions.
+    // Until a real metrics endpoint is wired here, show an empty state.
+    setM(null);
+    setReady(true);
   }, []);
 
-  if (error) {
+  if (ready && !m) {
     return (
       <div className="space-y-5 pb-12 animate-fade-in">
         <BackLink />
-        <div className="rounded-xl border border-error-border bg-error-subtle px-4 py-3 flex items-start gap-2.5">
-          <AlertCircle className="h-4 w-4 text-error-text shrink-0 mt-0.5" strokeWidth={2} aria-hidden />
-          <p className="font-body text-[12.5px] text-error-text flex-1">{error}</p>
+        <div className="rounded-xl border border-stroke-subtle bg-surface px-4 py-3 flex items-start gap-2.5">
+          <AlertCircle className="h-4 w-4 text-text-tertiary shrink-0 mt-0.5" strokeWidth={2} aria-hidden />
+          <p className="font-body text-[12.5px] text-text-secondary flex-1">
+            No metrics yet — your QA review activity will appear here as you complete reviews.
+          </p>
         </div>
       </div>
     );

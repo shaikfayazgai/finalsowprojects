@@ -9,7 +9,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, AlertCircle, ClipboardList, Search } from "lucide-react";
 import type { MockReviewerDecision } from "@/mocks/reviewer";
-import { fetchReviewerHistory, ReviewerApiError } from "@/lib/api/reviewer-mock";
 import { Skeleton } from "@/components/meridian";
 import { cn } from "@/lib/utils/cn";
 
@@ -61,14 +60,10 @@ export function ReviewerHistoryWorkspace() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    const c = new AbortController();
-    fetchReviewerHistory(c.signal)
-      .then((res) => setItems(res.items))
-      .catch((err: unknown) => {
-        if ((err as { name?: string }).name === "AbortError") return;
-        setError(err instanceof ReviewerApiError ? err.message : "Could not load history.");
-      });
-    return () => c.abort();
+    // No mock data — decision history reflects only the reviewer's real QA
+    // decisions. Until a real history endpoint is wired here, show an empty log.
+    setItems([]);
+    setError(null);
   }, []);
 
   const list = items ?? [];

@@ -9,7 +9,6 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowRight, AlertCircle } from "lucide-react";
 import type { MockMentorDecision } from "@/mocks/mentor";
-import { fetchMentorDecisions, MentorApiError } from "@/lib/api/mentor-mock";
 import { StatusChip } from "@/components/meridian";
 import { MentorListSkeleton } from "@/app/mentor/_components/mentor-skeletons";
 import {
@@ -44,14 +43,10 @@ export default function MentorHistoryPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    const c = new AbortController();
-    fetchMentorDecisions(c.signal)
-      .then((res) => setItems(res.items))
-      .catch((err: unknown) => {
-        if ((err as { name?: string }).name === "AbortError") return;
-        setError(err instanceof MentorApiError ? err.message : "Could not load history.");
-      });
-    return () => c.abort();
+    // No mock data — decision history reflects only the mentor's real decisions.
+    // Until a real history endpoint is wired here, show an empty log.
+    setItems([]);
+    setError(null);
   }, []);
 
   const list = items ?? [];

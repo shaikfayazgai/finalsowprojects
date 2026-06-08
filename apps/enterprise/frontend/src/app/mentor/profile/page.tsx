@@ -26,7 +26,6 @@ import {
 import { DashboardSection, KeyMetricCard } from "@/components/meridian/dashboard";
 import { Avatar, StatusChip } from "@/components/meridian";
 import { useActiveMentor } from "@/lib/hooks/use-active-mentor";
-import { fetchMentorDecisions, MentorApiError } from "@/lib/api/mentor-mock";
 import type { MOCK_MENTOR_METRICS } from "@/mocks/mentor";
 
 function fmtJoined(iso: string) {
@@ -35,19 +34,10 @@ function fmtJoined(iso: string) {
 
 export default function MentorProfilePage() {
   const { profile } = useActiveMentor();
-  const [m, setM] = React.useState<typeof MOCK_MENTOR_METRICS | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    const c = new AbortController();
-    fetchMentorDecisions(c.signal)
-      .then((res) => setM(res.metrics))
-      .catch((err: unknown) => {
-        if ((err as { name?: string }).name === "AbortError") return;
-        setError(err instanceof MentorApiError ? err.message : "Could not load metrics.");
-      });
-    return () => c.abort();
-  }, []);
+  // No mock metrics — these reflect only the mentor's real reviewed work. Until a
+  // real metrics endpoint is wired here, the metric tiles render "—" (no data).
+  const [m] = React.useState<typeof MOCK_MENTOR_METRICS | null>(null);
+  const error: string | null = null;
 
   return (
     <MentorPage>
@@ -130,25 +120,25 @@ export default function MentorProfilePage() {
             icon={Target}
             tone="blue"
             label="Reviews"
-            value={m ? String(m.reviewCount) : "…"}
+            value={m ? String(m.reviewCount) : "—"}
           />
           <KeyMetricCard
             icon={Timer}
             tone="violet"
             label="Avg time"
-            value={m ? `${m.avgTimeMin} min` : "…"}
+            value={m ? `${m.avgTimeMin} min` : "—"}
           />
           <KeyMetricCard
             icon={TrendingUp}
             tone="green"
             label="SLA hit"
-            value={m ? `${m.slaHitPct}%` : "…"}
+            value={m ? `${m.slaHitPct}%` : "—"}
           />
           <KeyMetricCard
             icon={Clock}
             tone="cyan"
             label="Accept rate"
-            value={m ? `${m.acceptPct}%` : "…"}
+            value={m ? `${m.acceptPct}%` : "—"}
           />
         </div>
       </DashboardSection>
@@ -159,14 +149,14 @@ export default function MentorProfilePage() {
             icon={Users}
             tone="amber"
             label="Sessions held"
-            value="12"
+            value="—"
             hint="Scheduled mentorship sessions completed"
           />
           <KeyMetricCard
             icon={Users}
             tone="green"
             label="Active mentees"
-            value="8"
+            value="—"
             hint="Contributors currently in your mentorship roster"
           />
         </div>
