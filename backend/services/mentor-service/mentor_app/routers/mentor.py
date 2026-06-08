@@ -184,6 +184,36 @@ def list_queue(
     })
 
 
+@router.get("/sow/{sow_id}/tasks")
+def get_sow_tasks(sow_id: str, user: MentorDep):
+    """Decomposed tasks (+ status/assignee) for a SOW — shown to the mentor in the
+    review detail. PAYOUT/cost fields are intentionally stripped: mentors see the
+    work and its state, never the money."""
+    conn = _conn()
+    # Find the decomposition plan(s) for this SOW (enterprise_plans.data.sowId).
+    tasks: list[dict] = []
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT data FROM enterprise_plans WHERE data->>'sowId' = %s ORDER BY created_at DESC",
+            (sow_id,),
+        )
+        for row in cur.fetchall():
+            data = row["data"] or {}
+            for t in (data.get("tasks") or []):
+                detail = t.get("detail") or {}
+                tasks.append({
+                    "id": t.get("id"),
+                    "title": t.get("title"),
+                    "milestone": t.get("milestone") or t.get("milestoneId"),
+                    "status": t.get("status") or "published",
+                    "assignee": t.get("assigneeEmail") or t.get("assigneeId") or "Unassigned",
+                    "effortHours": t.get("effortHours") or detail.get("effortHours"),
+                    "skills": t.get("requiredSkills") or detail.get("requiredSkills") or [],
+                    # NOTE: deliberately NO priceMinor / payout / cost fields.
+                })
+    return _ok({"sowId": sow_id, "tasks": tasks, "total": len(tasks)})
+
+
 @router.get("/queue/{review_id}")
 def get_queue_item(review_id: int, user: MentorDep):
     _ensure_seeded(user)

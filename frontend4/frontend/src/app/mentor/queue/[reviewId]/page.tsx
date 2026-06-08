@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import type { MockReview, MockRubricCriterion, MockContributorDecision } from "@/mocks/mentor";
 import { fetchMentorReview, MentorApiError } from "@/lib/api/mentor-mock";
-import { saveMentorReviewDraft, submitMentorReviewDecision } from "@/lib/api/mentor";
+import { saveMentorReviewDraft, submitMentorReviewDecision, getMentorSowTasks, type MentorSowTask } from "@/lib/api/mentor";
 import {
   AcceptModal, ReworkModal, RejectModal, ReassignModal, WithdrawModal,
 } from "@/components/mentor/decision-modals";
@@ -423,6 +423,7 @@ export default function MentorReviewDetailPage() {
         {/* Context rail */}
         <aside className="space-y-4">
           <ContributorPanel review={review} decisions={contributorDecisions} />
+          <SowTasksPanel sowId={review.project} />
           <AiAssistPanel review={review} available={aiAvailable} />
           {review.priorFeedback && <PriorFeedbackPanel review={review} />}
           {review.references.length > 0 && <ReferencesPanel review={review} />}
@@ -838,6 +839,68 @@ function ReferencesPanel({ review }: { review: MockReview }) {
               {r.label}
               <ExternalLink className="h-3 w-3" strokeWidth={2} aria-hidden />
             </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * SOW work panel — the decomposed tasks + status for the SOW this review belongs
+ * to. Read-only; intentionally NO payout/cost figures (mentors see the work, not
+ * the money). Renders nothing if the SOW id isn't a real backend SOW.
+ */
+function SowTasksPanel({ sowId }: { sowId: string }) {
+  const [tasks, setTasks] = React.useState<MentorSowTask[] | null>(null);
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!sowId || !sowId.startsWith("sow")) {
+      setLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    getMentorSowTasks(sowId)
+      .then((t) => {
+        if (!cancelled) setTasks(t);
+      })
+      .catch(() => {
+        if (!cancelled) setTasks([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sowId]);
+
+  if (!loaded || !tasks || tasks.length === 0) return null;
+
+  return (
+    <section className="rounded-xl border border-stroke-subtle bg-surface overflow-hidden">
+      <header className="px-4 py-2.5 border-b border-stroke-subtle flex items-center justify-between">
+        <h2 className="font-body text-[12.5px] font-semibold text-foreground">SOW tasks</h2>
+        <span className="font-body text-[10.5px] text-text-tertiary">{tasks.length} tasks</span>
+      </header>
+      <ul className="divide-y divide-stroke-subtle">
+        {tasks.map((t) => (
+          <li key={t.id} className="px-4 py-2.5">
+            <p className="font-body text-[12px] font-medium text-foreground truncate" title={t.title}>
+              {t.title}
+            </p>
+            <p className="mt-0.5 font-body text-[11px] text-text-secondary">
+              <span className="capitalize">{t.status}</span>
+              <span aria-hidden className="opacity-50 mx-1">·</span>
+              {t.assignee}
+              {t.effortHours ? (
+                <>
+                  <span aria-hidden className="opacity-50 mx-1">·</span>
+                  {t.effortHours}h
+                </>
+              ) : null}
+            </p>
           </li>
         ))}
       </ul>

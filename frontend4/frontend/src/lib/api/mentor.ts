@@ -106,6 +106,24 @@ export async function listMentorQueue(params: MentorQueueParams = {}): Promise<u
   return res.json();
 }
 
+export interface MentorSowTask {
+  id: string;
+  title: string;
+  milestone?: string | null;
+  status: string;
+  assignee: string;
+  effortHours?: number | null;
+  skills: string[];
+}
+
+/** Decomposed tasks (+ status) for a SOW assigned to the mentor. No payout. */
+export async function getMentorSowTasks(sowId: string): Promise<MentorSowTask[]> {
+  const res = await fetchInternal(`/api/mentor/sow/${encodeURIComponent(sowId)}/tasks`);
+  if (!res.ok) throw new Error(`Could not load SOW tasks (${res.status})`);
+  const body = (await res.json()) as { data?: { tasks?: MentorSowTask[] } };
+  return body.data?.tasks ?? [];
+}
+
 export async function getMentorSubmission(submissionId: string): Promise<unknown> {
   const res = await fetchInternal(
     `/api/mentor/submissions/${encodeURIComponent(submissionId)}`,
