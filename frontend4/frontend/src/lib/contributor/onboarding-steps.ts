@@ -25,8 +25,9 @@ export const ONBOARDING_PATH = {
 type StepKey = keyof typeof ONBOARDING_PATH;
 
 const TRACK_SEQUENCE: Record<OnboardingTrackKey, StepKey[]> = {
-  /** Freelancer: consent → skills → availability → evidence → KYC → payout → done */
-  freelancer: ["consent", "skills", "availability", "evidence", "verify", "payout", "complete"],
+  /** Freelancer: self-registers and works DIRECTLY — no KYC step / no admin
+   *  approval gate. consent → skills → availability → evidence → payout → done */
+  freelancer: ["consent", "skills", "availability", "evidence", "payout", "complete"],
   /** Student: university step replaces generic KYC */
   student: ["consent", "student", "skills", "availability", "evidence", "payout", "complete"],
   /** Women WF: partner + lightweight ID on women page — no generic verify */
@@ -88,13 +89,17 @@ export function nextStepPath(
   return pathForStep(seq[idx + 1]!, query);
 }
 
-export function requiresKycVerifyPage(track: OnboardingTrackKey): boolean {
-  return track === "freelancer";
+export function requiresKycVerifyPage(_track: OnboardingTrackKey): boolean {
+  // Freelancers self-register and work directly — no KYC verify page. (No track
+  // currently requires the generic verify page.)
+  return false;
 }
 
-/** Freelancer + women WF wait for admin KYC; university students do not. */
+/** Only the women-workforce track waits for admin KYC approval. Freelancers
+ *  register directly and start working immediately; university students are
+ *  vouched for by their institution. */
 export function requiresKycAdminApproval(track: OnboardingTrackKey): boolean {
-  return track === "freelancer" || track === "women_wf";
+  return track === "women_wf";
 }
 
 export function buildConsentEntryQuery(referral?: ReferralContext | null): string {

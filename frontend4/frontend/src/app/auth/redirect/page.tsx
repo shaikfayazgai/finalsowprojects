@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getContributorTrackStatus } from "@/lib/contributor/profile-status";
 import { resolveIncompleteOnboardingPath } from "@/lib/contributor/onboarding-routing";
+import {
+  resolveOnboardingTrack,
+  requiresKycAdminApproval,
+} from "@/lib/contributor/onboarding-steps";
 
 export default async function AuthRedirectPage() {
   const session = await auth();
@@ -43,7 +47,13 @@ export default async function AuthRedirectPage() {
         });
         redirect(path);
       }
-      if (track && !track.portalReady) {
+      // Only hold women-workforce contributors for admin KYC. Freelancers and
+      // students go straight to their dashboard once onboarding is complete.
+      const resolvedTrack = resolveOnboardingTrack({
+        contribType: track?.contribType,
+        isInternalEmployee: track?.onboardingTrack === "internal",
+      });
+      if (track && !track.portalReady && requiresKycAdminApproval(resolvedTrack)) {
         redirect("/onboarding/kyc-pending");
       }
     }

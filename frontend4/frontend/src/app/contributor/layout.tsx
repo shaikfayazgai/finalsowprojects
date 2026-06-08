@@ -16,6 +16,10 @@ import {
   isInsideOnboardingFlow,
   resolveIncompleteOnboardingPath,
 } from "@/lib/contributor/onboarding-routing";
+import {
+  resolveOnboardingTrack,
+  requiresKycAdminApproval,
+} from "@/lib/contributor/onboarding-steps";
 import { readReferralContext } from "@/lib/referral/context";
 import { PersonaSwitcher } from "@/components/contributor/persona-switcher";
 
@@ -55,9 +59,16 @@ export default function ContributorLayout({
   const needsOnboarding =
     !notApproved && trackReady && trackQuery.data && !trackQuery.data.onboardingComplete;
 
+  // Only the women-workforce track is held for admin KYC. Freelancers (and
+  // university students) register and work directly — never gate them on KYC.
+  const resolvedTrack = resolveOnboardingTrack({
+    contribType: trackQuery.data?.contribType,
+    referral: readReferralContext(),
+  });
   const needsKycReview =
     !notApproved &&
     trackReady &&
+    requiresKycAdminApproval(resolvedTrack) &&
     trackQuery.data?.onboardingComplete &&
     !trackQuery.data.portalReady;
 
