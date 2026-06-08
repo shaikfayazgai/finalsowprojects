@@ -130,7 +130,14 @@ def _demo_project_payload(owner: dict, project_id: str, plan_id: str) -> dict:
 
 
 def ensure_demo_data(owner: dict) -> None:
-    """Create demo SOW + plan + project for this owner if none exist yet."""
+    """Create demo SOW + plan + project for this owner if none exist yet.
+
+    DISABLED by default: auto-seeding re-creates a demo SOW every time an
+    enterprise with zero SOWs loads a dashboard, which silently undoes a SOW
+    purge. Set ENTERPRISE_DEMO_SEED=1 to re-enable for a fresh demo workspace."""
+    import os
+    if os.environ.get("ENTERPRISE_DEMO_SEED") != "1":
+        return
     oid = owner.get("id")
     if not oid:
         return
