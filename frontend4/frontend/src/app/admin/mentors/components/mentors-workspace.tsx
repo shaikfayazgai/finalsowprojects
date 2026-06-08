@@ -121,6 +121,12 @@ export function MentorsWorkspace() {
   const mentors = useAdminMentorsList();
   const pools = useAdminPoolsList();
 
+  // The mentor list is hydrated from a localStorage overlay, so counts differ
+  // between SSR and the client. Gate count-dependent UI behind a mounted flag
+  // to avoid a hydration mismatch.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+
   const statusFilter: StatusFilter =
     (searchParams.get("status") as StatusFilter | null) ?? "all";
   const roleFilter: RoleFilter =
@@ -268,7 +274,7 @@ export function MentorsWorkspace() {
         </div>
       </header>
 
-      {pendingHero && statusFilter !== "pending" && counts.pending > 0 && (
+      {mounted && pendingHero && statusFilter !== "pending" && counts.pending > 0 && (
         <ContextBanner
           title={
             setupHero
