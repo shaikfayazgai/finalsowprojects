@@ -86,20 +86,34 @@ export function InviteMemberDrawer({
 
     setSubmitting(true);
     try {
-      const result = await createReviewerInvite({
-        email: email.trim(),
-        note: note.trim() || undefined,
+      // Credential-based provisioning (locked flow — NO signup links): a random
+      // temp password is generated + emailed, must-change-password is set, and
+      // the reviewer sets their own password on first sign-in.
+      const res = await fetch("/api/superadmin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          role: "reviewer",
+          sendCredentials: true,
+        }),
       });
-      setRegisterUrl(result.registerUrl);
+      const body = (await res.json().catch(() => ({}))) as {
+        emailSent?: boolean;
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(body.error ?? "Could not create reviewer.");
+      }
       setStep("success");
       toast.success(
-        "Reviewer invite created",
-        result.emailSent
-          ? `Signup link emailed to ${result.email}.`
-          : `Copy the signup link and share it with ${result.email}.`,
+        "Reviewer account created",
+        body.emailSent
+          ? `Credentials emailed to ${email.trim()} — they set a new password on first sign-in.`
+          : `Reviewer created for ${email.trim()} — first sign-in forces a password reset.`,
       );
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Could not send invite.");
+      setSubmitError(err instanceof Error ? err.message : "Could not create reviewer.");
     } finally {
       setSubmitting(false);
     }
@@ -120,33 +134,18 @@ export function InviteMemberDrawer({
       appearance="gradient-glass"
       size="md"
       eyebrow="Settings · Members"
-      title={step === "success" ? "Invite ready" : "Invite a member"}
+      title={step === "success" ? "Reviewer created" : "Invite a member"}
       description={
         step === "success"
-          ? "Share the signup link with your reviewer. They will choose their own password."
+          ? "Credentials were emailed. The reviewer sets their own password on first sign-in."
           : "Send a workspace invitation with role assignments. Changes apply when they accept."
       }
       footer={
         <div className="flex items-center justify-end gap-2 w-full">
           {step === "success" ? (
-            <>
-              <button type="button" onClick={onClose} className={glassBtnSecondary}>
-                Done
-              </button>
-              <button type="button" onClick={copyLink} className={glassBtnPrimary}>
-                {copied ? (
-                  <>
-                    <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                    Copy signup link
-                  </>
-                )}
-              </button>
-            </>
+            <button type="button" onClick={onClose} className={glassBtnPrimary}>
+              Done
+            </button>
           ) : (
             <>
               <button type="button" onClick={onClose} className={glassBtnSecondary}>
@@ -171,15 +170,12 @@ export function InviteMemberDrawer({
           <div className="rounded-xl border border-success-border bg-success-subtle/50 px-3 py-2.5 flex items-start gap-2">
             <CheckCircle2 className="h-4 w-4 text-success-text shrink-0 mt-0.5" strokeWidth={2} aria-hidden />
             <p className="font-body text-[12.5px] text-foreground leading-relaxed">
-              Reviewer invite for <strong>{email.trim()}</strong>. They must sign up with this
-              email and pick a password — no temporary password is sent.
+              Reviewer account created for <strong>{email.trim()}</strong>. A temporary
+              password was emailed — they sign in at{" "}
+              <span className="font-mono text-[11px]">/reviewer/login</span> and are forced to
+              set a new password on first sign-in. No signup link.
             </p>
           </div>
-          <GlassSection title="Signup link" hint="Valid for 7 days">
-            <p className="font-mono text-[11px] text-text-secondary break-all leading-relaxed rounded-lg border border-border-subtle bg-bg-subtle/80 px-3 py-2">
-              {registerUrl}
-            </p>
-          </GlassSection>
           {selectedRoles.size > 1 && (
             <p className="font-body text-[12px] text-text-secondary">
               Other selected roles ({[...selectedRoles].filter((r) => r !== "reviewer").map((r) => ROLE_META[r].label).join(", ")})
