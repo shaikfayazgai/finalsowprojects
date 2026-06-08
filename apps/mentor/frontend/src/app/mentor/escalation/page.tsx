@@ -45,7 +45,7 @@ function backendEscalationToMock(e: MentorEscalation): MockEscalation {
     : (e.status as MockEscalation["status"]) ?? "open";
   return {
     id: String(e.id),
-    type: categoryToType(e.category),
+    type: categoryToType(e.category ?? undefined),
     severity: (e.priority === "urgent" ? "critical" : e.priority === "high" ? "high" : e.priority === "low" ? "low" : "medium") as MockEscalation["severity"],
     status,
     openedAt: created,

@@ -160,6 +160,54 @@ export async function fetchMentorAssignedSows(): Promise<MentorAssignedSow[]> {
   return Array.isArray(sows) ? sows : [];
 }
 
+/** A row from GET /api/mentor/escalation (mentor_escalations table). */
+export interface MentorEscalation {
+  id: string | number;
+  subject?: string | null;
+  category?: string | null;
+  priority?: string | null;
+  status?: string | null;
+  review_id?: string | number | null;
+  mentee_id?: string | number | null;
+  assignee?: string | null;
+  description?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  resolved_at?: string | null;
+}
+
+/** Escalations assigned to the signed-in mentor. Real backend; empty on error. */
+export async function listMentorEscalations(): Promise<MentorEscalation[]> {
+  const res = await fetchInternal("/api/mentor/escalation");
+  if (!res.ok) throw new Error(`Could not load escalations (${res.status})`);
+  const body = (await res.json()) as { data?: { items?: MentorEscalation[] }; items?: MentorEscalation[] };
+  const items = body.data?.items ?? body.items ?? [];
+  return Array.isArray(items) ? items : [];
+}
+
+/** A row from GET /api/mentor/history (mentor_reviews table, decided items). */
+export interface MentorHistoryItem {
+  id: string | number;
+  title?: string | null;
+  submission_type?: string | null;
+  contributor_name?: string | null;
+  decision?: string | null;
+  score?: number | null;
+  comments?: string | null;
+  status?: string | null;
+  decided_at?: string | null;
+  created_at?: string | null;
+}
+
+/** Past decisions by the signed-in mentor. Real backend; empty on error. */
+export async function listMentorHistory(): Promise<MentorHistoryItem[]> {
+  const res = await fetchInternal("/api/mentor/history");
+  if (!res.ok) throw new Error(`Could not load history (${res.status})`);
+  const body = (await res.json()) as { data?: { items?: MentorHistoryItem[] }; items?: MentorHistoryItem[] };
+  const items = body.data?.items ?? body.items ?? [];
+  return Array.isArray(items) ? items : [];
+}
+
 export interface MentorSowTask {
   id: string;
   title: string;
