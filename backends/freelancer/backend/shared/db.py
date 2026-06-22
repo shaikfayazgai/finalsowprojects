@@ -40,32 +40,57 @@ def _is_pg_alive(conn: psycopg2.extensions.connection) -> bool:
         return False
 
 
-def _connect_with_retry(attempts: int = 5, connect_timeout: int = 30):
-    """Open a Postgres connection; retry if Neon's compute is cold-starting."""
+def _connect_with_retry(attempts: int = 5, connect_timeout: int = 10):
+    """Open a Postgres connection; retry if Neon's compute is cold-starting.
+
+    TCP keepalives stop Neon's pooler from silently dropping an idle connection —
+    the root cause of the recurring "everything went blank / 0 tasks" bug, where
+    the next query after an idle period hung on a dead socket. (statement_timeout
+    can't be passed here: Neon's pooled endpoint rejects it as a startup option.)"""
     last_exc: Exception | None = None
     for i in range(attempts):
         try:
-            return psycopg2.connect(settings.postgres_dsn, connect_timeout=connect_timeout)
+            return psycopg2.connect(
+                settings.postgres_dsn,
+                connect_timeout=connect_timeout,
+                keepalives=1,
+                keepalives_idle=20,
+                keepalives_interval=10,
+                keepalives_count=3,
+            )
         except psycopg2.OperationalError as exc:
             last_exc = exc
             logger.warning("PG connect attempt %d/%d failed: %s", i + 1, attempts, str(exc).splitlines()[0])
-            time.sleep(2 * (i + 1))
+            time.sleep(min(2 * (i + 1), 5))
     assert last_exc is not None
     raise last_exc
 
 
 def get_pg_connection() -> psycopg2.extensions.connection:
-    """Return a live Postgres connection; reconnect if Neon dropped it."""
+    """Return an open Postgres connection, reconnecting only if it's been closed.
+    We DON'T run a `SELECT 1` liveness probe on every call — that added a full Neon
+    round-trip to EVERY query (the contributor pages felt slow). Liveness is covered
+    cheaply elsewhere: the rollback in ensure_pg_clean() runs before each query and
+    resets the connection if it's dead, TCP keepalives stop idle drops, and the query
+    helpers reconnect + retry once on a dropped socket."""
     global _pg_conn
-    if _pg_conn is None or _pg_conn.closed or not _is_pg_alive(_pg_conn):
-        if _pg_conn is not None and not _pg_conn.closed:
-            try:
-                _pg_conn.close()
-            except Exception:
-                pass
+    if _pg_conn is None or _pg_conn.closed:
         logger.info("Opening new PostgreSQL connection to Neon")
         _pg_conn = _connect_with_retry()
     return _pg_conn
+
+
+def reset_pg_connection() -> None:
+    """Force the next get_pg_connection() to open a fresh connection. Called by the
+    query helpers when a query fails on a dropped/stale connection so the request
+    recovers in one retry instead of erroring out."""
+    global _pg_conn
+    if _pg_conn is not None and not _pg_conn.closed:
+        try:
+            _pg_conn.close()
+        except Exception:
+            pass
+    _pg_conn = None
 
 
 def prepare_pg_connection() -> None:
@@ -95,7 +120,12 @@ def get_mongo_db() -> Database | None:
     if not settings.mongodb_uri.strip():
         return None
     if _mongo_client is None:
-        _mongo_client = MongoClient(settings.mongodb_uri, server_api=ServerApi("1"))
+        # Short timeouts so an unreachable Mongo fails fast (audit is fail-open)
+        # instead of hanging requests for the 20-30s pymongo default.
+        _mongo_client = MongoClient(
+            settings.mongodb_uri, server_api=ServerApi("1"),
+            serverSelectionTimeoutMS=3000, connectTimeoutMS=3000, socketTimeoutMS=3000,
+        )
     return _mongo_client[settings.mongodb_db]
 
 

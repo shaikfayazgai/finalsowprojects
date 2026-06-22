@@ -1,0 +1,382 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  AlertCircle, ArrowRight, CheckCircle,
+  GraduationCap, Briefcase, Users, Smartphone, Loader2,
+} from "lucide-react";
+import {
+  GlassCard, GlassCardContent, Button, Input, Label,
+} from "@/components/ui";
+import { CountryCombobox } from "./CountryCombobox";
+import { CountryDialPicker } from "./CountryDialPicker";
+import { COUNTRIES_DATA } from "../data";
+import type { PasswordStrength } from "../types";
+import type { ContributorType } from "../types";
+
+interface Props {
+  firstName: string;       setFirstName: (v: string) => void;
+  lastName: string;        setLastName: (v: string) => void;
+  phoneCountry: string;    setPhoneCountry: (v: string) => void;
+  phone: string;           setPhone: (v: string) => void;
+  email: string;           setEmail: (v: string) => void;
+  emailExists?: boolean | null;
+  emailChecking?: boolean;
+  password: string;        setPassword: (v: string) => void;
+  confirm: string;         setConfirm: (v: string) => void;
+  showPw: boolean;         setShowPw: (v: boolean) => void;
+  showCon?: boolean;       setShowCon?: (v: boolean) => void;
+  contribType: ContributorType; setContribType: (v: ContributorType) => void;
+  country: string;         setCountry: (v: string) => void;
+  passwordStrength: PasswordStrength;
+  error: string;
+  onContinue: () => void | Promise<void>;
+  isSsoUser?: boolean;
+  ssoProvider?: "google" | "microsoft" | null;
+  hideSignInLink?: boolean;
+}
+
+const CONTRIBUTOR_TYPES: {
+  value: ContributorType;
+  label: string;
+  sub: string;
+  Icon: React.FC<{ className?: string }>;
+  activeClass: string;
+  activeIcon: string;
+}[] = [
+  {
+    value: "student",
+    label: "Student",
+    sub: "University / college",
+    Icon: GraduationCap,
+    activeClass: "border-brown-500 bg-brown-50",
+    activeIcon: "text-brown-600",
+  },
+  {
+    value: "women_workforce",
+    label: "Women Workforce",
+    sub: "Returnship / professional",
+    Icon: Briefcase,
+    activeClass: "border-teal-500 bg-teal-50",
+    activeIcon: "text-teal-600",
+  },
+  {
+    value: "general_workforce",
+    label: "General Workforce",
+    sub: "Professional contributor",
+    Icon: Users,
+    activeClass: "border-forest-500 bg-forest-50",
+    activeIcon: "text-forest-600",
+  },
+];
+
+export function Step1Identity({
+  firstName, setFirstName,
+  lastName, setLastName,
+  phoneCountry, setPhoneCountry,
+  phone, setPhone,
+  email, setEmail,
+  emailExists = null,
+  emailChecking = false,
+  password, setPassword,
+  confirm, setConfirm,
+  showPw, setShowPw,
+  contribType, setContribType,
+  country, setCountry,
+  passwordStrength,
+  error,
+  onContinue,
+  isSsoUser = false,
+  ssoProvider = null,
+  hideSignInLink = false,
+}: Props) {
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const selectedPhoneCountry = COUNTRIES_DATA.find((c) => c.name === phoneCountry);
+  const phoneMaxLen = selectedPhoneCountry?.phoneMaxLength ?? 12;
+  const showEmailAvailability = email.trim() && !fieldErrors.email && !isSsoUser;
+
+  const validateField = (field: string, value: string) => {
+    const errs = { ...fieldErrors };
+    switch (field) {
+      case "firstName":
+        if (!value.trim()) errs.firstName = "First name is required";
+        else delete errs.firstName;
+        break;
+      case "lastName":
+        if (!value.trim()) errs.lastName = "Last name is required";
+        else delete errs.lastName;
+        break;
+      case "phone": {
+        const digits = value.replace(/\D/g, "");
+        if (digits.length < 7) errs.phone = "Enter a valid mobile number";
+        else delete errs.phone;
+        break;
+      }
+      case "email":
+        if (!value.trim()) errs.email = "Email is required";
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+          errs.email = "Enter a valid email address (e.g. name@company.com)";
+        else delete errs.email;
+        break;
+      case "password":
+        if (!value) errs.password = "Password is required";
+        else if (value.length < 8) errs.password = "Password must be at least 8 characters";
+        else if (!/[A-Z]/.test(value)) errs.password = "Must include an uppercase letter";
+        else if (!/[0-9]/.test(value)) errs.password = "Must include a number";
+        else if (!/[^A-Za-z0-9]/.test(value)) errs.password = "Must include a special character";
+        else delete errs.password;
+        break;
+      case "confirm":
+        if (!value) errs.confirm = "Please confirm your password";
+        else if (value !== password) errs.confirm = "Passwords do not match";
+        else delete errs.confirm;
+        break;
+    }
+    setFieldErrors(errs);
+  };
+
+  return (
+    <GlassCard variant="heavy" padding="lg">
+      <GlassCardContent>
+        <div className="mb-5">
+          <p className="text-[11px] font-semibold text-beige-400 uppercase tracking-widest">Step 1 of 4</p>
+          <p className="font-heading font-semibold text-brown-950 text-lg mt-0.5">Basic Identity</p>
+          <p className="text-xs text-beige-500 mt-0.5">Tell us who you are to get started</p>
+        </div>
+
+        <div className="space-y-4">
+
+          {/* Name row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="fn">First Name <span className="text-red-400">*</span></Label>
+              <Input id="fn" placeholder="Enter first name" value={firstName}
+                onChange={e => setFirstName(e.target.value)}
+                onBlur={() => validateField("firstName", firstName)}
+                maxLength={50} autoFocus readOnly={isSsoUser}
+                className={isSsoUser ? "bg-beige-50 text-beige-700" : ""} />
+              {fieldErrors.firstName && <p className="text-xs text-red-500">{fieldErrors.firstName}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ln">Last Name <span className="text-red-400">*</span></Label>
+              <Input id="ln" placeholder="Enter last name" value={lastName}
+                onChange={e => setLastName(e.target.value)}
+                onBlur={() => validateField("lastName", lastName)}
+                maxLength={50} readOnly={isSsoUser}
+                className={isSsoUser ? "bg-beige-50 text-beige-700" : ""} />
+              {fieldErrors.lastName && <p className="text-xs text-red-500">{fieldErrors.lastName}</p>}
+            </div>
+          </div>
+
+          {/* Mobile number */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Smartphone className="w-3.5 h-3.5 text-beige-500 shrink-0" />
+              <Label htmlFor="mobile-step1" className="mb-0">
+                Mobile Number <span className="text-red-400">*</span>
+              </Label>
+            </div>
+            <div className="flex flex-1 items-center rounded-xl border border-beige-200 bg-white shadow-sm transition-all focus-within:border-brown-500 focus-within:ring-2 focus-within:ring-brown-500/20">
+              <CountryDialPicker
+                value={phoneCountry}
+                onChange={(name) => {
+                  const c = COUNTRIES_DATA.find((x) => x.name === name)!;
+                  setPhoneCountry(c.name);
+                  setPhone(c.code + " ");
+                }}
+              />
+              <input
+                id="mobile-step1"
+                type="tel"
+                placeholder={`Number (${phoneMaxLen} digits)`}
+                value={phone.replace(/^\+\d+\s?/, "")}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "").slice(0, phoneMaxLen);
+                  const cc = selectedPhoneCountry?.code ?? "";
+                  setPhone(`${cc} ${digits}`);
+                }}
+                onBlur={() => validateField("phone", phone)}
+                maxLength={phoneMaxLen}
+                autoComplete="tel-national"
+                className="flex-1 h-11 px-3 text-sm text-brown-950 bg-transparent outline-none placeholder:text-beige-400"
+              />
+            </div>
+            {fieldErrors.phone && <p className="text-xs text-red-500">{fieldErrors.phone}</p>}
+          </div>
+
+          {/* Email */}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email Address <span className="text-red-400">*</span></Label>
+            <div className="relative">
+              <Input id="email" type="email" placeholder="Enter your email" value={email}
+                onChange={e => setEmail(e.target.value)}
+                onBlur={() => validateField("email", email)}
+                autoComplete="email"
+                readOnly={isSsoUser}
+                className={
+                  isSsoUser
+                    ? "pr-10 bg-beige-50 text-beige-700"
+                    : emailExists === true
+                      ? "border-red-300 focus-visible:ring-red-500/20"
+                      : emailExists === false
+                        ? "border-teal-300 focus-visible:ring-teal-500/20"
+                        : ""
+                } />
+              {isSsoUser && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  <CheckCircle className="w-4 h-4 text-teal-500" />
+                </div>
+              )}
+            </div>
+            {fieldErrors.email && <p className="text-xs text-red-500">{fieldErrors.email}</p>}
+            {showEmailAvailability && emailChecking && (
+              <p className="text-xs text-beige-500 flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Checking email availability...
+              </p>
+            )}
+            {showEmailAvailability && !emailChecking && emailExists === true && (
+              <p className="text-xs text-red-500 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                This email is already registered. Please sign in instead.
+              </p>
+            )}
+            {showEmailAvailability && !emailChecking && emailExists === false && (
+              <p className="text-xs text-teal-600 flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" />
+                Email is available
+              </p>
+            )}
+            {isSsoUser && ssoProvider && (
+              <p className="text-xs text-teal-600 flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" />
+                Verified via {ssoProvider === "google" ? "Google" : "Microsoft"}
+              </p>
+            )}
+          </div>
+
+          {/* Password — hidden for SSO users */}
+          {!isSsoUser && (
+            <div className="space-y-2">
+              <Label htmlFor="pw">Password <span className="text-red-400">*</span></Label>
+              <Input id="pw" type={showPw ? "text" : "password"}
+                placeholder="Create a strong password (min 8 characters)"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                onBlur={() => validateField("password", password)} />
+              {fieldErrors.password && <p className="text-xs text-red-500">{fieldErrors.password}</p>}
+            </div>
+          )}
+
+          {/* Confirm password — hidden for SSO users */}
+          {!isSsoUser && (
+            <div className="space-y-2">
+              <Label htmlFor="con">Confirm Password <span className="text-red-400">*</span></Label>
+              <Input id="con" type={showPw ? "text" : "password"}
+                placeholder="Re-enter password to confirm"
+                value={confirm}
+                onChange={e => setConfirm(e.target.value)}
+                onBlur={() => validateField("confirm", confirm)} />
+              {fieldErrors.confirm && (
+                <p className="text-xs text-red-500">{fieldErrors.confirm}</p>
+              )}
+              {!fieldErrors.confirm && confirm && password === confirm && password.length > 0 && (
+                <p className="text-xs text-teal-600 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" /> Passwords match
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Show password checkbox — shared toggle for both fields */}
+          {!isSsoUser && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={showPw} onChange={e => setShowPw(e.target.checked)}
+                className="w-4 h-4 rounded border-beige-300 accent-brown-600 cursor-pointer" />
+              <span className="text-xs text-beige-600">Show password</span>
+            </label>
+          )}
+
+          {/* Password requirements checklist */}
+          {!isSsoUser && password && (
+            <div className="p-3 rounded-lg bg-beige-50 border border-beige-200 space-y-1">
+              <p className="text-xs font-semibold text-beige-700 mb-1">Password requirements:</p>
+              {[
+                { check: password.length >= 8, text: "At least 8 characters" },
+                { check: /[A-Z]/.test(password), text: "Uppercase letter" },
+                { check: /[a-z]/.test(password), text: "Lowercase letter" },
+                { check: /[0-9]/.test(password), text: "Number" },
+                { check: /[^A-Za-z0-9]/.test(password), text: "Special character" },
+              ].map((req, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 ${
+                    req.check ? "bg-teal-500" : "bg-beige-300"
+                  }`}>
+                    {req.check && <CheckCircle className="w-2.5 h-2.5 text-white" />}
+                  </div>
+                  <span className={req.check ? "text-teal-700" : "text-beige-500"}>{req.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Contributor type */}
+          <div className="space-y-2">
+            <Label>Contributor Type <span className="text-red-400">*</span></Label>
+            <div className="grid grid-cols-3 gap-2">
+              {CONTRIBUTOR_TYPES.map(({ value, label, sub, Icon, activeClass, activeIcon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setContribType(value)}
+                  className={`flex flex-col items-center text-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                    contribType === value ? activeClass : "border-beige-200 hover:border-beige-300 bg-white"
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${contribType === value ? activeIcon : "text-beige-400"}`} />
+                  <div>
+                    <p className="text-xs font-semibold text-brown-950 leading-tight">{label}</p>
+                    <p className="text-[10px] text-beige-500 mt-0.5 leading-tight">{sub}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Country of Residence <span className="text-red-400">*</span></Label>
+            <CountryCombobox value={country} onChange={setCountry} />
+          </div>
+
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                key="step1-error"
+                initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0" />{error}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <Button type="button" variant="primary" size="lg" className="w-full" onClick={onContinue}>
+            Continue <ArrowRight className="w-4 h-4" />
+          </Button>
+
+          {!hideSignInLink && (
+            <p className="text-center text-sm text-beige-600">
+              Already have an account?{" "}
+              <Link href="/auth/login" className="text-teal-600 hover:text-teal-700 font-medium">Sign in</Link>
+            </p>
+          )}
+        </div>
+      </GlassCardContent>
+    </GlassCard>
+  );
+}

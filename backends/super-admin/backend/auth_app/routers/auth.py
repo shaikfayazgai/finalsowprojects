@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import base64
 import io
-from typing import Annotated
+from typing import Annotated, Any
 
 import pyotp
 import qrcode
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
 
 from shared.blob import blob_is_configured, upload_blob
 
@@ -118,6 +118,20 @@ async def login(body: LoginRequest, request: Request):
     if not row.get("is_active", True):
         raise HTTPException(status_code=403, detail="Account is disabled")
 
+    # SINGLE-USE default/temp password: a freshly-provisioned account
+    # (must_change_password) may sign in with its temp password exactly ONCE —
+    # that first session must set a new password. If it's already been used to
+    # sign in (last_login_at set) but the password still hasn't been changed, the
+    # temp is considered consumed: reject it and tell them to finish the reset or
+    # use Forgot password for a fresh code. (Once they reset, must_change_password
+    # is cleared and normal logins proceed.)
+    if row.get("must_change_password") and row.get("last_login_at"):
+        raise HTTPException(status_code=403, detail={
+            "code": "temp_password_used",
+            "message": "Your temporary password has already been used. Finish setting your "
+                       "new password, or use “Forgot password” to get a fresh code.",
+        })
+
     # Approval gate (women freelancers self-apply → pending until Super Admin
     # approves). They CAN sign in while pending/rejected, but the session carries
     # approvalStatus and the contributor portal shows a status-only screen
@@ -142,6 +156,12 @@ async def login(body: LoginRequest, request: Request):
                 ip_address=request.client.host if request.client else None)
 
     result = _token_pair(row)
+    repo.create_session(
+        str(row["id"]),
+        result.get("refresh_token", ""),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
+    )
     if row.get("must_change_password"):
         result["user"]["requiresPasswordChange"] = True
     return result
@@ -243,6 +263,10 @@ async def register_enterprise(body: EnterpriseRegisterRequest, request: Request)
         phone=body.phone, provider="password", tenant_id=tenant_id,
     )
     profile_id = repo.create_enterprise_profile(str(row["id"]), body.model_dump(), tenant_id, company_code)
+    # Keep the tenants table in sync — enterprise registration is a tenant-creation
+    # event, so the tenants row must exist (fixes the orphaned-tenant_id gap).
+    repo.ensure_tenant(tenant_id, body.orgName, kind="enterprise",
+                       metadata={"companyCode": company_code, "status": "active"})
     publish_event("enterprise.registered", {"userId": str(row["id"]), "org": body.orgName,
                                              "tenantId": tenant_id, "companyCode": company_code})
     write_audit(actor_id=str(row["id"]), actor_email=row["email"], actor_role="enterprise",
@@ -269,7 +293,8 @@ async def refresh(body: RefreshRequest):
 
 
 @router.post("/logout")
-async def logout(body: LogoutRequest):
+async def logout(body: LogoutRequest = Body(default=LogoutRequest())):
+    # Body is optional — logout works with just the Bearer token (no body).
     return {"ok": True}
 
 
@@ -278,12 +303,57 @@ async def logout_all(user: Annotated[dict, Depends(get_current_user)]):
     return {"ok": True}
 
 
+def _portal_extras(row: dict) -> dict:
+    """Extra fields the per-portal RBAC reads off /me: a `roles` array (codes)
+    and `tenant`. The super-admin provisions ONE tenant admin per tenant (login
+    role 'enterprise') — surface them as the enterprise **admin** role so the
+    portal RBAC grants Settings / Team / etc. Reviewer accounts surface
+    'reviewer'. (normalizeEnterpriseRole strips any 'ent.' prefix.)"""
+    role = (row.get("role") or "").lower()
+    extras: dict[str, Any] = {}
+    if role == "enterprise":
+        # Super-admin-provisioned tenant admin → enterprise admin.
+        extras["roles"] = [{"code": "admin"}]
+    elif role.startswith("ent."):
+        # Team members carry their tenant sub-role (ent.sponsor/ent.pmo/…);
+        # the frontend strips the 'ent.' prefix.
+        extras["roles"] = [{"code": role}]
+    elif role.startswith("reviewer"):
+        extras["roles"] = [{"code": "reviewer"}]
+
+    # Merge any additional role grants (e.g. a PMO who also reviews). These widen
+    # the in-portal RBAC; the primary `role` above still drives portal routing.
+    extra = row.get("extra_roles") or []
+    if isinstance(extra, str):  # tolerate a comma string if the column type differs
+        extra = [e for e in extra.replace("{", "").replace("}", "").split(",") if e]
+    if extra:
+        roles_list = extras.setdefault("roles", [])
+        seen = {r["code"] for r in roles_list}
+        for code in extra:
+            c = (code or "").strip().lower()
+            if c and c not in seen:
+                roles_list.append({"code": c})
+                seen.add(c)
+    tid = row.get("tenant_id")
+    if tid:
+        # Include the tenant's lifecycle status so the portals can BLOCK access
+        # when the workspace is suspended (status='suspended').
+        try:
+            t = repo.get_tenant(tid)
+        except Exception:  # noqa: BLE001
+            t = None
+        extras["tenant"] = {"id": tid, "status": (t.get("status") if t else None)}
+    return extras
+
+
 @router.get("/me")
 async def me(user: Annotated[dict, Depends(get_current_user)]):
     row = repo.find_account_by_id(user["id"])
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
-    return user_row_to_out(row).model_dump()
+    out = user_row_to_out(row).model_dump()
+    out.update(_portal_extras(row))
+    return out
 
 
 # ── MFA (TOTP) ───────────────────────────────────────────────────────────────
@@ -512,7 +582,13 @@ class _SetupAfterOtp(OtpVerifyRequest):
 async def setup_after_otp(body: _SetupAfterOtp):
     if not body.email:
         raise HTTPException(status_code=422, detail="Email required")
-    if not await verify_otp("email", body.email, body.code):
+    # Accept EITHER a still-valid code OR a recent verification. The FE's 3-step
+    # reset calls otp/verify-email first (which consumes the code and sets the
+    # recently-verified flag), so this final step must not require the code again.
+    ok = await verify_otp("email", body.email, body.code)
+    if not ok:
+        ok = await is_recently_verified("email", body.email)
+    if not ok:
         raise HTTPException(status_code=400, detail="Invalid or expired code")
     row = repo.find_account_by_email(body.email)
     if not row:

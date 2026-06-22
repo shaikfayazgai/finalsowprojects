@@ -17,7 +17,11 @@ from shared.init_schema import init_schema
 
 from mentor_app.db_schema import init_mentor_schema
 from mentor_app.routers import mentor
+from mentor_app.routers import notes_sessions
+from mentor_app.routers import portal as mentor_portal
+from mentor_app.routers import v1 as mentor_v1
 from auth_app.routers import auth as auth_router
+from auth_app.routers.sessions import router as sessions_router, auth_sessions_router
 
 logger = logging.getLogger(__name__)
 
@@ -31,5 +35,15 @@ def _startup() -> None:
 
 
 app = create_service_app(
-    "mentor-service", routers=[auth_router.router, mentor.router], on_startup=_startup
+    "mentor-service",
+    routers=[
+        auth_router.router,
+        mentor.router,
+        mentor_portal.router,
+        notes_sessions.router,
+        mentor_v1.router,
+        sessions_router,
+        auth_sessions_router,
+    ],
+    on_startup=_startup,
 )

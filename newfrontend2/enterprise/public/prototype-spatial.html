@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glimmora — The Spatial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --brown: #A67763;
+    --brown-light: #C49A86;
+    --brown-pale: #E8D5CB;
+    --teal: #5B9BA2;
+    --teal-light: #8FC4CA;
+    --forest: #4D5741;
+    --gold: #D0B060;
+    --gold-light: #E5D494;
+    --bg: #F2F0ED;
+    --text: #2C2420;
+    --text-secondary: #6B6058;
+    --text-muted: #9B9189;
+    --sans: 'DM Sans', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+
+    /* Glass levels */
+    --glass-1: rgba(255,255,255,0.35);
+    --glass-2: rgba(255,255,255,0.62);
+    --glass-3: rgba(255,255,255,0.78);
+    --blur-1: 8px;
+    --blur-2: 24px;
+    --blur-3: 40px;
+    --shadow-1: 0 1px 3px rgba(166,119,99,0.06), 0 1px 2px rgba(166,119,99,0.04);
+    --shadow-2: 0 4px 12px rgba(166,119,99,0.08), 0 2px 6px rgba(166,119,99,0.05), 0 1px 3px rgba(166,119,99,0.04), 0 0 0 1px rgba(255,255,255,0.5);
+    --shadow-3: 0 12px 40px rgba(166,119,99,0.12), 0 6px 16px rgba(166,119,99,0.08), 0 2px 6px rgba(166,119,99,0.05), 0 0 0 1px rgba(255,255,255,0.6);
+    --radius: 24px;
+    --radius-lg: 32px;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    min-height: 100vh;
+    position: relative;
+  }
+
+  /* ── AMBIENT GRADIENT ORBS ── */
+  .ambient-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(100px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .ambient-orb.orb-1 {
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(91,155,162,0.18) 0%, transparent 70%);
+    top: -100px; right: 100px;
+  }
+
+  .ambient-orb.orb-2 {
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(208,176,96,0.14) 0%, transparent 70%);
+    bottom: 50px; left: 300px;
+  }
+
+  .ambient-orb.orb-3 {
+    width: 350px; height: 350px;
+    background: radial-gradient(circle, rgba(166,119,99,0.12) 0%, transparent 70%);
+    top: 400px; right: 300px;
+  }
+
+  /* ── GLASS MIXINS ── */
+  .glass-1 {
+    background: var(--glass-1);
+    backdrop-filter: blur(var(--blur-1));
+    -webkit-backdrop-filter: blur(var(--blur-1));
+    box-shadow: var(--shadow-1);
+    border: 1px solid rgba(255,255,255,0.45);
+    border-radius: var(--radius);
+    position: relative;
+  }
+
+  .glass-1::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 1px;
+    right: 1px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .glass-2 {
+    background: var(--glass-2);
+    backdrop-filter: blur(var(--blur-2));
+    -webkit-backdrop-filter: blur(var(--blur-2));
+    box-shadow: var(--shadow-2);
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: var(--radius);
+    position: relative;
+  }
+
+  .glass-2::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 1px;
+    right: 1px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .glass-3 {
+    background: var(--glass-3);
+    backdrop-filter: blur(var(--blur-3));
+    -webkit-backdrop-filter: blur(var(--blur-3));
+    box-shadow: var(--shadow-3);
+    border: 1px solid rgba(255,255,255,0.6);
+    border-radius: var(--radius-lg);
+    position: relative;
+  }
+
+  .glass-3::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 2px;
+    right: 2px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 5%, rgba(255,255,255,1) 50%, transparent 95%);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    bottom: 12px;
+    width: 240px;
+    background: rgba(255,255,255,0.55);
+    backdrop-filter: blur(32px);
+    -webkit-backdrop-filter: blur(32px);
+    border: 1px solid rgba(255,255,255,0.6);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(166,119,99,0.1), 0 2px 8px rgba(166,119,99,0.05);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    overflow: hidden;
+  }
+
+  .sidebar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 2px;
+    right: 2px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.95), transparent);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .sidebar-brand {
+    padding: 16px 16px 14px;
+  }
+
+  .sidebar-brand h1 {
+    font-family: var(--sans);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+
+  .sidebar-brand span {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+  }
+
+  .sidebar-nav {
+    flex: 1;
+    padding: 4px 0;
+  }
+
+  .sidebar-section-label {
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    color: var(--text-muted);
+    padding: 16px 16px 6px;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 450;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+    text-decoration: none;
+    margin: 1px 0;
+  }
+
+  .sidebar-item:hover {
+    background: rgba(255,255,255,0.6);
+    color: var(--text);
+  }
+
+  .sidebar-item.active {
+    background: rgba(166,119,99,0.12);
+    color: var(--brown);
+    font-weight: 600;
+  }
+
+  .sidebar-item svg {
+    width: 18px;
+    height: 18px;
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+
+  .sidebar-item.active svg {
+    opacity: 1;
+    color: var(--brown);
+  }
+
+  .sidebar-footer {
+    padding: 12px;
+    margin-top: auto;
+    border-top: 1px solid rgba(255,255,255,0.5);
+  }
+
+  .sidebar-footer-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .sidebar-footer-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--brown-light), var(--brown));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: white;
+  }
+
+  .sidebar-footer-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .sidebar-footer-role {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    position: fixed;
+    top: 12px;
+    left: 268px;
+    right: 12px;
+    height: 56px;
+    background: rgba(255,255,255,0.45);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 8px rgba(166,119,99,0.05);
+    z-index: 99;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+  }
+
+  .topbar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 2px;
+    right: 2px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .topbar-greeting {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .topbar-greeting span {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .topbar-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(255,255,255,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .topbar-btn:hover {
+    background: rgba(255,255,255,0.8);
+    box-shadow: 0 2px 8px rgba(166,119,99,0.08);
+  }
+
+  .topbar-btn svg {
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+  }
+
+  .topbar-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(255,255,255,0.6);
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .topbar-search:hover {
+    background: rgba(255,255,255,0.8);
+  }
+
+  .topbar-search svg {
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+  }
+
+  /* ── MAIN CONTENT ── */
+  .main {
+    margin-left: 264px;
+    padding: 84px 24px 40px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .content-grid {
+    max-width: 1040px;
+  }
+
+  /* ── HERO KPI ── */
+  .hero-kpi {
+    padding: 32px 36px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: visible;
+  }
+
+  .hero-kpi-glow {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 60px;
+    background: radial-gradient(ellipse, rgba(166,119,99,0.15), transparent 70%);
+    filter: blur(20px);
+    pointer-events: none;
+  }
+
+  .hero-kpi-content {
+    display: flex;
+    align-items: center;
+    gap: 48px;
+  }
+
+  .hero-kpi-main {
+    flex: 1;
+  }
+
+  .hero-kpi-label {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+
+  .hero-kpi-number {
+    font-size: 56px;
+    font-weight: 700;
+    color: var(--brown);
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+
+  .hero-kpi-sub {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+  }
+
+  .hero-kpi-side {
+    display: flex;
+    gap: 32px;
+  }
+
+  .hero-kpi-metric {
+    text-align: center;
+  }
+
+  .hero-kpi-metric-number {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+
+  .hero-kpi-metric-label {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* ── KPI CARDS ROW ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .kpi-card {
+    padding: 20px 22px;
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), box-shadow 0.3s;
+  }
+
+  .kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(166,119,99,0.1), 0 2px 8px rgba(166,119,99,0.06), 0 0 0 1px rgba(255,255,255,0.55);
+  }
+
+  .kpi-card-label {
+    font-size: 10.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .kpi-card-number {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    letter-spacing: -0.5px;
+  }
+
+  .kpi-card-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  .kpi-card-meta span.up { color: var(--forest); }
+  .kpi-card-meta span.warn { color: var(--gold); }
+
+  /* ── KPI TERTIARY STRIP ── */
+  .kpi-strip {
+    display: flex;
+    gap: 16px;
+    padding: 14px 20px;
+    margin-bottom: 20px;
+  }
+
+  .kpi-strip-item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .kpi-strip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .kpi-strip-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .kpi-strip-label {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ── PROGRESS BAR ── */
+  .progress-bar-track {
+    height: 6px;
+    background: rgba(0,0,0,0.05);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--brown), var(--gold));
+  }
+
+  /* ── CHART AREA ── */
+  .chart-card {
+    padding: 28px 32px;
+    margin-bottom: 20px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .section-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: rgba(166,119,99,0.1);
+    color: var(--brown);
+  }
+
+  .chart-area {
+    width: 100%;
+    height: 200px;
+    position: relative;
+  }
+
+  .chart-line-grid {
+    position: absolute;
+    left: 40px;
+    right: 0;
+    top: 0;
+    bottom: 30px;
+  }
+
+  .chart-h-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(0,0,0,0.04);
+  }
+
+  .chart-h-label {
+    position: absolute;
+    left: -36px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    transform: translateY(-50%);
+  }
+
+  .chart-area-path {
+    position: absolute;
+    left: 40px;
+    right: 0;
+    top: 0;
+    bottom: 30px;
+  }
+
+  .chart-area-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .chart-x-labels {
+    position: absolute;
+    bottom: 0;
+    left: 40px;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .chart-x-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+
+  /* ── DATA TABLE ── */
+  .table-card {
+    padding: 28px 32px;
+    margin-bottom: 20px;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .data-table thead th {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-muted);
+    padding: 0 0 14px;
+    text-align: left;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+
+  .data-table thead th:last-child {
+    text-align: right;
+  }
+
+  .data-table tbody td {
+    padding: 16px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr {
+    transition: background 0.15s;
+  }
+
+  .data-table tbody tr:hover {
+    background: rgba(255,255,255,0.3);
+  }
+
+  .table-project-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .table-project-id {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  .table-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .table-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .table-status.active { color: var(--forest); }
+  .table-status.active .table-status-dot { background: var(--forest); }
+  .table-status.review { color: var(--gold); }
+  .table-status.review .table-status-dot { background: var(--gold); }
+  .table-status.draft { color: var(--text-muted); }
+  .table-status.draft .table-status-dot { background: var(--text-muted); }
+
+  .table-budget {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .table-progress {
+    width: 100px;
+    text-align: right;
+    margin-left: auto;
+  }
+
+  .table-progress-pct {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .table-progress-bar {
+    width: 100%;
+    height: 4px;
+    background: rgba(0,0,0,0.05);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .table-progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--brown), var(--gold));
+  }
+
+  /* ── BOTTOM GRID ── */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  .bottom-card {
+    padding: 24px 26px;
+  }
+
+  .bottom-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  .bottom-card-big {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+
+  .bottom-card-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    margin-bottom: 16px;
+  }
+
+  /* Pipeline */
+  .pipeline-track {
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.04);
+    display: flex;
+    gap: 3px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .pipeline-seg {
+    height: 100%;
+    border-radius: 4px;
+  }
+
+  .pipeline-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .pipeline-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .pipeline-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+  }
+
+  /* Teams */
+  .team-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+  }
+
+  .team-color {
+    width: 10px;
+    height: 10px;
+    border-radius: 6px;
+  }
+
+  .team-name {
+    flex: 1;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .team-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* Governance */
+  .gov-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+
+  .gov-row:last-child {
+    border-bottom: none;
+  }
+
+  .gov-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .gov-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .gov-unit {
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<!-- Ambient gradient orbs -->
+<div class="ambient-orb orb-1"></div>
+<div class="ambient-orb orb-2"></div>
+<div class="ambient-orb orb-3"></div>
+
+<!-- ═══ SIDEBAR ═══ -->
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <h1>Glimmora</h1>
+    <span>Enterprise</span>
+  </div>
+
+  <div class="sidebar-nav">
+    <div class="sidebar-section-label">Main</div>
+    <a class="sidebar-item active" href="#">
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="5.5" height="5.5" rx="2"/><rect x="10.5" y="2" width="5.5" height="5.5" rx="2"/><rect x="2" y="10.5" width="5.5" height="5.5" rx="2"/><rect x="10.5" y="10.5" width="5.5" height="5.5" rx="2"/></svg>
+      Dashboard
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 5h12M3 9h12M3 13h8"/></svg>
+      SOW Pipeline
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 14V7l5-3.5L14 7v7"/><path d="M7 14v-4h4v4"/></svg>
+      Projects
+    </a>
+
+    <div class="sidebar-section-label">Governance</div>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="9" cy="9" r="6.5"/><path d="M9 5.5v3.5l2.5 2.5"/></svg>
+      Reviews
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 3v12M3 9h12"/></svg>
+      Escalations
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 13l4-4 3 3 5-7"/></svg>
+      Analytics
+    </a>
+
+    <div class="sidebar-section-label">Workforce</div>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="9" cy="6" r="3"/><path d="M3 16c0-3 2.5-5.5 6-5.5s6 2.5 6 5.5"/></svg>
+      Teams
+    </a>
+    <a class="sidebar-item" href="#">
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="4" y="4" width="10" height="10" rx="2"/><path d="M7 4V2M11 4V2M7 14v2M11 14v2"/></svg>
+      AI Governor
+    </a>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-user">
+      <div class="sidebar-footer-avatar">PN</div>
+      <div>
+        <div class="sidebar-footer-name">Priya Nair</div>
+        <div class="sidebar-footer-role">Enterprise Lead</div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══ TOPBAR ═══ -->
+<header class="topbar">
+  <div class="topbar-greeting">Good morning, <span>Priya</span></div>
+  <div class="topbar-right">
+    <div class="topbar-search">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/></svg>
+      Search...
+    </div>
+    <div class="topbar-btn">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2v12l4-3 4 3V2z"/></svg>
+    </div>
+    <div class="topbar-btn">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 10c0 3-4 4-4 4s-4-1-4-4V5a4 4 0 018 0z"/><path d="M6 14h4"/></svg>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ MAIN CONTENT ═══ -->
+<main class="main">
+<div class="content-grid">
+
+  <!-- HERO KPI -->
+  <div class="hero-kpi glass-3">
+    <div class="hero-kpi-glow"></div>
+    <div class="hero-kpi-content">
+      <div class="hero-kpi-main">
+        <div class="hero-kpi-label">Active SOWs</div>
+        <div class="hero-kpi-number">12</div>
+        <div class="hero-kpi-sub">4 projects in delivery &middot; 3 escalations &middot; 5 reviews pending</div>
+      </div>
+      <div class="hero-kpi-side">
+        <div class="hero-kpi-metric">
+          <div class="hero-kpi-metric-number">$189k</div>
+          <div class="hero-kpi-metric-label">Budget</div>
+        </div>
+        <div class="hero-kpi-metric">
+          <div class="hero-kpi-metric-number">87%</div>
+          <div class="hero-kpi-metric-label">On-Time</div>
+        </div>
+        <div class="hero-kpi-metric">
+          <div class="hero-kpi-metric-number">67%</div>
+          <div class="hero-kpi-metric-label">Utilized</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="kpi-row">
+    <div class="kpi-card glass-2">
+      <div class="kpi-card-label">Projects</div>
+      <div class="kpi-card-number">4</div>
+      <div class="kpi-card-meta"><span class="up">+1 this week</span></div>
+    </div>
+    <div class="kpi-card glass-2">
+      <div class="kpi-card-label">Escalations</div>
+      <div class="kpi-card-number">3</div>
+      <div class="kpi-card-meta"><span class="warn">Action needed</span></div>
+    </div>
+    <div class="kpi-card glass-2">
+      <div class="kpi-card-label">Reviews</div>
+      <div class="kpi-card-number">5</div>
+      <div class="kpi-card-meta">2 high priority</div>
+    </div>
+    <div class="kpi-card glass-2">
+      <div class="kpi-card-label">Budget Used</div>
+      <div class="kpi-card-number">67%</div>
+      <div style="margin-top:8px;">
+        <div class="progress-bar-track"><div class="progress-bar-fill" style="width:67%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TERTIARY KPI STRIP -->
+  <div class="kpi-strip glass-1">
+    <div class="kpi-strip-item">
+      <div class="kpi-strip-dot" style="background:var(--forest);"></div>
+      <div>
+        <div class="kpi-strip-value">92%</div>
+        <div class="kpi-strip-label">First-Pass Rate</div>
+      </div>
+    </div>
+    <div class="kpi-strip-item">
+      <div class="kpi-strip-dot" style="background:var(--teal);"></div>
+      <div>
+        <div class="kpi-strip-value">82</div>
+        <div class="kpi-strip-label">APG Score</div>
+      </div>
+    </div>
+    <div class="kpi-strip-item">
+      <div class="kpi-strip-dot" style="background:var(--gold);"></div>
+      <div>
+        <div class="kpi-strip-value">42</div>
+        <div class="kpi-strip-label">Team Members</div>
+      </div>
+    </div>
+    <div class="kpi-strip-item">
+      <div class="kpi-strip-dot" style="background:var(--brown);"></div>
+      <div>
+        <div class="kpi-strip-value">5</div>
+        <div class="kpi-strip-label">Active Teams</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHART -->
+  <div class="chart-card glass-2">
+    <div class="section-header">
+      <span class="section-title">Delivery Performance</span>
+      <span class="section-badge">Last 6 Months</span>
+    </div>
+    <div class="chart-area">
+      <div class="chart-line-grid">
+        <div class="chart-h-line" style="top:0%"><span class="chart-h-label">40</span></div>
+        <div class="chart-h-line" style="top:25%"><span class="chart-h-label">30</span></div>
+        <div class="chart-h-line" style="top:50%"><span class="chart-h-label">20</span></div>
+        <div class="chart-h-line" style="top:75%"><span class="chart-h-label">10</span></div>
+        <div class="chart-h-line" style="top:100%"><span class="chart-h-label">0</span></div>
+      </div>
+      <div class="chart-area-path">
+        <svg class="chart-area-svg" viewBox="0 0 600 170" preserveAspectRatio="none">
+          <!-- Area fill -->
+          <defs>
+            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(166,119,99,0.2)"/>
+              <stop offset="100%" stop-color="rgba(166,119,99,0.02)"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,120 C50,100 100,85 150,70 C200,55 250,40 300,30 C350,20 400,35 450,25 C500,15 550,20 600,10 L600,170 L0,170 Z" fill="url(#areaGrad)"/>
+          <path d="M0,120 C50,100 100,85 150,70 C200,55 250,40 300,30 C350,20 400,35 450,25 C500,15 550,20 600,10" fill="none" stroke="var(--brown)" stroke-width="2.5" stroke-linecap="round"/>
+          <!-- Dots -->
+          <circle cx="0" cy="120" r="4" fill="var(--brown)" opacity="0.6"/>
+          <circle cx="120" cy="85" r="4" fill="var(--brown)" opacity="0.6"/>
+          <circle cx="240" cy="55" r="4" fill="var(--brown)" opacity="0.6"/>
+          <circle cx="360" cy="30" r="4" fill="var(--brown)" opacity="0.6"/>
+          <circle cx="480" cy="25" r="4" fill="var(--brown)" opacity="0.6"/>
+          <circle cx="600" cy="10" r="5" fill="var(--brown)"/>
+        </svg>
+      </div>
+      <div class="chart-x-labels">
+        <span class="chart-x-label">Oct</span>
+        <span class="chart-x-label">Nov</span>
+        <span class="chart-x-label">Dec</span>
+        <span class="chart-x-label">Jan</span>
+        <span class="chart-x-label">Feb</span>
+        <span class="chart-x-label">Mar</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATA TABLE -->
+  <div class="table-card glass-2">
+    <div class="section-header">
+      <span class="section-title">Project Register</span>
+      <span class="section-badge">4 Active</span>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Project</th>
+          <th>Status</th>
+          <th>Budget</th>
+          <th>Timeline</th>
+          <th style="text-align:right">Progress</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div class="table-project-name">Cloud Migration Platform</div>
+            <div class="table-project-id">SOW-2026-001</div>
+          </td>
+          <td><span class="table-status active"><span class="table-status-dot"></span>Active</span></td>
+          <td class="table-budget">$48,200</td>
+          <td style="font-size:12px;color:var(--text-secondary)">Mar 1 &ndash; Jun 15</td>
+          <td>
+            <div class="table-progress">
+              <div class="table-progress-pct">72%</div>
+              <div class="table-progress-bar"><div class="table-progress-fill" style="width:72%"></div></div>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="table-project-name">API Gateway Redesign</div>
+            <div class="table-project-id">SOW-2026-003</div>
+          </td>
+          <td><span class="table-status active"><span class="table-status-dot"></span>Active</span></td>
+          <td class="table-budget">$35,800</td>
+          <td style="font-size:12px;color:var(--text-secondary)">Feb 15 &ndash; May 30</td>
+          <td>
+            <div class="table-progress">
+              <div class="table-progress-pct">58%</div>
+              <div class="table-progress-bar"><div class="table-progress-fill" style="width:58%"></div></div>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="table-project-name">Data Pipeline Modernization</div>
+            <div class="table-project-id">SOW-2026-007</div>
+          </td>
+          <td><span class="table-status review"><span class="table-status-dot"></span>Review</span></td>
+          <td class="table-budget">$62,400</td>
+          <td style="font-size:12px;color:var(--text-secondary)">Apr 1 &ndash; Aug 20</td>
+          <td>
+            <div class="table-progress">
+              <div class="table-progress-pct">25%</div>
+              <div class="table-progress-bar"><div class="table-progress-fill" style="width:25%"></div></div>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="table-project-name">Mobile SDK Integration</div>
+            <div class="table-project-id">SOW-2026-009</div>
+          </td>
+          <td><span class="table-status draft"><span class="table-status-dot"></span>Draft</span></td>
+          <td class="table-budget">$42,600</td>
+          <td style="font-size:12px;color:var(--text-secondary)">Apr 15 &ndash; Jul 10</td>
+          <td>
+            <div class="table-progress">
+              <div class="table-progress-pct">10%</div>
+              <div class="table-progress-bar"><div class="table-progress-fill" style="width:10%"></div></div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- BOTTOM 3 COLUMNS -->
+  <div class="bottom-grid">
+    <!-- SOW Pipeline -->
+    <div class="bottom-card glass-2">
+      <div class="bottom-card-title">SOW Pipeline</div>
+      <div class="bottom-card-big">9</div>
+      <div class="bottom-card-sub">Total in pipeline</div>
+      <div class="pipeline-track">
+        <div class="pipeline-seg" style="flex:3;background:var(--brown);border-radius:4px;"></div>
+        <div class="pipeline-seg" style="flex:2;background:var(--gold);border-radius:4px;"></div>
+        <div class="pipeline-seg" style="flex:4;background:var(--teal);border-radius:4px;"></div>
+      </div>
+      <div class="pipeline-legend">
+        <div class="pipeline-legend-item"><div class="pipeline-legend-dot" style="background:var(--brown);"></div>Draft (3)</div>
+        <div class="pipeline-legend-item"><div class="pipeline-legend-dot" style="background:var(--gold);"></div>Review (2)</div>
+        <div class="pipeline-legend-item"><div class="pipeline-legend-dot" style="background:var(--teal);"></div>Approved (4)</div>
+      </div>
+    </div>
+
+    <!-- Teams -->
+    <div class="bottom-card glass-2">
+      <div class="bottom-card-title">Workforce</div>
+      <div class="bottom-card-big">42</div>
+      <div class="bottom-card-sub">People across 5 teams</div>
+      <div class="team-item"><div class="team-color" style="background:var(--brown);"></div><span class="team-name">Cloud Engineering</span><span class="team-count">12</span></div>
+      <div class="team-item"><div class="team-color" style="background:var(--teal);"></div><span class="team-name">API Platform</span><span class="team-count">9</span></div>
+      <div class="team-item"><div class="team-color" style="background:var(--forest);"></div><span class="team-name">Data Systems</span><span class="team-count">8</span></div>
+      <div class="team-item"><div class="team-color" style="background:var(--gold);"></div><span class="team-name">Mobile Dev</span><span class="team-count">7</span></div>
+      <div class="team-item"><div class="team-color" style="background:var(--text-muted);"></div><span class="team-name">QA & Review</span><span class="team-count">6</span></div>
+    </div>
+
+    <!-- AI Governance -->
+    <div class="bottom-card glass-2">
+      <div class="bottom-card-title">AI Governance</div>
+      <div class="bottom-card-big">82</div>
+      <div class="bottom-card-sub">APG Score</div>
+      <div class="gov-row"><span class="gov-label">On-Time Rate</span><span class="gov-value">87<span class="gov-unit">%</span></span></div>
+      <div class="gov-row"><span class="gov-label">First-Pass</span><span class="gov-value">92<span class="gov-unit">%</span></span></div>
+      <div class="gov-row"><span class="gov-label">Resolution Time</span><span class="gov-value">4.2<span class="gov-unit">hrs</span></span></div>
+      <div class="gov-row"><span class="gov-label">Quality</span><span class="gov-value">96<span class="gov-unit">%</span></span></div>
+    </div>
+  </div>
+
+</div>
+</main>
+
+</body>
+</html>

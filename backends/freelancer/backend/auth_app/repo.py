@@ -84,6 +84,37 @@ def create_account(
     return row
 
 
+def create_session(
+    account_id: str,
+    refresh_token: str,
+    *,
+    user_agent: str | None = None,
+    ip_address: str | None = None,
+    device: str | None = None,
+) -> None:
+    """Record a sign-in session in auth_sessions and mark it the current one.
+
+    Lets the contributor portal's Sessions page list real devices and revoke
+    other sessions. Fail-open: a tracking failure must never block login.
+    """
+    try:
+        conn = _conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE auth_sessions SET is_current=FALSE WHERE account_id=%s AND revoked=FALSE",
+                (account_id,),
+            )
+            cur.execute(
+                "INSERT INTO auth_sessions "
+                "(account_id, refresh_token, user_agent, ip_address, device, is_current) "
+                "VALUES (%s,%s,%s,%s,%s,TRUE)",
+                (account_id, refresh_token, user_agent, ip_address, device),
+            )
+        conn.commit()
+    except Exception:  # noqa: BLE001 — session tracking is best-effort
+        pass
+
+
 def set_password(account_id: str, password_hash: str, *, clear_must_change: bool = True) -> None:
     conn = _conn()
     with conn.cursor() as cur:

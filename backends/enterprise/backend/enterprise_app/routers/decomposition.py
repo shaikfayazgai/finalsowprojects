@@ -7,10 +7,12 @@ revision-complete callback.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
+from shared.audit import write_audit
 from shared.deps import get_current_user
 
 from enterprise_app import db
@@ -95,6 +97,7 @@ def get_revision(plan_id: str, user: Annotated[dict, Depends(get_current_user)])
 
 
 @router.post("/plans/{plan_id}/revision")
+@router.post("/plans/{plan_id}/revisions")  # plural alias — same handler
 def create_revision(plan_id: str, user: Annotated[dict, Depends(get_current_user)],
                     body: dict = Body(default={})):
     row = _load(plan_id, user["id"])
@@ -277,21 +280,83 @@ def create_task(plan_id: str, user: Annotated[dict, Depends(get_current_user)],
     return ok(task)
 
 
+def _contributor_code(account_id: int, name: str) -> str:
+    """Readable, stable display id for a contributor — the integer PK stays the real
+    key, this is only for display. e.g. account 66 'Rahul Mehta' → 'CTR-rahul-mehta-1u'."""
+    slug = re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")[:24].strip("-") or "user"
+    n = int(account_id)
+    digits = "0123456789abcdefghijklmnopqrstuvwxyz"
+    code = ""
+    while n > 0:
+        n, rem = divmod(n, 36)
+        code = digits[rem] + code
+    return f"CTR-{slug}-{code or '0'}"
+
+
 @router.get("/contributors")
 def list_assignable_contributors(user: Annotated[dict, Depends(get_current_user)]):
-    """Approved contributors the enterprise can assign tasks to (for the
-    assign-task dropdown)."""
+    """Approved contributors the enterprise can assign tasks to, enriched with a
+    lightweight track record (tasks taken/completed, acceptance %, avg mentor
+    rating) so the assign dialog can show the contributor's profile before
+    confirming. Stats are batched (3 GROUP BY queries — no N+1)."""
     from shared.db import get_pg_connection
     from psycopg2.extras import RealDictCursor
     conn = get_pg_connection()
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
-            "SELECT id, email, first_name, last_name, role FROM login_accounts "
+            "SELECT id, email, first_name, last_name FROM login_accounts "
             "WHERE role = 'contributor' AND COALESCE(approval_status,'approved') = 'approved' "
             "ORDER BY created_at DESC LIMIT 100")
-        out = [{"id": str(r["id"]), "email": r["email"],
-                "name": (f"{r.get('first_name','') or ''} {r.get('last_name','') or ''}".strip() or r["email"])}
-               for r in cur.fetchall()]
+        rows = cur.fetchall()
+        cur.execute(
+            "SELECT account_id, COUNT(*) AS taken, "
+            "COUNT(*) FILTER (WHERE status = 'completed') AS completed "
+            "FROM contributor_tasks GROUP BY account_id")
+        task_stats = {str(r["account_id"]): r for r in cur.fetchall()}
+        cur.execute(
+            "SELECT contributor_id, COALESCE(AVG(NULLIF(score,0)),0) AS avg_score, "
+            "COUNT(*) FILTER (WHERE score > 0) AS rated "
+            "FROM mentor_reviews GROUP BY contributor_id")
+        rate_stats = {str(r["contributor_id"]): r for r in cur.fetchall()}
+    # Final work ratings (avg of mentor + QA, per completed work) — the real track
+    # record shown when sourcing. Guarded: the table is created lazily on the first
+    # QA approval, so it may not exist yet.
+    final_stats = {}
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur2:
+            cur2.execute("SELECT account_id, AVG(final_rating) AS avg_final, "
+                         "COUNT(*) AS rated_works FROM work_ratings GROUP BY account_id")
+            final_stats = {str(r["account_id"]): r for r in cur2.fetchall()}
+    except Exception:  # noqa: BLE001 — table not created until first QA approval
+        conn.rollback()
+        final_stats = {}
+    out = []
+    for r in rows:
+        aid = str(r["id"])
+        ts = task_stats.get(aid) or {}
+        rs = rate_stats.get(aid) or {}
+        fs = final_stats.get(aid) or {}
+        taken = int(ts.get("taken") or 0)
+        completed = int(ts.get("completed") or 0)
+        name = (f"{r.get('first_name','') or ''} {r.get('last_name','') or ''}".strip() or r["email"])
+        avg_final = fs.get("avg_final")
+        rated_works = int(fs.get("rated_works") or 0)
+        # Prefer the FINAL rating (mentor+QA) as the headline track record; fall back
+        # to the mentor's quality score when no QA-approved work exists yet.
+        eff_rating = round(float(avg_final), 1) if avg_final else round(float(rs.get("avg_score") or 0), 1)
+        out.append({
+            "id": aid,
+            "code": _contributor_code(r["id"], name),  # readable display id (PK stays int)
+            "email": r["email"],
+            "name": name,
+            "tasksTaken": taken,
+            "tasksCompleted": completed,
+            "acceptancePct": round(100 * completed / taken) if taken else 0,
+            "avgRating": eff_rating,
+            "avgFinalRating": round(float(avg_final), 1) if avg_final else None,
+            "ratingCount": rated_works or int(rs.get("rated") or 0),
+            "ratedWorks": rated_works,
+        })
     return ok(out)
 
 
@@ -299,8 +364,88 @@ def list_assignable_contributors(user: Annotated[dict, Depends(get_current_user)
 def assign_task(plan_id: str, task_id: str, user: Annotated[dict, Depends(get_current_user)],
                 body: dict = Body(default={})):
     """Assign a plan task to a contributor. Creates a contributor_tasks row so it
-    appears in that contributor's task list. If no contributor is given, the task
-    is left 'available' (open pool) — but here we require an explicit assignee."""
+    appears in that contributor's task list.
+
+    Plans live in two stores: the live DB-backed system (decomp_plans/decomp_tasks
+    with dp_/tsk_ ids, used by the current UI) and a legacy JSON document store.
+    Handle the real table first; only fall back to the JSON store for old plans.
+    """
+    account_id = (body or {}).get("contributorId") or (body or {}).get("accountId")
+    account_email = (body or {}).get("contributorEmail")
+
+    from shared.db import get_pg_connection
+    from psycopg2.extras import Json, RealDictCursor
+
+    conn = get_pg_connection()
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT title, description, acceptance_criteria, required_skills, estimated_hours, "
+            "contributor_amount_minor, pay_currency, status, attachments FROM decomp_tasks WHERE id=%s AND plan_id=%s",
+            (task_id, plan_id))
+        dt = cur.fetchone()
+    if dt is not None:
+        if not account_id:
+            raise HTTPException(status_code=422, detail="contributorId is required")
+        st = (dt.get("status") or "").lower()
+        # 'declined' is assignable again — re-assigning a declined task is how the
+        # enterprise reacts to a contributor decline (declined → assigned).
+        if st not in ("ready", "available", "priced", "approved", "declined"):
+            raise HTTPException(status_code=400, detail=f"Task is '{st}', not open for assignment")
+        from shared.deadlines import compute_due_at
+        with conn.cursor() as cur:
+            cur.execute("SELECT sow_id FROM decomp_plans WHERE id=%s", (plan_id,))
+            srow = cur.fetchone()
+        sow_id = srow[0] if srow else None
+        reward = (float(dt["contributor_amount_minor"]) / 100.0) if dt.get("contributor_amount_minor") else None
+        currency = dt.get("pay_currency") or "INR"
+        est = dt.get("estimated_hours")
+        req = (body or {}).get("skills") or dt.get("required_skills") or []
+        due_at = compute_due_at(estimated_hours=est,
+                                override=(body or {}).get("dueAt") or (body or {}).get("deadline"))
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO contributor_tasks (account_id, title, status, priority, category, reward, currency, due_at, data) "
+                "VALUES (%s,%s,'assigned','normal','delivery',%s,%s,%s,%s) RETURNING id",
+                (int(account_id), dt.get("title") or "Task", reward, currency, due_at,
+                 Json({"taskId": task_id, "planId": plan_id, "sowId": sow_id,
+                       "dueAt": due_at.isoformat(),
+                       "estimatedHours": float(est) if est else None,
+                       "skills_required": list(req),
+                       # Carry the brief so the contributor knows what to build.
+                       "description": dt.get("description"),
+                       "acceptanceCriteria": dt.get("acceptance_criteria"),
+                       # Enterprise's reference files so the contributor can download them.
+                       "referenceFiles": dt.get("attachments") or []})))
+            ctid = cur.fetchone()[0]
+            cur.execute("UPDATE decomp_tasks SET status='assigned', updated_at=now() WHERE id=%s", (task_id,))
+            cur.execute("UPDATE task_interests SET status='selected', updated_at=now() "
+                        "WHERE plan_id=%s AND task_id=%s AND account_id=%s",
+                        (plan_id, task_id, int(account_id)))
+            cur.execute("UPDATE task_interests SET status='rejected', updated_at=now() "
+                        "WHERE plan_id=%s AND task_id=%s AND account_id<>%s AND status='interested'",
+                        (plan_id, task_id, int(account_id)))
+        conn.commit()
+        try:
+            write_audit(
+                actor_id=user.get("id"),
+                actor_email=user.get("email"),
+                actor_role=user.get("role"),
+                action="decomposition.task.assign",
+                target="decomp_task",
+                target_id=task_id,
+                details=f"Assigned '{dt.get('title') or task_id}' to contributor {account_id}"
+                        f"{f' ({account_email})' if account_email else ''}",
+                service="enterprise-service",
+                tenant_id=user.get("tenant_id"),
+            )
+        except Exception:  # noqa: BLE001 — audit must never block the assignment
+            pass
+        return ok({"id": task_id, "status": "assigned",
+                   "assigneeId": str(account_id), "assigneeEmail": account_email,
+                   "contributorTaskId": ctid, "dueAt": due_at.isoformat(),
+                   "reward": reward, "currency": currency})
+
+    # ── Legacy JSON-document plan ─────────────────────────────────────────────
     row = _load(plan_id, user["id"])
     task = _find_task(row, task_id)
     if task is None:
@@ -319,11 +464,31 @@ def assign_task(plan_id: str, task_id: str, user: Annotated[dict, Depends(get_cu
         task["assigneeEmail"] = account_email
         # Create the contributor-facing task (status assigned → shows in their list).
         if account_id:
+            # Carry the Glimmora-set price (decomp_tasks.contributor_amount_minor) onto
+            # the contributor task so they see their pay and the payout uses the right
+            # amount. reward is stored in major units; minor/100.
             cur.execute(
-                "INSERT INTO contributor_tasks (account_id, title, status, priority, category, data) "
-                "VALUES (%s,%s,'assigned',%s,%s,%s) RETURNING id",
-                (int(account_id), task.get("title") or "Task", "normal", "delivery",
+                "SELECT contributor_amount_minor, pay_currency, estimated_hours FROM decomp_tasks WHERE id=%s",
+                (task_id,),
+            )
+            pr = cur.fetchone()
+            reward = (float(pr[0]) / 100.0) if (pr and pr[0]) else None
+            currency = (pr[1] if (pr and pr[1]) else None) or "INR"
+            est_hours = pr[2] if (pr and len(pr) > 2) else None
+            # Delivery deadline so on-time tracking works — explicit override
+            # from the assigner, else derived from the task's estimated effort.
+            from shared.deadlines import compute_due_at
+            due_at = compute_due_at(
+                estimated_hours=est_hours,
+                override=(body or {}).get("dueAt") or (body or {}).get("deadline"),
+            )
+            task["dueAt"] = due_at.isoformat()
+            cur.execute(
+                "INSERT INTO contributor_tasks (account_id, title, status, priority, category, reward, currency, due_at, data) "
+                "VALUES (%s,%s,'assigned',%s,%s,%s,%s,%s,%s) RETURNING id",
+                (int(account_id), task.get("title") or "Task", "normal", "delivery", reward, currency, due_at,
                  Json({"planId": plan_id, "planTaskId": task_id, "sowId": sow_id,
+                       "dueAt": due_at.isoformat(), "estimatedHours": float(est_hours) if est_hours else None,
                        "description": (task.get("detail") or {}).get("description") or "",
                        "skills_required": (body or {}).get("skills") or []})))
             ctid = cur.fetchone()[0]

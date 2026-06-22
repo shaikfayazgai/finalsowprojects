@@ -1,0 +1,5 @@
+import { PayoutsSkeleton } from "@/components/enterprise/page-skeletons";
+
+export default function Loading() {
+  return <PayoutsSkeleton />;
+}

@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from psycopg2.extras import Json, RealDictCursor
 
 from shared.audit import write_audit
@@ -38,7 +38,11 @@ mentor_user = require_roles("mentor", "reviewer", "admin", "superadmin")
 MentorDep = Annotated[dict, Depends(mentor_user)]
 
 # Decision → resulting review status mapping.
-_DECISION_STATUS = {"accept": "accepted", "rework": "rework", "escalate": "escalated"}
+_DECISION_STATUS = {"accept": "accepted", "rework": "rework", "reject": "rejected",
+                    "escalate": "escalated"}
+# Mentor decision → canonical decomp_tasks lifecycle status (read by all 4 portals).
+_MENTOR_DELIVERY_STATUS = {"accept": "qa_review_pending", "rework": "req_check_rework",
+                           "reject": "req_check_failed"}
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -329,22 +333,92 @@ def submit_decision(review_id: int, body: DecisionRequest, user: MentorDep):
                     pl = _json.loads(pl)
                 except (ValueError, TypeError):
                     pl = {}
+            # Route to the enterprise-assigned reviewer on this SOW (else NULL = pool).
+            _rev_id, _rev_email = None, None
+            _sid = pl.get("sowId")
+            if _sid:
+                try:
+                    cur.execute("SELECT data->'reviewer' AS reviewer FROM enterprise_sows WHERE id=%s", (_sid,))
+                    _rrow = cur.fetchone()
+                    _rv = (_rrow or {}).get("reviewer") if _rrow else None
+                    if isinstance(_rv, dict) and (_rv.get("id") or _rv.get("email")):
+                        _rev_id = str(_rv["id"]) if _rv.get("id") is not None else None
+                        _rev_email = _rv.get("email")
+                except Exception:  # noqa: BLE001
+                    _rev_id, _rev_email = None, None
             try:
                 cur.execute(
                     """
                     INSERT INTO reviewer_assignments
                         (reviewer_id, reviewer_email, project_id, project_name, title,
                          status, priority, data)
-                    VALUES (NULL, NULL, %s, %s, %s, 'pending', 'normal', %s)
+                    VALUES (%s, %s, %s, %s, %s, 'pending', 'normal', %s)
                     """,
-                    (str(pl.get("taskId") or ""), existing.get("title"),
+                    (_rev_id, _rev_email, str(pl.get("taskId") or ""), existing.get("title"),
                      f"Review: {existing.get('title')}",
                      Json({"stage": "enterprise_reviewer", "fromMentorReview": review_id,
-                           "taskId": pl.get("taskId"), "submissionId": pl.get("submissionId"),
+                           "taskId": pl.get("taskId"), "canonicalTaskId": pl.get("canonicalTaskId"),
+                           "taskRef": pl.get("taskRef"), "submissionRef": pl.get("submissionRef"),
+                           "submissionId": pl.get("submissionId"), "sowId": pl.get("sowId"),
                            "accountId": pl.get("accountId"), "contributorName": existing.get("contributor_name"),
-                           "url": pl.get("url"), "summary": pl.get("summary")})),
+                           "url": pl.get("url"), "summary": pl.get("summary"),
+                           # Full task context so the reviewer sees the same as the mentor.
+                           "description": pl.get("description"), "acceptanceCriteria": pl.get("acceptanceCriteria"),
+                           "dueAt": pl.get("dueAt"), "githubUrl": pl.get("githubUrl"),
+                           "artifacts": pl.get("artifacts") or [],
+                           "referenceFiles": pl.get("referenceFiles") or [],
+                           "completionPct": pl.get("completionPct")})),
                 )
             except Exception:  # noqa: BLE001 — reviewer table lives in shared DB
+                pass
+
+            # Requirement check PASSED → canonical 'qa_review_pending' (with reviewer).
+            try:
+                _ctid = pl.get("canonicalTaskId") or pl.get("taskId")
+                if _ctid and str(_ctid).startswith("tsk_"):
+                    cur.execute("UPDATE decomp_tasks SET status='qa_review_pending', updated_at=now() WHERE id=%s",
+                                (_ctid,))
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Rework → returned to contributor to fix (resubmit goes back to the mentor).
+        # Reject → requirement check FAILED, terminal (no payout).
+        if body.decision in ("rework", "reject"):
+            pl = existing.get("payload") or {}
+            if isinstance(pl, str):
+                try:
+                    import json as _json
+                    pl = _json.loads(pl)
+                except (ValueError, TypeError):
+                    pl = {}
+            _ctid = pl.get("canonicalTaskId") or pl.get("taskId")
+            _sub_id = pl.get("submissionId")
+            _acct = pl.get("accountId")
+            _delivery = _MENTOR_DELIVERY_STATUS[body.decision]
+            # Canonical decomp lifecycle status.
+            try:
+                if _ctid and str(_ctid).startswith("tsk_"):
+                    cur.execute("UPDATE decomp_tasks SET status=%s, updated_at=now() WHERE id=%s",
+                                (_delivery, _ctid))
+            except Exception:  # noqa: BLE001
+                pass
+            # Return the submission to the contributor (rework) or close it (reject),
+            # so the contributor portal reflects the outcome and can resubmit.
+            try:
+                if _sub_id:
+                    _sub_status = "feedback_requested" if body.decision == "rework" else "rejected"
+                    cur.execute("UPDATE submissions SET status=%s, updated_at=now() WHERE id=%s",
+                                (_sub_status, _sub_id))
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                if _acct and _ctid:
+                    _ct_status = "in_progress" if body.decision == "rework" else "rejected"
+                    cur.execute(
+                        "UPDATE contributor_tasks SET status=%s, updated_at=now() "
+                        "WHERE account_id=%s AND (CAST(id AS TEXT)=%s OR data->>'taskId'=%s)",
+                        (_ct_status, _acct, str(pl.get("taskId") or ""), str(_ctid)))
+            except Exception:  # noqa: BLE001
                 pass
 
         # A decision optionally records a review note.
@@ -690,6 +764,7 @@ def update_profile(body: ProfileUpdateRequest, user: MentorDep):
             "headline": body.headline,
             "bio": body.bio,
             "timezone": body.timezone,
+            "country": body.country,
             "avatar_url": body.avatar_url,
         }
         for col, val in mapping.items():
@@ -705,6 +780,10 @@ def update_profile(body: ProfileUpdateRequest, user: MentorDep):
         if body.links is not None:
             sets.append("links = %s")
             params.append(Json(body.links))
+        if body.mentorship_intro is not None:
+            # merge into settings JSONB without clobbering other keys
+            sets.append("settings = COALESCE(settings, '{}'::jsonb) || jsonb_build_object('mentorshipIntro', %s::text)")
+            params.append(body.mentorship_intro)
         params.append(mentor_id)
         cur.execute(
             f"UPDATE mentor_profiles SET {', '.join(sets)} WHERE mentor_id = %s RETURNING *",

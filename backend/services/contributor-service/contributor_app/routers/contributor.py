@@ -913,6 +913,14 @@ async def create_safety_report(account_id: AcctId, payload: dict = Body(default=
     return row
 
 
+@router.get("/support/safety-reports/{report_id}")
+async def get_safety_report(account_id: AcctId, report_id: int):
+    return _require(db.fetch_one(
+        "SELECT * FROM contributor_support_tickets WHERE id=%s AND account_id=%s AND kind='safety_report'",
+        (report_id, account_id),
+    ), "Safety report")
+
+
 @router.get("/support/faqs")
 async def support_faqs(account_id: AcctId):
     return {"items": [

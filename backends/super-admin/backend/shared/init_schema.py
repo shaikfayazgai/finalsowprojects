@@ -45,6 +45,11 @@ CREATE INDEX IF NOT EXISTS idx_login_accounts_tenant ON login_accounts(tenant_id
 -- | 'rejected'. Women freelancers self-apply and stay 'pending' until a Super
 -- Admin approves; login is blocked while pending/rejected.
 ALTER TABLE login_accounts ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'approved';
+-- Additional role grants beyond the primary `role`. A person can hold more than
+-- one hat (e.g. a PMO who also reviews) — extra enterprise role codes go here and
+-- are merged into the /me `roles[]` the portal RBAC reads. The primary `role`
+-- still drives portal routing (session.role); these only widen in-portal access.
+ALTER TABLE login_accounts ADD COLUMN IF NOT EXISTS extra_roles TEXT[] NOT NULL DEFAULT '{}';
 -- Login resolves accounts with WHERE LOWER(email) = LOWER($1). A plain index on
 -- `email` can't serve that predicate, so without this functional index every
 -- login does a SEQ SCAN. This makes email lookup an index hit (microseconds),

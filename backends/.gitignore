@@ -1,0 +1,12 @@
+# Never commit secrets or caches
+.env
+*/backend/.env
+**/.env
+__pycache__/
+**/__pycache__/
+*.pyc
+.venv/
+**/.venv/
+*.log
+.pytest_cache/
+**/.pytest_cache/

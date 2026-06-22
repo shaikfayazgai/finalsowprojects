@@ -31,13 +31,22 @@ from shared.deps import get_current_admin
 router = APIRouter(tags=["audit"])
 
 
+def _safe_count(cur, sql: str, params: tuple = ()) -> int:
+    try:
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        return int(row[0]) if row else 0
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 @router.get("/api/superadmin/dashboard")
 async def platform_dashboard(admin: Annotated[dict, Depends(get_current_admin)]):
-    """Platform-wide stats for the admin dashboard: account counts by role,
-    pending applications, and recent audit activity."""
+    """Admin dashboard in the MockAdminDashboard shape (env, greetingFor, kpis,
+    pipeline, actionBreakdown, attention, recent, aiSignals) computed from real
+    DB counts. Legacy `stats`/`recent_activity` keys retained for back-compat."""
     counts: dict[str, int] = {}
-    pending = 0
-    total = 0
+    total = pending = tenants = mentors_n = active_sows = kyc_pending = gov_open = 0
     try:
         conn = get_pg_connection()
         with conn.cursor() as cur:
@@ -45,30 +54,60 @@ async def platform_dashboard(admin: Annotated[dict, Depends(get_current_admin)])
             for role, n in cur.fetchall():
                 counts[role or "unknown"] = int(n)
                 total += int(n)
-            cur.execute("SELECT COUNT(*) FROM login_accounts WHERE approval_status = 'pending'")
-            pending = int(cur.fetchone()[0])
+            pending = _safe_count(cur, "SELECT COUNT(*) FROM login_accounts WHERE approval_status = 'pending'")
+            tenants = _safe_count(cur, 'SELECT COUNT(*) FROM "Tenant" WHERE "deletedAt" IS NULL')
+            mentors_n = _safe_count(cur, "SELECT COUNT(*) FROM login_accounts WHERE LOWER(role) LIKE 'mentor%%' AND email NOT LIKE '%%.deleted.%%' AND COALESCE(is_active, TRUE)")
+            active_sows = _safe_count(cur, "SELECT COUNT(*) FROM enterprise_sows")
+            kyc_pending = _safe_count(cur, "SELECT COUNT(*) FROM contributor_kyc WHERE status = 'pending'")
+            gov_open = _safe_count(cur, "SELECT COUNT(*) FROM governance_cases WHERE status IN ('open','in_review','pending_legal')")
     except Exception:  # noqa: BLE001
         pass
-    recent = query_audit(filters={}, page=1, page_size=8).get("items", [])
+
+    recent_raw = query_audit(filters={}, page=1, page_size=8).get("items", [])
+    _ACTION_KIND = {"tenant": "tenant", "mentor": "mentor", "kyc": "kyc", "sow": "sow",
+                    "agent": "ai", "skill": "skill", "rubric": "rubric", "rail": "rail"}
+
+    def _kind(action: str) -> str:
+        a = (action or "").lower()
+        for k, v in _ACTION_KIND.items():
+            if k in a:
+                return v
+        return "audit"
+
+    recent = [{
+        "at": r.get("timestamp"),
+        "text": r.get("action") or "activity",
+        "kind": _kind(r.get("action") or ""),
+    } for r in recent_raw]
+
+    greeting = (admin.get("first_name") or (admin.get("email") or "Admin").split("@")[0])
+
     return {
-        "stats": {
-            "total_accounts": total,
-            "by_role": counts,
-            "pending_applications": pending,
-            "contributors": counts.get("contributor", 0),
-            "enterprises": counts.get("enterprise", 0),
-            "mentors": counts.get("mentor", 0),
+        "env": "PROD",
+        "greetingFor": greeting,
+        "kpis": {
+            "servicesUp": 0, "servicesTotal": 0,
+            "tenants": tenants, "mentors": mentors_n, "activeSows": active_sows,
         },
-        "recent_activity": [
-            {
-                "id": r.get("_id"),
-                "action": r.get("action"),
-                "actor": r.get("actorEmail") or "system",
-                "service": r.get("service"),
-                "timestamp": r.get("timestamp"),
-            }
-            for r in recent
-        ],
+        "pipeline": {
+            "tenantsActive": tenants, "commercialGate": active_sows,
+            "governanceOpen": gov_open, "kycPending": kyc_pending, "mentorsActive": mentors_n,
+        },
+        "actionBreakdown": {"resolved30d": 0, "escalated": gov_open, "onHold": 0},
+        "attention": [],
+        "recent": recent,
+        "aiSignals": [],
+        # Back-compat:
+        "stats": {
+            "total_accounts": total, "by_role": counts, "pending_applications": pending,
+            "contributors": counts.get("contributor", 0),
+            "enterprises": counts.get("enterprise", 0), "mentors": mentors_n,
+        },
+        "recent_activity": [{
+            "id": r.get("_id"), "action": r.get("action"),
+            "actor": r.get("actorEmail") or "system",
+            "service": r.get("service"), "timestamp": r.get("timestamp"),
+        } for r in recent_raw],
     }
 
 
@@ -293,6 +332,7 @@ async def tenant_provisioning_status(
     done = sum(1 for s in steps if s["state"] == "done")
     return {
         "tenantId": tenant_id,
+        "adminEmail": admin_row.get("email") if admin_row else None,
         "steps": steps,
         "completePct": round(done / len(steps) * 100),
         "signals": {"adminExists": admin_exists, "adminSignedIn": admin_signed_in,
@@ -368,18 +408,48 @@ async def list_all_sows(
 
 @router.get("/api/superadmin/mentors")
 async def list_mentors(admin: Annotated[dict, Depends(get_current_admin)]):
-    """Mentor accounts available for assignment (any role in the mentor family)."""
+    """Mentor accounts (mentor family). Returns both `mentors` (assignment
+    pickers) and `items` (the admin mentors-management page) for compatibility."""
     conn = get_pg_connection()
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        # All mentor accounts (every status), EXCEPT tombstoned/offboarded ones
+        # (email '...deleted.<ts>'). Status is derived below so the page's
+        # active/pending/paused tabs work.
         cur.execute(
-            "SELECT id, email, first_name, last_name, role FROM login_accounts "
-            "WHERE role LIKE 'mentor%' AND COALESCE(is_active, TRUE) ORDER BY created_at DESC")
-        mentors = [{
+            "SELECT id, email, first_name, last_name, role, is_active, created_at, "
+            "       last_login_at, must_change_password, approval_status, department, phone "
+            "FROM login_accounts "
+            "WHERE role LIKE 'mentor%' AND email NOT LIKE '%%.deleted.%%' "
+            "ORDER BY created_at DESC")
+        rows = cur.fetchall()
+    mentors = []
+    for r in rows:
+        created = r["created_at"].isoformat() if r.get("created_at") else None
+        approval = (r.get("approval_status") or "").lower()
+        if approval == "rejected":
+            status = "suspended"
+        elif not r.get("is_active", True):
+            status = "paused"
+        elif not r.get("last_login_at") and (r.get("must_change_password") or approval in ("", "pending")):
+            status = "pending"          # invited, hasn't completed first sign-in
+        else:
+            status = "active"
+        mentors.append({
             "id": str(r["id"]), "email": r["email"],
             "name": (f"{r.get('first_name','') or ''} {r.get('last_name','') or ''}".strip() or r["email"]),
-            "role": r["role"],
-        } for r in cur.fetchall()]
-    return {"mentors": mentors, "total": len(mentors)}
+            "country": r.get("department") or "",        # no dedicated column yet
+            # FE MockAdminMentor expects `roles` as an array (the role family).
+            "role": r["role"],                            # kept for assignment pickers
+            "roles": [r["role"]] if r.get("role") else [],
+            "pools": [],
+            "status": status,
+            "activeSince": created,
+            "createdAt": created,
+            # 30-day metrics not tracked at account level yet — surfaced as 0.
+            "reviews30d": 0, "sessions30d": 0, "escalations30d": 0,
+            "avgReviewMin": 0, "slaHitPct": 0,
+        })
+    return {"mentors": mentors, "items": mentors, "total": len(mentors)}
 
 
 @router.get("/api/superadmin/contributors")

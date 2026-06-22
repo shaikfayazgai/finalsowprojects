@@ -164,6 +164,68 @@ def list_reviewers() -> list[dict[str, Any]]:
         return [_user_out(r) for r in cur.fetchall()]
 
 
+def list_mentors() -> list[dict[str, Any]]:
+    """Return all login_accounts whose role starts with 'mentor'."""
+    conn = _conn()
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM login_accounts WHERE LOWER(role) LIKE 'mentor%' ORDER BY created_at DESC"
+        )
+        return [_mentor_out(r) for r in cur.fetchall()]
+
+
+def get_mentor(mentor_id: str) -> dict[str, Any] | None:
+    conn = _conn()
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM login_accounts WHERE id = %s AND LOWER(role) LIKE 'mentor%'",
+            (mentor_id,),
+        )
+        row = cur.fetchone()
+    return _mentor_out(row) if row else None
+
+
+def _mentor_out(row: dict[str, Any] | None) -> dict[str, Any]:
+    """Shape a login_accounts row as the admin mentor shape the frontend expects."""
+    if not row:
+        return {}
+    base = _user_out(row)
+    role_str = (row.get("role") or "mentor").lower()
+    # Normalise role family → roles array the FE expects
+    if role_str in ("mentor.lead",):
+        roles = ["mentor.lead"]
+    elif role_str in ("mentor.senior",):
+        roles = ["mentor.senior"]
+    else:
+        roles = ["mentor"]
+    # Map is_active + approval_status → AdminMentorStatus
+    is_active = row.get("is_active", True)
+    approval = (row.get("approval_status") or "").lower()
+    if not is_active:
+        status = "suspended"
+    elif approval == "pending":
+        status = "pending"
+    elif approval == "rejected":
+        status = "closed"
+    else:
+        status = "active"
+    # If the account was created but has never logged in, treat as pending
+    if status == "active" and not row.get("last_login_at"):
+        status = "pending"
+    return {
+        **base,
+        "roles": roles,
+        "pools": [],           # pool membership not yet stored on login_accounts
+        "status": status,
+        "activeSince": base.get("createdAt") or "",
+        "reviews30d": 0,
+        "sessions30d": 0,
+        "escalations30d": 0,
+        "avgReviewMin": 0,
+        "slaHitPct": 0,
+    }
+
+
 def user_out(row: dict[str, Any]) -> dict[str, Any]:
     return _user_out(row)
 

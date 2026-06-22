@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
 
 
 # ── Requests ──────────────────────────────────────────────────────────────────
@@ -15,11 +15,16 @@ class LoginRequest(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    # Accept both refresh_token (snake) and refreshToken (camel) from any client.
+    model_config = ConfigDict(populate_by_name=True)
+    refresh_token: str = Field(validation_alias=AliasChoices("refresh_token", "refreshToken"))
 
 
 class LogoutRequest(BaseModel):
-    refresh_token: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+    refresh_token: str | None = Field(
+        default=None, validation_alias=AliasChoices("refresh_token", "refreshToken")
+    )
 
 
 class ContributorRegisterRequest(BaseModel):
@@ -66,11 +71,15 @@ class ContributorRegisterRequest(BaseModel):
 
 
 class EnterpriseRegisterRequest(BaseModel):
+    # Accept orgName, organisationName, and organizationName for the org field.
+    model_config = ConfigDict(populate_by_name=True)
     firstName: str
     lastName: str = ""
     email: EmailStr
     password: str
-    orgName: str
+    orgName: str = Field(
+        validation_alias=AliasChoices("orgName", "organisationName", "organizationName")
+    )
     orgType: str | None = None
     industry: str | None = None
     companySize: str | None = None
@@ -106,9 +115,13 @@ class ResetPasswordRequest(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    new_password: str
+    # Accept snake_case and camelCase (newPassword / currentPassword) from any client.
+    model_config = ConfigDict(populate_by_name=True)
+    new_password: str = Field(validation_alias=AliasChoices("new_password", "newPassword"))
     confirmPassword: str | None = None
-    old_password: str | None = None
+    old_password: str | None = Field(
+        default=None, validation_alias=AliasChoices("old_password", "currentPassword", "oldPassword")
+    )
 
 
 class OtpSendRequest(BaseModel):
@@ -136,6 +149,7 @@ class UserOut(BaseModel):
     phone: str | None = None
     adminTitle: str | None = None
     approvalStatus: str = "approved"
+    createdAt: str | None = None
 
 
 class TokenPair(BaseModel):
@@ -159,4 +173,9 @@ def user_row_to_out(row: dict[str, Any]) -> UserOut:
         phone=row.get("phone"),
         adminTitle=row.get("admin_title"),
         approvalStatus=row.get("approval_status") or "approved",
+        createdAt=(
+            row["created_at"].isoformat()
+            if hasattr(row.get("created_at"), "isoformat")
+            else (row.get("created_at") or None)
+        ),
     )

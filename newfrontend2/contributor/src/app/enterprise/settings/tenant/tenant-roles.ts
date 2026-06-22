@@ -1,0 +1,20 @@
+/** Re-export shared tenant role definitions for settings UI + platform admin wizard. */
+export {
+  ENTERPRISE_ROLES,
+  RELEASE_ENTERPRISE_ROLES,
+  ENTERPRISE_ROLE_GROUPS,
+  DEFAULT_LICENSED_ROLES,
+  ROLE_META,
+  SOD_PAIRS,
+  type EnterpriseRole,
+  type EnterpriseRoleGroup,
+  type EnterpriseRoleGroupId,
+  toEntRoleCode,
+  normalizeEnterpriseRole,
+  normalizeEnterpriseRoles,
+  detectSodViolations,
+  memberHasSod,
+  roleLabel,
+  countActiveAdmins,
+  rolePillCls,
+} from "@/lib/enterprise/tenant-roles-shared";

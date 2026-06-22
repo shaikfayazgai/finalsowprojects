@@ -95,7 +95,12 @@ def get_mongo_db() -> Database | None:
     if not settings.mongodb_uri.strip():
         return None
     if _mongo_client is None:
-        _mongo_client = MongoClient(settings.mongodb_uri, server_api=ServerApi("1"))
+        # Short timeouts so an unreachable Mongo fails fast (audit is fail-open)
+        # instead of hanging requests for the 20-30s pymongo default.
+        _mongo_client = MongoClient(
+            settings.mongodb_uri, server_api=ServerApi("1"),
+            serverSelectionTimeoutMS=3000, connectTimeoutMS=3000, socketTimeoutMS=3000,
+        )
     return _mongo_client[settings.mongodb_db]
 
 

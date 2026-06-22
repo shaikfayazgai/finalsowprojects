@@ -47,7 +47,8 @@ class Settings(BaseSettings):
         return bool(self.redis_url.strip())
 
     # ── JWT / Auth (shared across all services) ───────────────────────────────
-    api_secret_key: str = "change-me-to-a-long-random-string-for-jwt"
+    # MUST be set via env; no safe default for production.
+    api_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
     refresh_token_expire_minutes: int = 60 * 24 * 30
@@ -87,20 +88,27 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str = "kafka:9092"
 
     # ── Super admin (the Glimmora admin) ──────────────────────────────────────
-    super_admin_email: str = "superadmin@glimmora.dev"
-    super_admin_password: str = "glimmora123"
-    dev_default_portal_password: str = "glimmora123"
+    # MUST be set via env; no safe defaults.
+    super_admin_email: str = ""
+    super_admin_password: str = ""
+    dev_default_portal_password: str = ""
 
     # ── Service-account logins used by the frontend proxy routes ──────────────
-    glimmora_service_email: str = "sow-test-user@glimmora.com"
-    glimmora_service_password: str = "Test@12345"
-    glimmora_enterprise_service_email: str = "enterprise-service@glimmora.com"
-    glimmora_enterprise_service_password: str = "Test@12345"
+    # MUST be set via env; no safe defaults.
+    glimmora_service_email: str = ""
+    glimmora_service_password: str = ""
+    glimmora_enterprise_service_email: str = ""
+    glimmora_enterprise_service_password: str = ""
 
     # ── CORS ───────────────────────────────────────────────────────────────────
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"
-        "http://localhost:3100,http://127.0.0.1:3100"
+        "http://localhost:3100,http://127.0.0.1:3100,"
+        "http://localhost:3101,http://127.0.0.1:3101,"
+        "http://localhost:3102,http://127.0.0.1:3102,"
+        "http://localhost:3103,http://127.0.0.1:3103,"
+        "http://localhost:3104,http://127.0.0.1:3104,"
+        "http://localhost:3105,http://127.0.0.1:3105"
     )
 
     @property

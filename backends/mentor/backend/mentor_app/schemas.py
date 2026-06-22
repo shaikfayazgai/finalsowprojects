@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field
 
 
 class DecisionRequest(BaseModel):
-    decision: Literal["accept", "rework", "escalate"]
+    # accept → requirement check passed (→ reviewer QA); rework → returned to
+    # contributor to fix; reject → requirement check FAILED (terminal); escalate.
+    decision: Literal["accept", "rework", "reject", "escalate"]
     score: Optional[float] = None
     comments: Optional[str] = None
 
@@ -42,8 +44,12 @@ class ProfileUpdateRequest(BaseModel):
     expertise: Optional[list[str]] = None
     languages: Optional[list[str]] = None
     timezone: Optional[str] = None
+    country: Optional[str] = None
     avatar_url: Optional[str] = None
     links: Optional[dict[str, Any]] = None
+    # Mentorship intro shown to contributors — stored in settings JSONB
+    # (no dedicated column); surfaced back via GET /profile settings.mentorshipIntro.
+    mentorship_intro: Optional[str] = None
 
 
 class SettingsUpdateRequest(BaseModel):

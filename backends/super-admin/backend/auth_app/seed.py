@@ -13,7 +13,18 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure(email: str, password: str, *, first: str, last: str, role: str) -> None:
-    if repo.find_account_by_email(email):
+    existing = repo.find_account_by_email(email)
+    if existing:
+        # Only set the seed password if the account has NO password yet (e.g. it
+        # was created by another service with no hash). NEVER overwrite an
+        # existing working password on every restart — that was silently resetting
+        # the super-admin credential and breaking login.
+        if not existing.get("password_hash"):
+            try:
+                repo.set_password(str(existing["id"]), hash_password(password), clear_must_change=True)
+                logger.info("Set seed password for passwordless account %s (%s)", email, role)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Could not set seed password for %s: %s", email, exc)
         return
     repo.create_account(
         email=email, password_hash=hash_password(password),

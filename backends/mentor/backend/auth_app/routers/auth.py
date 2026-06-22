@@ -142,6 +142,18 @@ async def login(body: LoginRequest, request: Request):
                 ip_address=request.client.host if request.client else None)
 
     result = _token_pair(row)
+    # Persist a session record so the sessions list is populated after login.
+    try:
+        from auth_app.routers.sessions import create_session  # local import avoids circularity
+        create_session(
+            account_id=str(row["id"]),
+            refresh_token=result.get("refresh_token", ""),
+            user_agent=request.headers.get("user-agent"),
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as _ses_exc:  # noqa: BLE001
+        logger.warning("Failed to persist session record: %s", _ses_exc)
+
     if row.get("must_change_password"):
         result["user"]["requiresPasswordChange"] = True
     return result
@@ -227,6 +239,134 @@ async def register_contributor(body: ContributorRegisterRequest, request: Reques
                 action="register_contributor", service="auth-service",
                 ip_address=request.client.host if request.client else None)
     return {"user": user_row_to_out(row).model_dump()}
+
+
+@router.post("/register/mentor")
+async def register_mentor(request: Request):
+    """POST /api/v1/auth/register/mentor — self-register with invite code.
+
+    Body: { firstName, lastName, email, password, inviteCode }
+    Returns: { ok, userId, email }
+    """
+    from pydantic import BaseModel, EmailStr, field_validator
+    import re as _re
+
+    class _MentorRegisterBody(BaseModel):
+        firstName: str = ""
+        lastName: str = ""
+        email: EmailStr
+        password: str
+        inviteCode: str
+
+        @field_validator("firstName")
+        @classmethod
+        def _first_name_min(cls, v: str) -> str:
+            v = v.strip()
+            if len(v) < 2:
+                raise ValueError("First name must be at least 2 characters")
+            return v
+
+        @field_validator("password")
+        @classmethod
+        def _password_strength(cls, v: str) -> str:
+            if len(v) < 8 or not _re.search(r"[A-Z]", v) or not _re.search(r"[a-z]", v) or not _re.search(r"\d", v):
+                raise ValueError("Password must include upper, lower, and a number.")
+            return v
+
+    try:
+        raw = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    try:
+        body_m = _MentorRegisterBody.model_validate(raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Check your details and try again.")
+
+    from shared.db import get_pg_connection, ensure_pg_clean
+    from psycopg2.extras import RealDictCursor
+
+    ensure_pg_clean()
+    conn = get_pg_connection()
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS mentor_invite_codes (
+                code        TEXT PRIMARY KEY,
+                created_by  TEXT,
+                used_by     TEXT,
+                used_at     TIMESTAMPTZ,
+                expires_at  TIMESTAMPTZ,
+                is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        conn.commit()
+        cur.execute(
+            "SELECT * FROM mentor_invite_codes WHERE code = %s",
+            (body_m.inviteCode,),
+        )
+        invite = cur.fetchone()
+
+    if not invite:
+        raise HTTPException(status_code=400, detail="Invalid or expired invite code")
+    if not invite.get("is_active"):
+        raise HTTPException(status_code=400, detail="This invite code has already been used")
+    if invite.get("expires_at") and invite["expires_at"] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Invite code has expired")
+    if invite.get("used_by"):
+        raise HTTPException(status_code=409, detail="This invite code has already been used")
+
+    if repo.find_account_by_email(body_m.email):
+        raise HTTPException(status_code=409,
+                            detail="An account with this email already exists")
+
+    row = repo.create_account(
+        email=body_m.email,
+        password_hash=hash_password(body_m.password),
+        first_name=body_m.firstName,
+        last_name=body_m.lastName,
+        role="mentor",
+        provider="password",
+        approval_status="approved",
+    )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE mentor_invite_codes SET is_active = FALSE, used_by = %s, "
+            "used_at = now() WHERE code = %s",
+            (str(row["id"]), body_m.inviteCode),
+        )
+    conn.commit()
+
+    # Ensure a mentor_profiles row exists.
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO mentor_profiles (mentor_id, display_name)
+            VALUES (%s, %s)
+            ON CONFLICT (mentor_id) DO NOTHING
+            """,
+            (str(row["id"]), f"{body_m.firstName} {body_m.lastName}".strip()),
+        )
+    conn.commit()
+
+    publish_event("user.registered", {
+        "userId": str(row["id"]),
+        "email": row["email"],
+        "role": "mentor",
+    })
+    write_audit(
+        actor_id=str(row["id"]),
+        actor_email=row["email"],
+        actor_role="mentor",
+        action="register_mentor",
+        service="auth-service",
+        ip_address=request.client.host if request.client else None,
+        extra={"inviteCode": body_m.inviteCode},
+    )
+    return {"ok": True, "userId": str(row["id"]), "email": row["email"]}
 
 
 @router.post("/register/enterprise")
@@ -332,7 +472,7 @@ async def mfa_setup_confirm(body: MfaCodeRequest, token: Annotated[str, Depends(
 
 
 @router.post("/mfa/verify")
-async def mfa_verify(body: MfaCodeRequest, token: Annotated[str, Depends(get_bearer_token)]):
+async def mfa_verify(body: MfaCodeRequest, token: Annotated[str, Depends(get_bearer_token)], request: Request):
     try:
         payload = decode_token(token, expected_purpose="mfa_pending")
     except Exception:
@@ -343,7 +483,18 @@ async def mfa_verify(body: MfaCodeRequest, token: Annotated[str, Depends(get_bea
     if not pyotp.TOTP(row["mfa_secret"]).verify(body.code, valid_window=1):
         raise HTTPException(status_code=400, detail="Invalid code")
     repo.mark_login(str(row["id"]))
-    return _token_pair(row)
+    result = _token_pair(row)
+    try:
+        from auth_app.routers.sessions import create_session
+        create_session(
+            account_id=str(row["id"]),
+            refresh_token=result.get("refresh_token", ""),
+            user_agent=request.headers.get("user-agent"),
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as _ses_exc:  # noqa: BLE001
+        logger.warning("Failed to persist MFA session record: %s", _ses_exc)
+    return result
 
 
 @router.post("/mfa/recovery")

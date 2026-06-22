@@ -12,6 +12,7 @@ All tables live in Postgres (Neon) and are created idempotently on startup.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -94,6 +95,108 @@ CREATE TABLE IF NOT EXISTS enterprise_deliverables (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_ent_deliverables_owner ON enterprise_deliverables(owner_id);
+
+-- ── Decomposition plans (normalised) ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS decomp_plans (
+    id                          TEXT PRIMARY KEY,
+    tenant_id                   TEXT NOT NULL,
+    sow_id                      TEXT NOT NULL,
+    version                     INTEGER NOT NULL DEFAULT 1,
+    status                      TEXT NOT NULL DEFAULT 'draft',
+    summary                     TEXT,
+    source_agent_invocation_id  TEXT,
+    default_workforce_sourcing  TEXT,
+    default_review_path         TEXT,
+    two_stage_review_enabled    BOOLEAN NOT NULL DEFAULT FALSE,
+    approved_at                 TIMESTAMPTZ,
+    approved_by                 TEXT,
+    activated_at                TIMESTAMPTZ,
+    archived_at                 TIMESTAMPTZ,
+    created_by                  TEXT NOT NULL,
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at                  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_decomp_plans_tenant   ON decomp_plans(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_decomp_plans_sow      ON decomp_plans(sow_id);
+CREATE INDEX IF NOT EXISTS idx_decomp_plans_status   ON decomp_plans(status);
+
+CREATE TABLE IF NOT EXISTS decomp_milestones (
+    id          TEXT PRIMARY KEY,
+    plan_id     TEXT NOT NULL REFERENCES decomp_plans(id) ON DELETE CASCADE,
+    tenant_id   TEXT NOT NULL,
+    "order"     INTEGER NOT NULL DEFAULT 0,
+    name        TEXT NOT NULL,
+    description TEXT,
+    start_date  TIMESTAMPTZ,
+    end_date    TIMESTAMPTZ,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_decomp_ms_plan ON decomp_milestones(plan_id);
+
+CREATE TABLE IF NOT EXISTS decomp_tasks (
+    id                   TEXT PRIMARY KEY,
+    plan_id              TEXT NOT NULL REFERENCES decomp_plans(id) ON DELETE CASCADE,
+    milestone_id         TEXT REFERENCES decomp_milestones(id) ON DELETE SET NULL,
+    tenant_id            TEXT NOT NULL,
+    external_key         TEXT,
+    title                TEXT NOT NULL,
+    description          TEXT,
+    required_skills      JSONB NOT NULL DEFAULT '[]'::jsonb,
+    estimated_hours      NUMERIC(10,2),
+    acceptance_criteria  TEXT,
+    complexity           TEXT,
+    "order"              INTEGER NOT NULL DEFAULT 0,
+    status               TEXT NOT NULL DEFAULT 'draft',
+    ai_confidence        INTEGER,
+    pmo_edited           BOOLEAN NOT NULL DEFAULT FALSE,
+    workforce_sourcing   TEXT,
+    review_path          TEXT,
+    attachments          JSONB NOT NULL DEFAULT '[]'::jsonb,
+    -- Contributor pay, set by the SUPER ADMIN at pricing time (NOT visible to
+    -- enterprise/mentor/reviewer — the margin is Glimmora's). Gross of GST.
+    pay_type                  TEXT,            -- 'fixed' | 'hourly'
+    pay_rate_minor            BIGINT,          -- hourly rate (minor units), if hourly
+    contributor_amount_minor  BIGINT,          -- final gross pay for the task (minor)
+    pay_currency              TEXT NOT NULL DEFAULT 'INR',
+    priced_at                 TIMESTAMPTZ,
+    priced_by                 TEXT,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_decomp_tasks_plan      ON decomp_tasks(plan_id);
+CREATE INDEX IF NOT EXISTS idx_decomp_tasks_milestone ON decomp_tasks(milestone_id);
+
+CREATE TABLE IF NOT EXISTS decomp_dependencies (
+    id            TEXT PRIMARY KEY,
+    from_task_id  TEXT NOT NULL REFERENCES decomp_tasks(id) ON DELETE CASCADE,
+    to_task_id    TEXT NOT NULL REFERENCES decomp_tasks(id) ON DELETE CASCADE,
+    tenant_id     TEXT NOT NULL,
+    type          TEXT NOT NULL DEFAULT 'finish_to_start',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_decomp_deps_from ON decomp_dependencies(from_task_id);
+CREATE INDEX IF NOT EXISTS idx_decomp_deps_to   ON decomp_dependencies(to_task_id);
+
+-- ── Enterprise review queue ────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS enterprise_review_queue (
+    submission_id   TEXT PRIMARY KEY,
+    data            JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    claimed_by      TEXT,
+    claimed_at      TIMESTAMPTZ,
+    decision        TEXT,
+    decided_at      TIMESTAMPTZ,
+    decided_by      TEXT,
+    decision_note   TEXT,
+    decision_id     TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ent_rq_status  ON enterprise_review_queue(status);
+CREATE INDEX IF NOT EXISTS idx_ent_rq_claimed ON enterprise_review_queue(claimed_by);
 """
 
 
@@ -102,7 +205,34 @@ def init_enterprise_schema() -> None:
     conn = get_pg_connection()
     with conn.cursor() as cur:
         cur.execute(DDL)
+        # Additive migrations for DBs created before these columns existed.
+        for col_ddl in (
+            "attachments JSONB NOT NULL DEFAULT '[]'::jsonb",
+            "pay_type TEXT",
+            "pay_rate_minor BIGINT",
+            "contributor_amount_minor BIGINT",
+            "pay_currency TEXT NOT NULL DEFAULT 'INR'",
+            "priced_at TIMESTAMPTZ",
+            "priced_by TEXT",
+        ):
+            cur.execute(f"ALTER TABLE decomp_tasks ADD COLUMN IF NOT EXISTS {col_ddl}")
+        # Send-back feedback note from the super admin to the enterprise/PMO.
+        cur.execute("ALTER TABLE decomp_plans ADD COLUMN IF NOT EXISTS revision_note TEXT")
     conn.commit()
+    # Also ensure the compliance/billing/razorpay tables
+    try:
+        from enterprise_app.routers.compliance_billing import (
+            init_compliance_billing_schema,
+        )
+        init_compliance_billing_schema()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("compliance_billing schema init failed: %s", exc)
+    # Workforce + task assignment tables
+    try:
+        from enterprise_app.routers.workforce import init_workforce_schema
+        init_workforce_schema()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("workforce schema init failed: %s", exc)
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────--
@@ -111,7 +241,25 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def new_id(prefix: str = "") -> str:
+def slugify(text: str | None, max_len: int = 28) -> str:
+    """Lowercase, hyphenated, ascii-only slug for human-readable ids. Returns '' for
+    empty/None so callers can fall back to a bare code."""
+    if not text:
+        return ""
+    s = re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")
+    # collapse repeated hyphens + trim to a sane length on a word boundary
+    s = re.sub(r"-{2,}", "-", s)[:max_len].strip("-")
+    return s
+
+
+def new_id(prefix: str = "", slug: str | None = None) -> str:
+    """Generate a record id. With a `slug` (e.g. the SOW/task title) the id is
+    human-readable while keeping the caller's prefix intact so cross-table links and
+    `startswith("tsk_")`-style checks still work: ``sow_acme-login-3f9a2b``. A short
+    hex code keeps it unique at lakhs-of-rows scale without a central counter."""
+    sl = slugify(slug)
+    if sl:
+        return f"{prefix}{sl}-{uuid.uuid4().hex[:6]}"
     base = uuid.uuid4().hex[:24]
     return f"{prefix}{base}" if prefix else base
 
@@ -133,11 +281,11 @@ _TABLES = {
 # enterprise gates (Business/Legal/Security + the enterprise Final sign-off) have
 # cleared. Glimmora closes the SOW.
 SOW_APPROVAL_STAGES = [
-    {"key": "business",   "title": "Business Owner Review",       "owner": "enterprise"},
     {"key": "legal",      "title": "Legal / Compliance Review",   "owner": "enterprise"},
+    {"key": "finance",    "title": "Finance / Business Review",   "owner": "enterprise"},
     {"key": "security",   "title": "Security Review",             "owner": "enterprise"},
-    {"key": "final",      "title": "Final Sign-off",              "owner": "enterprise"},
-    {"key": "commercial", "title": "GlimmoraTeam Commercial Review", "owner": "platform"},
+    {"key": "final",      "title": "Tenant Admin Sign-off",       "owner": "enterprise"},
+    {"key": "commercial", "title": "Super Admin Approval",         "owner": "platform"},
 ]
 
 

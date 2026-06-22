@@ -1,0 +1,67 @@
+import { z } from "zod";
+
+const passwordSchema = z.string().min(8, "Password must be at least 8 characters");
+
+// ── Contributor registration ──
+export const contributorRegistrationSchema = z.object({
+  firstName:          z.string().min(1, "First name is required"),
+  lastName:           z.string().min(1, "Last name is required"),
+  email:              z.string().email("Invalid email address"),
+  password:           passwordSchema,
+  contribType:        z.enum(["student", "women_workforce", "general_workforce"]),
+  country:            z.string().min(1, "Country is required"),
+  dob:                z.string().min(1, "Date of birth is required"),
+  timezone:           z.string().min(1, "Timezone is required"),
+  departmentCategory: z.string().min(1, "Department is required"),
+  departmentOther:    z.string().optional(),
+  primarySkills:      z.array(z.string()).min(1, "At least one primary skill required"),
+  secondarySkills:    z.array(z.string()).default([]),
+  otherSkills:        z.array(z.string()).default([]),
+  availability:       z.string().min(1, "Availability is required"),
+  degree:             z.string().optional(),
+  branch:             z.string().optional(),
+  linkedin:           z.string().optional(),
+  careerStage:        z.string().optional(),
+  yearsExperience:    z.string().optional(),
+  workStart:          z.string().optional(),
+  workEnd:            z.string().optional(),
+  studentCurrency:    z.string().optional(),
+  studentHourlyRate:  z.string().optional(),
+  phone: z
+    .string()
+    .min(1, "Mobile number is required")
+    .refine((s) => s.replace(/\D/g, "").length >= 7, "Enter a valid mobile number"),
+  ndaSignature:       z.string().min(1, "NDA signature is required"),
+  acceptTos:          z.literal(true, { message: "Must accept Terms of Use" }),
+  acceptCoc:          z.literal(true, { message: "Must accept Code of Conduct" }),
+  acceptPrivacy:      z.literal(true, { message: "Must accept Privacy Policy" }),
+  acceptFee:          z.literal(true, { message: "Must acknowledge platform fee" }),
+  acceptAhp:          z.literal(true, { message: "Must accept Anti-Harassment Policy" }),
+  marketingOptIn:     z.boolean().default(false),
+});
+
+// ── Enterprise registration ──
+export const enterpriseRegistrationSchema = z.object({
+  orgName:              z.string().min(1, "Organisation name is required"),
+  orgType:              z.string().min(1, "Organisation type is required"),
+  orgTypeOther:         z.string().optional(),
+  industry:             z.string().min(1, "Industry is required"),
+  industryOther:        z.string().optional(),
+  companySize:          z.string().min(1, "Company size is required"),
+  website:              z.string().optional(),
+  hqCountry:            z.string().optional(),
+  hqCity:               z.string().optional(),
+  adminFirstName:       z.string().min(1, "First name is required"),
+  adminLastName:        z.string().min(1, "Last name is required"),
+  adminTitle:           z.string().min(1, "Job title is required"),
+  adminEmail:           z.string().email("Invalid email address"),
+  adminDept:            z.string().optional(),
+  phone:                z.string().optional(),
+  password:             passwordSchema,
+  incorporationCountry: z.string().optional(),
+  acceptTos:            z.literal(true, { message: "Must accept Terms of Use" }),
+  acceptPp:             z.literal(true, { message: "Must accept Privacy Policy" }),
+  acceptEsa:            z.literal(true, { message: "Must accept Enterprise Service Agreement" }),
+  acceptAhp:            z.literal(true, { message: "Must accept Anti-Harassment Policy" }),
+  marketingOptIn:       z.boolean().default(false),
+});

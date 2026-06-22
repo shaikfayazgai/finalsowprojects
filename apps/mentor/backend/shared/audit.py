@@ -67,16 +67,24 @@ def query_audit(
     """Paginated audit reader for admin viewers."""
     page = max(1, page)
     page_size = max(1, min(200, page_size))
-    col = mongo_audit_collection()
-    if col is None:
-        return {"items": [], "page": page, "page_size": page_size, "total": 0}
-    q = filters or {}
-    total = col.count_documents(q)
-    cursor = col.find(q).sort("timestamp", -1).skip((page - 1) * page_size).limit(page_size)
-    items = []
-    for d in cursor:
-        d["_id"] = str(d.get("_id"))
-        if isinstance(d.get("timestamp"), datetime):
-            d["timestamp"] = d["timestamp"].isoformat()
-        items.append(d)
-    return {"items": items, "page": page, "page_size": page_size, "total": total}
+    empty = {"items": [], "page": page, "page_size": page_size, "total": 0}
+    # Fail-open: Mongo unconfigured OR unreachable (DNS/network) must not 500 the
+    # admin audit viewer — return an empty page instead. write_audit is already
+    # fail-open, so audit is best-effort end to end.
+    try:
+        col = mongo_audit_collection()
+        if col is None:
+            return empty
+        q = filters or {}
+        total = col.count_documents(q)
+        cursor = col.find(q).sort("timestamp", -1).skip((page - 1) * page_size).limit(page_size)
+        items = []
+        for d in cursor:
+            d["_id"] = str(d.get("_id"))
+            if isinstance(d.get("timestamp"), datetime):
+                d["timestamp"] = d["timestamp"].isoformat()
+            items.append(d)
+        return {"items": items, "page": page, "page_size": page_size, "total": total}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Audit read failed (returning empty): %s", exc)
+        return empty

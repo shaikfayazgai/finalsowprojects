@@ -43,7 +43,7 @@ async def upload_blob(
     }
     if content_type:
         headers["content-type"] = content_type
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=8) as client:
         resp = await client.put(f"{_BLOB_BASE}/{pathname.lstrip('/')}", content=data, headers=headers)
         resp.raise_for_status()
         return resp.json()
@@ -58,6 +58,6 @@ async def delete_blob(url: str) -> bool:
         "x-api-version": _API_VERSION,
         "content-type": "application/json",
     }
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=8) as client:
         resp = await client.post(f"{_BLOB_BASE}/delete", json={"urls": [url]}, headers=headers)
         return resp.status_code < 300

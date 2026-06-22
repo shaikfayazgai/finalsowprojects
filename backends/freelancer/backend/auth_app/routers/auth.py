@@ -142,6 +142,12 @@ async def login(body: LoginRequest, request: Request):
                 ip_address=request.client.host if request.client else None)
 
     result = _token_pair(row)
+    repo.create_session(
+        str(row["id"]),
+        result.get("refresh_token", ""),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
+    )
     if row.get("must_change_password"):
         result["user"]["requiresPasswordChange"] = True
     return result

@@ -45,7 +45,14 @@ def _connect_with_retry(attempts: int = 5, connect_timeout: int = 30):
     last_exc: Exception | None = None
     for i in range(attempts):
         try:
-            return psycopg2.connect(settings.postgres_dsn, connect_timeout=connect_timeout)
+            return psycopg2.connect(
+                settings.postgres_dsn,
+                connect_timeout=connect_timeout,
+                keepalives=1,
+                keepalives_idle=20,
+                keepalives_interval=10,
+                keepalives_count=3,
+            )
         except psycopg2.OperationalError as exc:
             last_exc = exc
             logger.warning("PG connect attempt %d/%d failed: %s", i + 1, attempts, str(exc).splitlines()[0])
@@ -95,7 +102,12 @@ def get_mongo_db() -> Database | None:
     if not settings.mongodb_uri.strip():
         return None
     if _mongo_client is None:
-        _mongo_client = MongoClient(settings.mongodb_uri, server_api=ServerApi("1"))
+        # Short timeouts so an unreachable Mongo fails fast (audit is fail-open)
+        # instead of hanging requests for the 20-30s pymongo default.
+        _mongo_client = MongoClient(
+            settings.mongodb_uri, server_api=ServerApi("1"),
+            serverSelectionTimeoutMS=3000, connectTimeoutMS=3000, socketTimeoutMS=3000,
+        )
     return _mongo_client[settings.mongodb_db]
 
 

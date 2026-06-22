@@ -1,10 +1,62 @@
-frontend4/.git_backup_phase1/
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
 
-# Per-role app secrets (shared DB url etc.)
+# Build outputs
+.next/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+env/
+venv/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+test-results/
+playwright-report/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Misc
+*.db
+*.sqlite
+dev*.log
+
+# Per-role app secrets and build artifacts
 apps/**/.env
 apps/**/__pycache__/
 apps/**/frontend/node_modules/
 apps/**/frontend/.next/
-apps/**/frontend/.env.local
 apps/**/frontend/*.db
 apps/**/frontend/dev*.log
+apps/**/frontend/test-results/
+frontend4/.git_backup_phase1/

@@ -1,0 +1,18 @@
+{
+  "name": "glimmora-newfrontend2",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Per-role frontend copies (enterprise, mentor, reviewer, contributor) sharing one hoisted node_modules.",
+  "workspaces": [
+    "enterprise",
+    "mentor",
+    "reviewer",
+    "contributor"
+  ],
+  "scripts": {
+    "dev:enterprise": "npm run dev -w enterprise",
+    "dev:mentor": "npm run dev -w mentor",
+    "dev:reviewer": "npm run dev -w reviewer",
+    "dev:contributor": "npm run dev -w contributor"
+  }
+}

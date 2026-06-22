@@ -16,9 +16,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
-from shared.db import ensure_pg_clean, get_pg_connection
+from shared.db import ensure_pg_clean, get_pg_connection, reset_pg_connection
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,18 @@ logger = logging.getLogger(__name__)
 def conn():
     ensure_pg_clean()
     return get_pg_connection()
+
+
+def _with_reconnect(op):
+    """Run a DB op against the shared connection; if it was dropped (Neon idle
+    cutoff / network blip), reconnect once and retry so the request recovers
+    instead of erroring or hanging — fixes the recurring "everything went blank"."""
+    try:
+        return op(conn())
+    except (psycopg2.OperationalError, psycopg2.InterfaceError) as exc:
+        logger.warning("PG op failed (%s) — reconnecting + retrying once", str(exc).splitlines()[0])
+        reset_pg_connection()
+        return op(conn())
 
 
 def _now() -> datetime:
@@ -324,6 +337,47 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_task_interests_plan_task_acct
     ON task_interests(plan_id, task_id, account_id);
 CREATE INDEX IF NOT EXISTS idx_task_interests_plan_task ON task_interests(plan_id, task_id);
 CREATE INDEX IF NOT EXISTS idx_task_interests_acct ON task_interests(account_id);
+
+-- ── Mentorship opt-in (contributor self-service) ─────────────────────────────
+-- One row per contributor; upserted on opt-in; mentor_id assigned by Glimmora.
+CREATE TABLE IF NOT EXISTS contributor_mentorship (
+    id            BIGSERIAL PRIMARY KEY,
+    account_id    BIGINT NOT NULL UNIQUE,
+    opted_in_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    focus         TEXT,
+    mentor_id     TEXT,
+    status        TEXT NOT NULL DEFAULT 'pending',   -- pending|assigned|active|completed|cancelled
+    data          JSONB NOT NULL DEFAULT '{}',
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_contrib_mentorship_acct ON contributor_mentorship(account_id);
+
+-- ── contributor_notifications extended columns (FE NotificationSummary shape) ─
+-- These are idempotent additions on top of the existing table that already has
+-- id / account_id / title / body / category / is_read / data / created_at.
+ALTER TABLE contributor_notifications ADD COLUMN IF NOT EXISTS kind         TEXT DEFAULT 'system.generic';
+ALTER TABLE contributor_notifications ADD COLUMN IF NOT EXISTS severity     TEXT DEFAULT 'informational';
+ALTER TABLE contributor_notifications ADD COLUMN IF NOT EXISTS action_url   TEXT;
+ALTER TABLE contributor_notifications ADD COLUMN IF NOT EXISTS action_label TEXT;
+ALTER TABLE contributor_notifications ADD COLUMN IF NOT EXISTS resource_type TEXT;
+ALTER TABLE contributor_notifications ADD COLUMN IF NOT EXISTS resource_id   TEXT;
+ALTER TABLE contributor_notifications ADD COLUMN IF NOT EXISTS channels      TEXT[] DEFAULT ARRAY['in_app'];
+ALTER TABLE contributor_notifications ADD COLUMN IF NOT EXISTS read_at       TIMESTAMPTZ;
+
+-- ── Structured skill registry (level + category persist, unlike primary_skills[]) ─
+CREATE TABLE IF NOT EXISTS contributor_skills (
+    id             BIGSERIAL PRIMARY KEY,
+    account_id     BIGINT NOT NULL,
+    slug           TEXT NOT NULL,            -- FE-facing id, e.g. "skill-react"
+    name           TEXT NOT NULL,
+    category       TEXT NOT NULL DEFAULT 'engineering',
+    level          TEXT NOT NULL DEFAULT 'L2',   -- L1|L2|L3
+    evidence_count INT  NOT NULL DEFAULT 0,
+    data           JSONB NOT NULL DEFAULT '{}',
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (account_id, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_contributor_skills_account ON contributor_skills(account_id);
 """
 
 
@@ -333,6 +387,18 @@ def init_contributor_schema() -> None:
         cur.execute(SCHEMA_SQL)
     c.commit()
     logger.info("contributor-service schema ensured.")
+    # Payouts module schema (payouts + payout_methods tables).
+    try:
+        from contributor_app.routers.payouts import init_payouts_schema
+        init_payouts_schema()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("payouts schema init failed: %s", exc)
+    # Submissions v1 schema (submissions + submission_artifacts tables).
+    try:
+        from contributor_app.routers.submissions import ensure_submissions_schema
+        ensure_submissions_schema()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("submissions schema init failed: %s", exc)
 
 
 # ── generic helpers ───────────────────────────────────────────────────────────
@@ -363,26 +429,29 @@ def row_to_dict(row: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 def fetch_all(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
-    c = conn()
-    with c.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(sql, params)
-        return [row_to_dict(r) for r in cur.fetchall()]
+    def _op(c):
+        with c.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(sql, params)
+            return [row_to_dict(r) for r in cur.fetchall()]
+    return _with_reconnect(_op)
 
 
 def fetch_one(sql: str, params: tuple = ()) -> dict[str, Any] | None:
-    c = conn()
-    with c.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(sql, params)
-        return row_to_dict(cur.fetchone())
+    def _op(c):
+        with c.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(sql, params)
+            return row_to_dict(cur.fetchone())
+    return _with_reconnect(_op)
 
 
 def execute(sql: str, params: tuple = ()) -> dict[str, Any] | None:
-    c = conn()
-    with c.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(sql, params)
-        row = cur.fetchone() if cur.description else None
-    c.commit()
-    return row_to_dict(row)
+    def _op(c):
+        with c.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(sql, params)
+            row = cur.fetchone() if cur.description else None
+        c.commit()
+        return row_to_dict(row)
+    return _with_reconnect(_op)
 
 
 def paginate(items: list[Any], page: int, page_size: int) -> dict[str, Any]:

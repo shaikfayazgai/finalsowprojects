@@ -2,6 +2,8 @@
 
 Covers upload, extraction review, gap analysis, commercial details,
 approval stages/messages, generation, and promotion to portfolio.
+Includes SOW lifecycle actions: submit, approve, reject, send-back,
+withdraw, archive.
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
 
+from shared.audit import write_audit
 from shared.blob import blob_is_configured, upload_blob
 from shared.deps import get_current_user
 
@@ -80,6 +83,236 @@ async def upload_sow(
     return ok(saved)
 
 
+@router.post("/upload-file")
+async def upload_sow_file(
+    user: Annotated[dict, Depends(get_current_user)],
+    file: UploadFile = File(...),
+):
+    """Upload a SOW document to Blob and return its descriptor — WITHOUT creating
+    a SOW. The author flow (/enterprise/sow/create) uploads here first, then sends
+    {fileName, fileUrl, fileSize} in the JSON create so the file + the rich fields
+    are saved together."""
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Empty file")
+    if len(raw) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File exceeds 20 MB")
+    if not blob_is_configured():
+        raise HTTPException(status_code=503, detail="File storage is not configured")
+    try:
+        res = await upload_blob(
+            pathname=f"enterprise/sow-uploads/{user['id']}-{file.filename}",
+            data=raw, content_type=file.content_type, add_random_suffix=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Upload failed: {exc}")
+    return ok({"fileName": file.filename, "fileUrl": res.get("url"), "fileSize": len(raw)})
+
+
+@router.post("")
+@router.post("/")
+def create_sow_json(
+    user: Annotated[dict, Depends(get_current_user)],
+    body: dict = Body(default={}),
+):
+    """Create a SOW from the Author flow (structured JSON, no file upload).
+
+    Accepts the frontend CreateSowInput shape: { title, confidentiality?, body?,
+    clientOrganisation?, pricing?{enterpriseProposed, platformFee, currency},
+    deliverables?[] }. Creates a SOW row that enters the real approval pipeline.
+    """
+    return ok(_build_sow_for_owner(user, body or {}))
+
+
+def _build_sow_for_owner(owner: dict, body: dict) -> dict:
+    """Create a SOW owned by `owner` from a CreateSowInput-shaped body, persist
+    all content fields, and return the saved row. Shared by the enterprise
+    self-serve create and the platform-admin create-for-tenant endpoint."""
+    title = (body.get("title") or body.get("projectTitle") or "").strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="title is required")
+    client_org = (body.get("clientOrganisation") or body.get("clientOrg")
+                  or owner.get("tenant_id") or "Enterprise")
+    pricing = body.get("pricing") or {}
+    # `writeSowPricing` (frontend) sets the canonical `pricing.clientPrice` and nests
+    # the manual inputs under `pricing.manual` — read those before the legacy flat keys,
+    # else the budget arrives null and the SOW persists with no commercial value.
+    _manual = pricing.get("manual") or {}
+    budget_amount = (pricing.get("clientPrice") or pricing.get("enterpriseProposed")
+                     or pricing.get("proposedValue") or _manual.get("enterpriseProposed")
+                     or body.get("budgetAmount"))
+    budget_currency = pricing.get("currency") or body.get("budgetCurrency") or "INR"
+
+    saved = _create_approved_sow(
+        owner, title, client_org, body.get("linkedSowId"),
+        file_name=body.get("fileName"), file_url=body.get("fileUrl"),
+        file_size=body.get("fileSize") or 0,
+        budget_amount=str(budget_amount) if budget_amount is not None else None,
+        budget_currency=budget_currency,
+        start_date=body.get("startDate"), end_date=body.get("endDate"),
+    )
+    # Reviewer chosen in step 2 of the create flow (assigned upfront).
+    reviewer = body.get("reviewer")
+    if not reviewer and body.get("reviewerId"):
+        reviewer = {"id": body.get("reviewerId"), "name": body.get("reviewerName"),
+                    "email": body.get("reviewerEmail")}
+    # Scope can arrive flat or nested under `scope`.
+    scope_in = body.get("scope") or {}
+
+    def _scope(key):
+        return body.get(key) if body.get(key) is not None else scope_in.get(key)
+
+    # Persist the authored scope body + confidentiality + pricing onto the row.
+    extra = {
+        "body": body.get("body") or body.get("scopeBody"),
+        "confidentiality": body.get("confidentiality") or "internal",
+        "deliverables": body.get("deliverables") or [],
+        # ── SOW content fields (create flow) ──
+        "requiredSkills": body.get("requiredSkills") or [],
+        "priority": body.get("priority") or "medium",
+        "engagementType": body.get("engagementType") or "fixed",  # fixed | hourly
+        "effortHours": body.get("effortHours"),
+        "durationWeeks": body.get("durationWeeks"),
+        "scope": {
+            "objectives": _scope("objectives"),
+            "assumptions": _scope("assumptions"),
+            "exclusions": _scope("exclusions"),
+            "acceptanceCriteria": _scope("acceptanceCriteria"),
+        },
+        "reviewer": reviewer,  # {id, name} assigned at step 2
+        # Marks who raised the SOW — platform admins can create on a tenant's behalf.
+        "createdBy": owner.get("createdBy") or owner.get("email"),
+        "raisedByAdmin": bool(owner.get("raisedByAdmin")),
+        "commercialDetails": {
+            "pricing": {
+                "enterpriseProposed": budget_amount,
+                "platformFee": (pricing.get("platformFee") or pricing.get("platformFeeAmount")
+                                or _manual.get("platformFeeAmount")),
+                "currency": budget_currency,
+                "mode": pricing.get("mode") or "manual",
+            },
+            "payment": {}, "completeSections": [],
+        },
+    }
+    sow_id = saved.get("id") if isinstance(saved, dict) else None
+    if sow_id:
+        try:
+            merged = db.merge_row("sow", sow_id, extra, owner["id"])
+            if merged:
+                saved = merged
+        except Exception:  # noqa: BLE001
+            pass
+    return saved
+
+
+@router.post("/admin/create")
+def admin_create_sow_for_tenant(user: Annotated[dict, Depends(get_current_user)],
+                                body: dict = Body(default={})):
+    """Platform admin raises a SOW on behalf of a tenant.
+
+    Body: { tenantId, title, ...CreateSowInput }. The SOW is owned by the
+    tenant's primary enterprise account (so it appears in that tenant's
+    owner-scoped list) and enters the normal approval pipeline. Admin-only.
+    """
+    if (user.get("role") or "").lower() not in _ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    body = body or {}
+    tenant_id = (body.get("tenantId") or body.get("tenant_id") or "").strip()
+    if not tenant_id:
+        raise HTTPException(status_code=422, detail="tenantId is required")
+    owner = _resolve_tenant_owner(tenant_id)
+    if not owner:
+        raise HTTPException(status_code=404, detail=f"No enterprise account found for tenant {tenant_id}")
+    owner["raisedByAdmin"] = True
+    owner["createdBy"] = user.get("email")
+    saved = _build_sow_for_owner(owner, body)
+    try:
+        write_audit(
+            actor_id=user.get("id"),
+            actor_email=user.get("email"),
+            actor_role=user.get("role"),
+            action="sow.admin_create",
+            target="sow",
+            target_id=saved.get("id") if isinstance(saved, dict) else None,
+            details=f"Platform admin raised SOW for tenant {tenant_id}",
+            service="enterprise-service",
+            tenant_id=tenant_id,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return ok(saved)
+
+
+def _resolve_tenant_owner(tenant_id: str) -> dict | None:
+    """Find a tenant's primary enterprise login account → the SOW owner.
+
+    Prefers the provisioned tenant owner (role == 'enterprise'); falls back to
+    the earliest account for the tenant. Returns {id, email, tenant_id}.
+    """
+    conn = db.get_pg_connection()
+    with conn.cursor(cursor_factory=db.RealDictCursor) as cur:
+        cur.execute(
+            "SELECT id, email FROM login_accounts "
+            "WHERE tenant_id = %s AND email NOT LIKE '%%.deleted.%%' "
+            "ORDER BY (LOWER(role) = 'enterprise') DESC, created_at ASC LIMIT 1",
+            [tenant_id],
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    return {"id": str(row["id"]), "email": row["email"], "tenant_id": tenant_id}
+
+
+_ADMIN_ROLES = {"admin", "superadmin", "super_admin", "plat", "platform"}
+
+
+@router.post("/{sow_id}/reviewer")
+def assign_reviewer(sow_id: str, user: Annotated[dict, Depends(get_current_user)],
+                    body: dict = Body(default={})):
+    """Assign / reassign the enterprise reviewer on an existing SOW.
+
+    The reviewer is chosen by the enterprise (admin/PMO) from their own
+    reviewer-role team members. Stored on the SOW row's `reviewer` field as
+    {id, name, email}. Owner-scoped for enterprise users; platform admins may
+    set it on any SOW. Passing a null/empty reviewerId clears the assignment.
+    """
+    is_admin = (user.get("role") or "").lower() in _ADMIN_ROLES
+    owner_scope = None if is_admin else user["id"]
+    row = db.get_row("sow", sow_id, owner_scope)
+    if row is None:
+        raise HTTPException(status_code=404, detail="SOW not found")
+
+    body = body or {}
+    reviewer = body.get("reviewer")
+    if not reviewer and body.get("reviewerId"):
+        reviewer = {
+            "id": body.get("reviewerId"),
+            "name": body.get("reviewerName"),
+            "email": body.get("reviewerEmail"),
+        }
+    # Clear when caller sends an explicit empty selection.
+    if reviewer is not None and not reviewer.get("id"):
+        reviewer = None
+
+    merged = db.merge_row("sow", sow_id, {"reviewer": reviewer}, owner_scope)
+    saved = merged or row
+    try:
+        write_audit(
+            actor_id=user.get("id"),
+            actor_email=user.get("email"),
+            actor_role=user.get("role"),
+            action="sow.reviewer.assign",
+            target="sow",
+            target_id=sow_id,
+            details=f"Reviewer set to {reviewer.get('name') if reviewer else 'none'}",
+            service="enterprise-service",
+            tenant_id=user.get("tenant_id"),
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return ok(saved)
+
+
 def _commercial_block(budget_amount, budget_currency, start_date, end_date) -> dict:
     """Normalise the manual commercial fields entered at upload into a stored
     block (budget, currency, start/end dates, derived duration in days)."""
@@ -119,7 +352,7 @@ def _create_approved_sow(user: dict, project_title: str, client_org: str,
     platform admin signs Commercial (in the Commercial gate). The SOW only
     becomes 'approved' once every stage is signed. Status starts 'approval'.
     """
-    sow_id = db.new_id("sow_")
+    sow_id = db.new_id("sow_", project_title)
     now = db.now_iso()
     commercial = _commercial_block(budget_amount, budget_currency, start_date, end_date)
     payload = {
@@ -419,6 +652,231 @@ def confirm_and_submit(sow_id: str, user: Annotated[dict, Depends(get_current_us
     row["status"] = "submitted"
     row["submittedAt"] = db.now_iso()
     return ok(_save(sow_id, user["id"], row))
+
+
+# ── SOW lifecycle actions ────────────────────────────────────────────────────--
+# These endpoints implement the core SOW status transitions that correspond to
+# the enterprise frontend action buttons:
+#   submit     → status: submitted  (moves a draft/changes_requested SOW into the approval queue)
+#   approve    → status: approved   (enterprise user approves the SOW)
+#   reject     → status: rejected   (enterprise user rejects the SOW)
+#   send-back  → status: changes_requested  (send back for revision with a reason)
+#   withdraw   → status: draft      (enterprise pulls the SOW back from approval)
+#   archive    → status: archived   (soft-delete / hide from active list)
+#
+# All mutations stamp a timestamp, record reason/comment in the SOW data, and
+# write an append-only audit event to MongoDB.
+
+
+def _sow_action(
+    sow_id: str,
+    user: dict,
+    new_status: str,
+    *,
+    reason: str | None = None,
+    comment: str | None = None,
+    extra_fields: dict | None = None,
+    timestamp_field: str | None = None,
+) -> dict:
+    """Generic SOW status transition: load → mutate → save → audit."""
+    row = _load(sow_id, user["id"])
+    prev_status = row.get("status")
+    now = db.now_iso()
+
+    row["status"] = new_status
+    row["updatedAt"] = now
+
+    if timestamp_field:
+        row[timestamp_field] = now
+
+    # Persist reason / comment into the SOW document so the history is readable.
+    note = reason or comment
+    if note:
+        row["lastActionNote"] = note
+
+    if extra_fields:
+        row.update(extra_fields)
+
+    saved = _save(sow_id, user["id"], row)
+
+    # Append-only audit event to MongoDB (fail-open).
+    write_audit(
+        actor_id=user.get("id"),
+        actor_email=user.get("email"),
+        actor_role=user.get("role"),
+        action=f"sow.{new_status}",
+        target="sow",
+        target_id=sow_id,
+        details=note or f"SOW transitioned from {prev_status} to {new_status}",
+        service="enterprise-service",
+        tenant_id=user.get("tenant_id"),
+        extra={
+            "sowId": sow_id,
+            "prevStatus": prev_status,
+            "newStatus": new_status,
+            "reason": note,
+        },
+    )
+
+    return saved
+
+
+@router.post("/{sow_id}/submit")
+def submit_sow_action(
+    sow_id: str,
+    user: Annotated[dict, Depends(get_current_user)],
+    body: dict = Body(default={}),
+):
+    """Submit a draft (or changes-requested) SOW into the approval pipeline.
+
+    Transitions status → 'submitted' and stamps submittedAt. Any optional
+    comment from the body is stored as lastActionNote.
+    """
+    b = body or {}
+    comment = b.get("comment") or b.get("note")
+    # Resubmitting after a send-back/reject must RE-OPEN the returned gates so the
+    # approval pipeline can run again — otherwise the gate stays 'rejected' and the
+    # approve page shows no decision form (the SOW is stuck). Reset any
+    # rejected/changes_requested stage back to 'pending'; keep approved ones.
+    row = _load(sow_id, user["id"])
+    stages = row.get("approvalStages") or []
+    reopened = []
+    for st in stages:
+        if (st.get("status") or "").lower() in ("rejected", "changes_requested", "sent_back", "returned"):
+            st = {**st, "status": "pending", "decidedBy": None, "decidedAt": None}
+        reopened.append(st)
+    saved = _sow_action(
+        sow_id, user, "submitted",
+        comment=comment,
+        timestamp_field="submittedAt",
+        extra_fields={"approvalStages": reopened} if reopened else None,
+    )
+    return ok(saved)
+
+
+@router.post("/{sow_id}/approve")
+def approve_sow_action(
+    sow_id: str,
+    user: Annotated[dict, Depends(get_current_user)],
+    body: dict = Body(default={}),
+):
+    """Approve a SOW.
+
+    Transitions status → 'approved', stamps approvedAt and approvedBy.
+    """
+    b = body or {}
+    comment = b.get("comment") or b.get("note")
+    saved = _sow_action(
+        sow_id, user, "approved",
+        comment=comment,
+        timestamp_field="approvedAt",
+        extra_fields={
+            "approvedBy": user.get("email"),
+        },
+    )
+    return ok(saved)
+
+
+@router.post("/{sow_id}/reject")
+def reject_sow_action(
+    sow_id: str,
+    user: Annotated[dict, Depends(get_current_user)],
+    body: dict = Body(default={}),
+):
+    """Reject a SOW.
+
+    Transitions status → 'rejected', stamps rejectedAt and rejectedBy.
+    A reason/comment is expected in the body and stored on the document.
+    """
+    b = body or {}
+    reason = b.get("reason") or b.get("comment") or b.get("note")
+    saved = _sow_action(
+        sow_id, user, "rejected",
+        reason=reason,
+        timestamp_field="rejectedAt",
+        extra_fields={
+            "rejectedBy": user.get("email"),
+            "rejectionReason": reason,
+        },
+    )
+    return ok(saved)
+
+
+@router.post("/{sow_id}/send-back")
+def send_back_sow_action(
+    sow_id: str,
+    user: Annotated[dict, Depends(get_current_user)],
+    body: dict = Body(default={}),
+):
+    """Send a SOW back for revision.
+
+    Transitions status → 'changes_requested', stamps sentBackAt, stores
+    the reason and the stage info so the owner knows what to fix.
+    """
+    b = body or {}
+    reason = b.get("reason") or b.get("comment") or b.get("note")
+    from_stage = b.get("fromStage") or b.get("stage")
+    saved = _sow_action(
+        sow_id, user, "changes_requested",
+        reason=reason,
+        timestamp_field="sentBackAt",
+        extra_fields={
+            "sentBackBy": user.get("email"),
+            "sentBackFromStage": from_stage,
+            "changesRequestedReason": reason,
+        },
+    )
+    return ok(saved)
+
+
+@router.post("/{sow_id}/withdraw")
+def withdraw_sow_action(
+    sow_id: str,
+    user: Annotated[dict, Depends(get_current_user)],
+    body: dict = Body(default={}),
+):
+    """Withdraw a submitted SOW back to draft.
+
+    Transitions status → 'draft', stamps withdrawnAt and records the
+    optional reason.
+    """
+    b = body or {}
+    reason = b.get("reason") or b.get("comment") or b.get("note")
+    saved = _sow_action(
+        sow_id, user, "draft",
+        reason=reason,
+        timestamp_field="withdrawnAt",
+        extra_fields={
+            "withdrawnBy": user.get("email"),
+            "withdrawalReason": reason,
+        },
+    )
+    return ok(saved)
+
+
+@router.post("/{sow_id}/archive")
+def archive_sow_action(
+    sow_id: str,
+    user: Annotated[dict, Depends(get_current_user)],
+    body: dict = Body(default={}),
+):
+    """Archive a SOW (soft-delete / hide from the active list).
+
+    Transitions status → 'archived', stamps archivedAt and records the
+    optional reason.
+    """
+    b = body or {}
+    reason = b.get("reason") or b.get("comment") or b.get("note")
+    saved = _sow_action(
+        sow_id, user, "archived",
+        reason=reason,
+        timestamp_field="archivedAt",
+        extra_fields={
+            "archivedBy": user.get("email"),
+            "archiveReason": reason,
+        },
+    )
+    return ok(saved)
 
 
 @router.post("/{sow_id}/promote-to-portfolio")

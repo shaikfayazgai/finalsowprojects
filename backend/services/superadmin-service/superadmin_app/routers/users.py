@@ -344,3 +344,24 @@ async def reviewer_resend_invite(
 async def reviewer_list(admin: Annotated[dict, Depends(get_current_admin)]):
     reviewers = repo.list_reviewers()
     return {"reviewers": reviewers, "total": len(reviewers)}
+
+
+# ── GET /api/superadmin/mentors  (admin mentor roster) ───────────────────────
+
+@router.get("/api/superadmin/mentors")
+async def list_mentors(admin: Annotated[dict, Depends(get_current_admin)]):
+    """List all mentor accounts for the admin mentor registry page."""
+    items = repo.list_mentors()
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/api/superadmin/mentors/{mentor_id}")
+async def get_mentor(
+    mentor_id: str,
+    admin: Annotated[dict, Depends(get_current_admin)],
+):
+    """Get a single mentor by account ID."""
+    mentor = repo.get_mentor(mentor_id)
+    if not mentor:
+        raise HTTPException(status_code=404, detail="Mentor not found")
+    return {"mentor": mentor, "competency": []}

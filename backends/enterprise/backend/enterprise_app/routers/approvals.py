@@ -60,6 +60,19 @@ def decide_stage(sow_id: str, stage: str, user: Annotated[dict, Depends(get_curr
     owner_id = None if _is_admin(user) else user["id"]
     decision = (body or {}).get("decision") or (body or {}).get("action") or "approve"
     comment = (body or {}).get("comment")
+    # Approver's typed name — the signature on the final Admin approval gate.
+    signature = (body or {}).get("signature")
+    # A hard Reject ends the pipeline (status → 'rejected'); a Send-back (terminal
+    # falsy) returns the SOW to draft for revision. Both record the gate as rejected.
+    terminal = bool((body or {}).get("terminal"))
+    # Validate the decision — reject unknown values (e.g. a typo) with 422 rather
+    # than silently treating them as a rejection.
+    _valid = {"approve", "approved", "reject", "rejected"}
+    if decision not in _valid:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid decision '{decision}'. Must be one of: approve, reject.",
+        )
     new_status = "approved" if decision in ("approve", "approved") else "rejected"
 
     # Always normalise to the canonical 5 stages first, so a legacy SOW (old
@@ -99,42 +112,31 @@ def decide_stage(sow_id: str, stage: str, user: Annotated[dict, Depends(get_curr
             st["decidedBy"] = user.get("email")
             st["decidedAt"] = db.now_iso()
             st["comment"] = comment
+            if signature:
+                st["signedBy"] = signature  # approver's signature (typed name)
             break
+    # The `final` stage is now a real gate — the enterprise Tenant-admin sign-off
+    # (signed), decided before the Super admin (commercial) gate. It is NOT
+    # auto-granted; the tenant admin must sign it explicitly.
     # SOW is fully approved only when ALL 5 canonical stages are approved.
     canonical_keys = {s["key"] for s in db.SOW_APPROVAL_STAGES}
     approved_keys = {s.get("key") for s in stages if s.get("status") == "approved"}
     if canonical_keys.issubset(approved_keys):
         row["status"] = "approved"
         row["approvedAt"] = db.now_iso()
-        # Auto-create a decomposition plan for this SOW the moment all 5 stages
-        # are approved (idempotent — only once per SOW). Carries the SOW title so
-        # it shows up named (not "Untitled Plan"), ready for the enterprise to
-        # add tasks. Non-fatal if it fails.
-        if not row.get("planId"):
-            try:
-                plan_id = db.new_id("plan_")
-                now = db.now_iso()
-                title = row.get("projectTitle") or row.get("fileName") or "Untitled Plan"
-                plan_payload = {
-                    "id": plan_id, "title": title, "projectTitle": title,
-                    "sowId": sow_id, "clientOrganisation": row.get("clientOrganisation"),
-                    "status": "draft", "revision": 1, "locked": False, "confirmed": False,
-                    "createdAt": now, "updatedAt": now,
-                    "tasks": [], "milestones": [], "criticalPath": [], "checklist": [],
-                    "review": {"status": "not_started", "checklist": [], "summary": {}},
-                    "revisions": [],
-                    "summary": {"taskCount": 0, "milestoneCount": 0, "completion": 0},
-                    "checklistStatus": {"complete": False, "items": 0, "done": 0},
-                }
-                # create_row needs a user-like dict; reuse the approver as owner.
-                db.create_row("plan", {"id": owner_id or user["id"], "email": user.get("email")},
-                              plan_payload, row_id=plan_id)
-                row["planId"] = plan_id
-            except Exception:  # noqa: BLE001
-                pass
+        # Decomposition is a real, separate step now: the enterprise builds a plan
+        # in the normalized decomp_plans tables (manual builder today, AI later)
+        # AFTER the SOW is approved. We deliberately do NOT auto-create a legacy
+        # "plan" JSONB row here — that would orphan a record the FE never reads and
+        # falsely mark the SOW as already-decomposed. The SOW simply stays in the
+        # decomposition queue until a real decomp_plans plan exists for it.
     elif new_status == "rejected":
-        # A rejection at any stage sends the SOW back to draft for revision.
-        row["status"] = "draft"
+        # Hard Reject → terminal 'rejected'; Send-back → 'draft' for revision.
+        if terminal:
+            row["status"] = "rejected"
+            row["rejectedAt"] = db.now_iso()
+        else:
+            row["status"] = "draft"
     else:
         row["status"] = "approval"
     row["updatedAt"] = db.now_iso()
