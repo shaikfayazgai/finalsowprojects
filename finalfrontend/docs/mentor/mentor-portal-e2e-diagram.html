@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mentor Portal — End-to-End Flow (Single Diagram)</title>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      flowchart: { curve: 'basis', padding: 20, htmlLabels: true, nodeSpacing: 50, rankSpacing: 60 },
+      themeVariables: {
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: '13px',
+        primaryColor: '#f4efeb',
+        primaryTextColor: '#211713',
+        primaryBorderColor: '#a67763',
+        lineColor: '#886151',
+        secondaryColor: '#eef5f5',
+        tertiaryColor: '#fbf5e8',
+        clusterBkg: '#faf8f6',
+        clusterBorder: '#dbc8c0',
+        edgeLabelBackground: '#ffffff'
+      }
+    });
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: #f9f7f5;
+      color: #211713;
+    }
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e9dfd7;
+      padding: 1.25rem 2rem;
+    }
+    header h1 { margin: 0 0 0.35rem; font-size: 1.35rem; font-weight: 600; }
+    header p { margin: 0; font-size: 0.875rem; color: #6a4c3f; max-width: 52rem; line-height: 1.5; }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+    }
+    .legend span { padding: 0.2rem 0.55rem; border-radius: 999px; border: 1px solid #e9dfd7; background: #fff; }
+    main { padding: 1.5rem; overflow: auto; }
+    .diagram-wrap {
+      background: #fff;
+      border: 1px solid #e9dfd7;
+      border-radius: 12px;
+      padding: 1.5rem;
+      min-width: min(100%, 1400px);
+    }
+    .mermaid { display: flex; justify-content: center; }
+    .hint { font-size: 0.75rem; color: #817165; margin-top: 1rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Mentor Portal — Complete End-to-End Flow</h1>
+    <p>Single diagram: entry → gates → onboarding → dashboard hub → all workstreams. Dashed arrows from ⚠️ nodes are edge cases for the step below. Only <strong>Mentorship</strong> is production-ready (🟢 Prisma); queue, dashboard, escalations, history, notifications are 🔵 mock / 🟡 runtime.</p>
+    <div class="legend">
+      <span>🟢 REAL — Prisma</span>
+      <span>🟡 RUNTIME — in-memory</span>
+      <span>🔵 MOCK — mock API</span>
+      <span>🟣 PROXY — API only</span>
+      <span>🔒 GATED — role / onboarding</span>
+      <span>⚠️ — edge case (dashed → step)</span>
+    </div>
+  </header>
+  <main>
+    <div class="diagram-wrap">
+      <pre class="mermaid">
+flowchart TB
+  classDef real fill:#d4edda,stroke:#2d6a4f,color:#1b4332
+  classDef mock fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+  classDef runtime fill:#fef3c7,stroke:#d97706,color:#92400e
+  classDef proxy fill:#ede9fe,stroke:#7c3aed,color:#5b21b6
+  classDef gate fill:#fce7f3,stroke:#db2777,color:#9d174d
+  classDef edge fill:#fff7ed,stroke:#ea580c,color:#9a3412,stroke-dasharray:4
+  classDef hub fill:#f6f1ef,stroke:#886151,color:#211713,stroke-width:2px
+  classDef ext fill:#edeeec,stroke:#4d5741,color:#161912
+
+  subgraph ADMIN["Admin & registration (parallel entry)"]
+    direction LR
+    ADM["/admin/mentors 🔵"] --> INV["Invite mentor"]
+    INV --> REG["/auth/register/mentor"]
+    REG --> UROW["User + Mentor + UserRole 🟢"]
+    UROW --> ONBENTRY["→ /mentor/onboarding"]
+  end
+
+  subgraph AUTH["Entry & authentication"]
+    direction TB
+    LOGIN["Login credentials / SSO"] --> HIT["Any /mentor/* request"]
+    ONBENTRY --> LOGIN
+    HIT --> ONBR{"Path = /mentor/onboarding ?"}
+    ONBR -->|Yes| SHELLA["AuthShell only — no sidebar"]
+    ONBR -->|No| SHELLB["EnterpriseShell + sidebar"]
+    SHELLA --> DEMO{"NEXT_PUBLIC_MENTOR_DEMO=1 ?"}
+    SHELLB --> DEMO
+    DEMO -->|No| RG["useRoleGuard mentor 🔒"]
+    DEMO -->|Yes| SKIP["Skip guard + gate"]
+    RG --> AUTHOK{Authenticated ?}
+    AUTHOK -->|No| LOGINPAGE["/auth/login"]
+    AUTHOK -->|Yes| ROLEOK{session.role = mentor ?}
+    ROLEOK -->|No| WRONG["Redirect to other portal dashboard"]
+    ROLEOK -->|Yes| GATE
+    SKIP --> GATE
+  end
+
+  subgraph ONBOARD["Onboarding first-time mentor"]
+    direction LR
+    GATE{"MentorOnboardingGate onboardingComplete ? 🔒"} -->|No| WIZ["/mentor/onboarding wizard"]
+    WIZ --> S1["1 Agreements"] --> S2["2 Competency"] --> S3["3 Availability"] --> S4["POST /api/mentor/me 🟡"]
+    S4 --> DASH
+    GATE -->|Yes| DASH
+    GATE -->|loading| SPIN["Loading workspace…"]
+  end
+
+  subgraph TIER["Role tier resolves nav"]
+    direction LR
+    DASH["/mentor/dashboard HUB"] --> ME["GET /api/mentor/me"]
+    ME --> TIERN["Tier: mentor | mentor.senior | mentor.lead"]
+    TIERN --> NAV["Sidebar: Queue · Escalations* · History · Sessions · Profile · Settings"]
+  end
+
+  subgraph DASHBOARD["Dashboard 🔵 MOCK"]
+    direction TB
+    DAPI["GET /api/mock/mentor/dashboard 🔵"] --> KPI["KPIs pending · SLA risk · done 7d"]
+    DAPI --> HERO["Hero next review by SLA"]
+    DAPI --> GLANCE["Queue glance"]
+    DAPI --> TSESS["Today sessions widget 🔵"]
+    DAPI --> ESCPANEL{"isSeniorOrLead ?"}
+    ESCPANEL -->|Yes| ESCOPEN["Open escalations panel 🔵"]
+    ESCPANEL -->|No| ESCSKIP["Hidden"]
+    DAPI --> TEAM{"role = mentor.lead ?"}
+    TEAM -->|Yes| TEAMLOAD["Team load + reassign 🔵"]
+    TEAM -->|No| TEAMSKIP["Hidden"]
+    DASH --> DAPI
+  end
+
+  subgraph QUEUE["Review queue 🔵 list + 🟡 decisions — core mentor work"]
+    direction TB
+    QLIST["/mentor/queue"] --> QAPI["GET /api/mock/mentor/reviews 🔵"]
+    QAPI --> QFILT["Filters scope · group · SLA · flags"]
+    QFILT --> QROW["Open review row"]
+    QROW --> QCOCK["/mentor/queue/reviewId Review cockpit"]
+    QCOCK --> QZONES["Brief · Evidence · Rubric · Feedback · Context"]
+    QCOCK --> QDIFF["/diff round evidence 🔵"]
+    QCOCK --> QAUD["/audit timeline 🔵"]
+    QCOCK --> QACT{"Footer action"}
+    QACT --> QDRAFT["Save draft PUT 🟡"]
+    QACT --> QMODAL["Decide modal"]
+    QMODAL --> QACC["Accept"]
+    QMODAL --> QREW["Rework"]
+    QMODAL --> QREJ["Reject"]
+    QMODAL --> QREAS["Reassign 🔵"]
+    QMODAL --> QWIT["Withdraw conflict"]
+    QACC & QREW & QREJ & QREAS & QWIT --> QPOST["POST /api/mentor/reviews/id 🟡"]
+    QPOST --> QHIST["Recorded in history 🔵+🟡"]
+    QPOST --> QBACK["Redirect /mentor/queue?refresh=timestamp"]
+    QBACK --> QLIST
+    DASH --> QLIST
+    HERO --> QCOCK
+  end
+
+  subgraph ESCALATION["Escalations 🔵 MOCK · 🔒 senior + lead only"]
+    direction TB
+    EPAGE["/mentor/escalation"] --> EGATE{"isSeniorOrLead ? 🔒"}
+    EGATE -->|No| EDENY["Access denied panel"]
+    EGATE -->|Yes| EAPI["GET mock escalations 🔵"]
+    EAPI --> EFILT["Filter open · sla_breach · dispute · conflict"]
+    EFILT --> EDET["/mentor/escalation/id"]
+    EDET --> EADJ["Adjudicate uphold · override · reassign"]
+    EADJ --> EMOCK["Simulated submit ~700ms — no persist"]
+    DASH --> EPAGE
+    ESCOPEN --> EPAGE
+  end
+
+  subgraph HISTORY["History & metrics 🔵+🟡"]
+    direction LR
+    HPAGE["/mentor/history"] --> HAPI["GET mock decisions 🔵 + runtime merge 🟡"]
+    HAPI --> HFILT["Filter accept · rework · reject · withdrawn"]
+    HFILT --> HDET["/history/decisionId read-only"]
+    HPAGE --> HMET["/history/metrics 30d rollups"]
+    QHIST --> HPAGE
+  end
+
+  subgraph MENTORSHIP["Mentorship 🟢 REAL — system-assigned not mentor-picked"]
+    direction TB
+    CSET["Contributor /contributor/settings/mentorship"] --> COPT["POST opt-in 🟢 mentorshipOptInAt"]
+    COPT --> ASSIGN["assignMentorshipSession"]
+    ASSIGN --> EXIST{"Existing scheduled session ?"}
+    EXIST -->|Yes| RETURN["Return existing idempotent"]
+    EXIST -->|No| MATCH["findBestMentorForContributor active + skills + acceptsMentorshipSessions"]
+    MATCH --> NOMENTOR{"Active mentor found ?"}
+    NOMENTOR -->|No| ERR409["409 conflict"]
+    NOMENTOR -->|Yes| SCHED["scheduleSession Prisma 🟢 tomorrow 14:00 UTC 45min Meet link"]
+    SCHED --> MLIST["/mentor/mentorship GET /api/mentor/sessions 🟢"]
+    RETURN --> MLIST
+    MLIST --> MTABS["Today · Upcoming · Held"]
+    MTABS --> MDET["/mentorship/sessionId"]
+    MDET --> MGET["GET session detail 🟢"]
+    MDET --> MNOTE["POST coaching notes 🟢"]
+    MDET --> MDONE["Mark held · no_show · cancel 🟢"]
+    DASH --> MLIST
+    NAV --> MLIST
+  end
+
+  subgraph ACCOUNT["Profile · settings · notifications"]
+    direction TB
+    PROF["/mentor/profile mock metrics + read-only competency 🔵"] --> PEDIT["/profile/edit PATCH 🟡"]
+    SET["/mentor/settings"] --> SNOTIF["Notifications PATCH 🟡 some toggles locked"]
+    SET --> SAVAIL["Availability OOO + capacity 🟡 not enforced in matcher"]
+    SET --> SACCT["Account password via auth API"]
+    SET --> SPRIV["Privacy static copy only"]
+    NOTIF["/mentor/notifications 🔵 mock feed"] --> NFILT["Filter review · mentorship · escalation · digest"]
+    NFILT --> NDEEP["Deep link → queue · escalation · mentorship"]
+    DASH --> PROF
+    DASH --> SET
+    DASH --> NOTIF
+  end
+
+  subgraph BACKEND["Backend not wired to mentor UI"]
+    direction LR
+    PROXY["Submission APIs 🟣 proxy :4000"] 
+    MANUAL["POST /api/mentor/sessions exists — no schedule UI"]
+  end
+
+  %% Edge cases — dashed links point DOWN to the step they affect
+  ec1["⚠️ E1 JWT role always mentor — tier from UserRole not JWT"] -.-> RG
+  ec2["⚠️ E2 onboarding route has no sidebar shell"] -.-> ONBR
+  ec3["⚠️ E3 MENTOR_DEMO=1 skips guard and gate"] -.-> DEMO
+  ec4["⚠️ E4 dev emails priya/amelia auto-onboarded"] -.-> GATE
+  ec5["⚠️ E5 wrong portal role → other dashboard not login"] -.-> ROLEOK
+  ec6["⚠️ E6 unauthenticated → login"] -.-> AUTHOK
+  ec7["⚠️ E7 incomplete onboarding forced to wizard"] -.-> GATE
+  ec8["⚠️ E8 onboarding UI = standalone AuthShell white"] -.-> WIZ
+  ec9["⚠️ E9 onboarding complete stored 🟡 runtime not Postgres"] -.-> S4
+  ec10["⚠️ E10 base mentor /escalation URL → access denied nav hidden"] -.-> EGATE
+  ec11["⚠️ E11 demo ?role= overrides tier"] -.-> TIERN
+  ec12["⚠️ E12 entire dashboard payload 🔵 mock"] -.-> DAPI
+  ec13["⚠️ E13 dashboard today sessions 🔵 may disagree with 🟢 mentorship page"] -.-> TSESS
+  ec14["⚠️ E14 empty queue → Queue clear hero"] -.-> HERO
+  ec15["⚠️ E15 AI signals block static not live AI"] -.-> GLANCE
+  ec16["⚠️ E16 team load panel mentor.lead only"] -.-> TEAM
+  ec17["⚠️ E17 queue list 🔵 decisions 🟡 lost on server restart"] -.-> QAPI
+  ec18["⚠️ E18 empty filters → No matches clear filters"] -.-> QFILT
+  ec19["⚠️ E19 unknown reviewId → 404 on detail diff audit"] -.-> QCOCK
+  ec20["⚠️ E20 post-decision ?refresh= refetches queue list"] -.-> QBACK
+  ec21["⚠️ E21 backend submission 🟣 exists UI still mock"] -.-> QCOCK
+  ec22["⚠️ E22 Accept tentative confidence → browser confirm"] -.-> QACC
+  ec23["⚠️ E23 Rework requires correction bullets"] -.-> QREW
+  ec24["⚠️ E24 Reject plagiarism category mentions escalation"] -.-> QREJ
+  ec25["⚠️ E25 Escalations adjudication no API write"] -.-> EMOCK
+  ec26["⚠️ E26 unknown decisionId → 404"] -.-> HDET
+  ec27["⚠️ E27 metrics derived from same mock decisions endpoint"] -.-> HMET
+  ec28["⚠️ E28 mentor does NOT assign sessions contributor opt-in only"] -.-> CSET
+  ec29["⚠️ E29 contributor mentorship under Settings not main nav"] -.-> CSET
+  ec30["⚠️ E30 session statuses scheduled held no_show cancelled"] -.-> MDONE
+  ec31["⚠️ E31 OOO capacity in settings not enforced in matcher"] -.-> SAVAIL
+  ec32["⚠️ E32 admin mentor pool 🔵 mock does not trigger assignment"] -.-> ADM
+  ec33["⚠️ E33 notifications mark-all-read client only cron not wired"] -.-> NOTIF
+  ec34["⚠️ E34 privacy settings page static only"] -.-> SPRIV
+
+  class COPT,SCHED,MGET,MNOTE,MDONE,UROW real
+  class DAPI,QAPI,QDIFF,QAUD,EPAGE,EAPI,HPAGE,NOTIF,ADM,PROF mock
+  class S4,QDRAFT,QPOST,PEDIT,SNOTIF,SAVAIL runtime
+  class PROXY,MANUAL proxy
+  class RG,GATE,EGATE,ONBR,ROLEOK gate
+  class ec1,ec2,ec3,ec4,ec5,ec6,ec7,ec8,ec9,ec10,ec11,ec12,ec13,ec14,ec15,ec16,ec17,ec18,ec19,ec20,ec21,ec22,ec23,ec24,ec25,ec26,ec27,ec28,ec29,ec30,ec31,ec32,ec33,ec34 edge
+  class DASH hub
+  class CSET ext
+      </pre>
+      <p class="hint">Open this file in a browser · zoom with trackpad · print or export via browser screenshot for slides</p>
+    </div>
+  </main>
+</body>
+</html>

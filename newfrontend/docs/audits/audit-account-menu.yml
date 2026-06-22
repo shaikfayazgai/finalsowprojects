@@ -1,0 +1,150 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - link "Skip to main content" [ref=e3] [cursor=pointer]:
+      - /url: "#meridian-main"
+    - complementary "Contributor navigation" [ref=e4]:
+      - link "Contributor Workspace" [ref=e6] [cursor=pointer]:
+        - /url: /contributor/dashboard
+        - generic [ref=e8]: G
+        - generic [ref=e9]:
+          - paragraph [ref=e10]: Glimmora
+          - paragraph [ref=e11]: Contributor · Glimmora HQ
+      - navigation "Primary" [ref=e12]:
+        - generic [ref=e13]:
+          - generic [ref=e14]:
+            - paragraph [ref=e15]: Today
+            - list [ref=e16]:
+              - listitem [ref=e17]:
+                - link "Dashboard" [ref=e18] [cursor=pointer]:
+                  - /url: /contributor/dashboard
+                  - img [ref=e19]
+                  - generic [ref=e24]: Dashboard
+          - generic [ref=e25]:
+            - paragraph [ref=e26]: My work
+            - list [ref=e27]:
+              - listitem [ref=e28]:
+                - link "Assigned" [ref=e29] [cursor=pointer]:
+                  - /url: /contributor/tasks
+                  - img [ref=e30]
+                  - generic [ref=e33]: Assigned
+              - listitem [ref=e34]:
+                - link "Submissions" [ref=e35] [cursor=pointer]:
+                  - /url: /contributor/tasks/submissions
+                  - img [ref=e36]
+                  - generic [ref=e39]: Submissions
+              - listitem [ref=e40]:
+                - link "Revisions" [ref=e41] [cursor=pointer]:
+                  - /url: /contributor/tasks/revisions
+                  - img [ref=e42]
+                  - generic [ref=e45]: Revisions
+              - listitem [ref=e46]:
+                - link "Completed" [ref=e47] [cursor=pointer]:
+                  - /url: /contributor/tasks/completed
+                  - img [ref=e48]
+                  - generic [ref=e51]: Completed
+          - generic [ref=e52]:
+            - paragraph [ref=e53]: My record
+            - list [ref=e54]:
+              - listitem [ref=e55]:
+                - link "Earnings" [ref=e56] [cursor=pointer]:
+                  - /url: /contributor/earnings
+                  - img [ref=e57]
+                  - generic [ref=e60]: Earnings
+              - listitem [ref=e61]:
+                - link "Credentials" [ref=e62] [cursor=pointer]:
+                  - /url: /contributor/credentials
+                  - img [ref=e63]
+                  - generic [ref=e66]: Credentials
+          - generic [ref=e67]:
+            - paragraph [ref=e68]: Support
+            - list [ref=e69]:
+              - listitem [ref=e70]:
+                - link "Help" [ref=e71] [cursor=pointer]:
+                  - /url: /contributor/support
+                  - img [ref=e72]
+                  - generic [ref=e79]: Help
+      - generic [ref=e80]:
+        - generic [ref=e81]: Navigation
+        - button "Collapse sidebar" [pressed] [ref=e83]:
+          - img [ref=e84]
+    - generic [ref=e87]:
+      - banner [ref=e88]:
+        - paragraph [ref=e90]: Dashboard
+        - generic [ref=e91]:
+          - button "Search or ask AI" [ref=e94]:
+            - img [ref=e95]
+          - button "Account menu — Priya Raghav" [active] [ref=e99]:
+            - generic [ref=e100]: PR
+            - generic [ref=e102]: Priya
+            - img [ref=e103]
+      - main [ref=e105]:
+        - generic [ref=e107]:
+          - generic [ref=e108]:
+            - paragraph [ref=e110]: Today · Saturday 30 May
+            - heading "Good evening, Priya" [level=1] [ref=e111]
+            - paragraph [ref=e112]: You have a clear queue. Take a breather or sharpen your profile.
+          - region "Continue working" [ref=e113]:
+            - heading "Continue working" [level=2] [ref=e114]
+            - generic [ref=e115]:
+              - heading "No active tasks" [level=3] [ref=e116]
+              - paragraph [ref=e117]: When a project lead assigns you to a task, it'll appear here. Until then, keep your profile sharp.
+              - link "Update profile" [ref=e119] [cursor=pointer]:
+                - /url: /contributor/profile
+                - text: Update profile
+                - img [ref=e120]
+          - region "Lifecycle" [ref=e122]:
+            - heading "Lifecycle" [level=2] [ref=e123]
+            - generic [ref=e124]:
+              - generic [ref=e125]:
+                - term [ref=e126]: Assigned
+                - definition [ref=e127]: "0"
+              - generic [ref=e128]:
+                - term [ref=e129]: In progress
+                - definition [ref=e130]: "0"
+              - generic [ref=e131]:
+                - term [ref=e132]: Submitted
+                - definition [ref=e133]: "0"
+              - generic [ref=e134]:
+                - term [ref=e135]: Accepted
+                - definition [ref=e136]: "0"
+          - region "Earnings" [ref=e137]:
+            - generic [ref=e138]:
+              - heading "Earnings" [level=2] [ref=e139]
+              - link "View all" [ref=e140] [cursor=pointer]:
+                - /url: /contributor/earnings
+                - text: View all
+                - img [ref=e141]
+            - generic [ref=e143]:
+              - generic [ref=e144]:
+                - term [ref=e145]: This week
+                - definition [ref=e146]: ₹0
+              - generic [ref=e147]:
+                - term [ref=e148]: This month
+                - definition [ref=e149]: ₹0
+              - generic [ref=e150]:
+                - term [ref=e151]: Acceptance
+                - definition [ref=e152]: —
+              - generic [ref=e153]:
+                - term [ref=e154]: Streak
+                - definition [ref=e155]: 0 days
+          - region "Inbox" [ref=e156]:
+            - generic [ref=e157]:
+              - heading "Inbox" [level=2] [ref=e158]
+              - link "See all" [ref=e159] [cursor=pointer]:
+                - /url: /contributor/notifications
+                - text: See all
+                - img [ref=e160]
+            - paragraph [ref=e162]: Quiet right now. New activity will appear here.
+  - 'button "Persona: Freelancer" [ref=e164]': "Persona: Freelancer"
+  - generic [ref=e170] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e171]:
+      - img [ref=e172]
+    - generic [ref=e175]:
+      - button "Open issues overlay" [ref=e176]:
+        - generic [ref=e177]:
+          - generic [ref=e178]: "0"
+          - generic [ref=e179]: "1"
+        - generic [ref=e180]: Issue
+      - button "Collapse issues badge" [ref=e181]:
+        - img [ref=e182]
+  - alert [ref=e184]
