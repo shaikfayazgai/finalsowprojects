@@ -320,6 +320,12 @@ export const reviewerNav: ModuleConfig = {
         { label: "Help & Support", href: "/enterprise/reviewer/support-center", icon: LifeBuoy },
       ],
     },
+    {
+      zone: "footer",
+      items: [
+        { label: "Settings", href: "/enterprise/reviewer/settings", icon: Settings },
+      ],
+    },
   ],
 };
 

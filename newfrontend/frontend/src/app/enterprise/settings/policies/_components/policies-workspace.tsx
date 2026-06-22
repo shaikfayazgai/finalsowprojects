@@ -57,6 +57,43 @@ export function PoliciesWorkspace() {
     getGovernanceThresholdsMock(),
   );
 
+  // Hydrate persisted governance thresholds on mount. GET returns {} when never
+  // saved — only override a key when it's actually present in the response.
+  React.useEffect(() => {
+    let cancelled = false;
+    async function hydrate() {
+      try {
+        const res = await fetch("/api/prefs/ent_policies", { cache: "no-store" });
+        const data = res.ok ? await res.json() : {};
+        if (cancelled) return;
+        setThresholds((prev) => ({
+          minAiConfidencePct:
+            typeof data?.minAiConfidencePct === "number"
+              ? data.minAiConfidencePct
+              : prev.minAiConfidencePct,
+          minMentorStars:
+            typeof data?.minMentorStars === "number"
+              ? data.minMentorStars
+              : prev.minMentorStars,
+          auditRetention:
+            typeof data?.auditRetention === "string" && data.auditRetention
+              ? data.auditRetention
+              : prev.auditRetention,
+          consentExpiry:
+            typeof data?.consentExpiry === "string" && data.consentExpiry
+              ? data.consentExpiry
+              : prev.consentExpiry,
+        }));
+      } catch {
+        // keep defaults
+      }
+    }
+    hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const setView = React.useCallback(
     (next: PolicyView) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -75,8 +112,17 @@ export function PoliciesWorkspace() {
   const showEscalation = view === "all" || view === "escalation";
   const showGovernance = view === "all" || view === "governance";
 
-  const onSaveGovernance = () => {
-    toast.success("Governance thresholds saved", "Updated rules apply to new reviews and suggestions.");
+  const onSaveGovernance = async () => {
+    try {
+      await fetch("/api/prefs/ent_policies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(thresholds),
+      });
+      toast.success("Governance thresholds saved", "Updated rules apply to new reviews and suggestions.");
+    } catch {
+      toast.error("Could not save", "Governance thresholds were not saved. Try again.");
+    }
   };
 
   return (

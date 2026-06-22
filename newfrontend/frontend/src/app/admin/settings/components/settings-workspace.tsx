@@ -245,8 +245,55 @@ export function SettingsWorkspace() {
     return () => clearTimeout(id);
   }, [toast]);
 
-  function handleSave() {
-    setToast("Settings saved.");
+  // Hydrate persisted preferences on mount. GET returns {} when never saved —
+  // only override a default when the key is actually present in the response.
+  React.useEffect(() => {
+    let cancelled = false;
+    async function hydrate() {
+      try {
+        const [nRes, cRes] = await Promise.all([
+          fetch("/api/prefs/admin_notifications", { cache: "no-store" }),
+          fetch("/api/prefs/admin_console", { cache: "no-store" }),
+        ]);
+        const notif = nRes.ok ? await nRes.json() : {};
+        const console_ = cRes.ok ? await cRes.json() : {};
+        if (cancelled) return;
+        if (typeof notif?.notifyCases === "boolean") setNotifyCases(notif.notifyCases);
+        if (typeof notif?.notifySystem === "boolean") setNotifySystem(notif.notifySystem);
+        if (typeof notif?.notifyTenants === "boolean") setNotifyTenants(notif.notifyTenants);
+        if (typeof notif?.notifyDigest === "boolean") setNotifyDigest(notif.notifyDigest);
+        if (console_?.environment === "PROD" || console_?.environment === "STAGING" || console_?.environment === "DEV") {
+          setDefaultEnv(console_.environment);
+        }
+        if (typeof console_?.timezone === "string" && console_.timezone) setTimezone(console_.timezone);
+      } catch {
+        // keep defaults
+      }
+    }
+    hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSave() {
+    try {
+      await Promise.all([
+        fetch("/api/prefs/admin_notifications", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notifyCases, notifySystem, notifyTenants, notifyDigest }),
+        }),
+        fetch("/api/prefs/admin_console", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ environment: defaultEnv, timezone }),
+        }),
+      ]);
+      setToast("Settings saved.");
+    } catch {
+      setToast("Could not save settings.");
+    }
   }
 
   return (

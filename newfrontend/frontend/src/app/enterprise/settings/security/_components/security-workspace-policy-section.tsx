@@ -9,8 +9,40 @@ export function SecurityWorkspacePolicySection() {
   const [sessionTimeout, setSessionTimeout] = React.useState("30");
   const [ipAllowlist, setIpAllowlist] = React.useState(false);
 
-  const onSave = () => {
-    toast.success("Workspace security saved", "Session and network policies updated for this tenant.");
+  // Hydrate persisted workspace-security policies on mount. GET returns {} when
+  // never saved — only override a default when the key is present in the response.
+  React.useEffect(() => {
+    let cancelled = false;
+    async function hydrate() {
+      try {
+        const res = await fetch("/api/prefs/ent_security", { cache: "no-store" });
+        const data = res.ok ? await res.json() : {};
+        if (cancelled) return;
+        if (typeof data?.sessionTimeout === "string" && data.sessionTimeout) {
+          setSessionTimeout(data.sessionTimeout);
+        }
+        if (typeof data?.ipAllowlist === "boolean") setIpAllowlist(data.ipAllowlist);
+      } catch {
+        // keep defaults
+      }
+    }
+    hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const onSave = async () => {
+    try {
+      await fetch("/api/prefs/ent_security", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionTimeout, ipAllowlist }),
+      });
+      toast.success("Workspace security saved", "Session and network policies updated for this tenant.");
+    } catch {
+      toast.error("Could not save", "Workspace security policies were not saved. Try again.");
+    }
   };
 
   return (
