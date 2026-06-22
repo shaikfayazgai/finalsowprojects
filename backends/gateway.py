@@ -48,6 +48,7 @@ ROUTES: list[tuple[str, str]] = [
     ("/api/superadmin", "super-admin"),
     ("/api/admin", "super-admin"),
     ("/api/v1/admin", "super-admin"),
+    ("/api/v1/cases", "super-admin"),
     ("/api/ai", "super-admin"),
     ("/api/audit", "super-admin"),
     ("/api/email", "super-admin"),

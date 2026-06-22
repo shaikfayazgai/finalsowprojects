@@ -229,7 +229,7 @@ export const contributorNav: ModuleConfig = {
     {
       title: "Support",
       items: [
-        { label: "Help", href: "/contributor/support", icon: LifeBuoy },
+        { label: "Help & Support", href: "/contributor/support-center", icon: LifeBuoy },
       ],
     },
 
@@ -383,6 +383,7 @@ export const adminNav: ModuleConfig = {
       title: "Compliance",
       items: [
         { label: "Cases", href: "/admin/governance", icon: Flag, badge: "3" },
+        { label: "Resolution Center", href: "/admin/cases", icon: LifeBuoy },
         { label: "Complaints", href: "/admin/complaints", icon: MessageSquare },
         { label: "KYC reviews", href: "/admin/kyc", icon: ShieldAlert, badge: "1" },
         { label: "Audit log", href: "/admin/audit", icon: ScrollText },
