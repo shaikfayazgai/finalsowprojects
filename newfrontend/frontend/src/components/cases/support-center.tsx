@@ -1,19 +1,19 @@
 "use client";
 
 /**
- * SupportCenter — the user side of the Resolution Center (Phase 1).
- * Any role can raise a Support question or a Complaint to Glimmora, track their
- * own cases, and reply in a live thread. Talks to /api/cases (proxied to the
- * super-admin case engine). Self-contained + role-agnostic, so it can be mounted
- * in any portal.
+ * SupportCenter — the user side of the Resolution Center.
+ * Any role raises a case in one of the 8 lanes (Support, Complaint, Feedback,
+ * Payment, Work/Task, Site/Bug, Safety, Security), tracks their own cases, and
+ * replies in a live thread. Everything routes to the Glimmora desk. Talks to
+ * /api/cases. Self-contained + role-agnostic, mountable in any portal.
  */
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { LifeBuoy, MessageSquareWarning, Send, RefreshCw, ChevronLeft, Plus } from "lucide-react";
+import { Send, RefreshCw, ChevronLeft, Plus } from "lucide-react";
 import { Button, Textarea } from "@/components/ui";
 import { toast } from "@/lib/stores/toast-store";
+import { LANES, LANE_BY_KEY, TONE_BG, laneLabel } from "./lanes";
 
-type Stream = "support" | "complaint";
 type Status =
   | "new" | "investigating" | "awaiting_user" | "resolved" | "closed" | "reopened";
 
@@ -26,7 +26,8 @@ interface CaseMsg {
 }
 interface CaseRow {
   id: string;
-  stream: Stream;
+  lane: string;
+  stream: string;
   subject: string;
   body: string;
   priority: string;
@@ -53,12 +54,14 @@ function Pill({ className, children }: { className?: string; children: ReactNode
     </span>
   );
 }
-
 function fmt(d: string | null | undefined): string {
   if (!d) return "";
-  try {
-    return new Date(d).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  } catch { return ""; }
+  try { return new Date(d).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
+  catch { return ""; }
+}
+function LaneIcon({ laneKey, className }: { laneKey: string; className?: string }) {
+  const Icon = LANE_BY_KEY[laneKey]?.icon ?? LANES[0].icon;
+  return <Icon className={className ?? "h-4 w-4"} />;
 }
 
 export function SupportCenter() {
@@ -83,12 +86,7 @@ export function SupportCenter() {
   useEffect(() => { void loadList(); }, [loadList]);
 
   if (selectedId) {
-    return (
-      <CaseThread
-        caseId={selectedId}
-        onBack={() => { setSelectedId(null); void loadList(); }}
-      />
-    );
+    return <CaseThread caseId={selectedId} onBack={() => { setSelectedId(null); void loadList(); }} />;
   }
 
   return (
@@ -96,7 +94,7 @@ export function SupportCenter() {
       <header className="space-y-1">
         <h1 className="font-display text-xl font-semibold text-foreground">Help &amp; Support</h1>
         <p className="text-sm text-text-secondary">
-          Ask Glimmora for help, or raise a complaint. We&apos;ll reply here.
+          Raise a request, complaint, feedback or report — it all goes to Glimmora, and we&apos;ll reply here.
         </p>
       </header>
 
@@ -105,10 +103,7 @@ export function SupportCenter() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">My cases</h2>
-          <button
-            onClick={() => void loadList()}
-            className="inline-flex items-center gap-1.5 text-xs text-text-secondary hover:text-foreground"
-          >
+          <button onClick={() => void loadList()} className="inline-flex items-center gap-1.5 text-xs text-text-secondary hover:text-foreground">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </button>
         </div>
@@ -117,7 +112,7 @@ export function SupportCenter() {
           <p className="text-sm text-text-secondary">Loading…</p>
         ) : items.length === 0 ? (
           <div className="rounded-lg border border-dashed border-stroke-subtle p-8 text-center text-sm text-text-secondary">
-            No cases yet. Raise a support question or a complaint above.
+            No cases yet. Pick a category above to raise one.
           </div>
         ) : (
           <ul className="space-y-2">
@@ -127,12 +122,12 @@ export function SupportCenter() {
                   onClick={() => setSelectedId(c.id)}
                   className="flex w-full items-center gap-3 rounded-lg border border-stroke-subtle bg-surface p-3 text-left transition-colors hover:border-stroke hover:bg-surface-hover"
                 >
-                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${c.stream === "complaint" ? "bg-error-subtle text-error-text" : "bg-info-subtle text-info-text"}`}>
-                    {c.stream === "complaint" ? <MessageSquareWarning className="h-4 w-4" /> : <LifeBuoy className="h-4 w-4" />}
+                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${TONE_BG[LANE_BY_KEY[c.lane]?.tone ?? "info"]}`}>
+                    <LaneIcon laneKey={c.lane} />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-foreground">{c.subject}</span>
-                    <span className="block text-xs text-text-secondary capitalize">{c.stream} · {fmt(c.createdAt)}</span>
+                    <span className="block text-xs text-text-secondary">{laneLabel(c.lane)} · {fmt(c.createdAt)}</span>
                   </span>
                   <Pill className={STATUS_PILL[c.status]?.cls}>{STATUS_PILL[c.status]?.label ?? c.status}</Pill>
                 </button>
@@ -147,28 +142,25 @@ export function SupportCenter() {
 
 function RaiseForm({ onRaised }: { onRaised: (c: CaseRow) => void }) {
   const [open, setOpen] = useState(false);
-  const [stream, setStream] = useState<Stream>("support");
+  const [lane, setLane] = useState<string>("support");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const reset = () => { setSubject(""); setBody(""); setStream("support"); };
+  const reset = () => { setSubject(""); setBody(""); setLane("support"); };
 
   const submit = async () => {
-    if (!subject.trim() || !body.trim()) {
-      toast.error("Add a subject and a message");
-      return;
-    }
+    if (!subject.trim() || !body.trim()) { toast.error("Add a subject and a message"); return; }
     setBusy(true);
     try {
       const res = await fetch("/api/cases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stream, subject: subject.trim(), body: body.trim() }),
+        body: JSON.stringify({ lane, subject: subject.trim(), body: body.trim() }),
       });
       if (!res.ok) throw new Error(String(res.status));
       const created = await res.json();
-      toast.success(stream === "complaint" ? "Complaint submitted" : "Support request sent", "Glimmora has been notified.");
+      toast.success(`${laneLabel(lane)} submitted`, "Glimmora has been notified.");
       reset(); setOpen(false);
       onRaised(created);
     } catch {
@@ -188,40 +180,43 @@ function RaiseForm({ onRaised }: { onRaised: (c: CaseRow) => void }) {
 
   return (
     <div className="space-y-4 rounded-xl border border-stroke-subtle bg-surface p-4">
-      <div className="grid grid-cols-2 gap-2">
-        {(["support", "complaint"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStream(s)}
-            className={`flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
-              stream === s ? "border-brand bg-brand-subtle text-foreground" : "border-stroke-subtle text-text-secondary hover:border-stroke"
-            }`}
-          >
-            {s === "complaint" ? <MessageSquareWarning className="h-4 w-4" /> : <LifeBuoy className="h-4 w-4" />}
-            <span>
-              <span className="block font-medium capitalize text-foreground">{s}</span>
-              <span className="block text-[11px]">{s === "support" ? "A question / need help" : "A problem / grievance"}</span>
-            </span>
-          </button>
-        ))}
+      <div>
+        <p className="mb-2 text-xs font-medium text-text-secondary">What is it about?</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {LANES.map((l) => {
+            const Icon = l.icon;
+            const active = lane === l.key;
+            return (
+              <button
+                key={l.key}
+                onClick={() => setLane(l.key)}
+                title={l.desc}
+                className={`flex flex-col items-start gap-1.5 rounded-lg border p-2.5 text-left transition-colors ${
+                  active ? "border-brand bg-brand-subtle" : "border-stroke-subtle hover:border-stroke"
+                }`}
+              >
+                <span className={`grid h-7 w-7 place-items-center rounded-md ${TONE_BG[l.tone]}`}>
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="text-xs font-semibold text-foreground">{l.label}</span>
+                <span className="text-[10px] leading-tight text-text-secondary">{l.desc}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-text-secondary">Subject</label>
         <input
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
-          placeholder={stream === "complaint" ? "e.g. Unfair review rejection" : "e.g. How do I submit my work?"}
+          placeholder={`Short summary of your ${laneLabel(lane).toLowerCase()}`}
           className="w-full rounded-md border border-stroke-subtle bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
         />
       </div>
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-text-secondary">Message</label>
-        <Textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={4}
-          placeholder="Describe it clearly so Glimmora can help."
-        />
+        <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="Describe it clearly so Glimmora can help." />
       </div>
       <div className="flex items-center justify-end gap-2">
         <Button variant="ghost" onClick={() => { reset(); setOpen(false); }} disabled={busy}>Cancel</Button>
@@ -288,20 +283,21 @@ function CaseThread({ caseId, onBack }: { caseId: string; onBack: () => void }) 
               <h1 className="text-base font-semibold text-foreground">{row.subject}</h1>
               <Pill className={STATUS_PILL[row.status]?.cls}>{STATUS_PILL[row.status]?.label ?? row.status}</Pill>
             </div>
-            <p className="text-xs text-text-secondary capitalize">{row.stream} · opened {fmt(row.createdAt)}</p>
+            <p className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <span className={`grid h-5 w-5 place-items-center rounded ${TONE_BG[LANE_BY_KEY[row.lane]?.tone ?? "info"]}`}>
+                <LaneIcon laneKey={row.lane} className="h-3 w-3" />
+              </span>
+              {laneLabel(row.lane)} · opened {fmt(row.createdAt)}
+            </p>
             {row.resolution && (
-              <p className="rounded-md bg-success-subtle p-2 text-xs text-success-text">
-                <strong>Resolution:</strong> {row.resolution}
-              </p>
+              <p className="rounded-md bg-success-subtle p-2 text-xs text-success-text"><strong>Resolution:</strong> {row.resolution}</p>
             )}
           </header>
 
           <div className="space-y-3">
             {(row.messages ?? []).map((m) => (
               <div key={m.id} className={`flex ${m.author === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
-                  m.author === "user" ? "bg-brand text-white" : "bg-surface-sunken text-foreground"
-                }`}>
+                <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${m.author === "user" ? "bg-brand text-white" : "bg-surface-sunken text-foreground"}`}>
                   <p className="mb-0.5 text-[10px] uppercase tracking-wide opacity-70">
                     {m.author === "user" ? "You" : "Glimmora"} · {fmt(m.createdAt)}
                   </p>

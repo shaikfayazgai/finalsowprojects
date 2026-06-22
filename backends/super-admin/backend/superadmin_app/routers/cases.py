@@ -30,7 +30,19 @@ except Exception:  # noqa: BLE001 — pragma: no cover
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["cases"])
 
-_STREAMS = {"support", "complaint"}            # Phase 1 surfaces
+# The 8 lanes a user can raise (Resolution Center plan). Each maps to a stream
+# (the future split surface) + a default priority. Subject/body free-text.
+_LANES: dict[str, dict[str, str]] = {
+    "support":   {"label": "Support",          "stream": "support",    "priority": "medium"},
+    "complaint": {"label": "Complaint",        "stream": "resolution", "priority": "high"},
+    "feedback":  {"label": "Feedback",         "stream": "support",    "priority": "low"},
+    "payment":   {"label": "Payment / Payout", "stream": "operations", "priority": "high"},
+    "work_task": {"label": "Work / Task",      "stream": "operations", "priority": "high"},
+    "site_bug":  {"label": "Site / Bug",       "stream": "support",    "priority": "medium"},
+    "safety":    {"label": "Safety",           "stream": "resolution", "priority": "critical"},
+    "security":  {"label": "Security",         "stream": "security",   "priority": "critical"},
+}
+_STREAMS = {"support", "resolution", "operations", "security"}
 _PRIORITIES = {"critical", "high", "medium", "low"}
 _STATUSES = {"new", "investigating", "awaiting_user", "resolved", "closed", "reopened"}
 _ADMIN_ROLES = {"admin", "superadmin", "super_admin"}
@@ -154,7 +166,8 @@ def _load_case(cur: Any, case_id: str) -> dict[str, Any] | None:
 # ── Any role: raise + track ───────────────────────────────────────────────────
 
 class _RaiseRequest(BaseModel):
-    stream: str                       # support | complaint
+    lane: str | None = None           # one of the 8 lanes (preferred)
+    stream: str | None = None         # back-compat with the 2-lane client
     subject: str
     body: str
     priority: str | None = None
@@ -166,17 +179,22 @@ async def raise_case(
     request: Request,
     user: Annotated[dict, Depends(get_current_user)],
 ):
-    """Any logged-in role raises a Support question or a Complaint to Glimmora."""
-    stream = (body.stream or "support").strip().lower()
-    if stream not in _STREAMS:
-        raise HTTPException(status_code=422, detail="stream must be 'support' or 'complaint'")
+    """Any logged-in role raises a case in one of the 8 lanes → Glimmora desk."""
+    lane = (body.lane or "").strip().lower()
+    if not lane:  # back-compat: old client sent stream=support|complaint
+        s = (body.stream or "support").strip().lower()
+        lane = "complaint" if s == "complaint" else "support"
+    meta = _LANES.get(lane)
+    if not meta:
+        raise HTTPException(status_code=422, detail="Unknown category")
+    stream = meta["stream"]
     subject = (body.subject or "").strip()
     text = (body.body or "").strip()
     if not subject or not text:
         raise HTTPException(status_code=422, detail="Subject and message are required")
-    priority = (body.priority or "medium").strip().lower()
+    priority = (body.priority or meta["priority"]).strip().lower()
     if priority not in _PRIORITIES:
-        priority = "medium"
+        priority = meta["priority"]
 
     cid = f"case_{uuid.uuid4().hex[:12]}"
     acct = _acct_int(user.get("id"))
@@ -193,7 +211,7 @@ async def raise_case(
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'new', now(), now())
             RETURNING *
             """,
-            (cid, acct, email, role, stream, stream, subject[:200], text, priority),
+            (cid, acct, email, role, stream, lane, subject[:200], text, priority),
         )
         row = cur.fetchone()
         # The opening message becomes the first entry in the thread.
@@ -204,22 +222,24 @@ async def raise_case(
         )
     conn.commit()
 
+    ncat = ("complaint" if stream == "resolution"
+            else "security" if stream == "security" else "update")
     notify_role(
         ["superadmin"],
-        category="complaint" if stream == "complaint" else "update",
-        kind=f"case.{stream}.created", severity="important",
-        title=f"New {stream}: {subject[:60]}",
-        body=f"{email or role} raised a {stream}.",
+        category=ncat,
+        kind=f"case.{lane}.created", severity="important",
+        title=f"New {meta['label']}: {subject[:60]}",
+        body=f"{email or role} raised a {meta['label']} case.",
         resource_type="case", resource_id=cid,
         action_url=_DESK_URL, action_label="Open desk",
     )
     try:
         write_audit(
             actor_id=user.get("id"), actor_email=email, actor_role=role,
-            action=f"case.{stream}.created", target=subject[:80], target_id=cid,
+            action=f"case.{lane}.created", target=subject[:80], target_id=cid,
             service="superadmin-service",
             ip_address=request.client.host if request.client else None,
-            extra={"stream": stream, "priority": priority},
+            extra={"stream": stream, "lane": lane, "priority": priority},
         )
     except Exception:  # noqa: BLE001
         pass
@@ -339,13 +359,17 @@ async def add_message(
 async def admin_list_cases(
     admin: Annotated[dict, Depends(get_current_admin)],
     stream: str | None = None,
+    lane: str | None = None,
     status: str | None = None,
 ):
-    """The unified Glimmora desk — every case, newest/open first, with counts."""
+    """The unified Glimmora desk — every case, newest/open first, with per-lane counts."""
     clauses, params = [], []
     if stream and stream.lower() in _STREAMS:
         clauses.append("stream = %s")
         params.append(stream.lower())
+    if lane and lane.lower() in _LANES:
+        clauses.append("lane = %s")
+        params.append(lane.lower())
     if status and status.lower() in _STATUSES:
         clauses.append("status = %s")
         params.append(status.lower())
@@ -355,15 +379,17 @@ async def admin_list_cases(
         cur.execute(
             f"SELECT * FROM glimmora_cases{where} ORDER BY "
             "CASE status WHEN 'new' THEN 0 WHEN 'reopened' THEN 0 WHEN 'investigating' THEN 1 "
-            "WHEN 'awaiting_user' THEN 2 WHEN 'resolved' THEN 3 ELSE 4 END, created_at DESC",
+            "WHEN 'awaiting_user' THEN 2 WHEN 'resolved' THEN 3 ELSE 4 END, "
+            "CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, "
+            "created_at DESC",
             tuple(params),
         )
         rows = cur.fetchall()
-        counts = {"support": 0, "complaint": 0}
-        cur.execute("SELECT stream, COUNT(*) n FROM glimmora_cases GROUP BY stream")
+        counts: dict[str, int] = {k: 0 for k in _LANES}
+        cur.execute("SELECT lane, COUNT(*) n FROM glimmora_cases GROUP BY lane")
         for r in cur.fetchall():
-            if r["stream"] in counts:
-                counts[r["stream"]] = int(r["n"])
+            if r["lane"] in counts:
+                counts[r["lane"]] = int(r["n"])
         cur.execute(
             "SELECT COUNT(*) n FROM glimmora_cases "
             "WHERE status IN ('new','investigating','awaiting_user','reopened')"
