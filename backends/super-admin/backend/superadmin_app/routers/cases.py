@@ -34,9 +34,18 @@ _STREAMS = {"support", "complaint"}            # Phase 1 surfaces
 _PRIORITIES = {"critical", "high", "medium", "low"}
 _STATUSES = {"new", "investigating", "awaiting_user", "resolved", "closed", "reopened"}
 _ADMIN_ROLES = {"admin", "superadmin", "super_admin"}
-# The raiser's portal landing for the bell deep-link (Phase 1 user surface).
-_USER_CASE_URL = "/contributor/support-center"
 _DESK_URL = "/admin/cases"
+# Per-role landing for the bell deep-link back to the raiser's own cases.
+_USER_CASE_URLS = {
+    "mentor": "/mentor/support-center",
+    "reviewer": "/enterprise/reviewer/support-center",
+    "enterprise": "/enterprise/support-center",
+    "ent.admin": "/enterprise/support-center",
+}
+
+
+def _user_case_url(role: str | None) -> str:
+    return _USER_CASE_URLS.get((role or "").lower(), "/contributor/support-center")
 
 
 def init_cases_schema() -> None:
@@ -312,7 +321,7 @@ async def add_message(
                 row.get("account_id"), category="update", kind="case.replied",
                 severity="informational", title="Glimmora replied to your case",
                 body=text[:120], resource_type="case", resource_id=case_id,
-                action_url=_USER_CASE_URL, action_label="View case",
+                action_url=_user_case_url(row.get("raiser_role")), action_label="View case",
             )
         else:
             notify_role(

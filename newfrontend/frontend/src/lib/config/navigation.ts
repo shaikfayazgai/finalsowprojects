@@ -174,7 +174,7 @@ export const enterpriseNav: ModuleConfig = {
       items: [
         { label: "Audit", href: "/enterprise/audit", icon: ScrollText },
         { label: "Compliance", href: "/enterprise/compliance", icon: ShieldAlert },
-        { label: "Support", href: "/enterprise/support", icon: LifeBuoy },
+        { label: "Help & Support", href: "/enterprise/support-center", icon: LifeBuoy },
       ],
     },
 
@@ -278,6 +278,12 @@ export const mentorNav: ModuleConfig = {
         { label: "Sessions", href: "/mentor/mentorship", icon: HeartHandshake },
       ],
     },
+    {
+      title: "Support",
+      items: [
+        { label: "Help & Support", href: "/mentor/support-center", icon: LifeBuoy },
+      ],
+    },
   ],
 };
 
@@ -306,6 +312,12 @@ export const reviewerNav: ModuleConfig = {
         { label: "Queue",   href: "/enterprise/reviewer/queue",   icon: ClipboardList },
         { label: "History", href: "/enterprise/reviewer/history", icon: History },
         { label: "Metrics", href: "/enterprise/reviewer/metrics", icon: TrendingUp },
+      ],
+    },
+    {
+      title: "Support",
+      items: [
+        { label: "Help & Support", href: "/enterprise/reviewer/support-center", icon: LifeBuoy },
       ],
     },
   ],
