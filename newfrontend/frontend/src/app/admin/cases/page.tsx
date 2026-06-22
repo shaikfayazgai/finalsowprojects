@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Send, RefreshCw, ShieldCheck, Lock, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { Button, Textarea } from "@/components/ui";
 import { toast } from "@/lib/stores/toast-store";
-import { LANES, LANE_BY_KEY, TONE_BG, laneLabel } from "@/components/cases/lanes";
+import { LANES, LANE_BY_KEY, TONE_BG, laneLabel, CaseFacts } from "@/components/cases/lanes";
 
 type Status = "new" | "investigating" | "awaiting_user" | "resolved" | "closed" | "reopened";
 
@@ -19,7 +19,8 @@ interface CaseMsg {
   id: number; author: "user" | "glimmora"; type: "public" | "internal"; body: string; createdAt: string | null;
 }
 interface CaseRow {
-  id: string; lane: string; stream: string; subject: string; body: string; priority: string; status: Status;
+  id: string; lane: string; stream: string; subtype?: string | null; details?: Record<string, unknown> | null;
+  subject: string; body: string; priority: string; status: Status;
   raiserEmail?: string | null; raiserRole?: string | null; resolution?: string | null;
   createdAt: string | null; updatedAt: string | null; messages?: CaseMsg[];
 }
@@ -244,6 +245,8 @@ function CaseDetail({ caseId, onChanged }: { caseId: string; onChanged: () => vo
           {PRIORITY_PILL[row.priority] && <Pill className={PRIORITY_PILL[row.priority]}><AlertTriangle className="h-3 w-3" />{row.priority}</Pill>}
         </div>
       </div>
+
+      <CaseFacts lane={row.lane} role={row.raiserRole} subtype={row.subtype} details={row.details} />
 
       {row.resolution && <p className="rounded-md bg-success-subtle p-2 text-xs text-success-text"><strong>Resolution:</strong> {row.resolution}</p>}
 

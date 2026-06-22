@@ -9,10 +9,11 @@
  */
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useSession } from "next-auth/react";
 import { Send, RefreshCw, ChevronLeft, Plus } from "lucide-react";
 import { Button, Textarea } from "@/components/ui";
 import { toast } from "@/lib/stores/toast-store";
-import { LANES, LANE_BY_KEY, TONE_BG, laneLabel } from "./lanes";
+import { LANES, LANE_BY_KEY, TONE_BG, laneLabel, laneFields, CaseFacts, type LaneField } from "./lanes";
 
 type Status =
   | "new" | "investigating" | "awaiting_user" | "resolved" | "closed" | "reopened";
@@ -28,6 +29,9 @@ interface CaseRow {
   id: string;
   lane: string;
   stream: string;
+  subtype?: string | null;
+  details?: Record<string, unknown> | null;
+  raiserRole?: string | null;
   subject: string;
   body: string;
   priority: string;
@@ -141,22 +145,35 @@ export function SupportCenter() {
 }
 
 function RaiseForm({ onRaised }: { onRaised: (c: CaseRow) => void }) {
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role ?? null;
   const [open, setOpen] = useState(false);
   const [lane, setLane] = useState<string>("support");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [busy, setBusy] = useState(false);
 
-  const reset = () => { setSubject(""); setBody(""); setLane("support"); };
+  const fields = laneFields(lane, role);
+  const reset = () => { setSubject(""); setBody(""); setLane("support"); setValues({}); };
+  const pickLane = (k: string) => { setLane(k); setValues({}); };
+  const setVal = (k: string, v: string | boolean) => setValues((s) => ({ ...s, [k]: v }));
 
   const submit = async () => {
     if (!subject.trim() || !body.trim()) { toast.error("Add a subject and a message"); return; }
     setBusy(true);
     try {
+      const subtype = typeof values.subtype === "string" ? values.subtype : undefined;
+      const details: Record<string, unknown> = {};
+      for (const f of fields) {
+        if (f.key === "subtype") continue;
+        const v = values[f.key];
+        if (v !== undefined && v !== "" && v !== false) details[f.key] = v;
+      }
       const res = await fetch("/api/cases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lane, subject: subject.trim(), body: body.trim() }),
+        body: JSON.stringify({ lane, subject: subject.trim(), body: body.trim(), subtype, details }),
       });
       if (!res.ok) throw new Error(String(res.status));
       const created = await res.json();
@@ -187,17 +204,11 @@ function RaiseForm({ onRaised }: { onRaised: (c: CaseRow) => void }) {
             const Icon = l.icon;
             const active = lane === l.key;
             return (
-              <button
-                key={l.key}
-                onClick={() => setLane(l.key)}
-                title={l.desc}
+              <button key={l.key} onClick={() => pickLane(l.key)} title={l.desc}
                 className={`flex flex-col items-start gap-1.5 rounded-lg border p-2.5 text-left transition-colors ${
                   active ? "border-brand bg-brand-subtle" : "border-stroke-subtle hover:border-stroke"
-                }`}
-              >
-                <span className={`grid h-7 w-7 place-items-center rounded-md ${TONE_BG[l.tone]}`}>
-                  <Icon className="h-4 w-4" />
-                </span>
+                }`}>
+                <span className={`grid h-7 w-7 place-items-center rounded-md ${TONE_BG[l.tone]}`}><Icon className="h-4 w-4" /></span>
                 <span className="text-xs font-semibold text-foreground">{l.label}</span>
                 <span className="text-[10px] leading-tight text-text-secondary">{l.desc}</span>
               </button>
@@ -205,25 +216,95 @@ function RaiseForm({ onRaised }: { onRaised: (c: CaseRow) => void }) {
           })}
         </div>
       </div>
+
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-text-secondary">Subject</label>
-        <input
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
+        <input value={subject} onChange={(e) => setSubject(e.target.value)}
           placeholder={`Short summary of your ${laneLabel(lane).toLowerCase()}`}
-          className="w-full rounded-md border border-stroke-subtle bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
-        />
+          className="w-full rounded-md border border-stroke-subtle bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand" />
       </div>
+
+      {fields.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fields.map((f) => (
+            <FieldInput key={f.key} field={f} value={values[f.key]} onChange={(v) => setVal(f.key, v)} />
+          ))}
+        </div>
+      )}
+
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-text-secondary">Message</label>
         <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="Describe it clearly so Glimmora can help." />
       </div>
+
       <div className="flex items-center justify-end gap-2">
         <Button variant="ghost" onClick={() => { reset(); setOpen(false); }} disabled={busy}>Cancel</Button>
         <Button onClick={submit} disabled={busy} className="gap-1.5">
           <Send className="h-4 w-4" /> {busy ? "Sending…" : "Submit"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// Endpoints that populate a field's dropdown suggestions (role-scoped server-side).
+const SOURCE_ENDPOINTS: Record<string, string> = { my_work: "/api/cases/context" };
+
+function FieldInput({
+  field, value, onChange,
+}: { field: LaneField; value: string | boolean | undefined; onChange: (v: string | boolean) => void }) {
+  const [dynOpts, setDynOpts] = useState<string[]>([]);
+  const cls = "w-full rounded-md border border-stroke-subtle bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand";
+
+  useEffect(() => {
+    const src = field.source;
+    if (!src || !SOURCE_ENDPOINTS[src]) return;
+    let cancel = false;
+    fetch(SOURCE_ENDPOINTS[src], { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancel || !d) return;
+        const items = Array.isArray(d?.items) ? d.items : [];
+        setDynOpts(items.map((t: { label?: string }) => t.label).filter(Boolean) as string[]);
+      })
+      .catch(() => {});
+    return () => { cancel = true; };
+  }, [field.source]);
+
+  if (field.type === "checkbox") {
+    return (
+      <label className="flex items-center gap-2 text-sm text-text-secondary sm:col-span-2">
+        <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} /> {field.label}
+      </label>
+    );
+  }
+
+  // A field with a `source` is a combobox: pick a suggestion OR type your own.
+  if (field.source) {
+    return (
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-text-secondary">{field.label}</label>
+        <input list={`dl-${field.key}`} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)}
+          placeholder={dynOpts.length ? "Pick one or type…" : (field.placeholder ?? "")} className={cls} />
+        <datalist id={`dl-${field.key}`}>
+          {dynOpts.map((o) => <option key={o} value={o} />)}
+        </datalist>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium text-text-secondary">{field.label}</label>
+      {field.type === "select" ? (
+        <select value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} className={cls}>
+          <option value="">Select…</option>
+          {field.options?.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : (
+        <input type={field.type === "date" ? "date" : "text"} value={(value as string) ?? ""}
+          onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} className={cls} />
+      )}
     </div>
   );
 }
@@ -289,6 +370,7 @@ function CaseThread({ caseId, onBack }: { caseId: string; onBack: () => void }) 
               </span>
               {laneLabel(row.lane)} · opened {fmt(row.createdAt)}
             </p>
+            <CaseFacts lane={row.lane} role={row.raiserRole} subtype={row.subtype} details={row.details} />
             {row.resolution && (
               <p className="rounded-md bg-success-subtle p-2 text-xs text-success-text"><strong>Resolution:</strong> {row.resolution}</p>
             )}

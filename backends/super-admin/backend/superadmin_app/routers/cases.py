@@ -15,7 +15,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, Json
 
 from shared.audit import write_audit
 from shared.db import get_pg_connection
@@ -133,6 +133,8 @@ def _out(r: dict[str, Any], *, messages: list | None = None) -> dict[str, Any]:
         "raiserRole": r.get("raiser_role"),
         "stream": r.get("stream") or "support",
         "lane": r.get("lane") or "support",
+        "subtype": r.get("subtype"),
+        "details": r.get("data") if isinstance(r.get("data"), dict) else {},
         "subject": r.get("subject"),
         "body": r.get("body"),
         "priority": r.get("priority") or "medium",
@@ -171,6 +173,8 @@ class _RaiseRequest(BaseModel):
     subject: str
     body: str
     priority: str | None = None
+    subtype: str | None = None        # lane/role-specific category (e.g. 'Delayed')
+    details: dict[str, Any] | None = None  # lane/role-specific structured fields
 
 
 @router.post("/api/v1/cases", status_code=201)
@@ -200,18 +204,21 @@ async def raise_case(
     acct = _acct_int(user.get("id"))
     role = (user.get("role") or "").lower()
     email = user.get("email")
+    subtype = (body.subtype or "").strip() or None
+    details = body.details if isinstance(body.details, dict) else {}
 
     conn = get_pg_connection()
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             """
             INSERT INTO glimmora_cases
-                (id, account_id, raiser_email, raiser_role, stream, lane,
-                 subject, body, priority, status, created_at, updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'new', now(), now())
+                (id, account_id, raiser_email, raiser_role, stream, lane, subtype,
+                 subject, body, priority, status, data, created_at, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'new',%s, now(), now())
             RETURNING *
             """,
-            (cid, acct, email, role, stream, lane, subject[:200], text, priority),
+            (cid, acct, email, role, stream, lane, subtype,
+             subject[:200], text, priority, Json(details)),
         )
         row = cur.fetchone()
         # The opening message becomes the first entry in the thread.
