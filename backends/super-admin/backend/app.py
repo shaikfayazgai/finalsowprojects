@@ -22,6 +22,7 @@ from superadmin_app.routers.tenants_list import router as tenants_list_router
 from superadmin_app.routers.enterprise_team import router as enterprise_team_router
 from superadmin_app.routers.complaints import router as complaints_router, init_complaints_schema
 from superadmin_app.routers.cases import router as cases_router, init_cases_schema
+from superadmin_app.routers.account_settings import router as account_settings_router, init_account_settings_schema
 from superadmin_app.schema import init_superadmin_schema
 from auth_app.routers import auth as auth_router
 from auth_app.routers import sso as sso_router
@@ -45,6 +46,7 @@ def _startup() -> None:
         getattr(email_templates, "init_email_templates_schema", None),
         init_complaints_schema,
         init_cases_schema,
+        init_account_settings_schema,
     ):
         if init_fn:
             try:
@@ -57,6 +59,6 @@ app = create_service_app(
     "superadmin-service",
     routers=[auth_router.router, sso_router.router, users.router, settings.router, reviewer.router, bulk.router, audit.router, kyc.router, platform_ops.router, ai_agents_router, tenant_subscription_router, tenants_list_router,
              governance.router, roles.router, rubrics.router, payment_rails.router, partnerships.router, email_templates.router,
-             enterprise_team_router, complaints_router, cases_router],
+             enterprise_team_router, complaints_router, cases_router, account_settings_router],
     on_startup=_startup,
 )

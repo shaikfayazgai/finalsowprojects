@@ -56,8 +56,9 @@ export async function patchMentorAvailability(payload: Record<string, unknown>):
 export async function fetchMentorAvailability(): Promise<Record<string, unknown> | null> {
   const res = await fetchInternal("/api/mentor/settings/availability", { method: "GET" });
   if (!res.ok) return null;
-  const data = (await res.json().catch(() => ({}))) as { availability?: Record<string, unknown> | null };
-  return data.availability ?? null;
+  // The account-settings store returns the section object directly ({} if unset).
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  return data && typeof data === "object" && Object.keys(data).length > 0 ? data : null;
 }
 
 /** Load the mentor's persisted notification rows (null if none saved yet). */
