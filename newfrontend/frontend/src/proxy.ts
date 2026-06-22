@@ -179,10 +179,27 @@ function homeForRole(role: string | undefined): string {
   return ROLE_HOME[role] ?? "/auth/login";
 }
 
+// Map a protected path to ITS portal's login so logout / session-loss lands on the
+// right login (e.g. /contributor/* -> /contributor/login), not the generic /auth/login.
+const PORTAL_LOGINS: ReadonlyArray<readonly [string, string]> = [
+  ["/enterprise/reviewer", "/reviewer/login"], // reviewer lives under /enterprise, logs in at /reviewer
+  ["/admin", "/admin/login"],
+  ["/enterprise", "/enterprise/login"],
+  ["/contributor", "/contributor/login"],
+  ["/mentor", "/mentor/login"],
+  ["/reviewer", "/reviewer/login"],
+];
+function loginPathFor(pathname: string): string {
+  for (const [prefix, login] of PORTAL_LOGINS) {
+    if (pathname === prefix || pathname.startsWith(prefix + "/")) return login;
+  }
+  return "/auth/login";
+}
+
 function loginRedirect(req: NextRequest, reason?: string): NextResponse {
   const url = req.nextUrl.clone();
   const returnTo = `${req.nextUrl.pathname}${req.nextUrl.search}`;
-  url.pathname = "/auth/login";
+  url.pathname = loginPathFor(req.nextUrl.pathname);
   url.search = "";
   url.searchParams.set("returnTo", returnTo);
   if (reason) url.searchParams.set("reason", reason);
@@ -210,7 +227,12 @@ function withRequestHeaders(
   headers.set("x-user-id", ctx.userId);
   headers.set("x-user-role", ctx.role);
   headers.set("x-pathname", req.nextUrl.pathname);
-  return NextResponse.next({ request: { headers } });
+  const res = NextResponse.next({ request: { headers } });
+  // Authenticated pages must NOT sit in the browser's back/forward cache: after
+  // logout, pressing Back must re-request (the guard then bounces to the portal
+  // login) — never restore a cached signed-in page.
+  res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  return res;
 }
 
 /* ───────────────────────────── Middleware ──────────────────────────── */

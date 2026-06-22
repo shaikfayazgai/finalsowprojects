@@ -131,6 +131,9 @@ export const EnterpriseTopbar: React.FC<EnterpriseTopbarProps> = ({
               operator={operator}
               profileHref={`${config.basePath}/profile`}
               settingsHref={`${config.basePath}/settings`}
+              // Sign out back to THIS portal's own login (not the generic /auth/login).
+              // Reviewer lives under /enterprise/reviewer but its login is /reviewer/login.
+              signOutTo={config.id === "reviewer" ? "/reviewer/login" : `${config.basePath}/login`}
               showSettings={
                 config.id === "admin" ||
                 config.id === "contributor" ||

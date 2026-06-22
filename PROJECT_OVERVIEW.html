@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GlimmoraTeam — Project Structure & Execution</title>
+<style>
+  :root{
+    --brand:#6d5cf6; --brand-d:#4f3fd6; --ink:#1b1b2b; --ink2:#3d3d52; --mut:#6b6b80;
+    --line:#e6e6ef; --bg:#f6f6fb; --card:#ffffff; --code:#1e1e2e; --code-t:#e7e7f5;
+    --ok:#15803d; --okbg:#e7f6ed; --warn:#b45309; --warnbg:#fdf3e3; --err:#dc2626; --errbg:#fdecec;
+    --info:#2563eb; --infobg:#e8f0fe;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;font-size:15px}
+  a{color:var(--brand-d);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+  header.hero{background:linear-gradient(135deg,#6d5cf6,#9b6cf0 55%,#c084fc);color:#fff;padding:46px 0 38px}
+  header.hero h1{margin:0;font-size:30px;letter-spacing:-.5px;font-weight:800}
+  header.hero p{margin:8px 0 0;opacity:.95;font-size:15.5px;max-width:720px}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:3px 11px;font-size:12px;font-weight:600;margin:14px 8px 0 0}
+  nav.toc{position:sticky;top:0;z-index:5;background:#fffffff2;backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 0}
+  nav.toc .wrap{display:flex;gap:6px;flex-wrap:wrap}
+  nav.toc a{font-size:12.5px;font-weight:600;color:var(--ink2);padding:5px 10px;border-radius:8px}
+  nav.toc a:hover{background:var(--bg);text-decoration:none;color:var(--brand-d)}
+  section{margin:34px 0}
+  h2{font-size:21px;font-weight:800;letter-spacing:-.3px;margin:0 0 6px;display:flex;align-items:center;gap:9px}
+  h2 .n{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--brand);color:#fff;font-size:13px}
+  h3{font-size:15.5px;font-weight:700;margin:20px 0 8px;color:var(--ink)}
+  .sub{color:var(--mut);font-size:13.5px;margin:0 0 14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:0 1px 2px rgba(20,20,50,.04)}
+  pre{background:var(--code);color:var(--code-t);border-radius:12px;padding:16px 18px;overflow-x:auto;font-size:12.7px;line-height:1.5;font-family:"Cascadia Code",Consolas,monospace;margin:0}
+  pre .c{color:#8a8aa8} pre .k{color:#c084fc} pre .s{color:#7ee787} pre .y{color:#ffd479} pre .b{color:#79c0ff;font-weight:600}
+  code.inl{background:#ececf6;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-family:Consolas,monospace;font-size:12.5px;color:var(--brand-d)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:4px}
+  th{background:#f0f0f8;text-align:left;padding:9px 12px;font-weight:700;border-bottom:2px solid var(--line);color:var(--ink2)}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .badge{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:700}
+  .b-brand{background:#efeaff;color:var(--brand-d)} .b-ok{background:var(--okbg);color:var(--ok)}
+  .b-warn{background:var(--warnbg);color:var(--warn)} .b-info{background:var(--infobg);color:var(--info)} .b-mut{background:#eee;color:#555}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px} @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .note{border-left:4px solid var(--brand);background:#f5f3ff;padding:11px 15px;border-radius:0 10px 10px 0;font-size:13.5px;margin-top:12px}
+  .note.warn{border-color:var(--warn);background:var(--warnbg)} .note.ok{border-color:var(--ok);background:var(--okbg)}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .step{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:600;box-shadow:0 1px 2px rgba(20,20,50,.05)}
+  .step .r{display:block;font-size:10.5px;color:var(--mut);font-weight:600}
+  .arr{color:var(--brand);font-weight:800}
+  footer{color:var(--mut);font-size:12.5px;text-align:center;padding:30px 0 50px}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap">
+  <h1>GlimmoraTeam — Workforce Delivery Platform</h1>
+  <p>One Next.js frontend (5 role portals) talking through a gateway to five FastAPI backends on one shared database. This page explains the structure and exactly how to run it.</p>
+  <div>
+    <span class="pill">Next.js 16 · React</span>
+    <span class="pill">FastAPI · Python 3.12</span>
+    <span class="pill">Neon Postgres + MongoDB</span>
+    <span class="pill">5 roles · 1 gateway</span>
+  </div>
+</div></header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#arch">Architecture</a>
+  <a href="#struct">Folder structure</a>
+  <a href="#services">Services &amp; ports</a>
+  <a href="#run">How to run</a>
+  <a href="#login">Logins</a>
+  <a href="#flow">Business flow</a>
+  <a href="#pricing">Pricing model</a>
+  <a href="#ops">Operations</a>
+</div></nav>
+
+<div class="wrap">
+
+<section id="arch">
+  <h2><span class="n">1</span>Architecture — how a request travels</h2>
+  <p class="sub">The browser only ever talks to the frontend. The frontend's API proxy attaches the user's token and forwards to the gateway, which routes to the right role backend by URL prefix. All five backends share one database.</p>
+  <div class="card">
+<pre><span class="b">Browser</span>  ─▶  <span class="k">Next.js frontend</span> (:3000)
+                 │  every page calls /api/**/route.ts  (the proxy layer)
+                 ▼
+        <span class="k">proxy</span>: reads NextAuth session → attaches  <span class="y">Authorization: Bearer &lt;JWT&gt;</span>
+                 ▼
+            <span class="b">GATEWAY</span> (:9000)   ── longest URL-prefix wins ──▶  one role backend
+                 │
+   /api/mentor → <span class="s">8101</span>   /api/superadmin,/api/admin → <span class="s">8102</span>   /api/enterprise,/api/v1/sow → <span class="s">8103</span>
+   /api/contributor → <span class="s">8104</span>   /api/reviewer → <span class="s">8105</span>
+                 ▼
+       <span class="k">ONE shared Neon Postgres "glimmora"</span>   +   <span class="k">MongoDB</span> (audit log)</pre>
+  </div>
+  <div class="note"><b>Why it works:</b> every backend signs &amp; verifies JWTs with the <b>same <code class="inl">API_SECRET_KEY</code></b>, so one login token is valid across all five services — the gateway just forwards it. They coordinate through shared tables (<code class="inl">decomp_tasks</code>, <code class="inl">contributor_tasks</code>, <code class="inl">mentor_reviews</code>, <code class="inl">reviewer_assignments</code>, <code class="inl">payouts</code>).</div>
+</section>
+
+<section id="struct">
+  <h2><span class="n">2</span>Folder structure</h2>
+  <p class="sub">★ = what actually runs today. The rest are older baselines kept in the repo.</p>
+  <div class="card">
+<pre>GTPROJECT/
+│
+├── <span class="b">newfrontend/frontend/</span>          <span class="y">★ ACTIVE FRONTEND</span> — Next.js, one app, 5 portals
+│   └── src/app/
+│       ├── admin/                 → Super-admin (Glimmora) portal
+│       ├── enterprise/            → Enterprise portal (+ /reviewer, /review sub-areas)
+│       ├── mentor/                → Mentor portal
+│       ├── contributor/           → Contributor portal
+│       ├── api/**/route.ts        → proxy layer (attaches JWT → gateway)
+│       ├── auth.ts                → NextAuth (per-portal login + token refresh)
+│       └── lib/                   → pricing, status-matrix, decomposition, hooks, api clients
+│
+├── <span class="b">backends/</span>                       <span class="y">★ ACTIVE BACKENDS</span> — FastAPI, one service per role
+│   ├── gateway.py                 → reverse proxy (:9000) → routes to the 5 below
+│   ├── mentor/backend/            → :8101   (mentor_app)
+│   ├── super-admin/backend/       → :8102   (superadmin_app)
+│   ├── enterprise/backend/        → :8103   (SOW, decomposition, pricing, billing)
+│   ├── freelancer/backend/        → :8104   (contributor: tasks, opportunities, payouts)
+│   ├── reviewer/backend/          → :8105   (reviewer_app)
+│   └── &lt;each&gt;/shared/             → per-service: db.py, security.py, deps.py, notify.py
+│
+├── <span class="s">PROJECT_OVERVIEW.html</span>          → this file
+├── <span class="s">MANUAL_TESTING.html</span>            → the testing flows (companion file)
+├── FULL_E2E_TEST_MANUAL.md        → exhaustive manual (every page/field/button)
+├── BACKEND_API_REFERENCE.md       → every endpoint + table schemas
+├── TESTING-GUIDE.md               → login credentials + step tests
+│
+└── <span class="c">(legacy, not run)  apps/  frontend/  frontend4/  newfrontend2/  finalfrontend/  backend/</span></pre>
+  </div>
+</section>
+
+<section id="services">
+  <h2><span class="n">3</span>Services &amp; ports</h2>
+  <p class="sub">Seven processes total. The frontend talks <b>only</b> to the gateway (:9000) — never the role ports directly.</p>
+  <div class="card">
+  <table>
+    <tr><th>Service</th><th>Port</th><th>Tech</th><th>Owns</th></tr>
+    <tr><td><b>Frontend</b></td><td><span class="badge b-brand">3000</span></td><td>Next.js</td><td>All 5 portals + the proxy layer</td></tr>
+    <tr><td><b>Gateway</b></td><td><span class="badge b-brand">9000</span></td><td>FastAPI</td><td>Single entry point → prefix-routes to backends</td></tr>
+    <tr><td>Mentor</td><td><span class="badge b-info">8101</span></td><td>FastAPI</td><td>Mentor queue, decisions, escalations</td></tr>
+    <tr><td>Super-admin</td><td><span class="badge b-info">8102</span></td><td>FastAPI</td><td>Commercial gate, KYC, tenants, audit, settings</td></tr>
+    <tr><td>Enterprise</td><td><span class="badge b-info">8103</span></td><td>FastAPI</td><td>SOW, decomposition, <b>work pricing</b>, billing, payouts</td></tr>
+    <tr><td>Freelancer / Contributor</td><td><span class="badge b-info">8104</span></td><td>FastAPI</td><td>Tasks, opportunities, submissions, earnings</td></tr>
+    <tr><td>Reviewer</td><td><span class="badge b-info">8105</span></td><td>FastAPI</td><td>QA review queue + decisions</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="run">
+  <h2><span class="n">4</span>How to run it</h2>
+  <p class="sub">Start order: <b>5 backends → gateway → frontend</b>. Each backend is a single-worker uvicorn started by a small launcher.</p>
+
+  <h3>Prerequisites</h3>
+  <div class="card">
+    <ul style="margin:0;padding-left:20px">
+      <li><b>Python 3.12</b> (<code class="inl">C:\Program Files\Python312\python.exe</code>) with each backend's deps installed</li>
+      <li><b>Node + npm</b> for the frontend</li>
+      <li>The <b><code class="inl">.env</code> files</b> present in each backend dir + <code class="inl">newfrontend/frontend/.env.local</code> (Neon DB URL, <code class="inl">API_SECRET_KEY</code>, Mongo URI)</li>
+      <li><b>Critical:</b> the frontend's <code class="inl">AUTH_SECRET</code> must equal the backends' <code class="inl">API_SECRET_KEY</code> (so JWTs verify)</li>
+    </ul>
+  </div>
+
+  <h3>Start everything</h3>
+  <div class="card">
+<pre><span class="c"># paths</span>
+PY=<span class="s">"C:/Program Files/Python312/python.exe"</span>
+R=<span class="s">"C:/tmp/run_backend.py"</span>
+B=<span class="s">"E:/GLIMMORA/educore/GTPROJECT/backends"</span>
+
+<span class="c"># 1) the five role backends</span>
+<span class="k">"$PY" "$R"</span> "$B/mentor/backend"      <span class="y">8101</span> app:app  &amp;
+<span class="k">"$PY" "$R"</span> "$B/super-admin/backend" <span class="y">8102</span> app:app  &amp;
+<span class="k">"$PY" "$R"</span> "$B/enterprise/backend"  <span class="y">8103</span> app:app  &amp;
+<span class="k">"$PY" "$R"</span> "$B/freelancer/backend"  <span class="y">8104</span> app:app  &amp;
+<span class="k">"$PY" "$R"</span> "$B/reviewer/backend"    <span class="y">8105</span> app:app  &amp;
+
+<span class="c"># 2) the gateway (run from the backends/ dir)</span>
+cd "$B" &amp;&amp; <span class="k">"$PY" -m uvicorn gateway:app</span> --host 127.0.0.1 --port <span class="y">9000</span>  &amp;
+
+<span class="c"># 3) the frontend</span>
+cd "E:/GLIMMORA/educore/GTPROJECT/newfrontend/frontend" &amp;&amp; <span class="k">npm run dev</span></pre>
+  </div>
+
+  <h3>Verify it's up</h3>
+  <div class="card">
+<pre><span class="c"># all 7 ports listening?</span>
+netstat -ano | grep LISTENING | grep -E <span class="s">":(3000|8101|8102|8103|8104|8105|9000) "</span>
+<span class="c"># frontend responds?</span>
+curl http://localhost:3000        <span class="c"># → 200</span></pre>
+    <div class="note ok">Open <b>http://localhost:3000</b> → the marketing home page means the system is ready.</div>
+  </div>
+</section>
+
+<section id="login">
+  <h2><span class="n">5</span>Login accounts</h2>
+  <p class="sub">Password is <code class="inl">Fayaz@123</code> for everyone <b>except</b> Super-admin (<code class="inl">glimmora123</code>). One role per browser — use a second browser / incognito to test two roles at once.</p>
+  <div class="card">
+  <table>
+    <tr><th>Portal</th><th>URL</th><th>Email</th><th>Password</th></tr>
+    <tr><td><span class="badge b-brand">Super-admin</span></td><td>/admin/login</td><td>superadmin@glimmora.dev</td><td><code class="inl">glimmora123</code></td></tr>
+    <tr><td><span class="badge b-info">Enterprise</span></td><td>/enterprise/login</td><td>sfayazmr@gmail.com</td><td><code class="inl">Fayaz@123</code></td></tr>
+    <tr><td><span class="badge b-ok">Contributor</span></td><td>/contributor/login</td><td>sfayazmr1@gmail.com</td><td><code class="inl">Fayaz@123</code></td></tr>
+    <tr><td><span class="badge b-warn">Mentor</span></td><td>/mentor/login</td><td>sfayazmr7@gmail.com</td><td><code class="inl">Fayaz@123</code></td></tr>
+    <tr><td><span class="badge b-mut">Reviewer</span></td><td>/reviewer/login</td><td>sfayazmr-reviewer@gmail.com</td><td><code class="inl">Fayaz@123</code></td></tr>
+  </table>
+  </div>
+  <div class="note">Seeded contributor test accounts also exist (Aarav, Priya, Rahul, Sara, Arjun, Meera) — e.g. <code class="inl">aarav.contributor@glimmora.com</code> / <code class="inl">priya.frontend@glimmora.com</code>, same password.</div>
+</section>
+
+<section id="flow">
+  <h2><span class="n">6</span>The business flow (SOW → payout)</h2>
+  <p class="sub">The whole platform exists to drive one pipeline. Each step is a different role.</p>
+  <div class="card">
+    <div class="flow">
+      <span class="step"><span class="r">Enterprise</span>Upload SOW</span><span class="arr">▶</span>
+      <span class="step"><span class="r">Ent + Glimmora</span>5 approval gates</span><span class="arr">▶</span>
+      <span class="step"><span class="r">Enterprise</span>Decompose → tasks</span><span class="arr">▶</span>
+      <span class="step"><span class="r">Glimmora</span>Work pricing</span><span class="arr">▶</span>
+      <span class="step"><span class="r">Contributor</span>"I'm interested"</span><span class="arr">▶</span>
+      <span class="step"><span class="r">Enterprise</span>Assign</span><span class="arr">▶</span>
+      <span class="step"><span class="r">Contributor</span>Submit work</span><span class="arr">▶</span>
+      <span class="step"><span class="r">Mentor</span>Review gate</span><span class="arr">▶</span>
+      <span class="step"><span class="r">Reviewer</span>QA gate</span><span class="arr">▶</span>
+      <span class="step"><span class="r">Glimmora/Ent</span>Payout</span>
+    </div>
+  </div>
+  <div class="note">Detailed click-by-click steps for this entire flow are in the companion <a href="MANUAL_TESTING.html"><b>MANUAL_TESTING.html</b></a>.</div>
+</section>
+
+<section id="pricing">
+  <h2><span class="n">7</span>Pricing model (the money)</h2>
+  <p class="sub">The contributor is paid <b>in full</b>. Glimmora's margin and GST are added <b>on top</b> to form the enterprise price. The golden rule: enterprise / mentor / reviewer never see the contributor's pay.</p>
+  <div class="grid2">
+    <div class="card">
+      <h3 style="margin-top:0">The formula</h3>
+<pre>contributor pay   = what Glimmora sets per task
+client price      = contributor ÷ (1 − commission%)
+GST               = client price × gst%
+<span class="b">enterprise pays   = client price + GST</span></pre>
+      <p class="sub" style="margin-top:10px">Example: pay <b>₹7,000</b> · commission 15% · GST 18% → client <b>₹8,235</b> → +GST <b>₹1,482</b> → enterprise pays <b>₹9,718</b>.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Who sees what</h3>
+      <table>
+        <tr><th>Role</th><th>Sees</th></tr>
+        <tr><td><span class="badge b-brand">Glimmora</span></td><td>Everything incl. contributor pay + margin</td></tr>
+        <tr><td><span class="badge b-info">Enterprise</span></td><td>Client price + GST only (budget)</td></tr>
+        <tr><td><span class="badge b-warn">Mentor</span></td><td>Task brief only — <b>no money</b></td></tr>
+        <tr><td><span class="badge b-mut">Reviewer</span></td><td>Task brief only — <b>no money</b></td></tr>
+        <tr><td><span class="badge b-ok">Contributor</span></td><td>Own payout only (paid in full)</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="ops">
+  <h2><span class="n">8</span>Operational notes</h2>
+  <div class="card">
+    <ul style="margin:0;padding-left:20px">
+      <li><b>Backend changes</b> need that one port restarted (single-worker, no auto-reload). The <b>frontend hot-reloads</b>.</li>
+      <li><b>Database resilience is built in</b> — TCP keepalives + reconnect-retry on the Neon connection, so the "everything went blank / 0 tasks" idle-drop won't recur. If a backend ever wedges, restart just that port.</li>
+      <li><b>Payments are simulated</b> (Razorpay test-mode planned) — no real money moves.</li>
+      <li><b>Shared DB:</b> all five backends read/write the same Neon "glimmora" database, so the flow stays consistent across roles.</li>
+    </ul>
+    <div class="note warn"><b>Secrets:</b> the <code class="inl">.env</code> files hold the live Neon DB string + <code class="inl">API_SECRET_KEY</code>. Keep the repo private and rotate them if they're ever exposed.</div>
+  </div>
+</section>
+
+</div>
+<footer class="wrap">GlimmoraTeam Workforce Delivery Platform · structure &amp; execution reference · companion file: MANUAL_TESTING.html</footer>
+</body>
+</html>

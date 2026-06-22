@@ -952,6 +952,20 @@ async def create_task_submission(account_id: AcctId, task_id: int, payload: dict
                  Json({"taskId": task_id, "submissionId": row["id"], "accountId": account_id,
                        "url": url, "summary": payload.get("summary", ""), "stage": "mentor"})),
             )
+            # Notify the mentor (or the mentor pool) that a new submission awaits review.
+            from shared.notify import create_notification, notify_role
+            _mt = "New submission to review"
+            _mb = f"{name} submitted “{title}” — it's waiting in your review queue."
+            if mentor_id and str(mentor_id).isdigit():
+                create_notification(int(mentor_id), category="action", kind="submission.received",
+                    severity="important", title=_mt, body=_mb,
+                    resource_type="submission", resource_id=str(row["id"]),
+                    action_url="/mentor/queue", action_label="Open queue")
+            else:
+                notify_role(["mentor"], category="action", kind="submission.received",
+                    severity="important", title=_mt, body=_mb,
+                    resource_type="submission", resource_id=str(row["id"]),
+                    action_url="/mentor/queue", action_label="Open queue")
     except Exception:  # noqa: BLE001 — review-queue wiring must never block submit
         pass
     return row

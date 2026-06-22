@@ -372,6 +372,23 @@ def submit_decision(review_id: int, body: DecisionRequest, user: MentorDep):
             except Exception:  # noqa: BLE001 — reviewer table lives in shared DB
                 pass
 
+            # Notify the reviewer (or the reviewer pool) that QA work is ready.
+            try:
+                from shared.notify import create_notification, notify_role
+                _qt = "New work ready for QA review"
+                _qb = f"“{existing.get('title')}” passed the mentor's check and is in the QA queue."
+                _qr = pl.get("canonicalTaskId") or pl.get("taskId")
+                if _rev_id:
+                    create_notification(_rev_id, category="action", kind="qa.ready", severity="important",
+                        title=_qt, body=_qb, resource_type="task", resource_id=_qr,
+                        action_url="/enterprise/reviewer/queue", action_label="Open QA queue")
+                else:
+                    notify_role(["reviewer"], category="action", kind="qa.ready", severity="important",
+                        title=_qt, body=_qb, resource_type="task", resource_id=_qr,
+                        action_url="/enterprise/reviewer/queue", action_label="Open QA queue")
+            except Exception:  # noqa: BLE001
+                pass
+
             # Requirement check PASSED → canonical 'qa_review_pending' (with reviewer).
             try:
                 _ctid = pl.get("canonicalTaskId") or pl.get("taskId")

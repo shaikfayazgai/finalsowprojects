@@ -580,17 +580,25 @@ def decide_submission(submission_id: int, body: SubmissionDecideRequest, user: M
                 pass
 
             # Notify the enterprise reviewer that mentor-approved work is ready for QA.
-            if _rev_id:
-                try:
-                    from shared.notify import create_notification
+            # If a reviewer is assigned to the SOW, ping them directly; otherwise ping
+            # the whole reviewer pool so unassigned QA work never sits unnoticed.
+            try:
+                from shared.notify import create_notification, notify_role
+                _qa_title = "New work ready for QA review"
+                _qa_body = f"“{existing.get('title')}” passed the mentor's check and is in the QA queue."
+                _qa_rid = pl.get("canonicalTaskId") or pl.get("taskId")
+                if _rev_id:
                     create_notification(
                         _rev_id, category="action", kind="qa.ready", severity="important",
-                        title="New work ready for QA review",
-                        body=f"“{existing.get('title')}” passed the mentor's check and is in your QA queue.",
-                        resource_type="task", resource_id=pl.get("canonicalTaskId") or pl.get("taskId"),
+                        title=_qa_title, body=_qa_body, resource_type="task", resource_id=_qa_rid,
                         action_url="/enterprise/reviewer/queue", action_label="Open QA queue")
-                except Exception:  # noqa: BLE001
-                    pass
+                else:
+                    notify_role(
+                        ["reviewer"], category="action", kind="qa.ready", severity="important",
+                        title=_qa_title, body=_qa_body, resource_type="task", resource_id=_qa_rid,
+                        action_url="/enterprise/reviewer/queue", action_label="Open QA queue")
+            except Exception:  # noqa: BLE001
+                pass
 
             # Requirement check PASSED → canonical 'qa_review_pending'.
             _ctid = pl.get("canonicalTaskId") or pl.get("taskId")

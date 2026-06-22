@@ -369,18 +369,24 @@ def _route_to_mentor(account_id: int, submission_id: int, task_definition_id: st
                  **{k: v for k, v in payload.items() if k not in ("body",)},
              })),
         )
-        # Notify the assigned mentor of the new submission (skip the open pool).
-        if mentor_id and str(mentor_id) != "pool":
-            try:
-                from shared.notify import create_notification
+        # Notify the assigned mentor of the new submission, or the mentor pool when
+        # none is assigned, so submitted work never sits unnoticed.
+        try:
+            from shared.notify import create_notification, notify_role
+            _mt = "New submission to review"
+            _mb = f"“{title}” was submitted and is waiting for your requirement check."
+            if mentor_id and str(mentor_id) != "pool":
                 create_notification(
                     mentor_id, category="action", kind="submission.received", severity="important",
-                    title="New submission to review",
-                    body=f"“{title}” was submitted and is waiting for your requirement check.",
-                    resource_type="submission", resource_id=submission_id,
+                    title=_mt, body=_mb, resource_type="submission", resource_id=submission_id,
                     action_url="/mentor/queue", action_label="Open queue")
-            except Exception:  # noqa: BLE001
-                pass
+            else:
+                notify_role(
+                    ["mentor"], category="action", kind="submission.received", severity="important",
+                    title=_mt, body=_mb, resource_type="submission", resource_id=submission_id,
+                    action_url="/mentor/queue", action_label="Open queue")
+        except Exception:  # noqa: BLE001
+            pass
         return True
     except Exception as exc:  # noqa: BLE001
         logger.warning("mentor routing failed for submission %s: %s", submission_id, exc)

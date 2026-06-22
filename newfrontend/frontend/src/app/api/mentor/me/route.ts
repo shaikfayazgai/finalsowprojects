@@ -22,37 +22,43 @@ import {
 async function overlayBackendProfile(
   profile: MentorProfile,
   token: string | undefined,
-): Promise<MentorProfile> {
-  if (!token) return profile;
+): Promise<{ profile: MentorProfile; onboardingComplete: boolean }> {
+  if (!token) return { profile, onboardingComplete: false };
   try {
     const res = await fetch(new URL("/api/mentor/profile", getBackendServiceUrl()).toString(), {
       headers: { authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(8_000),
     });
-    if (!res.ok) return profile;
+    if (!res.ok) return { profile, onboardingComplete: false };
     const data = ((await res.json()) as { data?: Record<string, unknown> }).data ?? {};
     const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
     const arr = (v: unknown) =>
       Array.isArray(v) && v.length ? v.filter((x): x is string => typeof x === "string") : undefined;
     const settings = (data.settings ?? {}) as Record<string, unknown>;
+    // Onboarding completion is persisted on the backend (mentor_profiles.settings).
+    // Read it here so the gate fires only ONCE — the in-memory store reset every login.
+    const onboardingComplete = Boolean(settings.onboarding_complete ?? settings.onboardingComplete);
     const expertise = arr(data.expertise);
     const competency = expertise
       ? expertise.map((skill) => ({ skill, levelMin: 1 as const, levelMax: 3 as const }))
       : profile.competency;
     return {
-      ...profile,
-      title: str(data.headline) ?? profile.title,
-      bio: str(data.bio) ?? profile.bio,
-      mentorshipIntro: str(settings.mentorshipIntro) ?? profile.mentorshipIntro,
-      languages: arr(data.languages) ?? profile.languages,
-      timezone: str(data.timezone) ?? profile.timezone,
-      country: str(data.country) ?? profile.country,
-      // real "mentor since" from the profile row's creation date
-      joinedAt: str(data.created_at) ?? profile.joinedAt,
-      competency,
+      profile: {
+        ...profile,
+        title: str(data.headline) ?? profile.title,
+        bio: str(data.bio) ?? profile.bio,
+        mentorshipIntro: str(settings.mentorshipIntro) ?? profile.mentorshipIntro,
+        languages: arr(data.languages) ?? profile.languages,
+        timezone: str(data.timezone) ?? profile.timezone,
+        country: str(data.country) ?? profile.country,
+        // real "mentor since" from the profile row's creation date
+        joinedAt: str(data.created_at) ?? profile.joinedAt,
+        competency,
+      },
+      onboardingComplete,
     };
   } catch {
-    return profile;
+    return { profile, onboardingComplete: false };
   }
 }
 
@@ -85,13 +91,16 @@ export async function GET(req: Request) {
   });
 
   const token = (ctx.session.user as { accessToken?: string } | undefined)?.accessToken;
-  const profile = await overlayBackendProfile(baseProfile, token);
+  const { profile, onboardingComplete: backendOnboarded } = await overlayBackendProfile(baseProfile, token);
 
   return NextResponse.json({
     profile,
     role,
     isSeniorOrLead: isSeniorMentorRole(role),
+    // Backend flag is the source of truth (persisted) — the in-memory store is only
+    // an optimistic fallback for the moments right after completing onboarding.
     onboardingComplete:
+      backendOnboarded ||
       isOnboardingComplete(ctx.userId) ||
       DEV_ONBOARDED_MENTOR_EMAILS.has(ctx.email.toLowerCase()),
   });
@@ -100,6 +109,22 @@ export async function GET(req: Request) {
 export async function POST() {
   const ctx = await requireRequest({ allowedRoles: ["mentor"] });
   if (ctx instanceof NextResponse) return ctx;
+  const token = (ctx.session.user as { accessToken?: string } | undefined)?.accessToken;
+  // PERSIST to the backend (mentor_profiles.settings.onboarding_complete) so the gate
+  // fires only ONCE. The in-memory store alone reset on every login → the agreement/
+  // details step kept re-appearing. Best-effort backend write + optimistic local flag.
+  if (token) {
+    try {
+      await fetch(new URL("/api/v1/mentor/me", getBackendServiceUrl()).toString(), {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: "{}",
+        signal: AbortSignal.timeout(8_000),
+      });
+    } catch {
+      /* best-effort; the optimistic flag below still covers this session */
+    }
+  }
   markOnboardingComplete(ctx.userId);
   return NextResponse.json({ success: true, onboardingComplete: true });
 }

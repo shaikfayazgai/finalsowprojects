@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GlimmoraTeam — Manual Testing Flows</title>
+<style>
+  :root{
+    --brand:#6d5cf6; --brand-d:#4f3fd6; --ink:#1b1b2b; --ink2:#3d3d52; --mut:#6b6b80;
+    --line:#e6e6ef; --bg:#f6f6fb; --card:#ffffff; --code:#1e1e2e; --code-t:#e7e7f5;
+    --ok:#15803d; --okbg:#e7f6ed; --warn:#b45309; --warnbg:#fdf3e3; --err:#dc2626; --errbg:#fdecec;
+    --info:#2563eb; --infobg:#e8f0fe;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;font-size:15px}
+  a{color:var(--brand-d);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+  header.hero{background:linear-gradient(135deg,#15803d,#3aa564 55%,#6dd49a);color:#fff;padding:46px 0 38px}
+  header.hero h1{margin:0;font-size:30px;letter-spacing:-.5px;font-weight:800}
+  header.hero p{margin:8px 0 0;opacity:.96;font-size:15.5px;max-width:730px}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:3px 11px;font-size:12px;font-weight:600;margin:14px 8px 0 0}
+  nav.toc{position:sticky;top:0;z-index:5;background:#fffffff2;backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 0}
+  nav.toc .wrap{display:flex;gap:6px;flex-wrap:wrap}
+  nav.toc a{font-size:12.5px;font-weight:600;color:var(--ink2);padding:5px 10px;border-radius:8px}
+  nav.toc a:hover{background:var(--bg);text-decoration:none;color:var(--brand-d)}
+  section{margin:34px 0}
+  h2{font-size:21px;font-weight:800;letter-spacing:-.3px;margin:0 0 6px;display:flex;align-items:center;gap:9px}
+  h2 .n{display:inline-grid;place-items:center;min-width:30px;height:26px;padding:0 7px;border-radius:8px;background:var(--ink);color:#fff;font-size:13px}
+  .sub{color:var(--mut);font-size:13.5px;margin:0 0 14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:0 1px 2px rgba(20,20,50,.04)}
+  code.inl{background:#ececf6;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-family:Consolas,monospace;font-size:12.5px;color:var(--brand-d)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{background:#f0f0f8;text-align:left;padding:9px 12px;font-weight:700;border-bottom:2px solid var(--line);color:var(--ink2)}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top} tr:last-child td{border-bottom:none}
+  .badge{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+  .b-brand{background:#efeaff;color:var(--brand-d)} .b-ok{background:var(--okbg);color:var(--ok)}
+  .b-warn{background:var(--warnbg);color:var(--warn)} .b-info{background:var(--infobg);color:var(--info)} .b-mut{background:#eee;color:#555} .b-err{background:var(--errbg);color:var(--err)}
+  .note{border-left:4px solid var(--brand);background:#f5f3ff;padding:11px 15px;border-radius:0 10px 10px 0;font-size:13.5px;margin-top:12px}
+  .note.warn{border-color:var(--warn);background:var(--warnbg)} .note.ok{border-color:var(--ok);background:var(--okbg)} .note.err{border-color:var(--err);background:var(--errbg)}
+  /* test step cards */
+  .tcard{background:var(--card);border:1px solid var(--line);border-radius:13px;margin:12px 0;overflow:hidden;box-shadow:0 1px 2px rgba(20,20,50,.04)}
+  .thead{display:flex;align-items:center;gap:10px;padding:11px 16px;background:#fafaff;border-bottom:1px solid var(--line);font-weight:700;font-size:14.5px}
+  .tnum{display:inline-grid;place-items:center;min-width:34px;height:24px;border-radius:7px;background:var(--brand);color:#fff;font-size:12px;font-weight:800}
+  .tbody{padding:12px 16px} .tbody p{margin:0 0 8px}
+  .do{font-size:13.7px;color:var(--ink2)} .do b{color:var(--ink)}
+  .expect{margin-top:9px;background:var(--okbg);border-radius:9px;padding:8px 12px;font-size:13.3px;color:#14532d}
+  .expect b{color:var(--ok)}
+  pre{background:var(--code);color:var(--code-t);border-radius:12px;padding:14px 16px;overflow-x:auto;font-size:12.5px;font-family:Consolas,monospace;margin:0}
+  pre .c{color:#8a8aa8} pre .s{color:#7ee787} pre .y{color:#ffd479}
+  ul.chk{list-style:none;padding:0;margin:0;columns:2;font-size:13.5px} @media(max-width:680px){ul.chk{columns:1}}
+  ul.chk li{padding:4px 0;break-inside:avoid} ul.chk li::before{content:"☐";color:var(--brand);font-weight:800;margin-right:8px}
+  footer{color:var(--mut);font-size:12.5px;text-align:center;padding:30px 0 50px}
+  .legend span{margin-right:14px;font-size:12.5px}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap">
+  <h1>Manual Testing Flows</h1>
+  <p>Follow this top to bottom. Every step tells you <b>what to do</b> and <b>what you should see</b>. The big one is the SOW → Delivery → Payment flow (section 4) — it touches all five roles.</p>
+  <div>
+    <span class="pill">Step-by-step</span>
+    <span class="pill">5 roles</span>
+    <span class="pill">Click → Expect</span>
+  </div>
+</div></header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#start">Start</a><a href="#rules">Rules</a><a href="#logins">Logins</a>
+  <a href="#mainflow">Main flow (SOW→Pay)</a><a href="#status">Status matrix</a>
+  <a href="#kyc">Women KYC</a><a href="#tenant">Tenant</a><a href="#features">Other features</a><a href="#checklist">Checklist</a>
+</div></nav>
+
+<div class="wrap">
+
+<section id="start">
+  <h2><span class="n">1</span>Start the system</h2>
+  <p class="sub">You need all 7 processes up: 5 role backends + the gateway + the frontend.</p>
+  <div class="card">
+<pre><span class="c"># five backends + gateway + frontend (see PROJECT_OVERVIEW.html for full detail)</span>
+PY=<span class="s">"C:/Program Files/Python312/python.exe"</span>; R=<span class="s">"C:/tmp/run_backend.py"</span>; B=<span class="s">"E:/GLIMMORA/educore/GTPROJECT/backends"</span>
+"$PY" "$R" "$B/mentor/backend" <span class="y">8101</span> app:app &amp; "$PY" "$R" "$B/super-admin/backend" <span class="y">8102</span> app:app &amp;
+"$PY" "$R" "$B/enterprise/backend" <span class="y">8103</span> app:app &amp; "$PY" "$R" "$B/freelancer/backend" <span class="y">8104</span> app:app &amp;
+"$PY" "$R" "$B/reviewer/backend" <span class="y">8105</span> app:app &amp;
+cd "$B" &amp;&amp; "$PY" -m uvicorn gateway:app --port <span class="y">9000</span> &amp;
+cd "E:/GLIMMORA/educore/GTPROJECT/newfrontend/frontend" &amp;&amp; npm run dev</pre>
+    <div class="note ok">Open <b>http://localhost:3000</b> — if the home page loads, you're ready to test.</div>
+  </div>
+</section>
+
+<section id="rules">
+  <h2><span class="n">2</span>Rules before testing (things that look like bugs but aren't)</h2>
+  <div class="card">
+    <ol style="margin:0;padding-left:20px">
+      <li><b>One role per browser.</b> Logging in as a second role ends the first session. To test two roles at once, use a <b>second browser or an Incognito window</b>.</li>
+      <li><b>Switch roles</b> by signing out: <code class="inl">/api/auth/signout</code> → Sign out → open the new role's login.</li>
+      <li><b>Data is step-gated.</b> A SOW only appears in the next role's queue <b>after the previous role advances it</b> (e.g. it reaches Glimmora's Commercial gate only after Enterprise approves Finance).</li>
+      <li><b>Payments are simulated</b> — no real money.</li>
+      <li>OAuth (Google/Microsoft) buttons appear only on the Contributor login — intentional.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="logins">
+  <h2><span class="n">3</span>Logins</h2>
+  <p class="sub">Password <code class="inl">Fayaz@123</code> for all except Super-admin (<code class="inl">glimmora123</code>).</p>
+  <div class="card">
+  <table>
+    <tr><th>Role</th><th>URL</th><th>Email</th><th>Password</th></tr>
+    <tr><td><span class="badge b-brand">Super-admin</span></td><td>/admin/login</td><td>superadmin@glimmora.dev</td><td><code class="inl">glimmora123</code></td></tr>
+    <tr><td><span class="badge b-info">Enterprise</span></td><td>/enterprise/login</td><td>sfayazmr@gmail.com</td><td><code class="inl">Fayaz@123</code></td></tr>
+    <tr><td><span class="badge b-ok">Contributor</span></td><td>/contributor/login</td><td>sfayazmr1@gmail.com</td><td><code class="inl">Fayaz@123</code></td></tr>
+    <tr><td><span class="badge b-warn">Mentor</span></td><td>/mentor/login</td><td>sfayazmr7@gmail.com</td><td><code class="inl">Fayaz@123</code></td></tr>
+    <tr><td><span class="badge b-mut">Reviewer</span></td><td>/reviewer/login</td><td>sfayazmr-reviewer@gmail.com</td><td><code class="inl">Fayaz@123</code></td></tr>
+  </table>
+  </div>
+  <div class="tcard"><div class="thead"><span class="tnum">C1</span> Login works for each role</div><div class="tbody">
+    <p class="do"><b>Do:</b> for each row, open the URL → log in → confirm the dashboard → sign out before the next.</p>
+    <p class="expect"><b>Expect:</b> each lands on its own dashboard; no role can open another's pages (a Contributor opening <code class="inl">/admin/...</code> is bounced).</p>
+  </div></div>
+  <div class="tcard"><div class="thead"><span class="tnum">C2</span> Forgot password (OTP)</div><div class="tbody">
+    <p class="do"><b>Do:</b> on a login page click <b>Forgot password?</b> → enter email → <b>Send code</b> → a dev OTP shows → enter it + a new password.</p>
+    <p class="expect"><b>Expect:</b> "Password reset" success; you can log in with the new password.</p>
+  </div></div>
+</section>
+
+<section id="mainflow">
+  <h2><span class="n">4</span>The main flow — SOW → Delivery → Payment</h2>
+  <p class="sub">The most important test. Runs across 4 roles in order. "Switch to X" = sign out, log in as X.</p>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D1</span> <span class="badge b-info">Enterprise</span> Create a SOW</div><div class="tbody">
+    <p class="do"><b>Do:</b> sidebar → <b>SOW Workspace</b> → <b>New SOW</b> → upload a PDF/DOC → pick a confidentiality level → <b>Upload + extract</b> → <b>Submit for approval</b>.</p>
+    <p class="expect"><b>Expect:</b> it shows the <b>5 approval stages</b> (Security, Finance, Legal, Tenant-admin, Final), then "Submitted" with a SOW id; the SOW lists at stage <b>Finance/Security</b>.</p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D2</span> <span class="badge b-info">Enterprise</span> Approve the internal gates</div><div class="tbody">
+    <p class="do"><b>Do:</b> open the SOW → on the approve page choose <b>Approve</b> → <b>Approve stage</b>, advancing through the enterprise-owned gates.</p>
+    <p class="expect"><b>Expect:</b> each gate flips to <b>Approved</b>; the SOW moves toward the Super-admin's queue.</p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D3</span> <span class="badge b-brand">Super-admin</span> Commercial approval + assign mentor</div><div class="tbody">
+    <p class="do"><b>Do:</b> switch to Super-admin → <b>Commercial gate</b> (<code class="inl">/admin/sow</code>) → open the SOW → tick the 3 checklist boxes → <b>Assign a mentor</b> (required) → comment → <b>Approve Commercial</b>.</p>
+    <p class="expect"><b>Expect:</b> Commercial = approved; records "Mentor assigned by Glimmora: …".</p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D4</span> <span class="badge b-info">Enterprise</span> Final sign-off → Active</div><div class="tbody">
+    <p class="do"><b>Do:</b> switch to Enterprise → approve the remaining gates through <b>Final sign-off</b>.</p>
+    <p class="expect"><b>Expect:</b> SOW status becomes <b>Approved / Active</b>; all 5 stages show done.</p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D5</span> <span class="badge b-info">Enterprise</span> Decompose into tasks</div><div class="tbody">
+    <p class="do"><b>Do:</b> sidebar → <b>Decomposition</b> → find the SOW → <b>Decompose</b> → open the plan → <b>Submit for approval</b>.</p>
+    <p class="expect"><b>Expect:</b> a plan of milestones + tasks is created and goes to Glimmora for pricing.</p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D6</span> <span class="badge b-brand">Super-admin</span> Work pricing (set contributor pay)</div><div class="tbody">
+    <p class="do"><b>Do:</b> <b>Work pricing</b> → open the plan (<code class="inl">/admin/decomposition/[planId]</code>) → per task, set <b>Fixed ₹</b> or <b>Hourly ₹/hr</b> → <b>Confirm</b> → <b>Save pricing</b>. Click a task's <b>View full details</b> to see the brief + price.</p>
+    <p class="expect"><b>Expect:</b> the economics show <b>Contributor payout · Glimmora margin · Client price · GST · Enterprise pays</b>, plus a <b>Budget comparison</b> (actual SOW budget vs final enterprise price). <b>An assigned task's price is locked.</b></p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D7</span> <span class="badge b-ok">Contributor</span> Express interest</div><div class="tbody">
+    <p class="do"><b>Do:</b> switch to Contributor → <b>Opportunities</b> → click a task to open its <b>detail page</b> (brief, acceptance criteria, files, deadline) → <b>I'm interested</b>.</p>
+    <p class="expect"><b>Expect:</b> price is shown up front (paid in full); button → "Interested · awaiting selection".</p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D8</span> <span class="badge b-info">Enterprise</span> Select contributor + assign reviewer</div><div class="tbody">
+    <p class="do"><b>Do:</b> switch to Enterprise → open the task's <b>Source &amp; assign</b> panel → pick from the interested pool → <b>Select</b> → assign a reviewer.</p>
+    <p class="expect"><b>Expect:</b> task → <b>Assigned</b>; reviewer recorded. (Enterprise never sees the contributor's pay.)</p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D9</span> <span class="badge b-ok">Contributor</span> Submit work</div><div class="tbody">
+    <p class="do"><b>Do:</b> switch to Contributor → <b>Assigned</b> → accept &amp; start → do the work → <b>Submit</b> (summary + artifact link).</p>
+    <p class="expect"><b>Expect:</b> status "Submitted — awaiting mentor"; a version is saved (v1).</p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D10</span> <span class="badge b-warn">Mentor</span> Review gate (with rework loop)</div><div class="tbody">
+    <p class="do"><b>Do:</b> switch to Mentor → <b>Queue</b> → open the submission → read the <b>Brief / Criteria / Evidence</b> → either <b>Request changes</b> (test rework) then have the contributor resubmit (v2), or <b>Accept</b> (rate the rubric).</p>
+    <p class="expect"><b>Expect:</b> rework returns to the contributor with comments; accept advances to the reviewer. Both versions kept in history.</p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D11</span> <span class="badge b-mut">Reviewer</span> QA gate (final acceptance)</div><div class="tbody">
+    <p class="do"><b>Do:</b> switch to Reviewer → <b>Queue</b> → open the mentor-approved task → check the <b>Task brief</b> tab → <b>Accept</b> (rate) or <b>Send back</b>.</p>
+    <p class="expect"><b>Expect:</b> Accept → status "Accepted", an <b>eligible payout</b> is created; the milestone becomes payable.</p>
+  </div></div>
+
+  <div class="tcard"><div class="thead"><span class="tnum">D12</span> <span class="badge b-brand">Glimmora</span> / <span class="badge b-info">Enterprise</span> Payout</div><div class="tbody">
+    <p class="do"><b>Do:</b> Glimmora requests the payout → Enterprise releases on <b>Billing</b> → Glimmora disburses to the contributor.</p>
+    <p class="expect"><b>Expect:</b> payout lifecycle <code class="inl">eligible → requested → released → paid</code>; the contributor sees it under <b>Earnings</b>; a "Payout sent" notification fires.</p>
+  </div></div>
+
+  <div class="note ok"><b>If D1–D12 all pass, the entire core platform works end-to-end.</b></div>
+</section>
+
+<section id="status">
+  <h2><span class="n">5</span>Task status matrix (the lifecycle)</h2>
+  <p class="sub">One code in the database (<code class="inl">decomp_tasks.status</code>), shown with role-appropriate labels.</p>
+  <div class="card">
+  <table>
+    <tr><th>Stage</th><th>Status code</th><th>Meaning</th></tr>
+    <tr><td><span class="badge b-mut">Pre-work</span></td><td><code class="inl">draft → ready</code></td><td>Created, priced, published for interest</td></tr>
+    <tr><td><span class="badge b-info">Sourcing</span></td><td><code class="inl">ready → assigned</code></td><td>Interested pool → enterprise selects one</td></tr>
+    <tr><td><span class="badge b-info">In delivery</span></td><td><code class="inl">in_progress → submitted</code></td><td>Contributor accepted, working, submitted</td></tr>
+    <tr><td><span class="badge b-warn">Mentor gate</span></td><td><code class="inl">qa_review_pending</code></td><td>Mentor reviewing (accept / rework)</td></tr>
+    <tr><td><span class="badge b-mut">QA gate</span></td><td><code class="inl">payment_pending</code></td><td>Reviewer accepted → payable</td></tr>
+    <tr><td><span class="badge b-ok">Done</span></td><td><code class="inl">paid</code></td><td>Payout disbursed</td></tr>
+    <tr><td><span class="badge b-err">Failure paths</span></td><td><code class="inl">req_check_failed · qa_review_failed · declined · cancelled</code></td><td>Sent back, rejected, declined or cancelled</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="kyc">
+  <h2><span class="n">6</span>Women KYC flow (real backend)</h2>
+  <div class="tcard"><div class="thead"><span class="tnum">E1</span> <span class="badge b-ok">Contributor</span> Women self-signup</div><div class="tbody">
+    <p class="do"><b>Do:</b> open <code class="inl">/auth/register?track=women</code> → fill details → email OTP (dev code shown) → submit.</p>
+    <p class="expect"><b>Expect:</b> "application under review" — account created as <b>pending</b>.</p>
+  </div></div>
+  <div class="tcard"><div class="thead"><span class="tnum">E2</span> Login while pending = blocked</div><div class="tbody">
+    <p class="do"><b>Do:</b> log in with the women account.</p>
+    <p class="expect"><b>Expect:</b> a full-screen <b>"Application under review"</b> wall with only Sign out — no dashboard (gated on the backend <code class="inl">approval_status</code>).</p>
+  </div></div>
+  <div class="tcard"><div class="thead"><span class="tnum">E3</span> <span class="badge b-brand">Super-admin</span> Approve KYC</div><div class="tbody">
+    <p class="do"><b>Do:</b> switch to Super-admin → <b>KYC Reviews</b> → open her case → Decision → <b>Approve</b>.</p>
+    <p class="expect"><b>Expect:</b> she appears in the pending queue (real data) → approved.</p>
+  </div></div>
+  <div class="tcard"><div class="thead"><span class="tnum">E4</span> Login after approval = unlocked</div><div class="tbody">
+    <p class="do"><b>Do:</b> log in again as the women account.</p>
+    <p class="expect"><b>Expect:</b> no more wall — she proceeds to onboarding / dashboard.</p>
+  </div></div>
+</section>
+
+<section id="tenant">
+  <h2><span class="n">7</span>Tenant provisioning (credential email + forced reset)</h2>
+  <div class="tcard"><div class="thead"><span class="tnum">F1</span> <span class="badge b-brand">Super-admin</span> Create a tenant</div><div class="tbody">
+    <p class="do"><b>Do:</b> <b>Tenants</b> → New tenant → name/slug/domain → primary admin name + email → <b>Provision</b>.</p>
+    <p class="expect"><b>Expect:</b> "Credentials emailed".</p>
+  </div></div>
+  <div class="tcard"><div class="thead"><span class="tnum">F2</span> Check the email</div><div class="tbody">
+    <p class="expect"><b>Expect:</b> email with the address, a random temporary password, and a Log in link to <code class="inl">/enterprise/login</code>.</p>
+  </div></div>
+  <div class="tcard"><div class="thead"><span class="tnum">F3</span> First login forces a reset</div><div class="tbody">
+    <p class="do"><b>Do:</b> log in with the temp password → set a new password.</p>
+    <p class="expect"><b>Expect:</b> routed to "Set your password"; afterward you log in normally and aren't asked again.</p>
+  </div></div>
+</section>
+
+<section id="features">
+  <h2><span class="n">8</span>Other features to check (per portal)</h2>
+  <div class="card">
+    <table>
+      <tr><th>Area</th><th>What to verify</th></tr>
+      <tr><td><b>Dashboards</b></td><td>Each role's dashboard renders with KPI cards / counts / recent activity, no errors.</td></tr>
+      <tr><td><b>Notifications</b> 🔔</td><td>Bell (top-right, same place in every portal) → list with unread badge → category tabs → mark read → action links work.</td></tr>
+      <tr><td><b>Search</b></td><td>Contributor top bar → "Search or ask AI" (Ctrl+K) → results dropdown navigates.</td></tr>
+      <tr><td><b>Settings persist</b></td><td>Contributor → Language (currency/date) and Notifications → Save → <b>reload</b> → choices stay.</td></tr>
+      <tr><td><b>Enterprise areas</b></td><td>Billing, Workforce, Analytics, Audit, Compliance, Settings all render.</td></tr>
+      <tr><td><b>Admin areas</b></td><td>Mentors, Skill taxonomy, Rubrics, Governance, Audit, Payment rails render.</td></tr>
+      <tr><td><b>Task detail (all roles)</b></td><td>Contributor opportunities, Glimmora work-pricing, Mentor queue, Reviewer queue each let you open a task's <b>full brief</b> (price only for Glimmora).</td></tr>
+    </table>
+  </div>
+  <div class="note">Placeholders that are <b>not bugs</b>: AI document extraction &amp; AI pricing use default values (real AI is a later phase); payments are simulated; some deep integrations (SSO test-login, ERP, webhooks) are display stubs.</div>
+</section>
+
+<section id="checklist">
+  <h2><span class="n">9</span>Test checklist</h2>
+  <div class="card">
+    <ul class="chk">
+      <li>System starts, home page loads</li>
+      <li>All 5 logins work (C1)</li>
+      <li>Forgot-password OTP (C2)</li>
+      <li>SOW create → submit (D1)</li>
+      <li>Internal gates approved (D2)</li>
+      <li>Commercial approve + mentor assign (D3)</li>
+      <li>Final sign-off → Active (D4)</li>
+      <li>Decompose → plan (D5)</li>
+      <li>Work pricing + budget comparison (D6)</li>
+      <li>Contributor "I'm interested" (D7)</li>
+      <li>Select + assign reviewer (D8)</li>
+      <li>Submit work v1 (D9)</li>
+      <li>Mentor rework → resubmit → accept (D10)</li>
+      <li>Reviewer accept → payout eligible (D11)</li>
+      <li>Payout released → paid (D12)</li>
+      <li>Women signup → approve → unlock (E1–E4)</li>
+      <li>Tenant provision → email → reset (F1–F3)</li>
+      <li>All dashboards render (G1)</li>
+      <li>Notifications bell (G2)</li>
+      <li>Search (G3)</li>
+      <li>Settings persist after reload (G4)</li>
+      <li>Sub-pages render (G5–G7)</li>
+    </ul>
+  </div>
+</section>
+
+</div>
+<footer class="wrap">GlimmoraTeam Workforce Delivery Platform · manual testing flows · companion file: PROJECT_OVERVIEW.html</footer>
+</body>
+</html>
