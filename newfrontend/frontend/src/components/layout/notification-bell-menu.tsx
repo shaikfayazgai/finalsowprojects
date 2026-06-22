@@ -68,7 +68,9 @@ export function NotificationBellMenu() {
   const preview: NotificationSummary[] = unread.slice(0, 5);
   const unreadCount = data?.unreadCount ?? 0;
   const hasCritical = unread.some((n) => n.severity === "critical");
-  const badgeColor = hasCritical ? "bg-red-500" : "bg-gold-500";
+  // Dark text on the light gold badge (was white-on-gold = unreadable); white only
+  // on the dark critical-red badge.
+  const badgeColor = hasCritical ? "bg-red-500 text-white" : "bg-gold-500 text-gray-900";
   const display = unreadCount > 9 ? "9+" : String(unreadCount);
 
   const role = (session?.user as { role?: string } | undefined)?.role;
@@ -101,7 +103,7 @@ export function NotificationBellMenu() {
           {unreadCount > 0 && (
             <span
               className={cn(
-                "absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center",
+                "absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center",
                 badgeColor,
               )}
               style={{

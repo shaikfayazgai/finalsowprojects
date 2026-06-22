@@ -267,6 +267,41 @@ async def my_cases(user: Annotated[dict, Depends(get_current_user)]):
     return {"items": [_out(r) for r in rows], "total": len(rows)}
 
 
+@router.get("/api/v1/cases/context")
+async def case_context(user: Annotated[dict, Depends(get_current_user)]):
+    """Reference items for the raise form's live dropdowns — the caller's tasks
+    (contributor: their tasks + paid-out tasks, so they don't have to remember a
+    title/ID). Other roles get an empty list. Registered BEFORE /{case_id}."""
+    acct = _acct_int(user.get("id"))
+    items: list[dict[str, Any]] = []
+    if acct is not None:
+        seen: set[str] = set()
+        conn = get_pg_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT title FROM contributor_tasks WHERE account_id = %s "
+                    "ORDER BY updated_at DESC LIMIT 40",
+                    (acct,),
+                )
+                for r in cur.fetchall():
+                    t = (r.get("title") or "").strip()
+                    if t and t.lower() not in seen:
+                        seen.add(t.lower()); items.append({"label": t})
+                cur.execute(
+                    "SELECT task_title FROM payouts WHERE account_id = %s "
+                    "ORDER BY created_at DESC LIMIT 40",
+                    (acct,),
+                )
+                for r in cur.fetchall():
+                    t = (r.get("task_title") or "").strip()
+                    if t and t.lower() not in seen:
+                        seen.add(t.lower()); items.append({"label": t})
+        except Exception:  # noqa: BLE001
+            items = []
+    return {"items": items}
+
+
 @router.get("/api/v1/cases/{case_id}")
 async def get_case(case_id: str, user: Annotated[dict, Depends(get_current_user)]):
     """Case detail + thread. Owner sees public messages only; admin sees all."""

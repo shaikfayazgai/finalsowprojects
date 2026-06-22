@@ -1,11 +1,9 @@
-import { Suspense } from "react";
-import { NotificationsWorkspace } from "./components/notifications-workspace";
-import { NotificationsSkeleton } from "./components/notifications-skeleton";
+import { RealNotificationsWorkspace } from "./components/real-notifications";
 
+export const dynamic = "force-dynamic";
+
+// Wired to the REAL notifications feed (was a mock). The old NotificationsWorkspace
+// mock is kept in ./components for reference but no longer rendered.
 export default function AdminNotificationsPage() {
-  return (
-    <Suspense fallback={<NotificationsSkeleton />}>
-      <NotificationsWorkspace />
-    </Suspense>
-  );
+  return <RealNotificationsWorkspace />;
 }

@@ -55,6 +55,7 @@ export interface LaneField {
 }
 const sel = (key: string, label: string, options: string[]): LaneField => ({ key, label, type: "select", options });
 const txt = (key: string, label: string, placeholder?: string): LaneField => ({ key, label, type: "text", placeholder });
+const src = (key: string, label: string, source: string, placeholder?: string): LaneField => ({ key, label, type: "text", source, placeholder });
 const dt = (key: string, label: string): LaneField => ({ key, label, type: "date" });
 const chk = (key: string, label: string): LaneField => ({ key, label, type: "checkbox" });
 
@@ -85,7 +86,7 @@ const FIELD_SETS: Record<string, FieldSet> = {
   payment: {
     default: [sel("subtype", "Issue", ["Delayed", "Missing", "Wrong amount", "Refund"]), txt("reference", "Reference"), txt("amount", "Amount (₹)")],
     roles: {
-      contributor: [sel("subtype", "Issue", ["Delayed", "Missing", "Wrong amount", "Refund"]), txt("taskRef", "Which task?", "Task title or ID"), txt("amount", "Amount expected (₹)"), dt("expected", "When was it expected?")],
+      contributor: [sel("subtype", "Issue", ["Delayed", "Missing", "Wrong amount", "Refund"]), src("taskRef", "Which task?", "my_work", "Pick or type your task"), txt("amount", "Amount expected (₹)"), dt("expected", "When was it expected?")],
       mentor: [sel("subtype", "Issue", ["Delayed", "Missing", "Wrong amount"]), txt("period", "Which review / period?"), txt("amount", "Amount (₹)")],
       reviewer: [sel("subtype", "Issue", ["Delayed", "Missing", "Wrong amount"]), txt("period", "Which review / period?"), txt("amount", "Amount (₹)")],
       enterprise: [sel("subtype", "Issue", ["Invoice query", "Overcharge", "Refund"]), txt("invoiceRef", "Invoice / SOW reference"), txt("amount", "Amount (₹)")],
@@ -94,7 +95,7 @@ const FIELD_SETS: Record<string, FieldSet> = {
   work_task: {
     default: [sel("subtype", "Issue", ["Blocked", "Unclear scope", "Can't access", "Deadline"]), txt("ref", "Reference")],
     roles: {
-      contributor: [sel("subtype", "Issue", ["Blocked", "Unclear scope", "Can't access", "Deadline too tight"]), txt("taskRef", "Which task?", "Task title or ID")],
+      contributor: [sel("subtype", "Issue", ["Blocked", "Unclear scope", "Can't access", "Deadline too tight"]), src("taskRef", "Which task?", "my_work", "Pick or type your task")],
       mentor: [sel("subtype", "Issue", ["Queue item", "SOW assignment", "Submission problem", "Other"]), txt("ref", "Which submission / SOW?")],
       reviewer: [sel("subtype", "Issue", ["QA item", "Assignment", "Submission problem", "Other"]), txt("ref", "Which QA item?")],
       enterprise: [sel("subtype", "Issue", ["SOW", "Decomposition", "Delivery", "Other"]), txt("ref", "Which SOW / project?")],
