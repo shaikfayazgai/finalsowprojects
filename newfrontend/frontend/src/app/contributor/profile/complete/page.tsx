@@ -223,7 +223,7 @@ export default function CompleteProfilePage() {
   const sectionDone = sections[currentKey] === true;
 
   return (
-    <div className="max-w-4xl mx-auto pb-16">
+    <div className="w-full pb-16">
       <Link href="/contributor/profile" className="inline-flex items-center gap-1.5 font-body text-[12.5px] text-text-tertiary hover:text-foreground mb-4"><ArrowLeft className="h-4 w-4" /> Back to profile</Link>
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-4 items-start">
