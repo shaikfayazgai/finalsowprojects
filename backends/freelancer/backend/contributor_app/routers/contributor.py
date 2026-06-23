@@ -1939,10 +1939,11 @@ async def list_projects(account_id: AcctId):
 @router.post("/profile/projects", status_code=201)
 async def add_project(account_id: AcctId, body: dict = Body(default={})):
     row = db.execute(
-        """INSERT INTO contributor_projects (account_id,title,description,role,url,skills,start_date,end_date)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+        """INSERT INTO contributor_projects (account_id,title,description,role,url,skills,keywords,category,start_date,end_date)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
         (account_id, body.get("title", ""), body.get("description", ""), body.get("role"),
-         body.get("url"), body.get("skills") or [], body.get("start_date"), body.get("end_date")))
+         body.get("url"), body.get("skills") or [], body.get("keywords") or [], body.get("category"),
+         body.get("start_date"), body.get("end_date")))
     return row
 
 

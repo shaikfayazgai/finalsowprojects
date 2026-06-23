@@ -37,6 +37,32 @@ async function save(url: string, body: unknown, method = "POST"): Promise<void> 
 const input = "w-full h-9 rounded-lg border border-stroke-subtle bg-surface px-3 font-body text-[12.5px] text-foreground placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand/30";
 const label = "font-body text-[11px] font-semibold uppercase tracking-[0.06em] text-text-tertiary";
 const primaryBtn = "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-foreground text-surface font-body text-[12px] font-semibold hover:opacity-90 disabled:opacity-50";
+const KEYWORDS = ["Authentication", "JWT", "RBAC", "Dashboard", "Payments", "Admin Panel", "Reporting", "Analytics", "Notifications", "Search", "Chat", "CRM", "Inventory", "Booking"];
+
+/** Searchable multi-select chips — keeps skills/keywords clean (no comma chaos). */
+function ChipField({ values, setValues, suggestions, placeholder }: { values: string[]; setValues: (v: string[]) => void; suggestions: string[]; placeholder: string }) {
+  const [inp, setInp] = React.useState("");
+  const add = (v: string) => { const t = v.trim(); if (t && !values.includes(t)) setValues([...values, t]); setInp(""); };
+  return (
+    <div className="space-y-1.5">
+      {values.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {values.map((v) => (
+            <span key={v} className="inline-flex items-center gap-1 rounded-full border border-stroke-subtle bg-surface-hover px-2.5 py-1 font-body text-[12px] text-foreground">
+              {v}<button type="button" onClick={() => setValues(values.filter((x) => x !== v))} className="text-text-tertiary hover:text-foreground">×</button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className="flex flex-wrap gap-1.5">
+        {suggestions.filter((s) => !values.includes(s)).slice(0, 10).map((s) => (
+          <button key={s} type="button" onClick={() => add(s)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-stroke px-2.5 py-1 font-body text-[11.5px] text-text-secondary hover:bg-surface-hover"><Plus className="h-3 w-3" /> {s}</button>
+        ))}
+      </div>
+      <input value={inp} onChange={(e) => setInp(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(inp); } }} placeholder={placeholder} className={input} />
+    </div>
+  );
+}
 
 export default function CompleteProfilePage() {
   const qc = useQueryClient();
@@ -60,7 +86,9 @@ export default function CompleteProfilePage() {
   const [experience, setExperience] = React.useState<Row[]>([]);
   const [education, setEducation] = React.useState<Row[]>([]);
   const [skillDraft, setSkillDraft] = React.useState({ name: "", level: "Intermediate" });
-  const [projDraft, setProjDraft] = React.useState({ title: "", category: CATEGORIES[0], description: "", skills: "", url: "" });
+  const [projDraft, setProjDraft] = React.useState({ title: "", category: CATEGORIES[0], description: "", url: "" });
+  const [projSkills, setProjSkills] = React.useState<string[]>([]);
+  const [projKeywords, setProjKeywords] = React.useState<string[]>([]);
   const [expDraft, setExpDraft] = React.useState({ organization: "", role: "", kind: "job", start_date: "", end_date: "" });
   const [eduDraft, setEduDraft] = React.useState({ institution: "", degree: "", field: "", start_year: "", end_year: "" });
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -90,7 +118,7 @@ export default function CompleteProfilePage() {
   const saveProf = () => run("professional", () => save("/api/contributor/profile", prof, "PATCH"));
   const saveExpertise = (next: string[]) => run("expertise", async () => { await save("/api/contributor/profile/expertise", { expertise_areas: next }, "PATCH"); setExpertise(next); });
   const addSkill = () => { if (!skillDraft.name.trim()) return; run("skills", async () => { await save("/api/contributor/skills", { name: skillDraft.name.trim(), level: skillDraft.level }); setSkillDraft({ name: "", level: "Intermediate" }); }); };
-  const addProject = () => { if (!projDraft.title.trim()) return; run("portfolio", async () => { await save("/api/contributor/profile/projects", { title: projDraft.title.trim(), description: projDraft.description.trim(), skills: projDraft.skills.split(",").map((s) => s.trim()).filter(Boolean), url: projDraft.url.trim(), data: { category: projDraft.category } }); setProjDraft({ title: "", category: CATEGORIES[0], description: "", skills: "", url: "" }); }); };
+  const addProject = () => { if (!projDraft.title.trim()) return; run("portfolio", async () => { await save("/api/contributor/profile/projects", { title: projDraft.title.trim(), description: projDraft.description.trim(), skills: projSkills, keywords: projKeywords, url: projDraft.url.trim(), category: projDraft.category }); setProjDraft({ title: "", category: CATEGORIES[0], description: "", url: "" }); setProjSkills([]); setProjKeywords([]); }); };
   const addExp = () => { if (!expDraft.organization.trim() || !expDraft.role.trim()) return; run("experience", async () => { await save("/api/contributor/profile/experience", { organization: expDraft.organization.trim(), role: expDraft.role.trim(), kind: expDraft.kind, start_date: expDraft.start_date || null, end_date: expDraft.end_date || null }); setExpDraft({ organization: "", role: "", kind: "job", start_date: "", end_date: "" }); }); };
   const addEdu = () => { if (!eduDraft.institution.trim()) return; run("education", async () => { await save("/api/contributor/profile/education", { institution: eduDraft.institution.trim(), degree: eduDraft.degree.trim(), field: eduDraft.field.trim(), start_year: eduDraft.start_year || null, end_year: eduDraft.end_year || null }); setEduDraft({ institution: "", degree: "", field: "", start_year: "", end_year: "" }); }); };
 
@@ -197,10 +225,11 @@ export default function CompleteProfilePage() {
             <div className="grid sm:grid-cols-2 gap-2">
               <input value={projDraft.title} onChange={(e) => setProjDraft({ ...projDraft, title: e.target.value })} placeholder="Project name *" className={input} />
               <select value={projDraft.category} onChange={(e) => setProjDraft({ ...projDraft, category: e.target.value })} className={input}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
-              <input value={projDraft.skills} onChange={(e) => setProjDraft({ ...projDraft, skills: e.target.value })} placeholder="Skills used (comma sep)" className={input} />
               <input value={projDraft.url} onChange={(e) => setProjDraft({ ...projDraft, url: e.target.value })} placeholder="GitHub / live URL" className={input} />
-              <input value={projDraft.description} onChange={(e) => setProjDraft({ ...projDraft, description: e.target.value })} placeholder="Short description" className={cn(input, "sm:col-span-2")} />
+              <input value={projDraft.description} onChange={(e) => setProjDraft({ ...projDraft, description: e.target.value })} placeholder="Short description" className={input} />
             </div>
+            <div><span className={label}>Skills used * (technology)</span><ChipField values={projSkills} setValues={setProjSkills} suggestions={SKILL_SUGGESTIONS} placeholder="Add a skill + Enter — React, Node.js…" /></div>
+            <div><span className={label}>Keywords * (features)</span><ChipField values={projKeywords} setValues={setProjKeywords} suggestions={KEYWORDS} placeholder="Add a keyword + Enter — Login, Payments…" /></div>
             <button type="button" disabled={busy === "portfolio" || !projDraft.title.trim()} onClick={addProject} className={primaryBtn}><Plus className="h-3.5 w-3.5" /> Add project</button>
           </>
         ) : null}

@@ -274,10 +274,14 @@ CREATE TABLE IF NOT EXISTS contributor_projects (
     role          TEXT,
     url           TEXT,
     skills        TEXT[] DEFAULT '{}',
+    keywords      TEXT[] DEFAULT '{}',
+    category      TEXT,
     start_date    TEXT,
     end_date      TEXT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE contributor_projects ADD COLUMN IF NOT EXISTS keywords TEXT[] DEFAULT '{}';
+ALTER TABLE contributor_projects ADD COLUMN IF NOT EXISTS category TEXT;
 CREATE INDEX IF NOT EXISTS idx_contrib_projects_acct ON contributor_projects(account_id);
 
 -- Work / internship experience.
