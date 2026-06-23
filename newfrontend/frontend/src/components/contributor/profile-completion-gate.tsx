@@ -26,6 +26,7 @@ export function ProfileCompletionGate({ children }: { children: React.ReactNode 
 
   const allSections = [
     "basic", "professional", "skills", "expertise", "portfolio", "experience", "education",
+    "certifications", "verification", "links",
   ] as const;
 
   return (

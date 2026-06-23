@@ -15,7 +15,17 @@ import { cn } from "@/lib/utils/cn";
 
 type Row = Record<string, unknown>;
 
-const SECTION_ORDER = ["basic", "professional", "skills", "expertise", "portfolio", "experience", "education"] as const;
+const SECTION_ORDER = ["basic", "professional", "skills", "expertise", "portfolio", "experience", "education", "certifications", "verification", "links"] as const;
+const ID_TYPES = ["Aadhaar", "PAN", "Passport", "Driving License", "Voter ID"];
+const VISIBILITY = ["Public", "Private", "Recruiters Only"];
+function validateId(type: string, num: string): string | null {
+  const v = num.trim().toUpperCase();
+  if (!v) return "ID number is required.";
+  if (type === "Aadhaar") return /^\d{12}$/.test(v) ? null : "Aadhaar must be 12 digits.";
+  if (type === "PAN") return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v) ? null : "PAN must look like ABCDE1234F.";
+  if (type === "Passport") return /^[A-Z][0-9]{7}$/.test(v) ? null : "Passport must look like A1234567.";
+  return null; // Driving License / Voter ID — loose
+}
 const COUNTRIES = ["India", "United States", "United Kingdom", "Canada", "Australia", "Germany", "Singapore", "United Arab Emirates"];
 const TIMEZONES = ["Asia/Kolkata", "Asia/Singapore", "Asia/Dubai", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Australia/Sydney"];
 const YEARS = ["0-1", "1-3", "3-5", "5-8", "8+"];
@@ -91,6 +101,11 @@ export default function CompleteProfilePage() {
   const [projKeywords, setProjKeywords] = React.useState<string[]>([]);
   const [expDraft, setExpDraft] = React.useState({ organization: "", role: "", kind: "job", start_date: "", end_date: "" });
   const [eduDraft, setEduDraft] = React.useState({ institution: "", degree: "", field: "", start_year: "", end_year: "" });
+  const [certs, setCerts] = React.useState<Row[]>([]);
+  const [certDraft, setCertDraft] = React.useState({ name: "", issuer: "", url: "", date: "" });
+  const [verif, setVerif] = React.useState({ idType: "", idNumber: "" });
+  const [links, setLinks] = React.useState({ linkedin: "", github: "", portfolio: "", behance: "", dribbble: "", kaggle: "", medium: "" });
+  const [prefs, setPrefs] = React.useState({ visibility: "Public", remoteOnly: false });
   const [busy, setBusy] = React.useState<string | null>(null);
   const [err, setErr] = React.useState("");
 
@@ -106,6 +121,13 @@ export default function CompleteProfilePage() {
     setProjects(arr(await getJson("/api/contributor/profile/projects")));
     setExperience(arr(await getJson("/api/contributor/profile/experience")));
     setEducation(arr(await getJson("/api/contributor/profile/education")));
+    const ex = (await getJson("/api/contributor/profile/extra")) as Row;
+    if (ex && typeof ex === "object" && !Array.isArray(ex)) {
+      setCerts(Array.isArray(ex.certifications) ? (ex.certifications as Row[]) : []);
+      const v = (ex.verification as Row) || {}; setVerif({ idType: (v.idType as string) || "", idNumber: (v.idNumber as string) || "" });
+      const l = (ex.links as Record<string, string>) || {}; setLinks((p) => ({ ...p, ...l }));
+      const pr = (ex.preferences as Row) || {}; setPrefs((p) => ({ visibility: (pr.visibility as string) || p.visibility, remoteOnly: Boolean(pr.remoteOnly) }));
+    }
     refresh();
   }, [refresh]);
   React.useEffect(() => { reload(); }, [reload]);
@@ -121,6 +143,10 @@ export default function CompleteProfilePage() {
   const addProject = () => { if (!projDraft.title.trim()) return; run("portfolio", async () => { await save("/api/contributor/profile/projects", { title: projDraft.title.trim(), description: projDraft.description.trim(), skills: projSkills, keywords: projKeywords, url: projDraft.url.trim(), category: projDraft.category }); setProjDraft({ title: "", category: CATEGORIES[0], description: "", url: "" }); setProjSkills([]); setProjKeywords([]); }); };
   const addExp = () => { if (!expDraft.organization.trim() || !expDraft.role.trim()) return; run("experience", async () => { await save("/api/contributor/profile/experience", { organization: expDraft.organization.trim(), role: expDraft.role.trim(), kind: expDraft.kind, start_date: expDraft.start_date || null, end_date: expDraft.end_date || null }); setExpDraft({ organization: "", role: "", kind: "job", start_date: "", end_date: "" }); }); };
   const addEdu = () => { if (!eduDraft.institution.trim()) return; run("education", async () => { await save("/api/contributor/profile/education", { institution: eduDraft.institution.trim(), degree: eduDraft.degree.trim(), field: eduDraft.field.trim(), start_year: eduDraft.start_year || null, end_year: eduDraft.end_year || null }); setEduDraft({ institution: "", degree: "", field: "", start_year: "", end_year: "" }); }); };
+
+  const addCert = () => { if (!certDraft.name.trim()) return; run("certifications", async () => { const next = [...certs, { ...certDraft }]; await save("/api/contributor/profile/extra", { certifications: next }, "PATCH"); setCerts(next); setCertDraft({ name: "", issuer: "", url: "", date: "" }); }); };
+  const saveVerif = () => { if (!verif.idType) { setErr("Select an ID type."); return; } const e = validateId(verif.idType, verif.idNumber); if (e) { setErr(e); return; } run("verification", () => save("/api/contributor/profile/extra", { verification: verif }, "PATCH")); };
+  const saveLinks = () => { if (!links.linkedin.trim()) { setErr("LinkedIn is required."); return; } const proof = links.github || links.portfolio || links.behance || links.dribbble || links.kaggle || links.medium; if (!proof) { setErr("Add at least one proof link besides LinkedIn (GitHub, Portfolio, Behance…)."); return; } run("links", () => save("/api/contributor/profile/extra", { links, preferences: prefs }, "PATCH")); };
 
   const sectionDone = sections[currentKey] === true;
 
@@ -263,6 +289,51 @@ export default function CompleteProfilePage() {
               </div>
             </div>
             <button type="button" disabled={busy === "education" || !eduDraft.institution.trim()} onClick={addEdu} className={primaryBtn}><Plus className="h-3.5 w-3.5" /> Add education</button>
+          </>
+        ) : null}
+
+        {currentKey === "certifications" ? (
+          <>
+            <p className="font-body text-[11.5px] text-text-tertiary">Optional — add any certifications you hold.</p>
+            {certs.length > 0 ? <ul className="space-y-1">{certs.map((c, i) => <li key={i} className="font-body text-[12.5px] text-foreground flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5" style={{ color: "#0F9D6B" }} /> {String(c.name)}{c.issuer ? ` · ${String(c.issuer)}` : ""}</li>)}</ul> : null}
+            <div className="grid sm:grid-cols-2 gap-2">
+              <input value={certDraft.name} onChange={(e) => setCertDraft({ ...certDraft, name: e.target.value })} placeholder="Certificate name" className={input} />
+              <input value={certDraft.issuer} onChange={(e) => setCertDraft({ ...certDraft, issuer: e.target.value })} placeholder="Issuer" className={input} />
+              <input value={certDraft.url} onChange={(e) => setCertDraft({ ...certDraft, url: e.target.value })} placeholder="Credential URL" className={input} />
+              <input type="date" value={certDraft.date} onChange={(e) => setCertDraft({ ...certDraft, date: e.target.value })} className={input} />
+            </div>
+            <button type="button" disabled={busy === "certifications" || !certDraft.name.trim()} onClick={addCert} className={primaryBtn}><Plus className="h-3.5 w-3.5" /> Add certification</button>
+          </>
+        ) : null}
+
+        {currentKey === "verification" ? (
+          <>
+            <p className="font-body text-[11.5px] text-text-tertiary">Government ID — kept private, used for trust only.</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <div><span className={label}>ID type *</span><select value={verif.idType} onChange={(e) => setVerif({ ...verif, idType: e.target.value })} className={input}><option value="">Select…</option>{ID_TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
+              <div><span className={label}>ID number *</span><input value={verif.idNumber} onChange={(e) => setVerif({ ...verif, idNumber: e.target.value })} className={input} placeholder={verif.idType === "Aadhaar" ? "12 digits" : verif.idType === "PAN" ? "ABCDE1234F" : "ID number"} /></div>
+            </div>
+            <button type="button" disabled={busy === "verification"} onClick={saveVerif} className={primaryBtn}>Save verification</button>
+          </>
+        ) : null}
+
+        {currentKey === "links" ? (
+          <>
+            <p className="font-body text-[11.5px] text-text-tertiary">LinkedIn is required, plus at least one proof link.</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <input value={links.linkedin} onChange={(e) => setLinks({ ...links, linkedin: e.target.value })} placeholder="LinkedIn *" className={input} />
+              <input value={links.github} onChange={(e) => setLinks({ ...links, github: e.target.value })} placeholder="GitHub" className={input} />
+              <input value={links.portfolio} onChange={(e) => setLinks({ ...links, portfolio: e.target.value })} placeholder="Portfolio website" className={input} />
+              <input value={links.behance} onChange={(e) => setLinks({ ...links, behance: e.target.value })} placeholder="Behance" className={input} />
+              <input value={links.dribbble} onChange={(e) => setLinks({ ...links, dribbble: e.target.value })} placeholder="Dribbble" className={input} />
+              <input value={links.kaggle} onChange={(e) => setLinks({ ...links, kaggle: e.target.value })} placeholder="Kaggle" className={input} />
+              <input value={links.medium} onChange={(e) => setLinks({ ...links, medium: e.target.value })} placeholder="Medium" className={input} />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-2 pt-1">
+              <div><span className={label}>Profile visibility</span><select value={prefs.visibility} onChange={(e) => setPrefs({ ...prefs, visibility: e.target.value })} className={input}>{VISIBILITY.map((v) => <option key={v}>{v}</option>)}</select></div>
+              <label className="flex items-center gap-2 mt-5 cursor-pointer"><input type="checkbox" checked={prefs.remoteOnly} onChange={(e) => setPrefs({ ...prefs, remoteOnly: e.target.checked })} className="h-3.5 w-3.5 rounded accent-brand" /><span className="font-body text-[12.5px] text-foreground">Remote only</span></label>
+            </div>
+            <button type="button" disabled={busy === "links"} onClick={saveLinks} className={primaryBtn}>Save links &amp; preferences</button>
           </>
         ) : null}
       </div>

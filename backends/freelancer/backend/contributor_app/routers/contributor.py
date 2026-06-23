@@ -1894,6 +1894,9 @@ def _completion_status(account_id: int) -> dict[str, Any]:
     # a basic form. Each section carries a weight; the contributor unlocks public
     # work only at 100%. Every gating section has a fill-in form on the complete page.
     n_skills = len(db.fetch_all("SELECT id FROM contributor_skills WHERE account_id=%s", (account_id,)))
+    extra = profile.get("profile_extra") or {}
+    verif = extra.get("verification") or {}
+    links = extra.get("links") or {}
     sections = {
         "basic": bool(profile.get("country") and profile.get("city")
                       and profile.get("timezone") and profile.get("linkedin")),
@@ -1904,11 +1907,16 @@ def _completion_status(account_id: int) -> dict[str, Any]:
         "portfolio": len(projects) > 0,
         "experience": len(experience) > 0,
         "education": len(education) > 0,
+        "certifications": len(extra.get("certifications") or []) > 0,
+        "verification": bool(verif.get("idType") and verif.get("idNumber")),
+        "links": bool(links.get("linkedin")),
     }
+    # Weighted gate (sums to 100, per template). expertise / certifications / links
+    # are steps in the wizard but optional — they raise profile strength, not the gate.
     WEIGHTS = {
-        "basic": 15, "professional": 15, "skills": 20, "expertise": 10,
-        "portfolio": 20, "experience": 10, "education": 10,
-    }  # sums to 100
+        "basic": 15, "professional": 15, "skills": 20, "portfolio": 20,
+        "experience": 10, "education": 10, "verification": 10,
+    }
     pct = sum(w for k, w in WEIGHTS.items() if sections.get(k))
     complete = pct >= 100
     # Persist the flag so the gate can read it cheaply.
@@ -2014,6 +2022,27 @@ async def update_expertise(account_id: AcctId, body: dict = Body(default={})):
     db.execute("UPDATE contributor_profiles SET expertise_areas=%s WHERE account_id=%s",
                (body.get("expertise_areas") or [], account_id))
     return _completion_status(account_id)
+
+
+@router.patch("/profile/extra")
+async def update_profile_extra(account_id: AcctId, body: dict = Body(default={})):
+    """Shallow-merge into profile_extra JSONB — languages, links, preferences,
+    verification meta, certifications (the richer 10-step wizard fields). Each step
+    PATCHes its own top-level key, so a shallow merge is the right granularity."""
+    from psycopg2.extras import Json
+    _ensure_profile(account_id)
+    db.execute(
+        "UPDATE contributor_profiles SET "
+        "profile_extra = COALESCE(profile_extra,'{}'::jsonb) || %s, updated_at=now() "
+        "WHERE account_id=%s",
+        (Json(body or {}), account_id))
+    return _completion_status(account_id)
+
+
+@router.get("/profile/extra")
+async def get_profile_extra(account_id: AcctId):
+    row = db.fetch_one("SELECT profile_extra FROM contributor_profiles WHERE account_id=%s", (account_id,))
+    return (row or {}).get("profile_extra") or {}
 
 
 @router.get("/profile/digital-twin")

@@ -283,6 +283,9 @@ CREATE TABLE IF NOT EXISTS contributor_projects (
 ALTER TABLE contributor_projects ADD COLUMN IF NOT EXISTS keywords TEXT[] DEFAULT '{}';
 ALTER TABLE contributor_projects ADD COLUMN IF NOT EXISTS category TEXT;
 CREATE INDEX IF NOT EXISTS idx_contrib_projects_acct ON contributor_projects(account_id);
+-- Flexible store for the richer profile steps (languages, links, preferences,
+-- verification meta, certifications) so the 10-step wizard persists everything.
+ALTER TABLE contributor_profiles ADD COLUMN IF NOT EXISTS profile_extra JSONB DEFAULT '{}';
 
 -- Work / internship experience.
 CREATE TABLE IF NOT EXISTS contributor_experience (
