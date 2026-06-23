@@ -160,6 +160,15 @@ def _create_payout_on_approval(acct_id: Any, task_id: Any, existing: dict, ex_da
                 }),
             ),
         )
+        # QA passed → advance the contributor's own task to accepted so it leaves
+        # "Submissions" and lands in "Completed" (consistent with the now-eligible
+        # payout). The freelancer _fe_status maps raw 'completed' → FE 'accepted'.
+        if ct_id is not None:
+            cur.execute(
+                "UPDATE contributor_tasks SET status='completed', updated_at=now() "
+                "WHERE id=%s AND account_id=%s AND status <> 'completed'",
+                (ct_id, account_id),
+            )
     conn.commit()
 
 
