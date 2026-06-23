@@ -89,10 +89,11 @@ function ChipField({ values, setValues, suggestions, placeholder }: { values: st
 
 /** File picker — shows the chosen filename (real upload to Blob is wired later).
  * For the profile photo it enforces a KB cap + passport-size (portrait) dimensions. */
-function FileField({ text, name, onPick, accept, multiple, maxKB, passport, onErr }: { text: string; name: string; onPick: (n: string) => void; accept: string; multiple?: boolean; maxKB?: number; passport?: boolean; onErr?: (m: string) => void }) {
+function FileField({ text, name, onPick, accept, multiple, maxKB, passport, pdfOnly, onErr }: { text: string; name: string; onPick: (n: string) => void; accept: string; multiple?: boolean; maxKB?: number; passport?: boolean; pdfOnly?: boolean; onErr?: (m: string) => void }) {
   const handle = async (files: FileList) => {
     const f = files[0];
-    if (maxKB && f.size > maxKB * 1024) { onErr?.(`Photo must be under ${maxKB} KB (yours is ${Math.round(f.size / 1024)} KB).`); return; }
+    if (pdfOnly && f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) { onErr?.("Only a PDF file is allowed for the ID document."); return; }
+    if (maxKB && f.size > maxKB * 1024) { onErr?.(`File must be under ${maxKB} KB (yours is ${Math.round(f.size / 1024)} KB).`); return; }
     if (passport) {
       const ok = await new Promise<boolean>((res) => {
         const img = new window.Image();
@@ -137,7 +138,7 @@ export default function CompleteProfilePage() {
   const [skillDraft, setSkillDraft] = React.useState({ name: "", level: "Intermediate", years: "1 Year" });
   const [expertise, setExpertise] = React.useState<string[]>([]);
   const [projects, setProjects] = React.useState<Row[]>([]);
-  const [projDraft, setProjDraft] = React.useState({ name: "", category: "", description: "", github: "", live: "", video: "", screenshots: "" });
+  const [projDraft, setProjDraft] = React.useState({ name: "", category: "", description: "", github: "", live: "", video: "" });
   const [projSkills, setProjSkills] = React.useState<string[]>([]);
   const [projKeywords, setProjKeywords] = React.useState<string[]>([]);
   const [experience, setExperience] = React.useState<Row[]>([]);
@@ -195,7 +196,7 @@ export default function CompleteProfilePage() {
   });
   const addSkill = () => { if (!skillDraft.name.trim()) return; run("skills", async () => { await save("/api/contributor/skills", { name: skillDraft.name.trim(), level: skillDraft.level, years: skillDraft.years }); setSkillDraft({ name: "", level: "Intermediate", years: "1 Year" }); }); };
   const saveExpertise = (next: string[]) => run("expertise", async () => { await save("/api/contributor/profile/expertise", { expertise_areas: next }, "PATCH"); setExpertise(next); });
-  const addProject = () => { if (!projDraft.name.trim()) return; run("portfolio", async () => { await save("/api/contributor/profile/projects", { title: projDraft.name.trim(), description: projDraft.description.trim(), category: projDraft.category, skills: projSkills, keywords: projKeywords, url: projDraft.github || projDraft.live, video: projDraft.video, screenshots: projDraft.screenshots ? projDraft.screenshots.split(",").map((s) => s.trim()) : [] }); setProjDraft({ name: "", category: "", description: "", github: "", live: "", video: "", screenshots: "" }); setProjSkills([]); setProjKeywords([]); }); };
+  const addProject = () => { if (!projDraft.name.trim()) return; run("portfolio", async () => { await save("/api/contributor/profile/projects", { title: projDraft.name.trim(), description: projDraft.description.trim(), category: projDraft.category, skills: projSkills, keywords: projKeywords, url: projDraft.github || projDraft.live, video: projDraft.video }); setProjDraft({ name: "", category: "", description: "", github: "", live: "", video: "" }); setProjSkills([]); setProjKeywords([]); }); };
   const addExp = () => { if (!expDraft.organization.trim() || !expDraft.role.trim()) return; run("experience", async () => { await save("/api/contributor/profile/experience", { organization: expDraft.organization.trim(), role: expDraft.role.trim(), kind: expDraft.employmentType, start_date: expDraft.startDate || null, end_date: expDraft.endDate || null, description: expDraft.description }); setExpDraft({ organization: "", role: "", employmentType: "Full Time", startDate: "", endDate: "", description: "" }); }); };
   const addEdu = () => { if (!eduDraft.institution.trim()) return; run("education", async () => { await save("/api/contributor/profile/education", { institution: eduDraft.institution.trim(), degree: eduDraft.degree, field: eduDraft.specialization, grade: eduDraft.grade, start_year: eduDraft.startYear || null, end_year: eduDraft.endYear || null }); setEduDraft({ institution: "", degree: "", specialization: "", grade: "", startYear: "", endYear: "" }); }); };
 
@@ -336,7 +337,6 @@ export default function CompleteProfilePage() {
               <Field label="Live URL"><input value={projDraft.live} onChange={(e) => setProjDraft({ ...projDraft, live: e.target.value })} className={inputCls} placeholder="https://…" /></Field>
               <Field label="Video URL"><input value={projDraft.video} onChange={(e) => setProjDraft({ ...projDraft, video: e.target.value })} className={inputCls} placeholder="https://…" /></Field>
             </div>
-            <FileField text="Attach screenshots" name={projDraft.screenshots} accept=".jpg,.jpeg,.png,.webp" multiple onPick={(n) => setProjDraft({ ...projDraft, screenshots: n })} />
             <button type="button" disabled={busy === "portfolio" || !projDraft.name.trim()} onClick={addProject} className={primaryBtn}><Plus className="h-3.5 w-3.5" /> Add project</button>
           </>
         ) : null}
@@ -383,7 +383,7 @@ export default function CompleteProfilePage() {
               <Field label="Government ID type *"><select value={verif.idType} onChange={(e) => setVerif({ ...verif, idType: e.target.value })} className={inputCls}><option value="">Select</option>{ID_TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
               <Field label="ID number *"><input value={verif.idNumber} onChange={(e) => setVerif({ ...verif, idNumber: e.target.value })} className={inputCls} placeholder={verif.idType === "Aadhaar Card" ? "12 digits" : verif.idType === "PAN Card" ? "ABCDE1234F" : "Enter ID number"} /></Field>
             </div>
-            <FileField text="Upload ID document *" name={verif.idDocument} accept=".pdf,.jpg,.jpeg,.png" onPick={(n) => setVerif({ ...verif, idDocument: n })} />
+            <FileField text="Upload ID document — PDF only (max 2000 KB) *" name={verif.idDocument} accept=".pdf,application/pdf" pdfOnly maxKB={2000} onErr={setErr} onPick={(n) => setVerif({ ...verif, idDocument: n })} />
             <Field label="Project preferences">
               <div className="flex flex-wrap gap-1.5">{PREFERENCES.map((p) => { const on = preferences.includes(p); return (
                 <button key={p} type="button" onClick={() => setPreferences(on ? preferences.filter((x) => x !== p) : [...preferences, p])} className={cn("px-2.5 py-1 rounded-full border font-body text-[11.5px]", on ? "border-brand bg-brand text-on-brand" : "border-stroke text-foreground hover:bg-surface-hover")}>{p}</button>
