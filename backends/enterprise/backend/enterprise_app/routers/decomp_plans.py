@@ -1601,6 +1601,10 @@ def plan_payout_status(plan_id: str, user: Annotated[dict, Depends(get_current_u
         "budgetMinor": client_total,   # billed/actual (client price) — safe to show enterprise
         "tasks": tasks,
     }
+    # SOW escrow — budget the enterprise pre-funded/released into Glimmora and how
+    # much has been drawn down to pay contributors (enterprise-safe — its own budget).
+    with conn.cursor(cursor_factory=_RDC) as cur_e:
+        out["escrow"] = _escrow_balance(cur_e, plan_id)
     if is_sa:
         out["contributorNetMinor"] = net_total   # Glimmora-only
     return out
@@ -1769,6 +1773,146 @@ def release_payment(plan_id: str, user: Annotated[dict, Depends(get_current_user
     return {"released": n, "budgetMinor": released_minor, "status": plan_payout_status(plan_id, user)}
 
 
+# ─────────────────────── SOW pre-funding / escrow ───────────────────────
+# The enterprise can release its SOW budget to Glimmora UP FRONT — full or a
+# partial amount — once the work is priced, WITHOUT waiting for task delivery.
+# The released money sits in a SOW escrow; Glimmora draws contributor payouts
+# from it as work completes (see payout_contributors). Enterprise only ever
+# sees its own budget — never contributor pay.
+
+_escrow_ready = False
+
+
+def _ensure_escrow_schema() -> None:
+    global _escrow_ready
+    if _escrow_ready:
+        return
+    conn = _conn()
+    with conn.cursor() as cur:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS sow_escrows (
+                 plan_id      TEXT PRIMARY KEY,
+                 sow_id       TEXT,
+                 currency     TEXT   NOT NULL DEFAULT 'INR',
+                 funded_minor BIGINT NOT NULL DEFAULT 0,
+                 spent_minor  BIGINT NOT NULL DEFAULT 0,
+                 data         JSONB  NOT NULL DEFAULT '{}',
+                 created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+                 updated_at   TIMESTAMPTZ NOT NULL DEFAULT now())""")
+    conn.commit()
+    _escrow_ready = True
+
+
+def _sow_budget_minor_for(cur, sow_id: str | None) -> int:
+    if not sow_id:
+        return 0
+    cur.execute("SELECT data->>'budgetAmount' ba FROM enterprise_sows WHERE id=%s", [sow_id])
+    r = cur.fetchone()
+    if r and (r.get("ba") if isinstance(r, dict) else r[0]):
+        try:
+            return int(round(float(r["ba"] if isinstance(r, dict) else r[0]) * 100))
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _escrow_balance(cur, plan_id: str) -> dict:
+    try:
+        cur.execute("SELECT funded_minor, spent_minor, currency FROM sow_escrows WHERE plan_id=%s", [plan_id])
+        r = cur.fetchone()
+    except Exception:  # noqa: BLE001 — table not created yet
+        r = None
+    if not r:
+        return {"fundedMinor": 0, "spentMinor": 0, "remainingMinor": 0, "currency": "INR"}
+    f = int(r["funded_minor"] or 0)
+    s = int(r["spent_minor"] or 0)
+    return {"fundedMinor": f, "spentMinor": s, "remainingMinor": f - s, "currency": r.get("currency") or "INR"}
+
+
+@router.post("/plans/{plan_id}/fund-escrow")
+def fund_escrow(plan_id: str, user: Annotated[dict, Depends(get_current_user)],
+                body: dict = Body(default={})):
+    """Enterprise pre-funds (releases) its SOW budget to Glimmora — full SOW
+    (no amount) OR a partial amount ({amountMinor}) — once the work is priced.
+    The released amount is held in the SOW escrow; Glimmora pays contributors
+    from it as tasks complete. Can't over-fund past the agreed SOW budget."""
+    if _is_superadmin(user):
+        raise HTTPException(status_code=403, detail="The enterprise releases the budget, not Glimmora")
+    row = _get_plan_row(plan_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    _ensure_escrow_schema()
+    from psycopg2.extras import RealDictCursor as _RDC, Json as _Json
+    cap_raw = (body or {}).get("amountMinor")
+    comment = (body or {}).get("comment") or None
+    actor = str(user.get("email") or user.get("id"))
+    conn = _conn()
+    with conn.cursor(cursor_factory=_RDC) as cur:
+        sow_id = row.get("sow_id")
+        budget = _sow_budget_minor_for(cur, sow_id)
+        bal = _escrow_balance(cur, plan_id)
+        remaining_to_fund = max(0, budget - bal["fundedMinor"])
+        try:
+            amt = int(cap_raw) if cap_raw is not None else remaining_to_fund
+        except (TypeError, ValueError):
+            amt = remaining_to_fund
+        amt = max(0, min(amt, remaining_to_fund))
+        if amt <= 0:
+            raise HTTPException(status_code=400,
+                                detail="Nothing left to release — the SOW budget is already fully funded.")
+        cur.execute(
+            "INSERT INTO sow_escrows (plan_id, sow_id, funded_minor, data) VALUES (%s,%s,%s,%s) "
+            "ON CONFLICT (plan_id) DO UPDATE SET "
+            "  funded_minor = sow_escrows.funded_minor + EXCLUDED.funded_minor, "
+            "  sow_id = COALESCE(sow_escrows.sow_id, EXCLUDED.sow_id), updated_at=now()",
+            [plan_id, sow_id, amt, _Json({"lastReleaseBy": actor, "lastReleaseComment": comment})])
+        conn.commit()
+        bal_after = _escrow_balance(cur, plan_id)
+    try:  # tell Glimmora funds are available to disburse
+        from shared.notify import notify_role
+        notify_role("superadmin", category="payment", kind="escrow.funded", severity="important",
+                    title="SOW funds released",
+                    body=f"The enterprise released ₹{amt/100:,.0f} into the SOW escrow. "
+                         "Available to pay contributors as work completes.",
+                    resource_type="plan", resource_id=plan_id,
+                    action_url="/admin/decomposition", action_label="View funds")
+    except Exception:  # noqa: BLE001
+        pass
+    _audit(user, "escrow.fund", plan_id,
+           extra={"sowId": row.get("sow_id"), "amountMinor": amt, "comment": comment})
+    return {"fundedMinor": amt, "escrow": bal_after, "status": plan_payout_status(plan_id, user)}
+
+
+@router.post("/plans/{plan_id}/request-topup")
+def request_topup(plan_id: str, user: Annotated[dict, Depends(get_current_user)],
+                  body: dict = Body(default={})):
+    """Glimmora asks the enterprise to top up the SOW escrow (release more budget)
+    when the pre-funded balance is running low and there's delivered work to pay."""
+    if not _is_superadmin(user):
+        raise HTTPException(status_code=403, detail="Only Glimmora (super admin) can request a top-up")
+    row = _get_plan_row(plan_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    amt_raw = (body or {}).get("amountMinor")
+    try:
+        amt = int(amt_raw) if amt_raw is not None else None
+    except (TypeError, ValueError):
+        amt = None
+    try:
+        from shared.notify import create_notification
+        msg = ("Glimmora requested a top-up" + (f" of ₹{amt/100:,.0f}" if amt else "") +
+               " for the SOW escrow to keep paying delivered work. Release more budget on the Billing page.")
+        create_notification(
+            row.get("created_by"), category="payment", kind="escrow.topup_requested", severity="important",
+            title="Top-up requested by Glimmora", body=msg,
+            resource_type="plan", resource_id=plan_id,
+            action_url="/enterprise/billing", action_label="Release funds")
+    except Exception:  # noqa: BLE001
+        pass
+    _audit(user, "escrow.topup_request", plan_id, extra={"sowId": row.get("sow_id"), "amountMinor": amt})
+    return {"ok": True, "amountMinor": amt}
+
+
 @router.post("/plans/{plan_id}/payout-contributors")
 def payout_contributors(plan_id: str, user: Annotated[dict, Depends(get_current_user)],
                         body: dict = Body(default={})):
@@ -1794,6 +1938,32 @@ def payout_contributors(plan_id: str, user: Annotated[dict, Depends(get_current_
                 "WHERE data->>'canonicalTaskId' = ANY(%s) AND status='released' "
                 "RETURNING account_id, task_id, data->>'canonicalTaskId' ctid", [ids])
             done = cur.fetchall(); paid = len(done)
+            # Pre-funded escrow: also pay DELIVERED tasks the enterprise pre-funded
+            # (payout still 'eligible'/'requested', not per-task released) straight from
+            # the SOW escrow — oldest first, only while the escrow balance covers them.
+            bal = _escrow_balance(cur, plan_id)
+            esc_remaining = bal["remainingMinor"]
+            if esc_remaining > 0:
+                cur.execute(
+                    "SELECT id, account_id, task_id, data->>'canonicalTaskId' ctid, "
+                    "COALESCE((data->>'clientMinor')::bigint,0) cm FROM payouts "
+                    "WHERE data->>'canonicalTaskId' = ANY(%s) AND status IN ('eligible','requested') "
+                    "ORDER BY created_at ASC", [ids])
+                drawn = 0
+                for r in cur.fetchall():
+                    cm = int(r["cm"] or 0)
+                    if cm > 0 and cm <= esc_remaining:
+                        cur.execute(
+                            "UPDATE payouts SET status='paid', paid_at=now(), "
+                            "external_ref=COALESCE(external_ref,'SIM-'||left(id,8)), "
+                            "data = data || jsonb_build_object('paidFromEscrow', true), updated_at=now() "
+                            "WHERE id=%s", [r["id"]])
+                        esc_remaining -= cm; drawn += cm
+                        done.append({"account_id": r["account_id"], "task_id": r["task_id"], "ctid": r["ctid"]})
+                if drawn > 0:
+                    cur.execute("UPDATE sow_escrows SET spent_minor = spent_minor + %s, "
+                                "updated_at=now() WHERE plan_id=%s", [drawn, plan_id])
+                    paid = len(done)
             for d in done:
                 ctid = d.get("ctid")
                 if ctid:

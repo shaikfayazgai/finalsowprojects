@@ -26,6 +26,8 @@ import { StatusChip } from "@/components/meridian";
 import { OrgChip } from "@/components/contributor/persona-modules";
 import { useActivePersona } from "@/lib/hooks/use-active-persona";
 import { useContributorProfileIndex } from "@/lib/hooks/use-contributor-profile";
+import { useProfileCompletion, SECTION_LABELS } from "@/lib/hooks/use-profile-completion";
+import { ProfileCompletionRing } from "@/components/contributor/profile-completion-ring";
 import { PERSONAS } from "@/mocks/contributor/personas";
 import type { MockSkill } from "@/mocks/contributor";
 import { cn } from "@/lib/utils/cn";
@@ -44,6 +46,7 @@ import {
 export function ProfileWorkspace() {
   const { profile, persona, isLoading: personaLoading } = useActivePersona();
   const { data, isLoading, error, refetch } = useContributorProfileIndex();
+  const { data: completion } = useProfileCompletion();
   const loading = personaLoading || (isLoading && !data);
 
   if (loading) return <ProfileSkeleton />;
@@ -65,6 +68,36 @@ export function ProfileWorkspace() {
 
   return (
     <div className="space-y-4 pb-12">
+      {completion ? (
+        <div className="rounded-xl border border-stroke bg-surface p-5 flex items-center gap-5">
+          <ProfileCompletionRing value={completion.completeness} size={88} stroke={8} />
+          <div className="flex-1 min-w-0">
+            <h2 className="font-body text-[15px] font-semibold text-foreground tracking-[-0.01em]">
+              {completion.complete ? "Profile complete" : "Finish your profile to unlock tasks"}
+            </h2>
+            <p className="mt-1 font-body text-[12px] text-text-secondary">
+              {completion.complete
+                ? "You're eligible to view and pick up public tasks."
+                : "A 100% complete profile is required to view and pick up public tasks."}
+              {!completion.complete && completion.missing.length > 0 ? (
+                <>
+                  {" "}
+                  Still needed: {completion.missing.map((m) => SECTION_LABELS[m] ?? m).join(", ")}.
+                </>
+              ) : null}
+            </p>
+          </div>
+          {!completion.complete ? (
+            <Link
+              href="/contributor/profile/complete"
+              className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-foreground text-surface font-body text-[12.5px] font-semibold hover:opacity-90 transition-opacity shrink-0"
+            >
+              Complete
+              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
       {error ? (
         <div className="rounded-lg border border-error-border bg-error-subtle px-4 py-3 flex flex-wrap items-center gap-3">
           <AlertCircle className="h-4 w-4 text-error-text shrink-0" strokeWidth={2} aria-hidden />

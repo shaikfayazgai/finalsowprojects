@@ -12,7 +12,7 @@
 import * as React from "react";
 import { Send, Wallet, CheckCircle2, Clock } from "lucide-react";
 import {
-  getPayoutStatus, requestPayout, payoutContributors,
+  getPayoutStatus, requestPayout, payoutContributors, requestTopup,
   type PayoutStatus, type PayoutTask,
 } from "@/lib/api/decomposition-v2";
 import { deliveryCell } from "@/lib/delivery/status-matrix";
@@ -86,6 +86,7 @@ export function PayoutSummary({ status, error, busy, onRequestAll }: {
   onRequestAll?: (amountMinor?: number) => void;
 }) {
   const [amt, setAmt] = React.useState(""); // custom request amount, in rupees
+  const [topup, setTopup] = React.useState<"idle" | "requesting" | "done">("idle");
   if (status.totalTasks === 0) return null;
   const phase = PHASE[status.paymentPhase];
   const tasks = status.tasks ?? [];
@@ -126,6 +127,32 @@ export function PayoutSummary({ status, error, busy, onRequestAll }: {
           {status.deliveredTasks}/{status.totalTasks} delivered{status.paidTasks ? ` · ${status.paidTasks} paid` : ""}
         </span>
       </div>
+      {status.escrow && status.escrow.fundedMinor > 0 ? (
+        <div className="pt-2 border-t border-stroke-subtle/60 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <Wallet className="h-3.5 w-3.5 text-text-tertiary" aria-hidden />
+            <span className="font-body text-[11.5px] font-semibold text-foreground">SOW funds · pre-funded by enterprise</span>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 font-body text-[11px] text-text-secondary">
+            <span>Released <b className="text-foreground tabular-nums">{inr(status.escrow.fundedMinor)}</b></span>
+            <span>Drawn <b className="text-foreground tabular-nums">{inr(status.escrow.spentMinor)}</b></span>
+            <span>Available <b className="tabular-nums" style={{ color: status.escrow.remainingMinor > 0 ? "#0F9D6B" : "#D97706" }}>{inr(status.escrow.remainingMinor)}</b></span>
+          </div>
+          <button
+            type="button"
+            disabled={topup === "requesting"}
+            onClick={async () => {
+              setTopup("requesting");
+              try { await requestTopup(status.planId); setTopup("done"); }
+              catch { setTopup("idle"); }
+            }}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-stroke text-text-secondary font-body text-[11.5px] font-semibold hover:bg-surface-hover disabled:opacity-50"
+          >
+            <Send className="h-3.5 w-3.5" />
+            {topup === "done" ? "Top-up requested ✓" : topup === "requesting" ? "Requesting…" : "Request top-up"}
+          </button>
+        </div>
+      ) : null}
       {eligible.length > 0 && onRequestAll ? (
         <div className="space-y-2 pt-2 border-t border-stroke-subtle/60">
           <p className="font-body text-[11.5px] text-text-secondary">

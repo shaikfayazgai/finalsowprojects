@@ -10,7 +10,7 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Banknote, CheckCircle2, ChevronDown, Receipt } from "lucide-react";
-import { getPayoutStatus, releasePayment, getPlan, getPaymentTransactions, type PayoutStatus, type PayoutTask, type PaymentTxn } from "@/lib/api/decomposition-v2";
+import { getPayoutStatus, releasePayment, fundEscrow, getPlan, getPaymentTransactions, type PayoutStatus, type PayoutTask, type PaymentTxn, type SowEscrow } from "@/lib/api/decomposition-v2";
 import { deliveryCell } from "@/lib/delivery/status-matrix";
 
 const inr = (m: number) => "₹" + (m / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 });
@@ -50,6 +50,8 @@ export default function SowPaymentDetailPage() {
   const [err, setErr] = React.useState("");
   const [manual, setManual] = React.useState("");
   const [comment, setComment] = React.useState("");
+  const [fundAmt, setFundAmt] = React.useState("");
+  const [fundComment, setFundComment] = React.useState("");
   const [txns, setTxns] = React.useState<PaymentTxn[]>([]);
   const [openRef, setOpenRef] = React.useState<string | null>(null);
 
@@ -67,6 +69,15 @@ export default function SowPaymentDetailPage() {
     finally { setBusy(false); }
   };
 
+  // Pre-fund: release the SOW budget to Glimmora up front (full or partial), once
+  // priced — without waiting for task delivery. Held in escrow; Glimmora draws from it.
+  const doFund = async (amountMinor?: number) => {
+    setBusy(true); setErr("");
+    try { const r = await fundEscrow(planId, amountMinor, fundComment.trim() || undefined); setStatus(r.status); setFundAmt(""); setFundComment(""); reload(); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Release failed"); }
+    finally { setBusy(false); }
+  };
+
   const tasks: PayoutTask[] = status?.tasks ?? [];
   const sum = (pred: (t: PayoutTask) => boolean) => tasks.filter(pred).reduce((a, t) => a + (t.budgetMinor || 0), 0);
   const awaiting = sum((t) => t.payoutStatus === "requested");
@@ -77,6 +88,8 @@ export default function SowPaymentDetailPage() {
   const paidSent = paid + released;                     // money the enterprise has sent
   const pending = awaiting;                             // money the enterprise still owes
   const remaining = sowBudget - billed;                 // >0 under budget · <0 over budget
+  const escrow: SowEscrow = status?.escrow ?? { fundedMinor: 0, spentMinor: 0, remainingMinor: 0, currency: "INR" };
+  const escrowToFund = Math.max(0, sowBudget - escrow.fundedMinor);  // budget not yet released
 
   return (
     <div className="space-y-5">
@@ -110,6 +123,66 @@ export default function SowPaymentDetailPage() {
             ? <span className="text-success-text font-medium">{inr(remaining)} under budget</span>
             : <span className="text-error-text font-medium">{inr(-remaining)} over budget — additional pending</span>}.
         </p>
+      ) : null}
+
+      {/* Pre-fund: release the SOW budget to Glimmora up front (full or partial),
+          once priced — without waiting for task delivery. Held in escrow; Glimmora
+          pays contributors from it as work completes. */}
+      {sowBudget > 0 ? (
+        <section className="rounded-2xl border border-stroke-subtle bg-surface p-4 space-y-3">
+          <div>
+            <p className="font-body text-[12.5px] font-semibold text-foreground">Release SOW budget to Glimmora</p>
+            <p className="font-body text-[11.5px] text-text-tertiary">
+              Pre-fund the full budget or a partial amount now — Glimmora pays contributors from it as
+              work completes. No need to wait for delivery.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Stat label="Released" value={inr(escrow.fundedMinor)} tone={escrow.fundedMinor > 0 ? "text-success-text" : undefined} />
+            <Stat label="Drawn" value={inr(escrow.spentMinor)} />
+            <Stat label="Available" value={inr(escrow.remainingMinor)} tone={escrow.remainingMinor > 0 ? "text-info-text" : undefined} />
+          </div>
+          {escrowToFund > 0 ? (
+            <>
+              <input
+                type="text" value={fundComment} onChange={(e) => setFundComment(e.target.value)}
+                placeholder="Add a note for this release (optional)"
+                className="w-full h-9 rounded-lg border border-stroke-subtle bg-surface px-3 font-body text-[12px] focus:outline-none focus:ring-2 focus:ring-brand/30"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <span className="font-body text-[11px] text-text-tertiary">₹</span>
+                  <input
+                    type="number" min="0" inputMode="decimal" value={fundAmt}
+                    onChange={(e) => setFundAmt(e.target.value)} placeholder="partial"
+                    className="h-9 w-28 rounded-lg border border-stroke-subtle bg-surface px-2 font-body text-[12px] tabular-nums focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  />
+                  <button
+                    type="button" disabled={busy || toMinor(fundAmt) <= 0}
+                    onClick={() => doFund(toMinor(fundAmt))}
+                    className="inline-flex items-center h-9 px-3 rounded-lg border border-stroke-subtle bg-bg-subtle font-body text-[12px] font-semibold text-text-secondary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Release partial
+                  </button>
+                </div>
+                <button
+                  type="button" disabled={busy}
+                  onClick={() => doFund()}
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand text-on-brand font-body text-[12.5px] font-semibold hover:opacity-90 disabled:opacity-50"
+                >
+                  <Banknote className="h-3.5 w-3.5" /> {busy ? "Releasing…" : `Release full (${inr(escrowToFund)})`}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-success-text" />
+              <span className="font-body text-[12.5px] text-success-text">
+                Full SOW budget released to Glimmora ({inr(escrow.fundedMinor)}).
+              </span>
+            </div>
+          )}
+        </section>
       ) : null}
 
       {awaiting > 0 ? (

@@ -168,7 +168,16 @@ export interface PayoutStatus {
   sowBudgetMinor?: number;      // agreed SOW budget (enterprise's own figure)
   budgetMinor: number;          // billed/actual (client price) — safe for enterprise
   contributorNetMinor?: number; // Glimmora-only
+  escrow?: SowEscrow;           // pre-funded budget released into Glimmora for this SOW
   tasks: PayoutTask[];
+}
+
+/** SOW escrow — budget the enterprise pre-funded; Glimmora draws payouts from it. */
+export interface SowEscrow {
+  fundedMinor: number;    // total released into escrow by the enterprise
+  spentMinor: number;     // drawn down to pay contributors
+  remainingMinor: number; // fundedMinor − spentMinor
+  currency: string;
 }
 
 export async function getPayoutStatus(planId: string): Promise<PayoutStatus> {
@@ -215,6 +224,44 @@ export async function releasePayment(
   if (amountMinor != null) body.amountMinor = amountMinor;
   if (comment) body.comment = comment;
   return call(`${BASE}/${encodeURIComponent(planId)}/release-payment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Enterprise pre-funds (releases) its SOW budget to Glimmora up front — once the
+ * work is priced, without waiting for task delivery. Omit amountMinor to release
+ * the whole remaining budget; pass amountMinor for a partial release. The money
+ * sits in the SOW escrow; Glimmora pays contributors from it as work completes.
+ */
+export async function fundEscrow(
+  planId: string,
+  amountMinor?: number,
+  comment?: string,
+): Promise<{ fundedMinor: number; escrow: SowEscrow; status: PayoutStatus }> {
+  const body: Record<string, unknown> = {};
+  if (amountMinor != null) body.amountMinor = amountMinor;
+  if (comment) body.comment = comment;
+  return call(`${BASE}/${encodeURIComponent(planId)}/fund-escrow`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Glimmora asks the enterprise to top up the SOW escrow (release more budget)
+ * when the pre-funded balance is running low. Notifies the enterprise.
+ */
+export async function requestTopup(
+  planId: string,
+  amountMinor?: number,
+): Promise<{ ok: boolean; amountMinor: number | null }> {
+  const body: Record<string, unknown> = {};
+  if (amountMinor != null) body.amountMinor = amountMinor;
+  return call(`${BASE}/${encodeURIComponent(planId)}/request-topup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

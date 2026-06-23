@@ -8,6 +8,7 @@
  */
 
 import { OpportunitiesSection } from "../tasks/components/opportunities-section";
+import { ProfileCompletionGate } from "@/components/contributor/profile-completion-gate";
 
 export default function ContributorOpportunitiesPage() {
   return (
@@ -22,7 +23,11 @@ export default function ContributorOpportunitiesPage() {
         </p>
       </header>
       <div className="space-y-4 pb-12">
-        <OpportunitiesSection standalone />
+        {/* A freelancer can only browse / pick up public tasks once their profile
+            is 100% complete. The gate shows the completion ring until then. */}
+        <ProfileCompletionGate>
+          <OpportunitiesSection standalone />
+        </ProfileCompletionGate>
       </div>
     </div>
   );

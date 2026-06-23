@@ -96,7 +96,10 @@ export function ReviewerLoginScreen() {
       user?: { role?: string; requiresPasswordChange?: boolean };
     } | null;
     const role = (session?.user?.role ?? "").toLowerCase();
-    const reviewerRoles = ["reviewer", "admin", "super_admin", "enterprise"];
+    // Plain `enterprise` is intentionally excluded — a PMO / enterprise-admin
+    // without a reviewer role must NOT sign into the QA reviewer portal. Legit
+    // enterprise reviewers carry the dedicated `ent.reviewer` role instead.
+    const reviewerRoles = ["reviewer", "ent.reviewer", "admin", "super_admin"];
 
     if (!reviewerRoles.includes(role)) {
       setError("This account doesn't have reviewer access. Use the portal that matches your role.");

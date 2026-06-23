@@ -166,6 +166,17 @@ export function ContributorLoginScreen() {
           Sign in
         </AuthSubmitButton>
       </form>
+
+      {/* Contributor is the only role with open self-signup (a freelancer). */}
+      <p className="mt-6 text-center font-body text-[13px] text-text-secondary">
+        New to Glimmora?{" "}
+        <Link
+          href="/auth/register"
+          className="font-semibold text-text-link hover:underline underline-offset-2"
+        >
+          Create a freelancer account
+        </Link>
+      </p>
     </LoginShell>
   );
 }

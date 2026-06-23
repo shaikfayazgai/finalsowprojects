@@ -2379,6 +2379,18 @@ async def list_opportunities(account_id: AcctId):
     """Open, priced decomposition tasks a contributor can express interest in.
     Price shown is the contributor's NET take-home (gross − 18% GST). Skill-
     matched against the contributor's declared skills (matched tasks first)."""
+    # Eligibility gate: a freelancer can only view / pick up public tasks once
+    # their profile is 100% complete. Return an empty "locked" payload until then
+    # so the marketplace stays hidden even if the client bypasses the UI gate.
+    _status = _completion_status(account_id)
+    if not _status["complete"]:
+        return {
+            "items": [],
+            "locked": True,
+            "completeness": _status["completeness"],
+            "missing": _status["missing"],
+        }
+
     prof = _profile(account_id)
     my = {_norm_skill(s) for s in
           (prof.get("primary_skills") or []) + (prof.get("secondary_skills") or [])
