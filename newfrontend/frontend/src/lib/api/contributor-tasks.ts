@@ -351,14 +351,11 @@ export async function listMySubmissions(params: {
     );
     // Real backend submissions only — no mock-sample fallback on empty.
     return params.limit ? { items: res.items.slice(0, params.limit) } : res;
-  } catch (err) {
-    if (
-      err instanceof ContributorApiError &&
-      (err.status === 401 || err.status >= 500)
-    ) {
-      return { items: [] };
-    }
-    throw err;
+  } catch {
+    // Any failure (404/403/unavailable/parse) — fall back to an empty list so
+    // the caller derives submissions from the contributor's tasks (the same
+    // source the Revisions + Completed lanes use). The page must never hard-fail.
+    return { items: [] };
   }
 }
 
