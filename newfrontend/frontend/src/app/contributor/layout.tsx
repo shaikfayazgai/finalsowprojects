@@ -29,7 +29,7 @@ function ContributorGuard() {
 // otherwise the guard bounces logged-out / wrong-role visitors away from the
 // contributor login itself (they'd never reach it). These pages bring their own
 // full-screen layout.
-const CONTRIBUTOR_PUBLIC_ROUTES = ["/contributor/login", "/contributor/forgot-password"];
+const CONTRIBUTOR_PUBLIC_ROUTES = ["/contributor/login", "/contributor/register", "/contributor/forgot-password"];
 
 function isContributorPublicRoute(pathname: string): boolean {
   return CONTRIBUTOR_PUBLIC_ROUTES.some(

@@ -78,6 +78,7 @@ const PUBLIC_EXACT_PATHS = new Set<string>([
   "/reviewer/change-password",
   "/reviewer/reset-password",
   "/contributor/login",
+  "/contributor/register", //  freelancer self-signup (mirrors /contributor/login)
 ]);
 
 /**

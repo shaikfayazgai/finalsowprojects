@@ -171,7 +171,7 @@ export function ContributorLoginScreen() {
       <p className="mt-6 text-center font-body text-[13px] text-text-secondary">
         New to Glimmora?{" "}
         <Link
-          href="/auth/register"
+          href="/contributor/register"
           className="font-semibold text-text-link hover:underline underline-offset-2"
         >
           Create a freelancer account
