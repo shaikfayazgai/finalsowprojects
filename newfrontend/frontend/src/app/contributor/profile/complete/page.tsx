@@ -291,8 +291,8 @@ export default function CompleteProfilePage() {
     <div className="w-full pb-16">
       {complete ? <Link href="/contributor/profile" className="inline-flex items-center gap-1.5 font-body text-[12.5px] text-text-tertiary hover:text-foreground mb-4"><ArrowLeft className="h-4 w-4" /> Back to profile</Link> : null}
 
-      <div className="grid lg:grid-cols-[240px_1fr] gap-4 items-start">
-        <aside className="space-y-3 lg:sticky lg:top-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-4 items-start">
+        <aside className="space-y-3 min-w-0 lg:sticky lg:top-4">
         <div className="rounded-xl border border-stroke bg-surface p-4">
         <div className="flex items-center justify-between gap-3">
           <h1 className="font-body text-[18px] font-semibold text-foreground">{complete ? "Profile complete" : "Complete your profile"}</h1>
@@ -302,12 +302,12 @@ export default function CompleteProfilePage() {
         {complete ? <Link href="/contributor/opportunities" className={cn(primaryBtn, "mt-3")}>Browse tasks <ArrowRight className="h-4 w-4" /></Link> : null}
       </div>
 
-        <nav className="rounded-xl border border-stroke bg-surface p-1.5 space-y-0.5">
+        <nav className="rounded-xl border border-stroke bg-surface p-1.5 flex lg:flex-col gap-0.5 overflow-x-auto">
           {SECTION_ORDER.map((key, i) => {
             const done = sections[key] === true;
             const active = i === step;
             return (
-              <button key={key} type="button" onClick={() => setStep(i)} className={cn("w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg font-body text-[12.5px] text-left transition-colors", active ? "bg-brand text-on-brand" : "hover:bg-surface-hover")}>
+              <button key={key} type="button" onClick={() => setStep(i)} className={cn("shrink-0 lg:w-full flex items-center gap-2 px-2.5 py-2 rounded-lg font-body text-[12.5px] text-left whitespace-nowrap transition-colors", active ? "bg-brand text-on-brand" : "hover:bg-surface-hover")}>
                 {done ? <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: active ? "currentColor" : "#0F9D6B" }} /> : <span className={cn("grid place-items-center h-4 w-4 rounded-full border text-[9px] font-semibold shrink-0", active ? "border-current" : "border-stroke text-text-tertiary")}>{i + 1}</span>}
                 <span className={active ? "" : done ? "text-text-secondary" : "text-foreground"}>{SECTION_LABELS[key]}</span>
               </button>
@@ -316,10 +316,10 @@ export default function CompleteProfilePage() {
         </nav>
         </aside>
 
-        <div>
+        <div className="min-w-0">
         {err ? <p className="mb-3 font-body text-[12px] text-error-text">{err}</p> : null}
 
-        <div className="rounded-xl border border-stroke bg-surface p-5 space-y-3">
+        <div className="rounded-xl border border-stroke bg-surface p-4 sm:p-5 space-y-3">
         <div className="flex items-center gap-2">
           <h2 className="font-body text-[16px] font-semibold text-foreground">{SECTION_LABELS[currentKey]}</h2>
           <span className="font-body text-[11px] text-text-tertiary">· {weights[currentKey] ?? 0}%</span>
