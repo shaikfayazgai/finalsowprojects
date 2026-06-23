@@ -1781,12 +1781,14 @@ async def add_skill(account_id: AcctId, payload: dict = Body(default={})):
     if not name:
         raise HTTPException(status_code=400, detail="Skill name is required.")
     slug = _skill_slug(name)
+    from psycopg2.extras import Json
     row = db.execute(
-        "INSERT INTO contributor_skills (account_id, slug, name, category, level) "
-        "VALUES (%s,%s,%s,%s,%s) "
+        "INSERT INTO contributor_skills (account_id, slug, name, category, level, data) "
+        "VALUES (%s,%s,%s,%s,%s,%s) "
         "ON CONFLICT (account_id, slug) DO UPDATE SET name=EXCLUDED.name, "
-        "category=EXCLUDED.category, level=EXCLUDED.level RETURNING *",
-        (account_id, slug, name, payload.get("category") or "engineering", payload.get("level") or "L2"),
+        "category=EXCLUDED.category, level=EXCLUDED.level, data=EXCLUDED.data RETURNING *",
+        (account_id, slug, name, payload.get("category") or "engineering", payload.get("level") or "L2",
+         Json({"years": payload.get("years") or ""})),
     )
     _resync_profile_skills(account_id)
     return _skill_to_fe(row)
@@ -1897,9 +1899,11 @@ def _completion_status(account_id: int) -> dict[str, Any]:
     extra = profile.get("profile_extra") or {}
     verif = extra.get("verification") or {}
     links = extra.get("links") or {}
+    bank = extra.get("bank") or {}
+    agree = extra.get("agreements") or {}
     sections = {
-        "basic": bool(profile.get("country") and profile.get("city")
-                      and profile.get("timezone") and profile.get("linkedin")),
+        "basic": bool(profile.get("country") and profile.get("city") and profile.get("timezone")
+                      and extra.get("mobileNumber") and (extra.get("languages") or [])),
         "professional": bool(profile.get("bio") and profile.get("job_title")
                              and profile.get("years_experience") and profile.get("availability")),
         "skills": n_skills > 0 or bool(profile.get("primary_skills")),
@@ -1907,15 +1911,17 @@ def _completion_status(account_id: int) -> dict[str, Any]:
         "portfolio": len(projects) > 0,
         "experience": len(experience) > 0,
         "education": len(education) > 0,
-        "certifications": len(extra.get("certifications") or []) > 0,
-        "verification": bool(verif.get("idType") and verif.get("idNumber")),
-        "links": bool(links.get("linkedin")),
+        "verification": bool(links.get("linkedin") and verif.get("idType") and verif.get("idNumber")),
+        "bank": bool(bank.get("accountHolderName") and bank.get("accountNumber") and bank.get("ifscCode")),
+        "agreements": bool(agree.get("termsAccepted") and agree.get("paymentPolicyAccepted")
+                           and agree.get("privacyPolicyAccepted") and agree.get("notificationConsent")
+                           and agree.get("truthDeclaration")),
     }
-    # Weighted gate (sums to 100, per template). expertise / certifications / links
-    # are steps in the wizard but optional — they raise profile strength, not the gate.
+    # Weighted gate (sums to 100, mirrors the template's step weights). expertise +
+    # agreements are required steps in the wizard but carry 0 weight there too.
     WEIGHTS = {
         "basic": 15, "professional": 15, "skills": 20, "portfolio": 20,
-        "experience": 10, "education": 10, "verification": 10,
+        "experience": 10, "education": 10, "verification": 5, "bank": 5,
     }
     pct = sum(w for k, w in WEIGHTS.items() if sections.get(k))
     complete = pct >= 100
@@ -1947,10 +1953,11 @@ async def list_projects(account_id: AcctId):
 @router.post("/profile/projects", status_code=201)
 async def add_project(account_id: AcctId, body: dict = Body(default={})):
     row = db.execute(
-        """INSERT INTO contributor_projects (account_id,title,description,role,url,skills,keywords,category,start_date,end_date)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+        """INSERT INTO contributor_projects (account_id,title,description,role,url,skills,keywords,category,video,screenshots,start_date,end_date)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
         (account_id, body.get("title", ""), body.get("description", ""), body.get("role"),
          body.get("url"), body.get("skills") or [], body.get("keywords") or [], body.get("category"),
+         body.get("video"), body.get("screenshots") or [],
          body.get("start_date"), body.get("end_date")))
     return row
 

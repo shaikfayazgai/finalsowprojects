@@ -36,9 +36,9 @@ export const SECTION_LABELS: Record<string, string> = {
   portfolio: "Portfolio projects",
   experience: "Work experience",
   education: "Education",
-  certifications: "Certifications",
-  verification: "Verification",
-  links: "Professional links",
+  verification: "Verification & links",
+  bank: "Bank details",
+  agreements: "Agreements",
 };
 
 export function useProfileCompletion() {
