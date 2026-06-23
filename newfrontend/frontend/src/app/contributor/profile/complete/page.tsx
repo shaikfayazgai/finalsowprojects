@@ -66,7 +66,7 @@ const arr = (x: unknown): Row[] => Array.isArray(x) ? (x as Row[]) : Array.isArr
 
 const inputCls = "w-full h-9 rounded-lg border border-stroke-subtle bg-surface px-3 font-body text-[12.5px] text-foreground placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand/30";
 const labelCls = "block font-body text-[11px] font-semibold uppercase tracking-[0.05em] text-text-tertiary mb-1";
-const primaryBtn = "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-foreground text-surface font-body text-[12px] font-semibold hover:opacity-90 disabled:opacity-50";
+const primaryBtn = "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand text-on-brand font-body text-[12px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-50";
 
 /** Searchable multi-select chips — keeps languages/skills/keywords clean. */
 function ChipField({ values, setValues, suggestions, placeholder }: { values: string[]; setValues: (v: string[]) => void; suggestions: string[]; placeholder: string }) {
@@ -231,9 +231,9 @@ export default function CompleteProfilePage() {
         <div className="rounded-xl border border-stroke bg-surface p-4">
         <div className="flex items-center justify-between gap-3">
           <h1 className="font-body text-[18px] font-semibold text-foreground">{complete ? "Profile complete" : "Complete your profile"}</h1>
-          <span className="font-display text-[20px] font-bold tabular-nums" style={{ color: complete ? "#0F9D6B" : pct >= 50 ? "#CA8A04" : "#D97706" }}>{pct}%</span>
+          <span className="font-display text-[20px] font-bold tabular-nums" style={{ color: complete ? "#0F9D6B" : "var(--color-brand)" }}>{pct}%</span>
         </div>
-        <div className="mt-2 h-2 rounded-full bg-stroke-subtle overflow-hidden"><div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: complete ? "#0F9D6B" : "#CA8A04" }} /></div>
+        <div className="mt-2 h-2 rounded-full bg-stroke-subtle overflow-hidden"><div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: complete ? "#0F9D6B" : "var(--color-brand)" }} /></div>
         {complete ? <Link href="/contributor/opportunities" className={cn(primaryBtn, "mt-3")}>Browse tasks <ArrowRight className="h-4 w-4" /></Link> : null}
       </div>
 
@@ -242,7 +242,7 @@ export default function CompleteProfilePage() {
             const done = sections[key] === true;
             const active = i === step;
             return (
-              <button key={key} type="button" onClick={() => setStep(i)} className={cn("w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg font-body text-[12.5px] text-left transition-colors", active ? "bg-foreground text-surface" : "hover:bg-surface-hover")}>
+              <button key={key} type="button" onClick={() => setStep(i)} className={cn("w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg font-body text-[12.5px] text-left transition-colors", active ? "bg-brand text-on-brand" : "hover:bg-surface-hover")}>
                 {done ? <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: active ? "currentColor" : "#0F9D6B" }} /> : <span className={cn("grid place-items-center h-4 w-4 rounded-full border text-[9px] font-semibold shrink-0", active ? "border-current" : "border-stroke text-text-tertiary")}>{i + 1}</span>}
                 <span className={active ? "" : done ? "text-text-secondary" : "text-foreground"}>{SECTION_LABELS[key]}</span>
               </button>
@@ -291,7 +291,7 @@ export default function CompleteProfilePage() {
             </div>
             <Field label="Availability *">
               <div className="flex flex-wrap gap-1.5">{AVAILABILITY.map((a) => (
-                <button key={a} type="button" onClick={() => setProf({ ...prof, availability: a })} className={cn("px-3 py-1.5 rounded-lg border font-body text-[12px]", prof.availability === a ? "border-foreground bg-foreground text-surface" : "border-stroke text-foreground hover:bg-surface-hover")}>{a}</button>
+                <button key={a} type="button" onClick={() => setProf({ ...prof, availability: a })} className={cn("px-3 py-1.5 rounded-lg border font-body text-[12px]", prof.availability === a ? "border-brand bg-brand text-on-brand" : "border-stroke text-foreground hover:bg-surface-hover")}>{a}</button>
               ))}</div>
             </Field>
             <button type="button" disabled={busy === "professional"} onClick={saveProf} className={primaryBtn}>Save professional details</button>
@@ -316,7 +316,7 @@ export default function CompleteProfilePage() {
           <>
             <p className="font-body text-[11.5px] text-text-tertiary">Select the domains you work in. GitHub becomes required for technical categories.</p>
             <div className="flex flex-wrap gap-1.5">{EXPERTISE.map((x) => { const on = expertise.includes(x); return (
-              <button key={x} type="button" disabled={busy === "expertise"} onClick={() => saveExpertise(on ? expertise.filter((e) => e !== x) : [...expertise, x])} className={cn("inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 font-body text-[12px] disabled:opacity-50", on ? "border-foreground bg-foreground text-surface" : "border-stroke text-foreground hover:bg-surface-hover")}>{on ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />} {x}</button>
+              <button key={x} type="button" disabled={busy === "expertise"} onClick={() => saveExpertise(on ? expertise.filter((e) => e !== x) : [...expertise, x])} className={cn("inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 font-body text-[12px] disabled:opacity-50", on ? "border-brand bg-brand text-on-brand" : "border-stroke text-foreground hover:bg-surface-hover")}>{on ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />} {x}</button>
             ); })}</div>
           </>
         ) : null}
@@ -386,7 +386,7 @@ export default function CompleteProfilePage() {
             <FileField text="Upload ID document *" name={verif.idDocument} accept=".pdf,.jpg,.jpeg,.png" onPick={(n) => setVerif({ ...verif, idDocument: n })} />
             <Field label="Project preferences">
               <div className="flex flex-wrap gap-1.5">{PREFERENCES.map((p) => { const on = preferences.includes(p); return (
-                <button key={p} type="button" onClick={() => setPreferences(on ? preferences.filter((x) => x !== p) : [...preferences, p])} className={cn("px-2.5 py-1 rounded-full border font-body text-[11.5px]", on ? "border-foreground bg-foreground text-surface" : "border-stroke text-foreground hover:bg-surface-hover")}>{p}</button>
+                <button key={p} type="button" onClick={() => setPreferences(on ? preferences.filter((x) => x !== p) : [...preferences, p])} className={cn("px-2.5 py-1 rounded-full border font-body text-[11.5px]", on ? "border-brand bg-brand text-on-brand" : "border-stroke text-foreground hover:bg-surface-hover")}>{p}</button>
               ); })}</div>
             </Field>
             <button type="button" disabled={busy === "verification"} onClick={saveVerif} className={primaryBtn}>Save verification &amp; links</button>
