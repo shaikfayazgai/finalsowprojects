@@ -132,11 +132,19 @@ export function completedFromTasks(tasks: ContributorTaskSummary[]): {
   let totalEarnedMinor = 0;
   const items: CompletedRow[] = completed.map((summary) => {
     const task = toMockTask(summary);
-    // Payout amount is derived from the real agreed rate × hours; the precise
-    // payout row + credential are loaded from the real backend on the detail page.
+    // Prefer the FIXED Glimmora-set payout (payGrossMinor) over rate×hours, which
+    // over-counts fixed-price tasks (a ₹3,000 fixed payout showed as ₹30,000).
+    // Only fall back to rate×hours for legacy hourly tasks with no fixed amount.
+    const fixedMinor =
+      (typeof task.payGrossMinor === "number" && task.payGrossMinor > 0
+        ? task.payGrossMinor
+        : null) ??
+      (task.pricing?.contributorPayout
+        ? Math.round(task.pricing.contributorPayout * 100)
+        : null);
     const hours = task.estimatedHours ?? summary.estimatedHours ?? 0;
     const rate = task.agreedRatePerHour ?? summary.agreedRatePerHour ?? 0;
-    const payoutMinor = Math.round(hours * rate * 100);
+    const payoutMinor = fixedMinor ?? Math.round(hours * rate * 100);
     totalEarnedMinor += payoutMinor;
     return {
       task,
