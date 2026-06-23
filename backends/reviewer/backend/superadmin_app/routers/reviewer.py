@@ -35,6 +35,85 @@ def _require_reviewer(user: dict) -> dict:
     return user
 
 
+def _reinforce_skills_for_task(conn, account_id: Any, ct_id: Any) -> None:
+    """When a task is ACCEPTED (payout eligible), reinforce the contributor's
+    profile skills from that task's required skills — evidence-backed and
+    idempotent per (skill, task). Declared skills get reinforced (evidence_count
+    bumped + marked verified); skills the delivery proves are added fresh. This is
+    what makes the profile's "declared at onboarding · reinforced by accepted
+    deliveries" real. Runs in its OWN transaction after the payout commit and
+    never raises — reinforcement must never block acceptance/payout.
+    """
+    import re as _re
+    import json as _json
+    try:
+        acct = int(account_id) if account_id not in (None, "") else None
+    except (TypeError, ValueError):
+        acct = None
+    if not acct or ct_id is None:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT data FROM contributor_tasks WHERE id=%s AND account_id=%s",
+                        (ct_id, acct))
+            r = cur.fetchone()
+            data = r[0] if r else None
+            if isinstance(data, str):
+                try:
+                    data = _json.loads(data)
+                except Exception:  # noqa: BLE001
+                    data = {}
+            data = data or {}
+            raw = (data.get("skills_required") or data.get("requiredSkills")
+                   or data.get("skills") or [])
+            names, seen = [], set()
+            for s in raw:
+                n = str(s).strip()
+                if n and n.lower() not in seen:
+                    seen.add(n.lower())
+                    names.append(n)
+            if not names:
+                return
+            tid = str(ct_id)
+            for name in names:
+                slug = "skill-" + _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+                if slug == "skill-":
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO contributor_skills
+                        (account_id, slug, name, category, level, evidence_count, data)
+                    VALUES (%s,%s,%s,'engineering','L2',1,
+                            jsonb_build_object('source','delivery','verified',true,
+                                               'tasks',jsonb_build_array(%s)))
+                    ON CONFLICT (account_id, slug) DO UPDATE SET
+                        evidence_count = contributor_skills.evidence_count
+                            + CASE WHEN contributor_skills.data->'tasks' ? %s THEN 0 ELSE 1 END,
+                        data = jsonb_set(
+                            contributor_skills.data
+                                || jsonb_build_object('source','delivery','verified',true),
+                            '{tasks}',
+                            (COALESCE(contributor_skills.data->'tasks','[]'::jsonb) - %s)
+                                || jsonb_build_array(%s))
+                    """,
+                    (acct, slug, name, tid, tid, tid, tid),
+                )
+            # keep contributor_profiles.primary_skills (TEXT[]) in sync with the table
+            cur.execute("INSERT INTO contributor_profiles (account_id) VALUES (%s) "
+                        "ON CONFLICT (account_id) DO NOTHING", (acct,))
+            cur.execute(
+                "UPDATE contributor_profiles SET primary_skills = "
+                "(SELECT COALESCE(array_agg(name ORDER BY created_at), '{}') "
+                " FROM contributor_skills WHERE account_id=%s), updated_at=now() "
+                "WHERE account_id=%s", (acct, acct))
+        conn.commit()
+    except Exception:  # noqa: BLE001 — reinforcement must never block acceptance
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _create_payout_on_approval(acct_id: Any, task_id: Any, existing: dict, ex_data: dict) -> None:
     """On final reviewer approval, record the contributor's eligible payout.
 
@@ -170,6 +249,7 @@ def _create_payout_on_approval(acct_id: Any, task_id: Any, existing: dict, ex_da
                 (ct_id, account_id),
             )
     conn.commit()
+    _reinforce_skills_for_task(conn, account_id, ct_id)
 
 
 def _enqueue_enterprise_acceptance(existing: dict, ex_data: dict, sub_id: Any,
@@ -329,6 +409,7 @@ def _create_payout(existing: dict, ex_data: dict, sub_id: Any,
                     "source": "reviewer_qa_approval", "sowId": sow_id,
                     "canonicalTaskId": ex_data.get("canonicalTaskId") or task_id})))
     conn.commit()
+    _reinforce_skills_for_task(conn, account_id, ct_id)
     # The contributor payout is now eligible (created here on QA approval) → tell
     # Glimmora (super-admins) it can be requested from the enterprise.
     try:
