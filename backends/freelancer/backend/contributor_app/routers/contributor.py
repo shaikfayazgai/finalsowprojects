@@ -360,6 +360,29 @@ async def list_tasks(
     except Exception:  # noqa: BLE001
         latest_by_task = {}
 
+    # Fallback: the POST /tasks/{id}/submissions path writes to the legacy
+    # `contributor_submissions` table. Fill in any task not already covered by
+    # `submissions`, so a submitted/accepted task ALWAYS shows its submission —
+    # otherwise latestSubmission stays null (task vanishes from Submissions, shows
+    # no history in Completed, and the contributor sees a payout with "no submission").
+    try:
+        cs_rows = db.fetch_all(
+            "SELECT DISTINCT ON (task_id) task_id, id, status, created_at, updated_at "
+            "FROM contributor_submissions WHERE account_id=%s "
+            "ORDER BY task_id, created_at DESC",
+            (account_id,),
+        )
+        for s in cs_rows:
+            k = str(s.get("task_id"))
+            if k not in latest_by_task:
+                latest_by_task[k] = {
+                    "id": s.get("id"), "version": 1, "status": s.get("status"),
+                    "submitted_at": s.get("created_at"), "created_at": s.get("created_at"),
+                    "updated_at": s.get("updated_at"),
+                }
+    except Exception:  # noqa: BLE001
+        pass
+
     # Normalise to the FE TaskDefinition shape so consumers never hit undefined fields.
     items = []
     for r in rows:
