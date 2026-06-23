@@ -72,7 +72,9 @@ function ContributorPortalLayout({
   // only be on a Profile page — every other section is locked and bounces back to
   // the profile-completion page (which carries the whole filling form: agreements,
   // identity, payout, skills, projects, experience, education).
-  const onProfile = pathname.startsWith("/contributor/profile");
+  // Only the completion WIZARD is reachable while locked — even the profile
+  // overview (/contributor/profile) bounces here until 100%.
+  const onCompletePage = pathname.startsWith("/contributor/profile/complete");
   const profileLoaded = !!completion;
   const profileComplete = completion?.complete ?? false;
   const locked = status === "authenticated" && profileLoaded && !profileComplete;
@@ -81,10 +83,10 @@ function ContributorPortalLayout({
   const awaitingCompletion = status === "authenticated" && !profileLoaded;
 
   useEffect(() => {
-    if (locked && !onProfile) {
+    if (locked && !onCompletePage) {
       router.replace("/contributor/profile/complete");
     }
-  }, [locked, onProfile, router]);
+  }, [locked, onCompletePage, router]);
 
   // ── Full-screen profile, no shell ──────────────────────────────────────────
   // While the profile is incomplete (or the gate is still loading), the ENTIRE
@@ -94,7 +96,7 @@ function ContributorPortalLayout({
     return (
       <main className="min-h-screen w-full bg-[var(--page-bg)]">
         {!CONTRIBUTOR_DEMO_BYPASS && <ContributorGuard />}
-        {locked && onProfile ? (
+        {locked && onCompletePage ? (
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
             <Suspense fallback={null}>{children}</Suspense>
           </div>
@@ -122,7 +124,7 @@ function ContributorPortalLayout({
   const shellChildren =
     status === "authenticated" && trackLoading(status, trackQuery) && !profileLoaded
       ? null
-      : locked && !onProfile
+      : locked && !onCompletePage
         ? null
         : children;
 
