@@ -155,10 +155,10 @@ function RegisterScreen() {
         }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { message?: string };
-        const msg = body.message ?? "Couldn't create your account. Try again.";
-        if (res.status === 409 && ref && (track === "student" || track === "women_wf") && invite) {
-          throw new Error(`${msg} If you already registered, sign in to continue onboarding.`);
+        const body = (await res.json().catch(() => ({}))) as { message?: string; detail?: string };
+        const msg = body.detail ?? body.message ?? "Couldn't create your account. Try again.";
+        if (res.status === 409) {
+          throw new Error("An account with this email already exists — sign in instead.");
         }
         throw new Error(msg);
       }

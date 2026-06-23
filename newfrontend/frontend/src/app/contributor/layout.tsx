@@ -11,11 +11,7 @@ import {
   useContributorTrack,
   trackLoading,
 } from "@/lib/hooks/use-contributor-track";
-import {
-  isInsideOnboardingFlow,
-  resolveIncompleteOnboardingPath,
-} from "@/lib/contributor/onboarding-routing";
-import { readReferralContext } from "@/lib/referral/context";
+import { useProfileCompletion } from "@/lib/hooks/use-profile-completion";
 import { PersonaSwitcher } from "@/components/contributor/persona-switcher";
 
 const CONTRIBUTOR_DEMO_BYPASS = process.env.NEXT_PUBLIC_CONTRIBUTOR_DEMO === "1";
@@ -61,65 +57,31 @@ function ContributorPortalLayout({
   const router = useRouter();
   const { data: session, status } = useSession();
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
-  const isOnboardingRoute = pathname.startsWith("/contributor/onboarding");
   const trackQuery = useContributorTrack();
-  const trackReady = status === "authenticated" && !trackLoading(status, trackQuery);
+  const { data: completion } = useProfileCompletion();
 
   useEffect(() => {
-    if (!trackReady || !trackQuery.data) return;
-    setOnboardingComplete(trackQuery.data.onboardingComplete);
-  }, [trackReady, trackQuery.data, setOnboardingComplete]);
-
-  const needsOnboarding =
-    trackReady && trackQuery.data && !trackQuery.data.onboardingComplete;
-
-  const needsKycReview =
-    trackReady &&
-    trackQuery.data?.onboardingComplete &&
-    !trackQuery.data.portalReady;
-
-  // Legacy SSO route → unified Meridian onboarding (page children were hidden here).
-  useEffect(() => {
-    if (!trackReady || pathname !== "/contributor/onboarding") return;
-    const user = session?.user as
-      | { provider?: string; isNewSsoUser?: boolean }
-      | undefined;
-    router.replace(
-      resolveIncompleteOnboardingPath({
-        provider: user?.provider,
-        isNewSsoUser: user?.isNewSsoUser,
-        contribType: trackQuery.data?.contribType,
-        referral: readReferralContext(),
-        isInternalEmployee: trackQuery.data?.onboardingTrack === "internal",
-      }),
-    );
-  }, [trackReady, pathname, router, session, trackQuery.data]);
-
-  // Register / referral users belong in `/onboarding/*`, not the portal shell.
-  useEffect(() => {
-    if (!needsOnboarding || isInsideOnboardingFlow(pathname)) return;
-
-    const user = session?.user as
-      | { provider?: string; isNewSsoUser?: boolean }
-      | undefined;
-    const target = resolveIncompleteOnboardingPath({
-      provider: user?.provider,
-      isNewSsoUser: user?.isNewSsoUser,
-      contribType: trackQuery.data?.contribType,
-      referral: readReferralContext(),
-    });
-
-    const targetPath = target.split("?")[0] ?? target;
-    if (pathname !== targetPath && !pathname.startsWith(targetPath)) {
-      router.replace(target);
+    if (status === "authenticated" && trackQuery.data) {
+      setOnboardingComplete(trackQuery.data.onboardingComplete);
     }
-  }, [needsOnboarding, pathname, router, session, trackQuery.data]);
+  }, [status, trackQuery.data, setOnboardingComplete]);
 
-  // Onboarding done but KYC not cleared — hold outside the portal shell.
+  // ── Locked-shell gate ──────────────────────────────────────────────────────
+  // Replaces the old full-screen onboarding wizard. After login the contributor
+  // lands in the portal SHELL, but until their profile is 100% complete they can
+  // only be on a Profile page — every other section is locked and bounces back to
+  // the profile-completion page (which carries the whole filling form: agreements,
+  // identity, payout, skills, projects, experience, education).
+  const onProfile = pathname.startsWith("/contributor/profile");
+  const profileLoaded = !!completion;
+  const profileComplete = completion?.complete ?? false;
+  const locked = status === "authenticated" && profileLoaded && !profileComplete;
+
   useEffect(() => {
-    if (!needsKycReview || isInsideOnboardingFlow(pathname)) return;
-    router.replace("/onboarding/kyc-pending");
-  }, [needsKycReview, pathname, router]);
+    if (locked && !onProfile) {
+      router.replace("/contributor/profile/complete");
+    }
+  }, [locked, onProfile, router]);
 
   const operatorName = session?.user?.name ?? "Contributor";
   const operatorInitials =
@@ -131,14 +93,14 @@ function ContributorPortalLayout({
       .slice(0, 2)
       .toUpperCase();
 
+  // While locked, render only Profile pages; other sections show nothing (they're
+  // mid-redirect) so no locked content flashes.
   const shellChildren =
-    status === "authenticated" && trackLoading(status, trackQuery)
+    status === "authenticated" && trackLoading(status, trackQuery) && !profileLoaded
       ? null
-      : needsOnboarding && !isOnboardingRoute
+      : locked && !onProfile
         ? null
-        : needsKycReview
-          ? null
-          : children;
+        : children;
 
   return (
     <>
@@ -153,7 +115,7 @@ function ContributorPortalLayout({
         {!CONTRIBUTOR_DEMO_BYPASS && <ContributorGuard />}
         <Suspense fallback={null}>{shellChildren}</Suspense>
       </EnterpriseShell>
-      {!needsOnboarding && CONTRIBUTOR_DEMO_BYPASS && (
+      {!locked && CONTRIBUTOR_DEMO_BYPASS && (
         <Suspense fallback={null}>
           <PersonaSwitcher />
         </Suspense>
