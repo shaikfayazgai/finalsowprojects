@@ -99,7 +99,9 @@ export function revisionsFromTasks(tasks: ContributorTaskSummary[]): RevisionRow
 
 /** Submissions nav — tasks in submitted / under_review / resubmitted. */
 export function submissionsFromTasks(tasks: ContributorTaskSummary[]): SubmissionSummary[] {
-  return tasks.filter(isSubmissionLaneTask).map((task) => {
+  // Guard: a task can sit in a submission-lane status while latestSubmission is
+  // still null (data lag) — skip those so we don't crash on sub.id below.
+  return tasks.filter((t) => isSubmissionLaneTask(t) && t.latestSubmission).map((task) => {
     const sub = task.latestSubmission!;
     return {
       id: sub.id,
