@@ -34,8 +34,50 @@ const AVAILABILITY = ["Full Time", "Part Time", "Weekends", "Flexible"];
 const SKILL_LEVELS = ["Beginner", "Intermediate", "Advanced", "Expert"];
 const SKILL_YEARS = ["0-6 Months", "6-12 Months", "1 Year", "2 Years", "3 Years", "4 Years", "5+ Years"];
 const LANGUAGES = ["English", "Hindi", "Telugu", "Tamil", "Kannada", "Malayalam"];
-const SKILLS = ["React", "Node.js", "TypeScript", "JavaScript", "Python", "MongoDB", "PostgreSQL", "AWS", "Docker", "Next.js", "Express", "TensorFlow", "Figma", "Java", "Spring Boot", "Flutter", "React Native", "GraphQL"];
-const KEYWORDS = ["Authentication", "JWT", "RBAC", "Dashboard", "Payments", "Admin Panel", "Reporting", "Analytics", "Inventory", "Attendance", "Chat", "Socket.IO", "CRM", "ERP", "Booking", "Notifications"];
+const SKILLS = [
+  // Languages
+  "JavaScript", "TypeScript", "Python", "Java", "C", "C++", "C#", "Go", "Rust", "Ruby", "PHP", "Swift", "Kotlin", "Dart", "Scala", "R", "MATLAB", "Perl", "Objective-C", "Elixir", "Haskell", "Lua", "Solidity", "Julia", "Groovy", "Clojure", "Erlang", "Bash", "PowerShell", "SQL", "GraphQL", "Assembly", "VB.NET",
+  // Frontend
+  "React", "Next.js", "Vue.js", "Nuxt.js", "Angular", "Svelte", "SvelteKit", "SolidJS", "Astro", "Remix", "Redux", "Zustand", "MobX", "React Query", "RxJS", "jQuery", "HTML", "CSS", "Sass", "Less", "Tailwind CSS", "Bootstrap", "Material UI", "Chakra UI", "Ant Design", "styled-components", "Three.js", "D3.js", "Framer Motion", "Storybook", "Webpack", "Vite", "Babel", "ESLint",
+  // Backend
+  "Node.js", "Express", "NestJS", "Fastify", "Koa", "Django", "Flask", "FastAPI", "Spring Boot", "Spring", "Laravel", "Ruby on Rails", "ASP.NET Core", ".NET", "Gin", "Fiber", "Phoenix", "Symfony", "Apollo", "gRPC", "REST API", "WebSockets", "Socket.IO", "Prisma", "Sequelize", "TypeORM", "Hibernate", "SQLAlchemy",
+  // Databases
+  "MongoDB", "PostgreSQL", "MySQL", "MariaDB", "SQLite", "Redis", "Cassandra", "DynamoDB", "Firebase", "Firestore", "Supabase", "Elasticsearch", "Neo4j", "CouchDB", "Oracle", "SQL Server", "Snowflake", "BigQuery", "InfluxDB",
+  // Mobile
+  "React Native", "Flutter", "SwiftUI", "Jetpack Compose", "Android", "iOS", "Ionic", "Xamarin", "Expo",
+  // AI / ML / Data
+  "TensorFlow", "PyTorch", "Keras", "scikit-learn", "Pandas", "NumPy", "Matplotlib", "OpenCV", "Hugging Face", "LangChain", "OpenAI API", "spaCy", "NLTK", "XGBoost", "Apache Spark", "Hadoop", "Apache Kafka", "Airflow", "Tableau", "Power BI", "Jupyter", "NLP", "Computer Vision", "Deep Learning", "Machine Learning", "Data Analysis",
+  // Cloud / DevOps
+  "AWS", "Azure", "Google Cloud", "Docker", "Kubernetes", "Terraform", "Ansible", "Jenkins", "GitHub Actions", "GitLab CI", "CircleCI", "Helm", "Prometheus", "Grafana", "Nginx", "Apache", "Linux", "Serverless", "AWS Lambda", "Amazon S3", "Amazon EC2", "CloudFormation", "ArgoCD", "Vault",
+  // Tools / Platforms
+  "Git", "GitHub", "GitLab", "Bitbucket", "Jira", "Figma", "Adobe XD", "Sketch", "Postman", "Swagger", "VS Code", "Notion", "OAuth", "JWT", "Stripe", "Razorpay", "Twilio", "SendGrid", "WebRTC", "Electron", "Tauri", "Unity", "Unreal Engine", "Blender", "WordPress", "Shopify", "Salesforce", "SAP", "Webflow",
+  // Security
+  "Penetration Testing", "Burp Suite", "Metasploit", "Wireshark", "Nmap", "Kali Linux", "OWASP", "Cryptography", "Ethical Hacking", "SIEM",
+  // Blockchain
+  "Ethereum", "Web3.js", "Ethers.js", "Hardhat", "Truffle", "Smart Contracts", "Solana",
+  // Design
+  "UI Design", "UX Design", "Wireframing", "Prototyping", "Photoshop", "Illustrator", "After Effects", "Canva",
+];
+const KEYWORDS = [
+  // Auth & identity
+  "Authentication", "Authorization", "JWT", "OAuth", "SSO", "RBAC", "Two-Factor Authentication", "Multi-Factor Authentication", "Session Management", "Password Reset", "Social Login", "Biometric Authentication", "KYC", "Identity Verification",
+  // Payments
+  "Payments", "Payment Gateway", "Subscriptions", "Billing", "Invoicing", "Wallet", "Refunds", "Checkout", "UPI", "Escrow", "Payouts", "Recurring Billing",
+  // Dashboard & analytics
+  "Dashboard", "Admin Panel", "Analytics", "Reporting", "Data Visualization", "Charts", "KPIs", "Audit Logs", "Activity Feed",
+  // Communication
+  "Chat", "Real-time Messaging", "Notifications", "Push Notifications", "Email", "SMS", "Video Call", "Voice Call", "Comments", "Live Streaming", "Forums",
+  // Commerce
+  "E-commerce", "Shopping Cart", "Product Catalog", "Order Management", "Inventory", "Wishlist", "Reviews & Ratings", "Coupons", "Search & Filter", "Recommendations", "Returns",
+  // Business domains
+  "CRM", "ERP", "HRMS", "LMS", "CMS", "POS", "Supply Chain", "Booking", "Scheduling", "Appointments", "Attendance", "Payroll", "Ticketing", "Helpdesk", "Project Management", "Task Management", "Time Tracking", "Asset Management",
+  // Data / AI features
+  "Search", "Recommendation Engine", "Chatbot", "NLP", "Image Recognition", "Sentiment Analysis", "Fraud Detection", "Predictive Analytics", "ETL", "Data Pipeline", "OCR", "Voice Recognition", "Personalization",
+  // Architecture / infra
+  "API Integration", "Microservices", "REST API", "GraphQL", "Webhooks", "Caching", "Load Balancing", "CI/CD", "Containerization", "Serverless", "Multi-tenancy", "Cloud Migration", "Message Queue", "Rate Limiting",
+  // Product features
+  "File Upload", "Maps & Geolocation", "Calendar", "PDF Generation", "Export/Import", "Internationalization", "Dark Mode", "Accessibility", "SEO", "PWA", "Offline Support", "Drag & Drop", "Workflow Automation", "Role Management", "Onboarding", "Document Management", "Forms", "Surveys", "Geofencing", "QR Code", "Barcode Scanning", "Gamification", "Loyalty Program", "Referral System", "Audit Trail",
+];
 const EXPERTISE = ["Frontend Development", "Backend Development", "Full Stack", "Mobile Development", "AI / ML", "Data Science", "Cloud", "DevOps", "QA Testing", "Cyber Security", "UI/UX", "Graphic Design", "Content Writing", "Business Analysis", "Project Coordination"];
 const TECHNICAL = ["Frontend Development", "Backend Development", "Full Stack", "Mobile Development", "AI / ML", "Data Science", "Cloud", "DevOps", "Cyber Security"];
 const PREFERENCES = ["Web", "Mobile", "AI", "Cloud", "Education", "Healthcare", "Finance", "Ecommerce", "SaaS", "Remote Only"];
