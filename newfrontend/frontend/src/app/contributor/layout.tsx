@@ -76,12 +76,36 @@ function ContributorPortalLayout({
   const profileLoaded = !!completion;
   const profileComplete = completion?.complete ?? false;
   const locked = status === "authenticated" && profileLoaded && !profileComplete;
+  // Until the gate resolves, don't show the portal shell either — avoids a flash
+  // of the sidebar before we know whether the profile is complete.
+  const awaitingCompletion = status === "authenticated" && !profileLoaded;
 
   useEffect(() => {
     if (locked && !onProfile) {
       router.replace("/contributor/profile/complete");
     }
   }, [locked, onProfile, router]);
+
+  // ── Full-screen profile, no shell ──────────────────────────────────────────
+  // While the profile is incomplete (or the gate is still loading), the ENTIRE
+  // portal shell — sidebar, top bar, nav — is hidden. The contributor sees only
+  // the profile-completion section, full screen, until they reach 100%.
+  if (locked || awaitingCompletion) {
+    return (
+      <main className="min-h-screen w-full bg-[var(--page-bg)]">
+        {!CONTRIBUTOR_DEMO_BYPASS && <ContributorGuard />}
+        {locked && onProfile ? (
+          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
+            <Suspense fallback={null}>{children}</Suspense>
+          </div>
+        ) : (
+          <div className="grid min-h-screen place-items-center">
+            <div className="h-8 w-8 rounded-full border-2 border-stroke border-t-brand animate-spin" />
+          </div>
+        )}
+      </main>
+    );
+  }
 
   const operatorName = session?.user?.name ?? "Contributor";
   const operatorInitials =
