@@ -1,8 +1,11 @@
 /**
- * Contributor sign-up — /contributor/register, the freelancer self-signup entry
- * that mirrors /contributor/login. Reuses the shared registration form (email +
- * password or Google/Microsoft SSO), which creates a `contributor` account and
- * routes into the profile-completion flow. Public (reachable signed-out) — see
- * proxy.ts PUBLIC_EXACT_PATHS.
+ * Contributor sign-up — /contributor/register (mirrors /contributor/login).
+ * OTP-based: email → 6-digit code → create password. No activation links.
+ * Public (reachable signed-out) — see proxy.ts PUBLIC_EXACT_PATHS + the
+ * contributor layout's standalone-route list.
  */
-export { default } from "@/app/auth/register/page";
+import { ContributorRegisterScreen } from "./_components/contributor-register-screen";
+
+export default function ContributorRegisterPage() {
+  return <ContributorRegisterScreen />;
+}
