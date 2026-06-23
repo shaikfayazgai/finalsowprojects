@@ -87,12 +87,28 @@ function ChipField({ values, setValues, suggestions, placeholder }: { values: st
   );
 }
 
-/** File picker — shows the chosen filename (real upload to Blob is wired later). */
-function FileField({ text, name, onPick, accept, multiple }: { text: string; name: string; onPick: (n: string) => void; accept: string; multiple?: boolean }) {
+/** File picker — shows the chosen filename (real upload to Blob is wired later).
+ * For the profile photo it enforces a KB cap + passport-size (portrait) dimensions. */
+function FileField({ text, name, onPick, accept, multiple, maxKB, passport, onErr }: { text: string; name: string; onPick: (n: string) => void; accept: string; multiple?: boolean; maxKB?: number; passport?: boolean; onErr?: (m: string) => void }) {
+  const handle = async (files: FileList) => {
+    const f = files[0];
+    if (maxKB && f.size > maxKB * 1024) { onErr?.(`Photo must be under ${maxKB} KB (yours is ${Math.round(f.size / 1024)} KB).`); return; }
+    if (passport) {
+      const ok = await new Promise<boolean>((res) => {
+        const img = new window.Image();
+        img.onload = () => { const r = img.width / img.height; res(img.width >= 150 && img.height >= 150 && r >= 0.6 && r <= 0.95); };
+        img.onerror = () => res(false);
+        img.src = URL.createObjectURL(f);
+      });
+      if (!ok) { onErr?.("Use a passport-size photo — portrait, min 150×150."); return; }
+    }
+    onErr?.("");
+    onPick(multiple ? Array.from(files).map((x) => x.name).join(", ") : f.name);
+  };
   return (
     <label className="flex items-center justify-between gap-2 h-9 px-3 rounded-lg border border-dashed border-stroke bg-surface cursor-pointer hover:bg-surface-hover">
       <span className="inline-flex items-center gap-1.5 font-body text-[12px] text-text-secondary truncate"><Upload className="h-3.5 w-3.5 shrink-0" /> {name || text}</span>
-      <input type="file" accept={accept} multiple={multiple} className="hidden" onChange={(e) => { const f = e.target.files; if (f && f.length) onPick(multiple ? Array.from(f).map((x) => x.name).join(", ") : f[0].name); }} />
+      <input type="file" accept={accept} multiple={multiple} className="hidden" onChange={(e) => { const f = e.target.files; if (f && f.length) handle(f); }} />
     </label>
   );
 }
@@ -130,7 +146,6 @@ export default function CompleteProfilePage() {
   const [eduDraft, setEduDraft] = React.useState({ institution: "", degree: "", specialization: "", grade: "", startYear: "", endYear: "" });
   const [links, setLinks] = React.useState({ linkedin: "", github: "", portfolio: "", proofUrl: "" });
   const [verif, setVerif] = React.useState({ idType: "", idNumber: "", idDocument: "" });
-  const [resume, setResume] = React.useState("");
   const [preferences, setPreferences] = React.useState<string[]>([]);
   const [bank, setBank] = React.useState({ accountHolderName: "", bankName: "", accountNumber: "", confirmAccountNumber: "", ifscCode: "", accountType: "", upiId: "" });
   const [agree, setAgree] = React.useState({ termsAccepted: false, paymentPolicyAccepted: false, privacyPolicyAccepted: false, notificationConsent: false, truthDeclaration: false });
@@ -156,7 +171,6 @@ export default function CompleteProfilePage() {
       const pr = (ex.professional as Record<string, string>) || {}; setProf((x) => ({ ...x, weeklyHours: pr.weeklyHours || x.weeklyHours, hourlyRate: pr.hourlyRate || x.hourlyRate }));
       setLinks((x) => ({ ...x, ...((ex.links as Record<string, string>) || {}) }));
       const v = (ex.verification as Record<string, string>) || {}; setVerif((x) => ({ idType: v.idType || x.idType, idNumber: v.idNumber || x.idNumber, idDocument: v.idDocument || x.idDocument }));
-      if (ex.resume) setResume(ex.resume as string);
       if (Array.isArray(ex.preferences)) setPreferences(ex.preferences as string[]);
       setBank((x) => ({ ...x, ...((ex.bank as Record<string, string>) || {}) }));
       setAgree((x) => ({ ...x, ...((ex.agreements as Record<string, boolean>) || {}) }));
@@ -191,7 +205,7 @@ export default function CompleteProfilePage() {
     if (githubRequired && !links.github.trim()) { setErr("GitHub is required for the technical areas you selected."); return; }
     if (!verif.idType) { setErr("Select a government ID type."); return; }
     const e = validateId(verif.idType, verif.idNumber); if (e) { setErr(e); return; }
-    run("verification", () => patchExtra({ links, verification: verif, resume, preferences }));
+    run("verification", () => patchExtra({ links, verification: verif, preferences }));
   };
   const saveBank = () => {
     if (!bank.accountHolderName.trim() || !bank.accountNumber.trim() || !bank.ifscCode.trim()) { setErr("Holder name, account number and IFSC are required."); return; }
@@ -209,10 +223,12 @@ export default function CompleteProfilePage() {
   const sectionDone = sections[currentKey] === true;
 
   return (
-    <div className="max-w-2xl mx-auto pb-16">
+    <div className="max-w-4xl mx-auto pb-16">
       <Link href="/contributor/profile" className="inline-flex items-center gap-1.5 font-body text-[12.5px] text-text-tertiary hover:text-foreground mb-4"><ArrowLeft className="h-4 w-4" /> Back to profile</Link>
 
-      <div className="rounded-xl border border-stroke bg-surface p-5 mb-4">
+      <div className="grid lg:grid-cols-[240px_1fr] gap-4 items-start">
+        <aside className="space-y-3 lg:sticky lg:top-4">
+        <div className="rounded-xl border border-stroke bg-surface p-4">
         <div className="flex items-center justify-between gap-3">
           <h1 className="font-body text-[18px] font-semibold text-foreground">{complete ? "Profile complete" : "Complete your profile"}</h1>
           <span className="font-display text-[20px] font-bold tabular-nums" style={{ color: complete ? "#0F9D6B" : pct >= 50 ? "#CA8A04" : "#D97706" }}>{pct}%</span>
@@ -221,21 +237,24 @@ export default function CompleteProfilePage() {
         {complete ? <Link href="/contributor/opportunities" className={cn(primaryBtn, "mt-3")}>Browse tasks <ArrowRight className="h-4 w-4" /></Link> : null}
       </div>
 
-      <div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1">
-        {SECTION_ORDER.map((key, i) => {
-          const done = sections[key] === true;
-          return (
-            <button key={key} type="button" onClick={() => setStep(i)} className={cn("inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-body text-[11.5px] whitespace-nowrap shrink-0 transition-colors", i === step ? "bg-foreground text-surface" : done ? "text-text-tertiary hover:bg-surface-hover" : "text-text-secondary hover:bg-surface-hover")}>
-              {done ? <CheckCircle2 className="h-3.5 w-3.5" style={{ color: i === step ? "currentColor" : "#0F9D6B" }} /> : <span className="grid place-items-center h-4 w-4 rounded-full border border-current text-[9px] font-semibold">{i + 1}</span>}
-              {SECTION_LABELS[key]}
-            </button>
-          );
-        })}
-      </div>
+        <nav className="rounded-xl border border-stroke bg-surface p-1.5 space-y-0.5">
+          {SECTION_ORDER.map((key, i) => {
+            const done = sections[key] === true;
+            const active = i === step;
+            return (
+              <button key={key} type="button" onClick={() => setStep(i)} className={cn("w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg font-body text-[12.5px] text-left transition-colors", active ? "bg-foreground text-surface" : "hover:bg-surface-hover")}>
+                {done ? <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: active ? "currentColor" : "#0F9D6B" }} /> : <span className={cn("grid place-items-center h-4 w-4 rounded-full border text-[9px] font-semibold shrink-0", active ? "border-current" : "border-stroke text-text-tertiary")}>{i + 1}</span>}
+                <span className={active ? "" : done ? "text-text-secondary" : "text-foreground"}>{SECTION_LABELS[key]}</span>
+              </button>
+            );
+          })}
+        </nav>
+        </aside>
 
-      {err ? <p className="mb-3 font-body text-[12px] text-error-text">{err}</p> : null}
+        <div>
+        {err ? <p className="mb-3 font-body text-[12px] text-error-text">{err}</p> : null}
 
-      <div className="rounded-xl border border-stroke bg-surface p-5 space-y-3">
+        <div className="rounded-xl border border-stroke bg-surface p-5 space-y-3">
         <div className="flex items-center gap-2">
           <h2 className="font-body text-[16px] font-semibold text-foreground">{SECTION_LABELS[currentKey]}</h2>
           <span className="font-body text-[11px] text-text-tertiary">· {weights[currentKey] ?? 0}%</span>
@@ -244,7 +263,7 @@ export default function CompleteProfilePage() {
 
         {currentKey === "basic" ? (
           <>
-            <FileField text="Upload profile photo" name={basic.profilePhoto} accept=".jpg,.jpeg,.png,.webp" onPick={(n) => setBasic({ ...basic, profilePhoto: n })} />
+            <FileField text="Upload passport-size photo (max 200 KB)" name={basic.profilePhoto} accept=".jpg,.jpeg,.png,.webp" maxKB={200} passport onErr={setErr} onPick={(n) => setBasic({ ...basic, profilePhoto: n })} />
             <div className="grid sm:grid-cols-2 gap-2">
               <Field label="First name *"><input value={basic.firstName} onChange={(e) => setBasic({ ...basic, firstName: e.target.value })} className={inputCls} placeholder="Aarav" /></Field>
               <Field label="Last name *"><input value={basic.lastName} onChange={(e) => setBasic({ ...basic, lastName: e.target.value })} className={inputCls} placeholder="Sharma" /></Field>
@@ -364,10 +383,7 @@ export default function CompleteProfilePage() {
               <Field label="Government ID type *"><select value={verif.idType} onChange={(e) => setVerif({ ...verif, idType: e.target.value })} className={inputCls}><option value="">Select</option>{ID_TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
               <Field label="ID number *"><input value={verif.idNumber} onChange={(e) => setVerif({ ...verif, idNumber: e.target.value })} className={inputCls} placeholder={verif.idType === "Aadhaar Card" ? "12 digits" : verif.idType === "PAN Card" ? "ABCDE1234F" : "Enter ID number"} /></Field>
             </div>
-            <div className="grid sm:grid-cols-2 gap-2">
-              <FileField text="Upload ID document *" name={verif.idDocument} accept=".pdf,.jpg,.jpeg,.png" onPick={(n) => setVerif({ ...verif, idDocument: n })} />
-              <FileField text="Upload resume" name={resume} accept=".pdf,.doc,.docx" onPick={setResume} />
-            </div>
+            <FileField text="Upload ID document *" name={verif.idDocument} accept=".pdf,.jpg,.jpeg,.png" onPick={(n) => setVerif({ ...verif, idDocument: n })} />
             <Field label="Project preferences">
               <div className="flex flex-wrap gap-1.5">{PREFERENCES.map((p) => { const on = preferences.includes(p); return (
                 <button key={p} type="button" onClick={() => setPreferences(on ? preferences.filter((x) => x !== p) : [...preferences, p])} className={cn("px-2.5 py-1 rounded-full border font-body text-[11.5px]", on ? "border-foreground bg-foreground text-surface" : "border-stroke text-foreground hover:bg-surface-hover")}>{p}</button>
@@ -423,6 +439,8 @@ export default function CompleteProfilePage() {
         ) : (
           <span className="font-body text-[12px] text-text-tertiary">Reach 100% to finish</span>
         )}
+      </div>
+        </div>
       </div>
     </div>
   );
