@@ -1,8 +1,0 @@
-{
-  "name": "Glimmora Mentor Portal Flow",
-  "id": "glimmora-mentor-portal-flow-v2",
-  "api": "1.0.0",
-  "main": "code.js",
-  "documentAccess": "dynamic-page",
-  "editorType": ["figma", "figjam"]
-}
