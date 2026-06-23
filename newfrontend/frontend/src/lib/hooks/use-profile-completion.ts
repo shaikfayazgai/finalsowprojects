@@ -15,6 +15,7 @@ export interface ProfileCompletion {
   completeness: number; // 0..100
   complete: boolean; // true once every gating section is filled
   sections: Record<string, boolean>;
+  weights: Record<string, number>; // per-section weight (sums to 100)
   missing: string[]; // keys of gating sections still incomplete
 }
 
@@ -22,17 +23,19 @@ const EMPTY: ProfileCompletion = {
   completeness: 0,
   complete: false,
   sections: {},
+  weights: {},
   missing: [],
 };
 
-/** Friendly labels for the gating section keys returned by the backend. */
+/** Friendly labels for the weighted section keys returned by the backend. */
 export const SECTION_LABELS: Record<string, string> = {
+  basic: "Basic information",
+  professional: "Professional details",
+  skills: "Skills",
   expertise: "Expertise areas",
-  projects: "Portfolio projects",
+  portfolio: "Portfolio projects",
   experience: "Work experience",
   education: "Education",
-  basics: "Basic info",
-  skills: "Skills",
 };
 
 export function useProfileCompletion() {
@@ -49,6 +52,7 @@ export function useProfileCompletion() {
         completeness: Math.max(0, Math.min(100, Number(json?.completeness ?? 0))),
         complete: Boolean(json?.complete),
         sections: (json?.sections as Record<string, boolean>) ?? {},
+        weights: (json?.weights as Record<string, number>) ?? {},
         missing: Array.isArray(json?.missing) ? json.missing : [],
       };
     },

@@ -24,7 +24,9 @@ export function ProfileCompletionGate({ children }: { children: React.ReactNode 
   // 100 % → eligible: show the real marketplace.
   if (data.complete) return <>{children}</>;
 
-  const allSections = ["expertise", "projects", "experience", "education"] as const;
+  const allSections = [
+    "basic", "professional", "skills", "expertise", "portfolio", "experience", "education",
+  ] as const;
 
   return (
     <div className="rounded-xl border border-stroke bg-surface p-6 sm:p-8">

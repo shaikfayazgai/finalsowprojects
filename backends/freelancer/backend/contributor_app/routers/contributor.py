@@ -1671,10 +1671,12 @@ async def patch_profile(account_id: AcctId, payload: dict = Body(default={})):
     db.execute(
         "UPDATE contributor_profiles SET bio=COALESCE(%s, bio), job_title=COALESCE(%s, job_title), "
         "country=COALESCE(%s, country), city=COALESCE(%s, city), timezone=COALESCE(%s, timezone), "
-        "linkedin=COALESCE(%s, linkedin), availability=COALESCE(%s, availability), updated_at=now() "
+        "linkedin=COALESCE(%s, linkedin), availability=COALESCE(%s, availability), "
+        "years_experience=COALESCE(%s, years_experience), updated_at=now() "
         "WHERE account_id=%s",
         (payload.get("bio"), payload.get("job_title"), payload.get("country"), payload.get("city"),
-         payload.get("timezone"), payload.get("linkedin"), payload.get("availability"), account_id),
+         payload.get("timezone"), payload.get("linkedin"), payload.get("availability"),
+         payload.get("years_experience"), account_id),
     )
     return _profile(account_id)
 
@@ -1888,23 +1890,27 @@ def _completion_status(account_id: int) -> dict[str, Any]:
     experience = db.fetch_all("SELECT id FROM contributor_experience WHERE account_id=%s", (account_id,))
     education = db.fetch_all("SELECT id FROM contributor_education WHERE account_id=%s", (account_id,))
 
-    # All six sections are tracked for display, but only the four that the
-    # profile-completion PAGE can actually fill (expertise, projects, experience,
-    # education) gate the dashboard. Basics + skills are edited in profile
-    # settings and are surfaced here as informational only — requiring them would
-    # make 100% unreachable from this page and lock the dashboard forever.
+    # Professional, weighted completion — a searchable-talent-database profile, not
+    # a basic form. Each section carries a weight; the contributor unlocks public
+    # work only at 100%. Every gating section has a fill-in form on the complete page.
+    n_skills = len(db.fetch_all("SELECT id FROM contributor_skills WHERE account_id=%s", (account_id,)))
     sections = {
-        "basics": bool(profile.get("bio") and profile.get("country") and profile.get("timezone")),
-        "skills": bool(profile.get("primary_skills")),
+        "basic": bool(profile.get("country") and profile.get("city")
+                      and profile.get("timezone") and profile.get("linkedin")),
+        "professional": bool(profile.get("bio") and profile.get("job_title")
+                             and profile.get("years_experience") and profile.get("availability")),
+        "skills": n_skills > 0 or bool(profile.get("primary_skills")),
         "expertise": bool(profile.get("expertise_areas")),
-        "projects": len(projects) > 0,
+        "portfolio": len(projects) > 0,
         "experience": len(experience) > 0,
         "education": len(education) > 0,
     }
-    GATING = ("expertise", "projects", "experience", "education")
-    gating_done = sum(1 for k in GATING if sections[k])
-    pct = int(gating_done / len(GATING) * 100)
-    complete = gating_done == len(GATING)
+    WEIGHTS = {
+        "basic": 15, "professional": 15, "skills": 20, "expertise": 10,
+        "portfolio": 20, "experience": 10, "education": 10,
+    }  # sums to 100
+    pct = sum(w for k, w in WEIGHTS.items() if sections.get(k))
+    complete = pct >= 100
     # Persist the flag so the gate can read it cheaply.
     if bool(profile.get("profile_completed")) != complete:
         db.execute("UPDATE contributor_profiles SET profile_completed=%s WHERE account_id=%s",
@@ -1913,7 +1919,8 @@ def _completion_status(account_id: int) -> dict[str, Any]:
         "completeness": pct,
         "complete": complete,
         "sections": sections,
-        "missing": [k for k in GATING if not sections[k]],
+        "weights": WEIGHTS,
+        "missing": [k for k in WEIGHTS if not sections.get(k)],
     }
 
 
