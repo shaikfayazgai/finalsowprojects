@@ -10,7 +10,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CheckCircle2, Plus, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Plus, Upload, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProfileCompletion, SECTION_LABELS } from "@/lib/hooks/use-profile-completion";
 import { cn } from "@/lib/utils/cn";
@@ -68,21 +68,43 @@ const inputCls = "w-full h-9 rounded-lg border border-stroke-subtle bg-surface p
 const labelCls = "block font-body text-[11px] font-semibold uppercase tracking-[0.05em] text-text-tertiary mb-1";
 const primaryBtn = "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand text-on-brand font-body text-[12px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-50";
 
-/** Searchable multi-select chips — keeps languages/skills/keywords clean. */
+/** Searchable multi-select dropdown with checkboxes; picked values show as
+ * horizontal chips with an × to remove. Used for languages, skills, keywords. */
 function ChipField({ values, setValues, suggestions, placeholder }: { values: string[]; setValues: (v: string[]) => void; suggestions: string[]; placeholder: string }) {
-  const [inp, setInp] = React.useState("");
-  const add = (v: string) => { const t = v.trim(); if (t && !values.includes(t)) setValues([...values, t]); setInp(""); };
+  const [q, setQ] = React.useState("");
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  const toggle = (v: string) => { const t = v.trim(); if (!t) return; setValues(values.includes(t) ? values.filter((x) => x !== t) : [...values, t]); };
+  const filtered = suggestions.filter((s) => s.toLowerCase().includes(q.trim().toLowerCase()));
+  const canAdd = !!q.trim() && !suggestions.some((s) => s.toLowerCase() === q.trim().toLowerCase()) && !values.some((v) => v.toLowerCase() === q.trim().toLowerCase());
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" ref={ref}>
       {values.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">{values.map((v) => (
-          <span key={v} className="inline-flex items-center gap-1 rounded-full border border-stroke-subtle bg-surface-hover px-2.5 py-1 font-body text-[12px] text-foreground">{v}<button type="button" onClick={() => setValues(values.filter((x) => x !== v))} className="text-text-tertiary hover:text-foreground">×</button></span>
+          <span key={v} className="inline-flex items-center gap-1 rounded-full border border-brand/20 bg-brand/10 px-2.5 py-1 font-body text-[12px] text-brand">{v}<button type="button" onClick={() => toggle(v)} aria-label={`Remove ${v}`} className="hover:text-brand-hover"><X className="h-3 w-3" /></button></span>
         ))}</div>
       ) : null}
-      <div className="flex flex-wrap gap-1.5">{suggestions.filter((s) => !values.includes(s)).slice(0, 12).map((s) => (
-        <button key={s} type="button" onClick={() => add(s)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-stroke px-2.5 py-1 font-body text-[11.5px] text-text-secondary hover:bg-surface-hover"><Plus className="h-3 w-3" /> {s}</button>
-      ))}</div>
-      <input value={inp} onChange={(e) => setInp(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(inp); } }} placeholder={placeholder} className={inputCls} />
+      <div className="relative">
+        <input value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onKeyDown={(e) => { if (e.key === "Enter" && canAdd) { e.preventDefault(); toggle(q); setQ(""); } }} placeholder={placeholder} className={inputCls} />
+        {open ? (
+          <div className="absolute z-20 mt-1 w-full max-h-52 overflow-auto rounded-lg border border-stroke bg-surface shadow-lg p-1">
+            {filtered.map((s) => { const on = values.includes(s); return (
+              <button key={s} type="button" onClick={() => toggle(s)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md font-body text-[12.5px] text-foreground hover:bg-surface-hover text-left">
+                <span className={cn("grid place-items-center h-4 w-4 rounded border shrink-0", on ? "bg-brand border-brand text-on-brand" : "border-stroke")}>{on ? <Check className="h-3 w-3" /> : null}</span>{s}
+              </button>
+            ); })}
+            {canAdd ? (
+              <button type="button" onClick={() => { toggle(q); setQ(""); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md font-body text-[12.5px] text-brand hover:bg-surface-hover text-left"><Plus className="h-3.5 w-3.5" /> Add &ldquo;{q.trim()}&rdquo;</button>
+            ) : null}
+            {filtered.length === 0 && !canAdd ? <p className="px-2 py-1.5 font-body text-[12px] text-text-tertiary">No matches</p> : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
