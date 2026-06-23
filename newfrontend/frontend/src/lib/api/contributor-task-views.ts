@@ -136,11 +136,11 @@ export function completedFromTasks(tasks: ContributorTaskSummary[]): {
     // over-counts fixed-price tasks (a ₹3,000 fixed payout showed as ₹30,000).
     // Only fall back to rate×hours for legacy hourly tasks with no fixed amount.
     const fixedMinor =
-      (typeof task.payGrossMinor === "number" && task.payGrossMinor > 0
-        ? task.payGrossMinor
+      (typeof summary.payGrossMinor === "number" && summary.payGrossMinor > 0
+        ? summary.payGrossMinor
         : null) ??
-      (task.pricing?.contributorPayout
-        ? Math.round(task.pricing.contributorPayout * 100)
+      (summary.pricing?.contributorPayout
+        ? Math.round(summary.pricing.contributorPayout * 100)
         : null);
     const hours = task.estimatedHours ?? summary.estimatedHours ?? 0;
     const rate = task.agreedRatePerHour ?? summary.agreedRatePerHour ?? 0;
