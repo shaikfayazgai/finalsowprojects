@@ -1,3 +1,0 @@
-employee_id,email,first_name,last_name,department,primary_skills,manager_email,cost_center,status
-EMP-301,pooja.import@acme.com,Pooja,Iyer,Design,"Figma, UX",rahul@acme.com,CC-200,active
-EMP-302,hari.import@acme.com,Hari,Krishnan,Engineering,"Node.js, React",rahul@acme.com,CC-200,active
