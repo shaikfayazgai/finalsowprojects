@@ -116,6 +116,19 @@ export default function AdminPricePlanPage() {
     }
   };
 
+  // "Pay all delivered tasks" — bulk disburse. In TEST/simulated mode this runs the
+  // real state machine on the backend (no Razorpay checkout per task); the backend
+  // caps at the remaining payable and skips any task that exceeds it.
+  const doPayAll = async () => {
+    setActionError(null);
+    try {
+      await payout.payAll();
+      payout.reload();
+    } catch (e) {
+      if (e instanceof Error) setActionError(e.message);
+    }
+  };
+
   React.useEffect(() => {
     fetch("/api/admin/commission", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
@@ -426,6 +439,7 @@ export default function AdminPricePlanPage() {
                       onPayout={payout.payout}
                       onPayEligible={doPayEligible}
                       localPaid={localPaidTaskIds}
+                      payableMinor={payout.status?.payableMinor}
                     />
                   ) : null}
                 </div>
@@ -502,7 +516,7 @@ export default function AdminPricePlanPage() {
         const gf = Math.max(0, Math.min(gstPct, 50)) / 100;
         const clientMinor = cf < 1 ? Math.round(totalMinor / (1 - cf)) : totalMinor;
         const enterprisePriceMinor = clientMinor + Math.round(clientMinor * gf); // contributor + margin + GST
-        return <PayoutSummary status={payout.status} error={payout.error} busy={payout.busy} onRequestAll={payout.requestAll} enterprisePriceMinor={enterprisePriceMinor} />;
+        return <PayoutSummary status={payout.status} error={payout.error} busy={payout.busy} onRequestAll={payout.requestAll} onPayAll={doPayAll} enterprisePriceMinor={enterprisePriceMinor} />;
       })() : null}
 
       {/* Actions */}
