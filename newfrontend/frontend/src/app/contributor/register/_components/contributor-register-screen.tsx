@@ -15,13 +15,15 @@ import { signIn } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
 import {
   AuthAlert,
-  AuthDivider,
   AuthField,
   AuthSubmitButton,
-  OAuthButtonStack,
   authInputCls,
 } from "@/components/auth/auth-screen";
-import { LoginShell } from "@/app/auth/login/_components/login-layout";
+import {
+  LoginDivider,
+  LoginOAuthRow,
+  LoginShell,
+} from "@/app/auth/login/_components/login-layout";
 import { cn } from "@/lib/utils/cn";
 
 type Step = "details" | "otp" | "password";
@@ -152,21 +154,6 @@ export function ContributorRegisterScreen() {
       ) : null}
 
       {step === "details" ? (
-        <>
-          <OAuthButtonStack
-            onGoogle={() => onOauth("google")}
-            onMicrosoft={() => onOauth("microsoft")}
-            googleBusy={oauthBusy === "google"}
-            microsoftBusy={oauthBusy === "microsoft"}
-            disabled={busy}
-            googleLabel="Sign up with Google"
-            microsoftLabel="Sign up with Microsoft"
-          />
-          <AuthDivider label="or sign up with email" />
-        </>
-      ) : null}
-
-      {step === "details" ? (
         <form onSubmit={sendCode} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <AuthField label="First name" htmlFor="reg-first">
@@ -191,6 +178,19 @@ export function ContributorRegisterScreen() {
             Send verification code
           </AuthSubmitButton>
         </form>
+      ) : null}
+
+      {step === "details" ? (
+        <>
+          <LoginDivider />
+          <LoginOAuthRow
+            onGoogle={() => onOauth("google")}
+            onMicrosoft={() => onOauth("microsoft")}
+            googleBusy={oauthBusy === "google"}
+            microsoftBusy={oauthBusy === "microsoft"}
+            disabled={busy}
+          />
+        </>
       ) : null}
 
       {step === "otp" ? (
