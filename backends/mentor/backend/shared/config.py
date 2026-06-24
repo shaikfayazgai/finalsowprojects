@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     def email_from_address(self) -> str:
         return (self.email_from or self.email_user).strip()
 
+    # ── Razorpay (TEST mode) ──────────────────────────────────────────────────
+    # When RAZORPAY_KEY_ID is set the payout disburse paths treat money movement
+    # as "live" (the real RazorpayX call slots in behind that toggle). The webhook
+    # secret is used to verify inbound webhook signatures. Blank = simulated.
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
+
     # ── Kafka event bus ───────────────────────────────────────────────────────
     # Off by default: cloud deploys (Render/Vercel) have no broker, and events are
     # fail-open (dropped). Set KAFKA_ENABLED=true + KAFKA_BOOTSTRAP_SERVERS to use.

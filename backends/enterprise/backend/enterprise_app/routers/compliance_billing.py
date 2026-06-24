@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import hmac
 import io
 import json
 import logging
@@ -25,10 +26,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from shared.audit import write_audit
+from shared.audit import write_audit, write_txn_event
+from shared.config import settings
 from shared.deps import get_current_user
 from shared.db import ensure_pg_clean, get_pg_connection
 from psycopg2.extras import Json, RealDictCursor
@@ -1027,25 +1029,76 @@ def razorpay_create_order(
     }
 
 
+async def _read_raw_and_verify(request: Request, signature: str | None) -> tuple[bytes, bool | None]:
+    """Read the raw request body and verify the Razorpay webhook signature.
+    Returns (raw_bytes, verified) where verified is:
+      True  — secret configured AND HMAC-SHA256 matches
+      False — secret configured BUT signature missing/mismatch (REJECT)
+      None  — no webhook secret configured (cannot verify; allow for TEST mode)
+    Never raises."""
+    try:
+        raw = await request.body()
+    except Exception:  # noqa: BLE001
+        raw = b""
+    secret = (getattr(settings, "razorpay_webhook_secret", "") or "").strip()
+    if not secret:
+        return raw, None
+    if not signature:
+        return raw, False
+    try:
+        expected = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).hexdigest()
+        return raw, hmac.compare_digest(expected, signature)
+    except Exception:  # noqa: BLE001
+        return raw, False
+
+
 @razorpay_router.post("/webhook")
-def razorpay_webhook(body: dict = Body(default={})):
+async def razorpay_webhook(
+    request: Request,
+    body: dict = Body(default={}),
+    x_razorpay_signature: str | None = Header(default=None, alias="X-Razorpay-Signature"),
+):
     """
-    Simulated Razorpay payment webhook.
+    Razorpay payment webhook (simulated money movement, real signature check).
     Expected payload: { event: 'payment.captured', payload: { payment: { entity: { order_id, id } } } }
-    Marks the order as paid.
+    Marks the order as paid. When RAZORPAY_WEBHOOK_SECRET is set, the HMAC-SHA256
+    signature is verified; a mismatch is logged to Mongo and rejected (400).
     """
+    raw, verified = await _read_raw_and_verify(request, x_razorpay_signature)
     event = (body or {}).get("event", "")
+
+    # Signature verification FAILURE → log raw event to Mongo + reject. Best-effort log.
+    if verified is False:
+        _oid = None
+        try:
+            _oid = body["payload"]["payment"]["entity"].get("order_id")
+        except (KeyError, TypeError, AttributeError):
+            _oid = None
+        write_txn_event(
+            direction="in", status="failed", order_id=_oid,
+            error="razorpay webhook signature verification failed", error_code="signature_invalid",
+            verified=False, raw=body if isinstance(body, dict) else None, service="enterprise")
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
     if event == "payment.captured":
         try:
             entity = body["payload"]["payment"]["entity"]
             order_id = entity["order_id"]
             payment_id = entity.get("id", "pay_" + uuid.uuid4().hex[:16])
-        except (KeyError, TypeError):
+        except (KeyError, TypeError) as exc:
+            write_txn_event(
+                direction="in", status="failed", error=f"invalid payload structure: {exc}",
+                error_code="invalid_payload", verified=verified,
+                raw=body if isinstance(body, dict) else None, service="enterprise")
             raise HTTPException(status_code=400, detail="Invalid webhook payload structure")
 
         row = _mark_order_paid(order_id, payment_id)
         if row is None:
             # Unknown order — still return 200 to avoid Razorpay retries
+            write_txn_event(
+                direction="in", status="failed", order_id=order_id, transaction_id=payment_id,
+                error="order not found", error_code="order_not_found", verified=verified,
+                raw=body if isinstance(body, dict) else None, service="enterprise")
             return {"status": "ignored", "reason": "order_not_found"}
 
         write_audit(
@@ -1057,6 +1110,9 @@ def razorpay_webhook(body: dict = Body(default={})):
             target_id=order_id,
             extra={"payment_id": payment_id},
         )
+        write_txn_event(
+            direction="in", status="success", order_id=order_id, transaction_id=payment_id,
+            verified=verified, raw=body if isinstance(body, dict) else None, service="enterprise")
         return {"status": "ok", "order_id": order_id, "payment_id": payment_id}
 
     # Unknown event — acknowledge but no action
@@ -1064,20 +1120,40 @@ def razorpay_webhook(body: dict = Body(default={})):
 
 
 @razorpay_router.post("/payout-webhook")
-def razorpay_payout_webhook(body: dict = Body(default={})):
+async def razorpay_payout_webhook(
+    request: Request,
+    body: dict = Body(default={}),
+    x_razorpay_signature: str | None = Header(default=None, alias="X-Razorpay-Signature"),
+):
     """
-    Simulated Razorpay payout webhook.
+    Razorpay payout webhook (simulated money movement, real signature check).
     Expected payload: { event: 'payout.processed', payload: { payout: { entity: { id, reference_id } } } }
-    Marks the order/payout row as processed.
+    Marks the order/payout row as processed. payout.reversed/failed → the linked
+    payout is recorded as a FAILED transaction. Signature is verified when
+    RAZORPAY_WEBHOOK_SECRET is set (mismatch → logged + rejected).
     """
+    raw, verified = await _read_raw_and_verify(request, x_razorpay_signature)
     event = (body or {}).get("event", "")
-    if event in ("payout.processed", "payout.reversed"):
+
+    if verified is False:
+        write_txn_event(
+            direction="out", status="failed",
+            error="razorpay payout webhook signature verification failed",
+            error_code="signature_invalid", verified=False,
+            raw=body if isinstance(body, dict) else None, service="enterprise")
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    if event in ("payout.processed", "payout.reversed", "payout.failed"):
         try:
             entity = body["payload"]["payout"]["entity"]
             payout_id = entity.get("id", "pout_" + uuid.uuid4().hex[:16])
             # reference_id is usually the order_id we created
             order_id = entity.get("reference_id") or entity.get("order_id", "")
-        except (KeyError, TypeError):
+        except (KeyError, TypeError) as exc:
+            write_txn_event(
+                direction="out", status="failed", error=f"invalid payload structure: {exc}",
+                error_code="invalid_payload", verified=verified,
+                raw=body if isinstance(body, dict) else None, service="enterprise")
             raise HTTPException(status_code=400, detail="Invalid payout webhook payload structure")
 
         if order_id:
@@ -1094,6 +1170,15 @@ def razorpay_payout_webhook(body: dict = Body(default={})):
             target_id=order_id or payout_id,
             extra={"payout_id": payout_id, "order_id": order_id, "found": row is not None},
         )
+
+        # A reversed/failed payout is a FAILED transaction; processed is a success.
+        failed_event = event in ("payout.reversed", "payout.failed")
+        write_txn_event(
+            direction="out", status="failed" if failed_event else "success",
+            order_id=order_id, transaction_id=payout_id,
+            error=event if failed_event else None,
+            error_code=event.replace("payout.", "") if failed_event else None,
+            verified=verified, raw=body if isinstance(body, dict) else None, service="enterprise")
 
         return {
             "status": "ok" if row else "ignored",

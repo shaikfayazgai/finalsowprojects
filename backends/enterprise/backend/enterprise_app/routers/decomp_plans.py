@@ -30,7 +30,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from psycopg2.extras import Json, RealDictCursor
 
-from shared.audit import write_audit
+from shared.audit import write_audit, write_txn_event
 from shared.db import ensure_pg_clean, get_pg_connection
 from shared.deps import get_current_user
 
@@ -2075,7 +2075,8 @@ def payout_contributors(plan_id: str, user: Annotated[dict, Depends(get_current_
     done: list = []
     skipped: list = []  # tasks delivered but over the remaining payable
     sim = not _razorpay_live()
-    with conn.cursor(cursor_factory=_RDC) as cur:
+    try:
+      with conn.cursor(cursor_factory=_RDC) as cur:
         ids = [task_id] if task_id else _plan_task_ids(cur, plan_id)
         # Fund-released gate: never disburse more than the enterprise has funded.
         payable = _payable_minor(cur, plan_id, ids)
@@ -2103,8 +2104,8 @@ def payout_contributors(plan_id: str, user: Annotated[dict, Depends(get_current_
                 "WHERE id=%s AND status='processing'",
                 [ext_ref, plan_id, sow_id, str(user.get("email") or user.get("id")), sim,
                  bool(from_escrow), pid])
-            done.append({"account_id": acct, "task_id": num_task, "ctid": ctid,
-                         "amountMinor": cm, "title": None})
+            done.append({"payout_id": pid, "account_id": acct, "task_id": num_task,
+                         "ctid": ctid, "amountMinor": cm, "title": None})
 
         if ids:
             # 1) Per-task 'released' payouts (enterprise sent that task's budget) — pay
@@ -2158,7 +2159,60 @@ def payout_contributors(plan_id: str, user: Annotated[dict, Depends(get_current_
                 elif ctid:
                     cur.execute("UPDATE contributor_tasks SET status='completed', updated_at=now() "
                                 "WHERE account_id=%s AND data->>'taskId'=%s", [d.get("account_id"), ctid])
-    conn.commit()
+      conn.commit()
+    except Exception as exc:  # noqa: BLE001
+        # FAILED disburse: roll back the in-flight batch, then (best-effort, in a
+        # FRESH transaction) mark every payout left mid-disbursal ('processing') for
+        # this plan's tasks as 'failed' with the error reason saved into its data
+        # JSONB, and log the raw error to Mongo. Re-raise so the caller sees it.
+        err = str(exc)
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            ids2 = [task_id] if task_id else None
+            with conn.cursor(cursor_factory=_RDC) as cur2:
+                if ids2 is None:
+                    ids2 = _plan_task_ids(cur2, plan_id)
+                if ids2:
+                    cur2.execute(
+                        "UPDATE payouts SET status='failed', failure_reason=%s, "
+                        "data = data || jsonb_build_object('error', %s, 'errorCode', %s, "
+                        "  'failedAt', %s, 'planId', %s, 'sowId', %s), updated_at=now() "
+                        "WHERE data->>'canonicalTaskId' = ANY(%s) AND status='processing' "
+                        "RETURNING id, account_id, task_id, "
+                        "COALESCE((data->>'clientMinor')::bigint,0) cm",
+                        [err[:500], err[:1000], type(exc).__name__,
+                         datetime.now(timezone.utc).isoformat(), plan_id, sow_id, ids2])
+                    failed_rows = cur2.fetchall()
+                else:
+                    failed_rows = []
+            conn.commit()
+        except Exception:  # noqa: BLE001
+            try:
+                conn.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            failed_rows = []
+        for fr in failed_rows:
+            write_txn_event(
+                direction="out", status="failed", payout_id=str(fr.get("id")),
+                task_id=str(fr.get("task_id")) if fr.get("task_id") is not None else None,
+                plan_id=plan_id, amount_minor=int(fr.get("cm") or 0),
+                error=err, error_code=type(exc).__name__, verified=False, service="enterprise")
+        if not failed_rows:  # still record the failed attempt even if no row flipped
+            write_txn_event(
+                direction="out", status="failed", plan_id=plan_id, task_id=task_id,
+                error=err, error_code=type(exc).__name__, verified=False, service="enterprise")
+        raise
+    # SUCCESS: record each disbursed payout (full ledger of successful transactions).
+    for d in done:
+        write_txn_event(
+            direction="out", status="success", payout_id=str(d.get("payout_id")),
+            task_id=str(d.get("task_id")) if d.get("task_id") is not None else None,
+            plan_id=plan_id, amount_minor=int(d.get("amountMinor") or 0),
+            verified=True, service="enterprise")
     _notify_and_email_payouts(conn, done, plan_id, sow_id, row)
     _audit(user, "payout.disburse", plan_id,
            extra={"sowId": sow_id, "paid": paid, "skipped": len(skipped), "simulated": sim})

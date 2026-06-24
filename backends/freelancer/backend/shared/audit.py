@@ -10,10 +10,56 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from shared.db import mongo_audit_collection
+from shared.db import get_mongo_db, mongo_audit_collection
 from shared.kafka_bus import publish_event
 
 logger = logging.getLogger(__name__)
+
+
+def write_txn_event(
+    *,
+    direction: str,                 # "in" (enterprise→Glimmora) | "out" (→contributor)
+    status: str,                    # "success" | "failed"
+    transaction_id: str | None = None,
+    payout_id: str | None = None,
+    task_id: str | None = None,
+    plan_id: str | None = None,
+    order_id: str | None = None,
+    amount_minor: int | None = None,
+    currency: str | None = None,
+    error: str | None = None,
+    error_code: str | None = None,
+    verified: bool | None = None,
+    raw: dict[str, Any] | None = None,
+    service: str | None = None,
+) -> None:
+    """Best-effort record of ONE money-movement transaction (success OR failure) to
+    the Mongo `razorpay_events` collection. Never raises — payment handlers stay fast
+    and a logging failure never affects the disburse/webhook. Both successful and
+    failed transactions are recorded so finance/audit has the full ledger."""
+    doc = {
+        "direction": direction,
+        "status": status,
+        "transactionId": transaction_id,
+        "payoutId": payout_id,
+        "taskId": task_id,
+        "planId": plan_id,
+        "orderId": order_id,
+        "amountMinor": amount_minor,
+        "currency": currency,
+        "error": error,
+        "errorCode": error_code,
+        "verified": verified,
+        "raw": raw,
+        "service": service,
+        "timestamp": datetime.now(timezone.utc),
+    }
+    try:
+        db = get_mongo_db()
+        if db is not None:
+            db["razorpay_events"].insert_one(dict(doc))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Txn event write failed: %s", exc)
 
 
 def write_audit(

@@ -801,8 +801,8 @@ function OAuthCallbackContent() {
                   </button>
                   <p className="text-xs" style={{ color: "#C4AFA4" }}>
                     If the issue persists, please contact{" "}
-                    <a href="mailto:support@glimmora.ai" className="underline hover:text-brown-600 transition-colors">
-                      support@glimmora.ai
+                    <a href="mailto:grcsupport@glimmora.ai" className="underline hover:text-brown-600 transition-colors">
+                      grcsupport@glimmora.ai
                     </a>
                   </p>
                 </div>

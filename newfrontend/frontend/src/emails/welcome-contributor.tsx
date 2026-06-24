@@ -139,8 +139,8 @@ export default function WelcomeContributor({
                 <Text style={footerTextStyle}>{footerText}</Text>
                 <Text style={footerTextStyle}>
                   Need help?&nbsp;
-                  <a href="mailto:support@glimmora.com" style={{ color: "#9ca3af", textDecoration: "underline" }}>
-                    support@glimmora.com
+                  <a href="mailto:grcsupport@glimmora.ai" style={{ color: "#9ca3af", textDecoration: "underline" }}>
+                    grcsupport@glimmora.ai
                   </a>
                 </Text>
               </Column>

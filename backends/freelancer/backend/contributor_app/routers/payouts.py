@@ -24,7 +24,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from psycopg2.extras import Json
 
-from shared.audit import write_audit
+from shared.audit import write_audit, write_txn_event
 from shared.deps import get_current_user
 from contributor_app import db
 
@@ -81,31 +81,67 @@ def disburse_payout_row(row: dict, *, account_id: int, plan_id: str | None = Non
 
     method = _resolve_payout_method(account_id)
     method_id = (method or {}).get("id") or row.get("method_id")
+    amount_minor = row.get("amount_minor")
+    currency = row.get("currency")
 
-    # released → processing (so a concurrent caller sees it in-flight, not payable).
-    db.execute(
-        "UPDATE payouts SET status='processing', method_id=COALESCE(%s, method_id), "
-        "data = data || %s, updated_at=now() WHERE id=%s AND account_id=%s AND status <> 'paid'",
-        (method_id,
-         Json({k: v for k, v in {"planId": plan_id, "canonicalTaskId": task_id}.items() if v}),
-         payout_id, account_id),
+    try:
+        # released → processing (so a concurrent caller sees it in-flight, not payable).
+        db.execute(
+            "UPDATE payouts SET status='processing', method_id=COALESCE(%s, method_id), "
+            "data = data || %s, updated_at=now() WHERE id=%s AND account_id=%s AND status <> 'paid'",
+            (method_id,
+             Json({k: v for k, v in {"planId": plan_id, "canonicalTaskId": task_id}.items() if v}),
+             payout_id, account_id),
+        )
+
+        ext_ref = f"SIM-{payout_id[:8]}"
+        if _razorpay_live():
+            # ── REAL RazorpayX branch (placeholder) ──────────────────────────────
+            # A real RazorpayX fund-account payout call wires in here using `method`
+            # (bank/UPI). On success set ext_ref to the RazorpayX payout id. Left
+            # simulated for now — no real call is made until the key is wired.
+            ext_ref = f"SIM-{payout_id[:8]}"  # replace with rzp payout id when live
+        # else: TEST mode — simulated, external_ref stays SIM-<id>.
+
+        updated = db.execute(
+            "UPDATE payouts SET status='paid', paid_at=now(), external_ref=%s, updated_at=now() "
+            "WHERE id=%s AND account_id=%s AND status='processing' RETURNING *",
+            (ext_ref, payout_id, account_id),
+        )
+    except Exception as exc:  # noqa: BLE001
+        # FAILED transaction: mark the payout 'failed' with the error reason saved
+        # into its data JSONB, log the raw error to Mongo, then re-raise so the
+        # caller surfaces the error. Best-effort — bookkeeping never masks the cause.
+        err = str(exc)
+        try:
+            db.execute(
+                "UPDATE payouts SET status='failed', failure_reason=%s, "
+                "data = data || %s, updated_at=now() WHERE id=%s AND account_id=%s",
+                (err[:500],
+                 Json({"error": err[:1000], "errorCode": type(exc).__name__,
+                       "failedAt": datetime.now(timezone.utc).isoformat(),
+                       "planId": plan_id, "canonicalTaskId": task_id}),
+                 payout_id, account_id),
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        write_txn_event(
+            direction="out", status="failed", payout_id=payout_id,
+            task_id=task_id, plan_id=plan_id, amount_minor=amount_minor, currency=currency,
+            error=err, error_code=type(exc).__name__, verified=False,
+            service="contributor-service",
+        )
+        raise
+
+    final = _ser(updated) or row
+    # SUCCESS transaction recorded too (full ledger of in/out money movement).
+    write_txn_event(
+        direction="out", status="success", payout_id=payout_id,
+        transaction_id=final.get("external_ref"), task_id=task_id, plan_id=plan_id,
+        amount_minor=amount_minor, currency=currency, verified=True,
+        service="contributor-service",
     )
-
-    ext_ref = f"SIM-{payout_id[:8]}"
-    if _razorpay_live():
-        # ── REAL RazorpayX branch (placeholder) ──────────────────────────────
-        # A real RazorpayX fund-account payout call wires in here using `method`
-        # (bank/UPI). On success set ext_ref to the RazorpayX payout id. Left
-        # simulated for now — no real call is made until the key is wired.
-        ext_ref = f"SIM-{payout_id[:8]}"  # replace with rzp payout id when live
-    # else: TEST mode — simulated, external_ref stays SIM-<id>.
-
-    updated = db.execute(
-        "UPDATE payouts SET status='paid', paid_at=now(), external_ref=%s, updated_at=now() "
-        "WHERE id=%s AND account_id=%s AND status='processing' RETURNING *",
-        (ext_ref, payout_id, account_id),
-    )
-    return _ser(updated) or row
+    return final
 
 # ── Schema DDL (idempotent, called from init_contributor_schema) ──────────────
 

@@ -31,6 +31,7 @@ import {
   Sparkles,
   Flag,
   CircuitBoard,
+  Receipt,
   FileWarning,
   Siren,
   Send,
@@ -412,6 +413,7 @@ export const adminNav: ModuleConfig = {
       zone: "governance",
       items: [
         { label: "AI agents", href: "/admin/ai", icon: CircuitBoard },
+        { label: "Billing", href: "/admin/billing", icon: Receipt },
         { label: "Payment rails", href: "/admin/payment-rails", icon: Wallet },
         { label: "System health", href: "/admin/system-health", icon: Server },
       ],
