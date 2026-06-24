@@ -24,6 +24,18 @@ interface TimelineEvent {
   meta?: { note?: string };
 }
 
+type EvidenceItem = string | { url?: string; href?: string; name?: string; label?: string };
+interface Submission {
+  url?: string | null;
+  githubUrl?: string | null;
+  coverNote?: string | null;
+  reviewerNote?: string | null;
+  evidence?: EvidenceItem[];
+  submittedAt?: string | null;
+  round?: number | null;
+  contributorName?: string | null;
+}
+
 const EVENT_COLOR: Record<string, string> = {
   created: "var(--color-text-tertiary, #71717a)",
   interest: "#7c5cf6",
@@ -61,20 +73,65 @@ function absTime(iso: string): string {
 function TaskActivityTimeline({ planId, taskId }: { planId: string; taskId: string }) {
   const q = useQuery({
     queryKey: ["decomposition", "task-timeline", planId, taskId],
-    queryFn: async (): Promise<TimelineEvent[]> => {
+    queryFn: async (): Promise<{ items: TimelineEvent[]; submission: Submission | null }> => {
       const res = await fetch(`/api/decomposition/plans/${planId}/tasks/${taskId}/timeline`, {
         cache: "no-store",
       });
-      if (!res.ok) return [];
+      if (!res.ok) return { items: [], submission: null };
       const body = await res.json();
       const items = body.items ?? body.data?.items ?? [];
-      return Array.isArray(items) ? items : [];
+      return { items: Array.isArray(items) ? items : [], submission: body.submission ?? null };
     },
     refetchInterval: 15_000,
   });
-  const items = q.data ?? [];
+  const items = q.data?.items ?? [];
+  const submission = q.data?.submission ?? null;
+  const hasWork = !!submission && (!!submission.url || !!submission.coverNote || (submission.evidence?.length ?? 0) > 0);
   return (
-    <Section title="Activity timeline">
+    <>
+      {hasWork && submission ? (
+        <Section title="Submission · work to review">
+          <div className="space-y-2.5 rounded-lg border border-stroke-subtle bg-bg-subtle/30 p-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              {submission.contributorName ? <span className="font-body text-[12.5px] font-semibold text-foreground">{submission.contributorName}</span> : null}
+              {submission.round ? <span className="font-body text-[11px] text-text-tertiary">Round {submission.round}</span> : null}
+              {submission.submittedAt ? <span className="font-body text-[11px] text-text-tertiary tabular-nums">{absTime(submission.submittedAt)}</span> : null}
+            </div>
+            {submission.url ? (
+              <a href={submission.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand text-on-brand font-body text-[12.5px] font-semibold hover:opacity-90">
+                <ExternalLink className="h-3.5 w-3.5" /> View work
+              </a>
+            ) : null}
+            {submission.coverNote ? (
+              <div>
+                <p className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">Contributor note</p>
+                <p className="mt-0.5 font-body text-[12.5px] text-foreground whitespace-pre-wrap leading-relaxed">{submission.coverNote}</p>
+              </div>
+            ) : null}
+            {submission.evidence && submission.evidence.length > 0 ? (
+              <div>
+                <p className="font-body text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">Supporting documents ({submission.evidence.length})</p>
+                <ul className="mt-1 space-y-1">
+                  {submission.evidence.map((ev, i) => {
+                    const url = typeof ev === "string" ? ev : (ev.url || ev.href);
+                    const name = typeof ev === "string" ? ev : (ev.name || ev.label || ev.url || ev.href || "file");
+                    return (
+                      <li key={i} className="font-body text-[12px]">
+                        {url ? (
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-brand hover:underline"><Paperclip className="h-3 w-3" /> {name}</a>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-text-secondary"><Paperclip className="h-3 w-3" /> {name}</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </Section>
+      ) : null}
+      <Section title="Activity timeline">
       {q.isLoading ? (
         <p className="font-body text-[12.5px] text-text-tertiary italic">Loading activity…</p>
       ) : items.length === 0 ? (
@@ -106,6 +163,7 @@ function TaskActivityTimeline({ planId, taskId }: { planId: string; taskId: stri
         </ol>
       )}
     </Section>
+    </>
   );
 }
 

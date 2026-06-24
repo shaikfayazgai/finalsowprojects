@@ -1165,8 +1165,36 @@ def task_timeline(
         if (po.get("status") or "").lower() in ("paid", "sent", "released"):
             add(po.get("paid_at") or po.get("eligible_at"), "paid", "Payment released — task complete")
 
+    # Latest contributor deliverable — links + cover note + evidence/docs — so the
+    # enterprise can open and review the actual work (same package the mentor + QA saw).
+    submission = None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT status, updated_at, data FROM reviewer_assignments "
+                "WHERE data->>'canonicalTaskId'=%s OR data->>'taskId'=%s OR data->>'taskId' = ANY(%s) "
+                "ORDER BY created_at DESC LIMIT 1",
+                [str(task_id), str(task_id), refs])
+            ra = cur.fetchone()
+        if ra:
+            d = ra.get("data") or {}
+            ev = d.get("evidence") or d.get("artifacts") or d.get("referenceFiles") or []
+            submission = {
+                "url": d.get("url") or d.get("githubUrl"),
+                "githubUrl": d.get("githubUrl"),
+                "coverNote": d.get("contributorCoverNote") or d.get("summary"),
+                "reviewerNote": d.get("reviewerNote") or d.get("mentorNote"),
+                "evidence": ev if isinstance(ev, list) else [],
+                "submittedAt": d.get("submittedAt"),
+                "round": d.get("round"),
+                "contributorName": d.get("contributorName"),
+            }
+    except Exception:  # noqa: BLE001
+        conn.rollback()
+        submission = None
+
     events.sort(key=lambda e: e["at"])
-    return {"items": events}
+    return {"items": events, "submission": submission}
 
 
 def _ensure_interest_window_cols(cur) -> None:
