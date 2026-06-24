@@ -1109,6 +1109,19 @@ def task_timeline(
         except Exception:  # noqa: BLE001
             conn.rollback()
             ras = []
+        # A single submission/round can spawn MULTIPLE reviewer_assignments rows when
+        # the work is re-reviewed (e.g. mentor re-checks, then QA re-scores the same
+        # deliverable). Only the LATEST row per (round, submission) is authoritative —
+        # its mentor/QA scores are the ones recorded in work_ratings. Keep just that
+        # one so the timeline shows the real, consistent score for each round instead
+        # of also surfacing a stale earlier attempt's QA score. (`ras` is ordered by
+        # created_at ASC, so the last write for a key wins.)
+        _latest: dict = {}
+        for ra in ras:
+            rd = ra.get("data") or {}
+            key = (rd.get("round") or 1, str(rd.get("submissionId") or ra.get("id")))
+            _latest[key] = ra
+        ras = sorted(_latest.values(), key=lambda r: _to_iso(r.get("updated_at")) or "")
         seen_sub: set = set()
         for ra in ras:
             rd = ra.get("data") or {}
