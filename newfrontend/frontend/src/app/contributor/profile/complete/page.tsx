@@ -10,7 +10,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Plus, Upload, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, Plus, Upload, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProfileCompletion, SECTION_LABELS } from "@/lib/hooks/use-profile-completion";
 import { cn } from "@/lib/utils/cn";
@@ -19,15 +19,7 @@ type Row = Record<string, unknown>;
 
 const SECTION_ORDER = ["basic", "professional", "skills", "expertise", "portfolio", "experience", "education", "verification", "bank", "agreements"] as const;
 
-const COUNTRY_MAP: Record<string, Record<string, string[]>> = {
-  India: { "Andhra Pradesh": ["Anantapur", "Vijayawada", "Visakhapatnam", "Tirupati"], Telangana: ["Hyderabad", "Warangal", "Karimnagar", "Nizamabad"], "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli"], Karnataka: ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi"], Maharashtra: ["Mumbai", "Pune", "Nagpur", "Nashik"] },
-  "United States": { California: ["Los Angeles", "San Francisco", "San Diego"], Texas: ["Austin", "Dallas", "Houston"], "New York": ["New York City", "Buffalo", "Rochester"] },
-  "United Kingdom": { England: ["London", "Manchester", "Birmingham"], Scotland: ["Edinburgh", "Glasgow", "Aberdeen"] },
-  Australia: { "New South Wales": ["Sydney", "Newcastle", "Wollongong"], Victoria: ["Melbourne", "Geelong", "Ballarat"] },
-  Canada: { Ontario: ["Toronto", "Ottawa", "Waterloo"], "British Columbia": ["Vancouver", "Victoria", "Kelowna"] },
-};
-const COUNTRIES = Object.keys(COUNTRY_MAP);
-const TIMEZONES = ["Asia/Kolkata", "Asia/Dubai", "Europe/London", "America/New_York", "America/Los_Angeles"];
+const TIMEZONES =["Asia/Kolkata", "Asia/Dubai", "Europe/London", "America/New_York", "America/Los_Angeles"];
 const YEARS = ["Fresher", "0-1 Years", "1-3 Years", "3-5 Years", "5-8 Years", "8+ Years"];
 const WEEKLY = ["10 Hours", "20 Hours", "30 Hours", "40 Hours", "Flexible"];
 const AVAILABILITY = ["Full Time", "Part Time", "Weekends", "Flexible"];
@@ -106,6 +98,41 @@ async function save(url: string, body: unknown, method = "POST"): Promise<void> 
 }
 const arr = (x: unknown): Row[] => Array.isArray(x) ? (x as Row[]) : Array.isArray((x as { items?: Row[] })?.items) ? (x as { items: Row[] }).items : [];
 
+/** Read an image File into a data-URL (persisted to profile_extra.avatar_url). */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read the image."));
+    reader.readAsDataURL(file);
+  });
+}
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+const AVATAR_TYPES = ["image/png", "image/jpeg"];
+
+/** India Post PIN-code lookup → { city, state } (free, no auth). Returns null on failure. */
+async function lookupPincode(pin: string, signal?: AbortSignal): Promise<{ city: string; state: string } | null> {
+  try {
+    const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal });
+    if (!r.ok) return null;
+    const data = (await r.json()) as Array<{ Status?: string; PostOffice?: Array<{ Name?: string; District?: string; State?: string }> | null }>;
+    const first = Array.isArray(data) ? data[0] : undefined;
+    const po = first?.PostOffice?.[0];
+    if (first?.Status !== "Success" || !po) return null;
+    return { city: po.District || po.Name || "", state: po.State || "" };
+  } catch { return null; }
+}
+
+/** Razorpay IFSC lookup → bank/branch/city/state (free, no auth). Returns null on 404/failure. */
+async function lookupIfsc(ifsc: string, signal?: AbortSignal): Promise<{ bank: string; branch: string; city: string; state: string } | null> {
+  try {
+    const r = await fetch(`https://ifsc.razorpay.com/${ifsc}`, { signal });
+    if (!r.ok) return null;
+    const d = (await r.json()) as { BANK?: string; BRANCH?: string; CITY?: string; STATE?: string };
+    return { bank: d.BANK || "", branch: d.BRANCH || "", city: d.CITY || "", state: d.STATE || "" };
+  } catch { return null; }
+}
+
 const inputCls = "w-full h-9 rounded-lg border border-stroke-subtle bg-surface px-3 font-body text-[12.5px] text-foreground placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand/30";
 const labelCls = "block font-body text-[11px] font-semibold uppercase tracking-[0.05em] text-text-tertiary mb-1";
 const primaryBtn = "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand text-on-brand font-body text-[12px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-50";
@@ -153,7 +180,8 @@ function ChipField({ values, setValues, suggestions, placeholder }: { values: st
 
 /** File picker — shows the chosen filename (real upload to Blob is wired later).
  * For the profile photo it enforces a KB cap + passport-size (portrait) dimensions. */
-function FileField({ text, name, onPick, accept, multiple, maxKB, passport, pdfOnly, onErr }: { text: string; name: string; onPick: (n: string) => void; accept: string; multiple?: boolean; maxKB?: number; passport?: boolean; pdfOnly?: boolean; onErr?: (m: string) => void }) {
+function FileField({ text, name, onPick, onClear, accept, multiple, maxKB, passport, pdfOnly, onErr }: { text: string; name: string; onPick: (n: string) => void; onClear?: () => void; accept: string; multiple?: boolean; maxKB?: number; passport?: boolean; pdfOnly?: boolean; onErr?: (m: string) => void }) {
+  const ref = React.useRef<HTMLInputElement>(null);
   const handle = async (files: FileList) => {
     const f = files[0];
     if (pdfOnly && f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) { onErr?.("Only a PDF file is allowed for the ID document."); return; }
@@ -170,11 +198,17 @@ function FileField({ text, name, onPick, accept, multiple, maxKB, passport, pdfO
     onErr?.("");
     onPick(multiple ? Array.from(files).map((x) => x.name).join(", ") : f.name);
   };
+  const clear = () => { if (ref.current) ref.current.value = ""; onErr?.(""); onClear?.(); };
   return (
-    <label className="flex items-center justify-between gap-2 h-9 px-3 rounded-lg border border-dashed border-stroke bg-surface cursor-pointer hover:bg-surface-hover">
-      <span className="inline-flex items-center gap-1.5 font-body text-[12px] text-text-secondary truncate"><Upload className="h-3.5 w-3.5 shrink-0" /> {name || text}</span>
-      <input type="file" accept={accept} multiple={multiple} className="hidden" onChange={(e) => { const f = e.target.files; if (f && f.length) handle(f); }} />
-    </label>
+    <div className="flex items-center gap-1.5">
+      <label className="flex-1 flex items-center justify-between gap-2 h-9 px-3 rounded-lg border border-dashed border-stroke bg-surface cursor-pointer hover:bg-surface-hover">
+        <span className="inline-flex items-center gap-1.5 font-body text-[12px] text-text-secondary truncate"><Upload className="h-3.5 w-3.5 shrink-0" /> {name || text}</span>
+        <input ref={ref} type="file" accept={accept} multiple={multiple} className="hidden" onChange={(e) => { const f = e.target.files; if (f && f.length) handle(f); }} />
+      </label>
+      {name ? (
+        <button type="button" onClick={clear} aria-label="Remove file" className="grid place-items-center h-9 w-9 shrink-0 rounded-lg border border-stroke bg-surface text-text-tertiary hover:bg-surface-hover hover:text-error-text"><X className="h-4 w-4" /></button>
+      ) : null}
+    </div>
   );
 }
 
@@ -186,16 +220,25 @@ export default function CompleteProfilePage() {
   const qc = useQueryClient();
   const { data: completion } = useProfileCompletion();
   const sections = completion?.sections ?? {};
-  const weights = (completion?.weights ?? {}) as Record<string, number>;
-  const pct = completion?.completeness ?? 0;
-  const complete = completion?.complete ?? false;
+  const rawWeights = (completion?.weights ?? {}) as Record<string, number>;
+  const rawPct = completion?.completeness ?? 0;
 
   const [step, setStep] = React.useState(0);
   const currentKey = SECTION_ORDER[step];
   const lastStep = SECTION_ORDER.length - 1;
   const refresh = React.useCallback(() => qc.invalidateQueries({ queryKey: ["contributor", "profile", "completion"] }), [qc]);
 
-  const [basic, setBasic] = React.useState({ firstName: "", lastName: "", username: "", country: "", state: "", city: "", pincode: "", mobileNumber: "", timezone: "", profilePhoto: "" });
+  const [basic, setBasic] = React.useState({ firstName: "", lastName: "", country: "", state: "", city: "", pincode: "", mobileNumber: "", timezone: "", profilePhoto: "" });
+  // Profile image — `avatarPreview` is what we show (a stored data-URL loaded from
+  // profile_extra.avatar_url, or an object-URL while picking). `avatarDataUrl` is
+  // set only when a new photo is picked this session and is what we persist.
+  const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
+  const [avatarDataUrl, setAvatarDataUrl] = React.useState<string | null>(null);
+  const [avatarError, setAvatarError] = React.useState("");
+  const avatarInputRef = React.useRef<HTMLInputElement>(null);
+  const avatarObjUrlRef = React.useRef<string | null>(null);
+  const [pinLookup, setPinLookup] = React.useState<{ loading: boolean; error: string }>({ loading: false, error: "" });
+  const [ifscLookup, setIfscLookup] = React.useState<{ loading: boolean; error: string; branch: string; city: string; state: string }>({ loading: false, error: "", branch: "", city: "", state: "" });
   const [languages, setLanguages] = React.useState<string[]>([]);
   const [prof, setProf] = React.useState({ headline: "", bio: "", yearsExperience: "", weeklyHours: "", hourlyRate: "", availability: "" });
   const [skills, setSkills] = React.useState<Row[]>([]);
@@ -214,6 +257,8 @@ export default function CompleteProfilePage() {
   const [preferences, setPreferences] = React.useState<string[]>([]);
   const [bank, setBank] = React.useState({ accountHolderName: "", bankName: "", accountNumber: "", confirmAccountNumber: "", ifscCode: "", accountType: "", upiId: "" });
   const [agree, setAgree] = React.useState({ termsAccepted: false, paymentPolicyAccepted: false, privacyPolicyAccepted: false, notificationConsent: false, truthDeclaration: false });
+  // Agreements already accepted in the saved profile are locked (can't be un-accepted).
+  const [agreeLocked, setAgreeLocked] = React.useState({ termsAccepted: false, paymentPolicyAccepted: false, privacyPolicyAccepted: false, notificationConsent: false, truthDeclaration: false });
   const [busy, setBusy] = React.useState<string | null>(null);
   const [err, setErr] = React.useState("");
 
@@ -231,14 +276,26 @@ export default function CompleteProfilePage() {
     const ex = (await getJson("/api/contributor/profile/extra")) as Row;
     if (ex && typeof ex === "object" && !Array.isArray(ex)) {
       const b = (ex.basic as Record<string, string>) || {};
-      setBasic((x) => ({ ...x, firstName: b.firstName || x.firstName, lastName: b.lastName || x.lastName, username: b.username || x.username, state: b.state || x.state, pincode: b.pincode || x.pincode, mobileNumber: (ex.mobileNumber as string) || b.mobileNumber || x.mobileNumber, profilePhoto: b.profilePhoto || x.profilePhoto }));
+      setBasic((x) => ({ ...x, firstName: b.firstName || x.firstName, lastName: b.lastName || x.lastName, state: b.state || x.state, pincode: b.pincode || x.pincode, mobileNumber: (ex.mobileNumber as string) || b.mobileNumber || x.mobileNumber, profilePhoto: b.profilePhoto || x.profilePhoto }));
       if (Array.isArray(ex.languages)) setLanguages(ex.languages as string[]);
       const pr = (ex.professional as Record<string, string>) || {}; setProf((x) => ({ ...x, weeklyHours: pr.weeklyHours || x.weeklyHours, hourlyRate: pr.hourlyRate || x.hourlyRate }));
       setLinks((x) => ({ ...x, ...((ex.links as Record<string, string>) || {}) }));
       const v = (ex.verification as Record<string, string>) || {}; setVerif((x) => ({ idType: v.idType || x.idType, idNumber: v.idNumber || x.idNumber, idDocument: v.idDocument || x.idDocument }));
       if (Array.isArray(ex.preferences)) setPreferences(ex.preferences as string[]);
       setBank((x) => ({ ...x, ...((ex.bank as Record<string, string>) || {}) }));
-      setAgree((x) => ({ ...x, ...((ex.agreements as Record<string, boolean>) || {}) }));
+      const savedAgree = (ex.agreements as Record<string, boolean>) || {};
+      setAgree((x) => ({ ...x, ...savedAgree }));
+      // Lock any agreement that was already accepted in the saved profile.
+      setAgreeLocked((x) => ({
+        termsAccepted: x.termsAccepted || savedAgree.termsAccepted === true,
+        paymentPolicyAccepted: x.paymentPolicyAccepted || savedAgree.paymentPolicyAccepted === true,
+        privacyPolicyAccepted: x.privacyPolicyAccepted || savedAgree.privacyPolicyAccepted === true,
+        notificationConsent: x.notificationConsent || savedAgree.notificationConsent === true,
+        truthDeclaration: x.truthDeclaration || savedAgree.truthDeclaration === true,
+      }));
+      // Pre-load the saved profile image (shared with the simple edit page).
+      const savedAvatar = ex.avatar_url as string | undefined;
+      if (savedAvatar) setAvatarPreview((cur) => cur ?? savedAvatar);
     }
     refresh();
   }, [refresh]);
@@ -252,8 +309,64 @@ export default function CompleteProfilePage() {
 
   const saveBasic = () => run("basic", async () => {
     await save("/api/contributor/profile", { country: basic.country, city: basic.city, timezone: basic.timezone }, "PATCH");
-    await patchExtra({ basic: { firstName: basic.firstName, lastName: basic.lastName, username: basic.username, state: basic.state, pincode: basic.pincode, mobileNumber: basic.mobileNumber, profilePhoto: basic.profilePhoto }, mobileNumber: basic.mobileNumber, languages });
+    await patchExtra({ basic: { firstName: basic.firstName, lastName: basic.lastName, state: basic.state, pincode: basic.pincode, mobileNumber: basic.mobileNumber, profilePhoto: basic.profilePhoto }, mobileNumber: basic.mobileNumber, languages, ...(avatarDataUrl ? { avatar_url: avatarDataUrl } : {}) });
+    if (avatarDataUrl) { setAvatarPreview(avatarDataUrl); setAvatarDataUrl(null); }
   });
+
+  // Profile image: validate (PNG/JPG, ≤2 MB), preview via object-URL, encode to a
+  // data-URL for persistence (saved to profile_extra.avatar_url on "Save basic info").
+  const onPickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setAvatarError("");
+    if (!AVATAR_TYPES.includes(file.type)) { setAvatarError("Use a PNG or JPG image."); return; }
+    if (file.size > AVATAR_MAX_BYTES) { setAvatarError("Image must be 2 MB or smaller."); return; }
+    if (avatarObjUrlRef.current) URL.revokeObjectURL(avatarObjUrlRef.current);
+    const objUrl = URL.createObjectURL(file);
+    avatarObjUrlRef.current = objUrl;
+    setAvatarPreview(objUrl);
+    try { setAvatarDataUrl(await fileToDataUrl(file)); } catch { setAvatarError("Could not read that image. Try another file."); }
+  };
+  React.useEffect(() => () => { if (avatarObjUrlRef.current) URL.revokeObjectURL(avatarObjUrlRef.current); }, []);
+
+  // PIN-code → City + State auto-fill (India Post). Fires when 6 digits are entered.
+  const pinAbort = React.useRef<AbortController | null>(null);
+  const onPincode = (raw: string) => {
+    const pin = raw.replace(/\D/g, "").slice(0, 6);
+    setBasic((b) => ({ ...b, pincode: pin }));
+    setPinLookup({ loading: false, error: "" });
+    pinAbort.current?.abort();
+    if (pin.length !== 6) return;
+    const ctrl = new AbortController();
+    pinAbort.current = ctrl;
+    setPinLookup({ loading: true, error: "" });
+    lookupPincode(pin, ctrl.signal).then((res) => {
+      if (ctrl.signal.aborted) return;
+      if (!res) { setPinLookup({ loading: false, error: "Couldn't find that PIN code" }); return; }
+      setBasic((b) => ({ ...b, country: "India", state: res.state || b.state, city: res.city || b.city }));
+      setPinLookup({ loading: false, error: "" });
+    });
+  };
+
+  // IFSC → Bank name auto-fill (Razorpay). Fires when 11 chars are entered.
+  const ifscAbort = React.useRef<AbortController | null>(null);
+  const onIfsc = (raw: string) => {
+    const code = raw.toUpperCase().slice(0, 11);
+    setBank((b) => ({ ...b, ifscCode: code }));
+    setIfscLookup({ loading: false, error: "", branch: "", city: "", state: "" });
+    ifscAbort.current?.abort();
+    if (code.length !== 11) return;
+    const ctrl = new AbortController();
+    ifscAbort.current = ctrl;
+    setIfscLookup({ loading: true, error: "", branch: "", city: "", state: "" });
+    lookupIfsc(code, ctrl.signal).then((res) => {
+      if (ctrl.signal.aborted) return;
+      if (!res) { setIfscLookup({ loading: false, error: "Invalid IFSC code", branch: "", city: "", state: "" }); return; }
+      setBank((b) => ({ ...b, bankName: res.bank || b.bankName }));
+      setIfscLookup({ loading: false, error: "", branch: res.branch, city: res.city, state: res.state });
+    });
+  };
   const saveProf = () => run("professional", async () => {
     await save("/api/contributor/profile", { job_title: prof.headline, bio: prof.bio, years_experience: prof.yearsExperience, availability: prof.availability }, "PATCH");
     await patchExtra({ professional: { weeklyHours: prof.weeklyHours, hourlyRate: prof.hourlyRate } });
@@ -283,9 +396,30 @@ export default function CompleteProfilePage() {
     run("agreements", () => patchExtra({ agreements: agree }));
   };
 
-  const states = basic.country ? Object.keys(COUNTRY_MAP[basic.country] || {}) : [];
-  const cities = basic.country && basic.state ? (COUNTRY_MAP[basic.country]?.[basic.state] || []) : [];
-  const sectionDone = sections[currentKey] === true;
+  // The backend's completion math omits the Agreements step from its weights, so
+  // it can report 100% / "complete" while none of the 5 agreement checkboxes are
+  // accepted. Re-weight the Agreements step in on the client so it carries weight,
+  // and require all 5 boxes for 100%. Agreements gets a 5% slice (same as
+  // verification/bank); the backend's 0–100 score is scaled into the other 95%.
+  const AGREEMENTS_WEIGHT = 5;
+  const agreeKeys = Object.keys(agree) as Array<keyof typeof agree>;
+  const agreeCount = agreeKeys.filter((k) => agree[k]).length;
+  const allAgreed = agreeCount === agreeKeys.length;
+  // The Agreements step's own "· X%" — proportional to boxes checked (each = 20%).
+  const agreementsPct = Math.round((agreeCount / agreeKeys.length) * 100);
+
+  // Per-step weights shown next to each section heading, with Agreements added.
+  const weights: Record<string, number> = { ...rawWeights, agreements: AGREEMENTS_WEIGHT };
+  // Overall %: backend score scaled into 95, plus the agreements slice (0–5).
+  const pct = Math.min(
+    100,
+    Math.round((rawPct / 100) * (100 - AGREEMENTS_WEIGHT)) +
+      Math.round((agreeCount / agreeKeys.length) * AGREEMENTS_WEIGHT),
+  );
+  // Complete only when the backend gate is satisfied AND every agreement is accepted.
+  const complete = (completion?.complete ?? false) && allAgreed;
+
+  const sectionDone = currentKey === "agreements" ? allAgreed : sections[currentKey] === true;
 
   return (
     <div className="w-full pb-16">
@@ -322,21 +456,43 @@ export default function CompleteProfilePage() {
         <div className="rounded-xl border border-stroke bg-surface p-4 sm:p-5 space-y-3">
         <div className="flex items-center gap-2">
           <h2 className="font-body text-[16px] font-semibold text-foreground">{SECTION_LABELS[currentKey]}</h2>
-          <span className="font-body text-[11px] text-text-tertiary">· {weights[currentKey] ?? 0}%</span>
+          <span className="font-body text-[11px] text-text-tertiary">· {currentKey === "agreements" ? agreementsPct : weights[currentKey] ?? 0}%</span>
           {sectionDone ? <span className="ml-auto inline-flex items-center gap-1 font-body text-[11.5px]" style={{ color: "#0F9D6B" }}><CheckCircle2 className="h-3.5 w-3.5" /> Done</span> : null}
         </div>
 
         {currentKey === "basic" ? (
           <>
-            <FileField text="Upload passport-size photo (max 200 KB)" name={basic.profilePhoto} accept=".jpg,.jpeg,.png,.webp" maxKB={200} passport onErr={setErr} onPick={(n) => setBasic({ ...basic, profilePhoto: n })} />
+            <Field label="Profile photo">
+              <div className="flex flex-wrap items-center gap-4">
+                {avatarPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarPreview} alt="Profile photo" className="h-16 w-16 rounded-full object-cover shrink-0 ring-4 ring-surface shadow-sm" />
+                ) : (
+                  <div aria-hidden className="h-16 w-16 rounded-full bg-brand text-on-brand inline-flex items-center justify-center font-body text-[18px] font-semibold shrink-0 ring-4 ring-surface shadow-sm">{(basic.firstName?.[0] || "") + (basic.lastName?.[0] || "") || "👤"}</div>
+                )}
+                <div className="space-y-1.5 min-w-0">
+                  <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg" className="sr-only" onChange={(e) => void onPickAvatar(e)} />
+                  <button type="button" onClick={() => avatarInputRef.current?.click()} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-dashed border-stroke text-text-secondary hover:text-foreground hover:bg-surface-hover font-body text-[12px] font-semibold transition-colors"><Upload className="h-3.5 w-3.5" /> {avatarPreview ? "Change photo" : "Upload photo"}</button>
+                  <p className="font-body text-[11px] text-text-tertiary">PNG or JPG, max 2 MB. Saved with your basic info.</p>
+                  {avatarError ? <p className="font-body text-[11px] text-error-text">{avatarError}</p> : null}
+                </div>
+              </div>
+            </Field>
+            <FileField text="Upload passport-size photo (max 200 KB)" name={basic.profilePhoto} accept=".jpg,.jpeg,.png,.webp" maxKB={200} passport onErr={setErr} onPick={(n) => setBasic({ ...basic, profilePhoto: n })} onClear={() => setBasic({ ...basic, profilePhoto: "" })} />
+            <p className="font-body text-[11px] text-text-tertiary">Your name and email are set during onboarding/KYC and can&apos;t be edited here. Change them in <Link href="/contributor/settings/account" className="text-text-link hover:underline font-medium">Account settings</Link> (major changes may need re-verification).</p>
             <div className="grid sm:grid-cols-2 gap-2">
-              <Field label="First name *"><input value={basic.firstName} onChange={(e) => setBasic({ ...basic, firstName: e.target.value })} className={inputCls} placeholder="Aarav" /></Field>
-              <Field label="Last name *"><input value={basic.lastName} onChange={(e) => setBasic({ ...basic, lastName: e.target.value })} className={inputCls} placeholder="Sharma" /></Field>
-              <Field label="Username *"><input value={basic.username} onChange={(e) => setBasic({ ...basic, username: e.target.value })} className={inputCls} placeholder="fayaz-dev" /></Field>
-              <Field label="Country *"><select value={basic.country} onChange={(e) => setBasic({ ...basic, country: e.target.value, state: "", city: "" })} className={inputCls}><option value="">Select country</option>{COUNTRIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
-              <Field label="State *"><select value={basic.state} onChange={(e) => setBasic({ ...basic, state: e.target.value, city: "" })} className={inputCls} disabled={!basic.country}><option value="">Select state</option>{states.map((s) => <option key={s}>{s}</option>)}</select></Field>
-              <Field label="City *"><select value={basic.city} onChange={(e) => setBasic({ ...basic, city: e.target.value })} className={inputCls} disabled={!basic.state}><option value="">Select city</option>{cities.map((c) => <option key={c}>{c}</option>)}</select></Field>
-              <Field label="Pincode *"><input value={basic.pincode} onChange={(e) => setBasic({ ...basic, pincode: e.target.value })} className={inputCls} placeholder="400001" inputMode="numeric" /></Field>
+              <Field label="First name *"><input value={basic.firstName} readOnly disabled aria-readonly className={cn(inputCls, "bg-bg-subtle text-text-secondary cursor-not-allowed")} placeholder="Aarav" /></Field>
+              <Field label="Last name *"><input value={basic.lastName} readOnly disabled aria-readonly className={cn(inputCls, "bg-bg-subtle text-text-secondary cursor-not-allowed")} placeholder="Sharma" /></Field>
+              <Field label="Pincode *">
+                <div className="relative">
+                  <input value={basic.pincode} onChange={(e) => onPincode(e.target.value)} className={inputCls} placeholder="400001" inputMode="numeric" maxLength={6} />
+                  {pinLookup.loading ? <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-text-tertiary" /> : null}
+                </div>
+                {pinLookup.error ? <p className="mt-1 font-body text-[11px] text-error-text">{pinLookup.error}</p> : <p className="mt-1 font-body text-[11px] text-text-tertiary">Enter your 6-digit PIN to auto-fill city &amp; state.</p>}
+              </Field>
+              <Field label="Country *"><input value={basic.country} onChange={(e) => setBasic({ ...basic, country: e.target.value })} className={inputCls} placeholder="India" /></Field>
+              <Field label="State *"><input value={basic.state} onChange={(e) => setBasic({ ...basic, state: e.target.value })} className={inputCls} placeholder="Maharashtra" /></Field>
+              <Field label="City *"><input value={basic.city} onChange={(e) => setBasic({ ...basic, city: e.target.value })} className={inputCls} placeholder="Mumbai" /></Field>
               <Field label="Mobile number *"><input value={basic.mobileNumber} onChange={(e) => setBasic({ ...basic, mobileNumber: e.target.value })} className={inputCls} placeholder="+91 98765 43210" /></Field>
               <Field label="Timezone *"><select value={basic.timezone} onChange={(e) => setBasic({ ...basic, timezone: e.target.value })} className={inputCls}><option value="">Select timezone</option>{TIMEZONES.map((t) => <option key={t}>{t}</option>)}</select></Field>
             </div>
@@ -447,7 +603,7 @@ export default function CompleteProfilePage() {
               <Field label="Government ID type *"><select value={verif.idType} onChange={(e) => setVerif({ ...verif, idType: e.target.value })} className={inputCls}><option value="">Select</option>{ID_TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
               <Field label="ID number *"><input value={verif.idNumber} onChange={(e) => setVerif({ ...verif, idNumber: e.target.value })} className={inputCls} placeholder={verif.idType === "Aadhaar Card" ? "12 digits" : verif.idType === "PAN Card" ? "ABCDE1234F" : "Enter ID number"} /></Field>
             </div>
-            <FileField text="Upload ID document — PDF only (max 2000 KB) *" name={verif.idDocument} accept=".pdf,application/pdf" pdfOnly maxKB={2000} onErr={setErr} onPick={(n) => setVerif({ ...verif, idDocument: n })} />
+            <FileField text="Upload ID document — PDF only (max 2000 KB) *" name={verif.idDocument} accept=".pdf,application/pdf" pdfOnly maxKB={2000} onErr={setErr} onPick={(n) => setVerif({ ...verif, idDocument: n })} onClear={() => setVerif({ ...verif, idDocument: "" })} />
             <Field label="Project preferences">
               <div className="flex flex-wrap gap-1.5">{PREFERENCES.map((p) => { const on = preferences.includes(p); return (
                 <button key={p} type="button" onClick={() => setPreferences(on ? preferences.filter((x) => x !== p) : [...preferences, p])} className={cn("px-2.5 py-1 rounded-full border font-body text-[11.5px]", on ? "border-brand bg-brand text-on-brand" : "border-stroke text-foreground hover:bg-surface-hover")}>{p}</button>
@@ -465,7 +621,19 @@ export default function CompleteProfilePage() {
               <Field label="Bank name *"><input value={bank.bankName} onChange={(e) => setBank({ ...bank, bankName: e.target.value })} className={inputCls} placeholder="HDFC Bank" /></Field>
               <Field label="Account number *"><input value={bank.accountNumber} onChange={(e) => setBank({ ...bank, accountNumber: e.target.value })} className={inputCls} placeholder="123456789012" inputMode="numeric" /></Field>
               <Field label="Confirm account number *"><input value={bank.confirmAccountNumber} onChange={(e) => setBank({ ...bank, confirmAccountNumber: e.target.value })} className={inputCls} placeholder="Re-enter account number" inputMode="numeric" /></Field>
-              <Field label="IFSC code *"><input value={bank.ifscCode} onChange={(e) => setBank({ ...bank, ifscCode: e.target.value })} className={inputCls} placeholder="HDFC0001234" maxLength={11} /></Field>
+              <Field label="IFSC code *">
+                <div className="relative">
+                  <input value={bank.ifscCode} onChange={(e) => onIfsc(e.target.value)} className={inputCls} placeholder="HDFC0001234" maxLength={11} />
+                  {ifscLookup.loading ? <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-text-tertiary" /> : null}
+                </div>
+                {ifscLookup.error ? (
+                  <p className="mt-1 font-body text-[11px] text-error-text">{ifscLookup.error}</p>
+                ) : ifscLookup.branch || ifscLookup.city || ifscLookup.state ? (
+                  <p className="mt-1 font-body text-[11px] text-text-tertiary">{[ifscLookup.branch, ifscLookup.city, ifscLookup.state].filter(Boolean).join(" · ")}</p>
+                ) : (
+                  <p className="mt-1 font-body text-[11px] text-text-tertiary">Enter your 11-character IFSC to auto-fill the bank.</p>
+                )}
+              </Field>
               <Field label="Account type *"><select value={bank.accountType} onChange={(e) => setBank({ ...bank, accountType: e.target.value })} className={inputCls}><option value="">Select account type</option>{ACCOUNT_TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
               <Field label="UPI ID"><input value={bank.upiId} onChange={(e) => setBank({ ...bank, upiId: e.target.value })} className={inputCls} placeholder="name@upi" /></Field>
             </div>
@@ -482,13 +650,17 @@ export default function CompleteProfilePage() {
               ["privacyPolicyAccepted", "I agree to the privacy policy and consent to secure profile verification."],
               ["notificationConsent", "I agree to receive work, payment, verification, and account notifications."],
               ["truthDeclaration", "I confirm that all profile, portfolio, identity, and bank details are correct."],
-            ] as const).map(([k, text]) => (
-              <label key={k} className="flex items-start gap-2 cursor-pointer">
-                <input type="checkbox" checked={agree[k]} onChange={(e) => setAgree({ ...agree, [k]: e.target.checked })} className="mt-0.5 h-3.5 w-3.5 rounded accent-brand" />
-                <span className="font-body text-[12.5px] text-foreground">{text}</span>
-              </label>
-            ))}
-            <button type="button" disabled={busy === "agreements"} onClick={saveAgreements} className={primaryBtn}>Save agreements</button>
+            ] as const).map(([k, text]) => {
+              const locked = agreeLocked[k];
+              return (
+                <label key={k} className={cn("flex items-start gap-2", locked ? "cursor-default" : "cursor-pointer")}>
+                  <input type="checkbox" checked={agree[k]} disabled={locked} onChange={(e) => { if (!locked) setAgree({ ...agree, [k]: e.target.checked }); }} className={cn("mt-0.5 h-3.5 w-3.5 rounded accent-brand", locked && "cursor-not-allowed")} />
+                  <span className="font-body text-[12.5px] text-foreground">{text}{locked ? <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle font-body text-[10.5px] text-text-tertiary"><Check className="h-3 w-3" />Accepted</span> : null}</span>
+                </label>
+              );
+            })}
+            <button type="button" disabled={busy === "agreements" || !allAgreed} onClick={saveAgreements} className={primaryBtn}>Save agreements</button>
+            {!allAgreed ? <p className="font-body text-[11.5px] text-text-tertiary">Accept all {agreeKeys.length} agreements to finish ({agreeCount}/{agreeKeys.length} accepted).</p> : null}
           </>
         ) : null}
       </div>

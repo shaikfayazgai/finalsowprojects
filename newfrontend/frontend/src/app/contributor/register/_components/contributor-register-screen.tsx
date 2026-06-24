@@ -13,7 +13,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
-import { AuthAlert, AuthField, AuthSubmitButton, authInputCls } from "@/components/auth/auth-screen";
+import {
+  AuthAlert,
+  AuthDivider,
+  AuthField,
+  AuthSubmitButton,
+  OAuthButtonStack,
+  authInputCls,
+} from "@/components/auth/auth-screen";
 import { LoginShell } from "@/app/auth/login/_components/login-layout";
 import { cn } from "@/lib/utils/cn";
 
@@ -40,6 +47,7 @@ export function ContributorRegisterScreen() {
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [oauthBusy, setOauthBusy] = React.useState<"google" | "microsoft" | null>(null);
 
   const emailLc = email.trim().toLowerCase();
   const strong = pwd.length >= 8 && /[A-Z]/.test(pwd) && /[a-z]/.test(pwd) && /\d/.test(pwd);
@@ -104,6 +112,21 @@ export function ContributorRegisterScreen() {
     finally { setBusy(false); }
   }
 
+  /**
+   * Sign up with Google / Microsoft. Set the `sso_register_role` cookie first so
+   * the NextAuth signIn callback (src/auth.ts) lets a brand-new email through
+   * instead of blocking it as "not registered" — the contributor account is
+   * created from the OAuth identity on callback.
+   */
+  async function onOauth(provider: "google" | "microsoft") {
+    setError(null);
+    setOauthBusy(provider);
+    document.cookie = "sso_register_role=contributor; path=/; max-age=600; samesite=lax";
+    const idp = provider === "google" ? "google" : "microsoft-entra-id";
+    await signIn(idp, { callbackUrl: "/contributor/profile/complete" });
+    setOauthBusy(null);
+  }
+
   return (
     <LoginShell>
       <header className="mb-6">
@@ -126,6 +149,21 @@ export function ContributorRegisterScreen() {
         <p className="mb-3 rounded-lg border border-stroke-subtle bg-surface-hover px-3 py-2 font-body text-[12px] text-text-secondary">
           Dev code (no inbox configured): <span className="font-mono font-semibold text-foreground">{devOtp}</span>
         </p>
+      ) : null}
+
+      {step === "details" ? (
+        <>
+          <OAuthButtonStack
+            onGoogle={() => onOauth("google")}
+            onMicrosoft={() => onOauth("microsoft")}
+            googleBusy={oauthBusy === "google"}
+            microsoftBusy={oauthBusy === "microsoft"}
+            disabled={busy}
+            googleLabel="Sign up with Google"
+            microsoftLabel="Sign up with Microsoft"
+          />
+          <AuthDivider label="or sign up with email" />
+        </>
       ) : null}
 
       {step === "details" ? (
@@ -194,6 +232,9 @@ export function ContributorRegisterScreen() {
       <p className="mt-6 text-center font-body text-[13px] text-text-secondary">
         Already have an account?{" "}
         <Link href="/contributor/login" className="font-semibold text-text-link hover:underline underline-offset-2">Sign in</Link>
+      </p>
+      <p className="mt-1.5 text-center font-body text-[12.5px] text-text-tertiary">
+        <Link href="/auth/forgot-password" className="font-semibold text-text-link hover:underline underline-offset-2">Forgot password?</Link>
       </p>
     </LoginShell>
   );
