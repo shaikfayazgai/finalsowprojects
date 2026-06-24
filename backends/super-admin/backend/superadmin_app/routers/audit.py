@@ -261,13 +261,14 @@ async def tenant_provisioning_status(
     admin: Annotated[dict, Depends(get_current_admin)],
     admin_email: str | None = None,
 ):
-    """Real provisioning status for a tenant, derived from live data:
-      - scope/policies: done once the tenant has any account
-      - admin invited: an enterprise admin account exists for the tenant
-      - first sign-in: that admin has logged in AND set a real password
-      - employees: more than just the admin account exists
+    """Real provisioning status for a tenant — every step derived from live data:
+      - scope / policies: done once the tenant scope (its admin account) exists
+      - admin credentials: an enterprise admin account exists (creds were emailed)
+      - first sign-in: that admin has LOGGED IN at least once (last_login_at set)
+      - employees imported: the tenant has >=1 invited member (reviewer/employee)
       - first SOW: the tenant owns at least one SOW
-    Returns step states the timeline renders directly (no mock).
+    Each of the 6 booleans below maps 1:1 to a step, so the per-step badge and
+    the X/6 + % summary are always consistent (no mock, no hardcoded states).
 
     The tenant_id used in the UI (store/mock id) may not match the account's
     tenant_id for legacy accounts created before the link existed. When the
@@ -275,48 +276,56 @@ async def tenant_provisioning_status(
     we fall back to resolving the admin by email so the timeline still tracks."""
     conn = get_pg_connection()
     admin_row = None
-    employee_count = 0
+    member_count = 0          # invited members (reviewers/employees), excl. owner
+    member_ids: list[str] = []  # ids of every active (non-tombstoned) tenant account
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        # Active (non-tombstoned) accounts scoped to this tenant. The owner has
+        # login role exactly 'enterprise'; everyone else (ent.* / reviewer*) is
+        # an invited member that counts toward "Employees imported".
         cur.execute(
             "SELECT id, email, role, last_login_at, must_change_password FROM login_accounts "
-            "WHERE tenant_id = %s ORDER BY created_at ASC", (tenant_id,))
+            "WHERE tenant_id = %s AND email NOT LIKE '%%.deleted.%%' "
+            "ORDER BY created_at ASC", (tenant_id,))
         rows = cur.fetchall()
         # Fallback: resolve the primary admin by email when the tenant link is missing.
         if not rows and admin_email and "@" in admin_email:
             cur.execute(
                 "SELECT id, email, role, last_login_at, must_change_password FROM login_accounts "
-                "WHERE LOWER(email) = LOWER(%s)", (admin_email,))
+                "WHERE LOWER(email) = LOWER(%s) AND email NOT LIKE '%%.deleted.%%'", (admin_email,))
             rows = cur.fetchall()
-        employee_count = len(rows)
-        admin_row = next((r for r in rows if r["role"] == "enterprise"), rows[0] if rows else None)
+        admin_row = next((r for r in rows if (r["role"] or "").lower() == "enterprise"),
+                         rows[0] if rows else None)
+        # Members = every account that ISN'T the resolved owner.
+        member_count = sum(1 for r in rows if admin_row is None or r["id"] != admin_row["id"])
+        member_ids = [str(r["id"]) for r in rows]
 
-    # SOW count for the tenant (enterprise_sows owned by the resolved admin).
+    # SOW count for the tenant: any SOW owned by ANY of the tenant's accounts
+    # (the admin usually uploads, but a member may). Counts >=1 → "First SOW".
     sow_count = 0
-    if admin_row:
+    if member_ids:
         try:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT COUNT(*) FROM enterprise_sows WHERE owner_id = %s",
-                    (str(admin_row["id"]),))
+                    "SELECT COUNT(*) FROM enterprise_sows WHERE owner_id = ANY(%s)",
+                    (member_ids,))
                 sow_count = int(cur.fetchone()[0])
         except Exception:  # noqa: BLE001 — table may live in another DB/service
             sow_count = 0
 
     admin_exists = admin_row is not None
+    # First admin sign-in is DONE once the admin has signed in at least once —
+    # last_login_at is stamped on every successful login (incl. the first temp-
+    # password login), so this reflects "has the admin actually signed in".
     admin_signed_in = bool(admin_row and admin_row.get("last_login_at"))
     password_set = bool(admin_row and not admin_row.get("must_change_password"))
+    signin_done = admin_signed_in
 
-    # First admin sign-in is "done" only once they've logged in AND reset the
-    # temporary password. Re-sending credentials reissues a temp password, so
-    # this correctly flips back to pending until the next reset.
-    signin_done = admin_signed_in and password_set
-
-    # Downstream steps (employee import, SOW upload) happen INSIDE the enterprise
-    # portal, which requires the admin to have signed in. So they can't be "done"
-    # before sign-in — gate them on signin_done to keep the timeline monotonic
-    # (no later step completing while an earlier prerequisite is still pending).
-    employees_done = signin_done and employee_count > 1
-    sow_done = signin_done and sow_count > 0
+    # Employees / SOW each derive from their OWN real signal (a member existing,
+    # a SOW existing). They naturally can't precede sign-in in practice (both are
+    # done from inside the enterprise portal), so no artificial gating is needed —
+    # deriving from the real artifact keeps the timeline honest and monotonic.
+    employees_done = member_count > 0
+    sow_done = sow_count > 0
 
     def step(sid: str, label: str, done: bool) -> dict:
         return {"id": sid, "label": label, "state": "done" if done else "pending"}
@@ -334,9 +343,10 @@ async def tenant_provisioning_status(
         "tenantId": tenant_id,
         "adminEmail": admin_row.get("email") if admin_row else None,
         "steps": steps,
+        # Summary computed from the SAME per-step booleans → always agrees with badges.
         "completePct": round(done / len(steps) * 100),
         "signals": {"adminExists": admin_exists, "adminSignedIn": admin_signed_in,
-                    "passwordSet": password_set, "employeeCount": employee_count, "sowCount": sow_count},
+                    "passwordSet": password_set, "memberCount": member_count, "sowCount": sow_count},
     }
 
 
