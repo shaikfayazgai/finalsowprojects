@@ -15,6 +15,8 @@ import { deliveryCell } from "@/lib/delivery/status-matrix";
 
 const inr = (m: number) => "₹" + (m / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 });
 const toMinor = (s: string) => Math.round((parseFloat(s) || 0) * 100);
+// Razorpay per-order cap in paise — mirrors RAZORPAY_MAX_AMOUNT_MINOR on the server (default ₹5,00,000).
+const RZP_MAX_MINOR = 50_000_000;
 const fmtDateTime = (iso: string) => {
   if (!iso) return "—";
   const d = new Date(iso.includes("T") || iso.includes("+") ? iso : iso.replace(" ", "T") + "Z");
@@ -62,20 +64,70 @@ export default function SowPaymentDetailPage() {
   React.useEffect(() => { reload(); }, [reload]);
   React.useEffect(() => { getPlan(planId).then((p) => setName(p.sowTitle ?? "")).catch(() => {}); }, [planId]);
 
+  // Load Razorpay checkout.js once on mount
+  React.useEffect(() => {
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.async = true;
+    document.body.appendChild(s);
+    return () => { document.body.removeChild(s); };
+  }, []);
+
+  // Opens Razorpay checkout for a given amount. Resolves on payment success,
+  // rejects with "Payment cancelled" on dismiss or an error message on failure.
+  const openRazorpay = (amountMinor: number, description: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      fetch("/api/razorpay/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountMinor, currency: "INR", notes: { planId } }),
+      })
+        .then((r) => r.ok ? r.json() : r.json().then((e: { message?: string }) => Promise.reject(new Error(e?.message ?? "Order creation failed"))))
+        .then((order: { orderId: string; amount: number; currency: string }) => {
+          type RzpInstance = { open(): void; on(e: string, cb: (r: unknown) => void): void };
+          type RzpCtor = new (opts: unknown) => RzpInstance;
+          const RzpClass = (window as unknown as { Razorpay?: RzpCtor }).Razorpay;
+          if (!RzpClass) { reject(new Error("Payment gateway not loaded — please refresh and try again")); return; }
+          const rzp = new RzpClass({
+            key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "",
+            amount: order.amount,
+            currency: order.currency,
+            name: "Glimmora",
+            description,
+            order_id: order.orderId,
+            handler: () => resolve(),
+            modal: { ondismiss: () => reject(new Error("Payment cancelled")) },
+          });
+          rzp.on("payment.failed", (r: unknown) =>
+            reject(new Error((r as { error?: { description?: string } })?.error?.description ?? "Payment failed"))
+          );
+          rzp.open();
+        })
+        .catch(reject);
+    });
+
   const doRelease = async (amountMinor?: number) => {
     setBusy(true); setErr("");
-    try { const r = await releasePayment(planId, amountMinor, comment.trim() || undefined); setStatus(r.status); setManual(""); setComment(""); reload(); }
-    catch (e) { setErr(e instanceof Error ? e.message : "Release failed"); }
-    finally { setBusy(false); }
+    try {
+      await openRazorpay(amountMinor ?? awaiting, "SOW Budget Release");
+      const r = await releasePayment(planId, amountMinor, comment.trim() || undefined);
+      setStatus(r.status); setManual(""); setComment(""); reload();
+    } catch (e) {
+      if (e instanceof Error && e.message !== "Payment cancelled") setErr(e.message);
+    } finally { setBusy(false); }
   };
 
   // Pre-fund: release the SOW budget to Glimmora up front (full or partial), once
   // priced — without waiting for task delivery. Held in escrow; Glimmora draws from it.
   const doFund = async (amountMinor?: number) => {
     setBusy(true); setErr("");
-    try { const r = await fundEscrow(planId, amountMinor, fundComment.trim() || undefined); setStatus(r.status); setFundAmt(""); setFundComment(""); reload(); }
-    catch (e) { setErr(e instanceof Error ? e.message : "Release failed"); }
-    finally { setBusy(false); }
+    try {
+      await openRazorpay(amountMinor ?? escrowToFund, "SOW Escrow Funding");
+      const r = await fundEscrow(planId, amountMinor, fundComment.trim() || undefined);
+      setStatus(r.status); setFundAmt(""); setFundComment(""); reload();
+    } catch (e) {
+      if (e instanceof Error && e.message !== "Payment cancelled") setErr(e.message);
+    } finally { setBusy(false); }
   };
 
   const tasks: PayoutTask[] = status?.tasks ?? [];
@@ -144,6 +196,12 @@ export default function SowPaymentDetailPage() {
           </div>
           {escrowToFund > 0 ? (
             <>
+              {escrowToFund > RZP_MAX_MINOR ? (
+                <p className="font-body text-[11.5px] text-warning-text">
+                  Full amount {inr(escrowToFund)} exceeds the per-transaction limit ({inr(RZP_MAX_MINOR)}).
+                  Use partial releases up to {inr(RZP_MAX_MINOR)} each, or contact your Razorpay account manager to raise the limit.
+                </p>
+              ) : null}
               <input
                 type="text" value={fundComment} onChange={(e) => setFundComment(e.target.value)}
                 placeholder="Add a note for this release (optional)"
@@ -153,12 +211,12 @@ export default function SowPaymentDetailPage() {
                 <div className="flex items-center gap-1">
                   <span className="font-body text-[11px] text-text-tertiary">₹</span>
                   <input
-                    type="number" min="0" inputMode="decimal" value={fundAmt}
+                    type="number" min="0" max={RZP_MAX_MINOR / 100} inputMode="decimal" value={fundAmt}
                     onChange={(e) => setFundAmt(e.target.value)} placeholder="partial"
                     className="h-9 w-28 rounded-lg border border-stroke-subtle bg-surface px-2 font-body text-[12px] tabular-nums focus:outline-none focus:ring-2 focus:ring-brand/30"
                   />
                   <button
-                    type="button" disabled={busy || toMinor(fundAmt) <= 0}
+                    type="button" disabled={busy || toMinor(fundAmt) <= 0 || toMinor(fundAmt) > RZP_MAX_MINOR}
                     onClick={() => doFund(toMinor(fundAmt))}
                     className="inline-flex items-center h-9 px-3 rounded-lg border border-stroke-subtle bg-bg-subtle font-body text-[12px] font-semibold text-text-secondary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -166,7 +224,7 @@ export default function SowPaymentDetailPage() {
                   </button>
                 </div>
                 <button
-                  type="button" disabled={busy}
+                  type="button" disabled={busy || escrowToFund > RZP_MAX_MINOR}
                   onClick={() => doFund()}
                   className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand text-on-brand font-body text-[12.5px] font-semibold hover:opacity-90 disabled:opacity-50"
                 >
@@ -189,6 +247,12 @@ export default function SowPaymentDetailPage() {
         <section className="rounded-2xl border border-warning-border bg-warning-subtle/20 p-4 space-y-2">
           <p className="font-body text-[12.5px] font-semibold text-foreground">Release budget to Glimmora</p>
           <p className="font-body text-[11.5px] text-text-tertiary">Pay the full completed amount, or a partial amount (pays whole delivered tasks up to it).</p>
+          {awaiting > RZP_MAX_MINOR ? (
+            <p className="font-body text-[11.5px] text-warning-text">
+              Full amount {inr(awaiting)} exceeds the per-transaction limit ({inr(RZP_MAX_MINOR)}).
+              Use partial releases up to {inr(RZP_MAX_MINOR)} each, or contact your Razorpay account manager to raise the limit.
+            </p>
+          ) : null}
           <input
             type="text" value={comment} onChange={(e) => setComment(e.target.value)}
             placeholder="Add a note for this payment (optional)"
@@ -198,12 +262,12 @@ export default function SowPaymentDetailPage() {
             <div className="flex items-center gap-1">
               <span className="font-body text-[11px] text-text-tertiary">₹</span>
               <input
-                type="number" min="0" inputMode="decimal" value={manual}
+                type="number" min="0" max={RZP_MAX_MINOR / 100} inputMode="decimal" value={manual}
                 onChange={(e) => setManual(e.target.value)} placeholder="partial"
                 className="h-9 w-28 rounded-lg border border-stroke-subtle bg-surface px-2 font-body text-[12px] tabular-nums focus:outline-none focus:ring-2 focus:ring-brand/30"
               />
               <button
-                type="button" disabled={busy || toMinor(manual) <= 0}
+                type="button" disabled={busy || toMinor(manual) <= 0 || toMinor(manual) > RZP_MAX_MINOR}
                 onClick={() => doRelease(toMinor(manual))}
                 className="inline-flex items-center h-9 px-3 rounded-lg border border-stroke-subtle bg-bg-subtle font-body text-[12px] font-semibold text-text-secondary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -211,7 +275,7 @@ export default function SowPaymentDetailPage() {
               </button>
             </div>
             <button
-              type="button" disabled={busy}
+              type="button" disabled={busy || awaiting > RZP_MAX_MINOR}
               onClick={() => doRelease()}
               className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand text-on-brand font-body text-[12.5px] font-semibold hover:opacity-90 disabled:opacity-50"
             >

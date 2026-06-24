@@ -39,6 +39,7 @@ export interface PlanPayout {
   byTask: Record<string, PayoutTask>;
   busy: string | null;
   error: string;
+  reload: () => void;
   request: (taskId: string) => Promise<void>;
   requestAll: (amountMinor?: number) => Promise<void>;
   payout: (taskId: string) => Promise<void>;
@@ -76,7 +77,7 @@ export function usePlanPayout(planId: string, enabled = true): PlanPayout {
   );
   const payout = React.useCallback((taskId: string) => run(`pay:${taskId}`, () => payoutContributors(planId, taskId)), [run, planId]);
 
-  return { status, byTask, busy, error, request, requestAll, payout };
+  return { status, byTask, busy, error, reload, request, requestAll, payout };
 }
 
 export function PayoutSummary({ status, error, busy, onRequestAll, enterprisePriceMinor }: {
@@ -307,17 +308,19 @@ export function TaskStatusCells({ task }: { task?: PayoutTask }) {
  * PayoutSummary); per task we only show the contributor payout once the
  * enterprise has released that task's budget.
  */
-export function TaskPayoutAction({ task, busy, onPayout }: {
+export function TaskPayoutAction({ task, busy, onPayout, onPayEligible, localPaid }: {
   task?: PayoutTask;
   busy: string | null;
   onPayout: (taskId: string) => void;
+  onPayEligible?: (taskId: string) => void;
+  localPaid?: Set<string>;
 }) {
   if (!task) return <span className="w-[130px] shrink-0" />;
   const payKey = `pay:${task.taskId}`;
   const btn = "inline-flex items-center justify-center gap-1.5 h-9 px-2.5 rounded-lg font-body text-[11.5px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full";
   return (
     <div className="w-[130px] shrink-0">
-      {taskIsPaid(task) ? (
+      {(taskIsPaid(task) || localPaid?.has(task.taskId)) ? (
         <span className="inline-flex items-center gap-1 h-9 text-[11.5px] font-semibold text-success-text"><CheckCircle2 className="h-3.5 w-3.5" /> Paid</span>
       ) : task.payoutStatus === "released" ? (
         <button type="button" disabled={busy === payKey} onClick={() => onPayout(task.taskId)} className={`${btn} bg-brand text-on-brand hover:opacity-90`}>
@@ -326,7 +329,13 @@ export function TaskPayoutAction({ task, busy, onPayout }: {
       ) : task.payoutStatus === "requested" ? (
         <span className="inline-flex items-center gap-1 h-9 text-[11px] text-text-tertiary"><Clock className="h-3.5 w-3.5" /> Awaiting enterprise</span>
       ) : task.payoutStatus === "eligible" ? (
-        <span className="inline-flex items-center gap-1 h-9 text-[11px] text-text-secondary"><Send className="h-3.5 w-3.5" /> Ready to bill</span>
+        onPayEligible ? (
+          <button type="button" disabled={busy === payKey} onClick={() => onPayEligible(task.taskId)} className={`${btn} bg-brand text-on-brand hover:opacity-90`}>
+            <Wallet className="h-3.5 w-3.5" /> {busy === payKey ? "Paying…" : "Pay"}
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-1 h-9 text-[11px] text-text-secondary"><Send className="h-3.5 w-3.5" /> Ready to bill</span>
+        )
       ) : (
         <span className="inline-flex items-center h-9 text-[11px] text-text-tertiary">—</span>
       )}

@@ -38,6 +38,7 @@ export default function AdminPricePlanPage() {
   // 3-party payout — per-task delivery + payout status from the enterprise API.
   const payout = usePlanPayout(planId);
 
+  const [localPaidTaskIds, setLocalPaidTaskIds] = React.useState<Set<string>>(new Set());
   const [price, setPrice] = React.useState<Record<string, PriceRow>>({});
   const [comment, setComment] = React.useState("");
   const [actionError, setActionError] = React.useState<string | null>(null);
@@ -60,6 +61,60 @@ export default function AdminPricePlanPage() {
   // Per-task pricing edit-lock: each task's price is read-only until you click
   // "Edit"; the value snapshot lets Cancel restore the pre-edit amount.
   const [editingTasks, setEditingTasks] = React.useState<Record<string, PriceRow>>({});
+
+  // Load Razorpay checkout.js once on mount
+  React.useEffect(() => {
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.async = true;
+    document.body.appendChild(s);
+    return () => { document.body.removeChild(s); };
+  }, []);
+
+  const openRazorpay = (amountMinor: number, description: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      fetch("/api/razorpay/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountMinor, currency: "INR", notes: { planId } }),
+      })
+        .then((r) => r.ok ? r.json() : r.json().then((e: { message?: string }) => Promise.reject(new Error(e?.message ?? "Order creation failed"))))
+        .then((order: { orderId: string; amount: number; currency: string; keyId: string }) => {
+          type RzpInstance = { open(): void; on(e: string, cb: (r: unknown) => void): void };
+          type RzpCtor = new (opts: unknown) => RzpInstance;
+          const RzpClass = (window as unknown as { Razorpay?: RzpCtor }).Razorpay;
+          if (!RzpClass) { reject(new Error("Payment gateway not loaded — please refresh")); return; }
+          const rzp = new RzpClass({
+            key: order.keyId,
+            amount: order.amount,
+            currency: order.currency,
+            name: "Glimmora",
+            description,
+            order_id: order.orderId,
+            handler: () => resolve(),
+            modal: { ondismiss: () => reject(new Error("Payment cancelled")) },
+          });
+          rzp.on("payment.failed", (r: unknown) =>
+            reject(new Error((r as { error?: { description?: string } })?.error?.description ?? "Payment failed"))
+          );
+          rzp.open();
+        })
+        .catch(reject);
+    });
+
+  const doPayEligible = async (taskId: string) => {
+    const task = payout.byTask[taskId];
+    if (!task || task.budgetMinor <= 0) return;
+    setActionError(null);
+    try {
+      await openRazorpay(task.budgetMinor, `Task payout: ${task.title || taskId}`);
+      await payout.payout(taskId);
+      setLocalPaidTaskIds((prev) => new Set([...prev, taskId]));
+      payout.reload();
+    } catch (e) {
+      if (e instanceof Error && e.message !== "Payment cancelled") setActionError(e.message);
+    }
+  };
 
   React.useEffect(() => {
     fetch("/api/admin/commission", { cache: "no-store" })
@@ -369,6 +424,8 @@ export default function AdminPricePlanPage() {
                       task={payout.byTask[t.id]}
                       busy={payout.busy}
                       onPayout={payout.payout}
+                      onPayEligible={doPayEligible}
+                      localPaid={localPaidTaskIds}
                     />
                   ) : null}
                 </div>

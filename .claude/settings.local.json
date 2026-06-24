@@ -153,5 +153,8 @@
       "Bash(ls src/app/api/auth/password/setup-after-otp/route.ts)",
       "Bash(ls src/app/api/auth/forgot-password/route.ts)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "chrome-devtools"
+  ]
 }
