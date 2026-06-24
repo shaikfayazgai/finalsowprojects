@@ -396,16 +396,6 @@ export const adminNav: ModuleConfig = {
       ],
     },
     {
-      title: "Compliance",
-      items: [
-        { label: "Cases", href: "/admin/governance", icon: Flag, badge: "3" },
-        { label: "Resolution Center", href: "/admin/cases", icon: LifeBuoy },
-        { label: "Complaints", href: "/admin/complaints", icon: MessageSquare },
-        { label: "KYC reviews", href: "/admin/kyc", icon: ShieldAlert, badge: "1" },
-        { label: "Audit log", href: "/admin/audit", icon: ScrollText },
-      ],
-    },
-    {
       title: "Infrastructure",
       zone: "governance",
       items: [
@@ -413,6 +403,16 @@ export const adminNav: ModuleConfig = {
         { label: "Billing", href: "/admin/billing", icon: Receipt },
         { label: "Payment rails", href: "/admin/payment-rails", icon: Wallet },
         { label: "System health", href: "/admin/system-health", icon: Server },
+      ],
+    },
+    {
+      title: "Compliance",
+      items: [
+        { label: "Cases", href: "/admin/governance", icon: Flag, badge: "3" },
+        { label: "Resolution Center", href: "/admin/cases", icon: LifeBuoy },
+        { label: "Complaints", href: "/admin/complaints", icon: MessageSquare },
+        { label: "KYC reviews", href: "/admin/kyc", icon: ShieldAlert, badge: "1" },
+        { label: "Audit log", href: "/admin/audit", icon: ScrollText },
       ],
     },
     {
