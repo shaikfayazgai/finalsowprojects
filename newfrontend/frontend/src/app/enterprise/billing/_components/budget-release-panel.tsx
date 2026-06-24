@@ -17,7 +17,7 @@ import { releasePayment } from "@/lib/api/decomposition-v2";
 type Delivery = {
   total: number; delivered: number; paid: number; progressPct: number;
   paymentPhase: string; payoutCounts: Record<string, number>;
-  budgetMinor?: number; requestedMinor?: number; releasedMinor?: number; paidMinor?: number;
+  budgetMinor?: number; sowBudgetMinor?: number; requestedMinor?: number; releasedMinor?: number; paidMinor?: number;
 };
 type Plan = { id: string; sowId: string; sowTitle?: string; delivery?: Delivery };
 
@@ -36,7 +36,9 @@ export function BudgetReleasePanel() {
   const plans = (data?.items ?? []) as Plan[];
   const active = plans.filter((p) => {
     const d = p.delivery;
-    return !!d && ((d.delivered || 0) > 0 || (d.requestedMinor || 0) > 0 || (d.releasedMinor || 0) > 0 || (d.paidMinor || 0) > 0);
+    // Show a SOW once it's priced (sowBudgetMinor) so it can be PRE-FUNDED up front,
+    // as well as once there's delivered work / a Glimmora payment request.
+    return !!d && ((d.sowBudgetMinor || 0) > 0 || (d.delivered || 0) > 0 || (d.requestedMinor || 0) > 0 || (d.releasedMinor || 0) > 0 || (d.paidMinor || 0) > 0);
   });
 
   const doRelease = async (id: string, amountMinor?: number) => {
@@ -63,7 +65,7 @@ export function BudgetReleasePanel() {
 
       {active.length === 0 ? (
         <p className="font-body text-[12.5px] text-text-tertiary py-3">
-          No SOW payments yet. When Glimmora requests payment for delivered work, each SOW appears here to release.
+          No SOW payments yet. Once a SOW is priced it appears here to pre-fund Glimmora (full or partial); Glimmora&apos;s payment requests for delivered work also show here.
         </p>
       ) : (
         active.map((p) => {
@@ -129,6 +131,13 @@ export function BudgetReleasePanel() {
                   <span className="font-body text-[11.5px] text-success-text">
                     {released === 0 && paid > 0 ? "Fully paid" : "Budget released to Glimmora"}
                   </span>
+                </div>
+              ) : (d.sowBudgetMinor || 0) > 0 ? (
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-stroke-subtle/60">
+                  <span className="font-body text-[11.5px] text-text-tertiary">SOW budget {inr(d.sowBudgetMinor || 0)} — pre-fund Glimmora now (full or partial) or pay on delivery.</span>
+                  <Link href={href} className="ml-auto inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand text-on-brand font-body text-[12.5px] font-semibold hover:opacity-90">
+                    <Banknote className="h-3.5 w-3.5" /> Release budget →
+                  </Link>
                 </div>
               ) : null}
             </div>
