@@ -19,7 +19,66 @@ type Row = Record<string, unknown>;
 
 const SECTION_ORDER = ["basic", "professional", "skills", "expertise", "portfolio", "experience", "education", "verification", "bank", "agreements"] as const;
 
-const TIMEZONES =["Asia/Kolkata", "Asia/Dubai", "Europe/London", "America/New_York", "America/Los_Angeles"];
+// Fallback IANA zones if Intl.supportedValuesOf is unavailable (older browsers).
+const TIMEZONES_FALLBACK = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Europe/London", "Europe/Berlin", "America/New_York", "America/Chicago", "America/Los_Angeles", "Australia/Sydney", "UTC"];
+/** Full IANA timezone list from the browser (Intl.supportedValuesOf), with a
+ * static fallback. No external API needed — these are standard built-in values. */
+function getTimezones(): string[] {
+  try {
+    const sv = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf;
+    if (typeof sv === "function") { const z = sv("timeZone"); if (Array.isArray(z) && z.length) return z; }
+  } catch { /* fall through */ }
+  return TIMEZONES_FALLBACK;
+}
+/** The user's detected IANA zone, e.g. "Asia/Kolkata" (best-effort). */
+function detectedTimezone(): string {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; }
+}
+
+type DialCode = { country: string; dialCode: string; flag: string; cca2: string };
+// Minimal fallback if restcountries.com is unreachable — keeps the form usable.
+const DIAL_CODES_FALLBACK: DialCode[] = [
+  { country: "India", dialCode: "+91", flag: "🇮🇳", cca2: "IN" },
+  { country: "United States", dialCode: "+1", flag: "🇺🇸", cca2: "US" },
+  { country: "United Kingdom", dialCode: "+44", flag: "🇬🇧", cca2: "GB" },
+  { country: "United Arab Emirates", dialCode: "+971", flag: "🇦🇪", cca2: "AE" },
+  { country: "Singapore", dialCode: "+65", flag: "🇸🇬", cca2: "SG" },
+  { country: "Australia", dialCode: "+61", flag: "🇦🇺", cca2: "AU" },
+  { country: "Canada", dialCode: "+1", flag: "🇨🇦", cca2: "CA" },
+  { country: "Germany", dialCode: "+49", flag: "🇩🇪", cca2: "DE" },
+];
+/** Build a sorted dialing-code list from restcountries.com (GET, no auth).
+ * Returns the fallback list on any failure so the form never breaks. */
+async function fetchDialCodes(signal?: AbortSignal): Promise<DialCode[]> {
+  try {
+    const r = await fetch("https://restcountries.com/v3.1/all?fields=name,idd,cca2,flag", { signal });
+    if (!r.ok) return DIAL_CODES_FALLBACK;
+    const data = (await r.json()) as Array<{ name?: { common?: string }; idd?: { root?: string; suffixes?: string[] }; cca2?: string; flag?: string }>;
+    const out: DialCode[] = [];
+    for (const c of Array.isArray(data) ? data : []) {
+      const root = c.idd?.root;
+      if (!root) continue;
+      const suffixes = c.idd?.suffixes && c.idd.suffixes.length ? c.idd.suffixes : [""];
+      // Most countries have one dialing code (root + first suffix). Skip multi-suffix
+      // sprawl (e.g. +1 with 30 area suffixes) by taking only the first.
+      const dialCode = `${root}${suffixes[0] || ""}`;
+      out.push({ country: c.name?.common || c.cca2 || "", dialCode, flag: c.flag || "", cca2: c.cca2 || "" });
+    }
+    out.sort((a, b) => a.country.localeCompare(b.country));
+    return out.length ? out : DIAL_CODES_FALLBACK;
+  } catch { return DIAL_CODES_FALLBACK; }
+}
+// Split a stored mobile ("+91 9876543210") into { dialCode, number } best-effort.
+function splitMobile(saved: string, codes: DialCode[]): { dialCode: string; number: string } {
+  const v = (saved || "").trim();
+  if (!v) return { dialCode: "+91", number: "" };
+  // Longest matching dial code wins (so +971 beats +9).
+  const match = codes.filter((c) => v.replace(/\s/g, "").startsWith(c.dialCode))
+    .sort((a, b) => b.dialCode.length - a.dialCode.length)[0];
+  if (match) return { dialCode: match.dialCode, number: v.replace(/\s/g, "").slice(match.dialCode.length) };
+  if (v.startsWith("+")) { const m = v.match(/^(\+\d{1,4})\s?(.*)$/); if (m) return { dialCode: m[1], number: m[2].replace(/\s/g, "") }; }
+  return { dialCode: "+91", number: v.replace(/\s/g, "") };
+}
 const YEARS = ["Fresher", "0-1 Years", "1-3 Years", "3-5 Years", "5-8 Years", "8+ Years"];
 const WEEKLY = ["10 Hours", "20 Hours", "30 Hours", "40 Hours", "Flexible"];
 const AVAILABILITY = ["Full Time", "Part Time", "Weekends", "Flexible"];
@@ -94,7 +153,18 @@ async function getJson(url: string): Promise<Row[] | Row> {
 }
 async function save(url: string, body: unknown, method = "POST"): Promise<void> {
   const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { detail?: string }).detail || "Could not save.");
+  if (!r.ok) {
+    // The error shape varies: FastAPI sends { detail }, while our Next proxy's own
+    // failures (401 AUTH_TOKEN_UNAVAILABLE / 503 BACKEND_UNAVAILABLE) send
+    // { error, message } with NO `detail`. Read all of them so the user sees the
+    // real reason (e.g. "Session is reconnecting — please retry") instead of a
+    // misleading generic "Could not save." `detail` may also be a 422 array.
+    const j = (await r.json().catch(() => ({}))) as { detail?: unknown; message?: string; error?: string };
+    const detailMsg = typeof j.detail === "string" ? j.detail : Array.isArray(j.detail)
+      ? (j.detail as Array<{ msg?: string }>).map((d) => d?.msg).filter(Boolean).join(", ")
+      : "";
+    throw new Error(detailMsg || j.message || j.error || `Could not save. (HTTP ${r.status})`);
+  }
 }
 const arr = (x: unknown): Row[] => Array.isArray(x) ? (x as Row[]) : Array.isArray((x as { items?: Row[] })?.items) ? (x as { items: Row[] }).items : [];
 
@@ -240,6 +310,14 @@ export default function CompleteProfilePage() {
   const [pinLookup, setPinLookup] = React.useState<{ loading: boolean; error: string }>({ loading: false, error: "" });
   const [ifscLookup, setIfscLookup] = React.useState<{ loading: boolean; error: string; branch: string; city: string; state: string }>({ loading: false, error: "", branch: "", city: "", state: "" });
   const [languages, setLanguages] = React.useState<string[]>([]);
+  // Country-code (mobile) — dial-code list from restcountries.com, default +91.
+  const [dialCodes, setDialCodes] = React.useState<DialCode[]>(DIAL_CODES_FALLBACK);
+  const [mobileDial, setMobileDial] = React.useState("+91");
+  const [mobileLocal, setMobileLocal] = React.useState("");
+  // Latest dial codes for use inside the (stable) reload callback without re-creating it.
+  const dialCodesRef = React.useRef<DialCode[]>(DIAL_CODES_FALLBACK);
+  // Full IANA timezone list (browser built-in), default = the user's detected zone.
+  const [timezones] = React.useState<string[]>(() => getTimezones());
   const [prof, setProf] = React.useState({ headline: "", bio: "", yearsExperience: "", weeklyHours: "", hourlyRate: "", availability: "" });
   const [skills, setSkills] = React.useState<Row[]>([]);
   const [skillDraft, setSkillDraft] = React.useState({ name: "", level: "Intermediate", years: "1 Year" });
@@ -276,7 +354,10 @@ export default function CompleteProfilePage() {
     const ex = (await getJson("/api/contributor/profile/extra")) as Row;
     if (ex && typeof ex === "object" && !Array.isArray(ex)) {
       const b = (ex.basic as Record<string, string>) || {};
-      setBasic((x) => ({ ...x, firstName: b.firstName || x.firstName, lastName: b.lastName || x.lastName, state: b.state || x.state, pincode: b.pincode || x.pincode, mobileNumber: (ex.mobileNumber as string) || b.mobileNumber || x.mobileNumber, profilePhoto: b.profilePhoto || x.profilePhoto }));
+      const savedMobile = (ex.mobileNumber as string) || b.mobileNumber || "";
+      setBasic((x) => ({ ...x, firstName: b.firstName || x.firstName, lastName: b.lastName || x.lastName, state: b.state || x.state, pincode: b.pincode || x.pincode, mobileNumber: savedMobile || x.mobileNumber, profilePhoto: b.profilePhoto || x.profilePhoto }));
+      // Split the saved mobile back into the country-code selector + local number.
+      if (savedMobile) { const sp = splitMobile(savedMobile, dialCodesRef.current); setMobileDial(sp.dialCode); setMobileLocal(sp.number); }
       if (Array.isArray(ex.languages)) setLanguages(ex.languages as string[]);
       const pr = (ex.professional as Record<string, string>) || {}; setProf((x) => ({ ...x, weeklyHours: pr.weeklyHours || x.weeklyHours, hourlyRate: pr.hourlyRate || x.hourlyRate }));
       setLinks((x) => ({ ...x, ...((ex.links as Record<string, string>) || {}) }));
@@ -300,6 +381,38 @@ export default function CompleteProfilePage() {
     refresh();
   }, [refresh]);
   React.useEffect(() => { reload(); }, [reload]);
+
+  // Load the dialing-code list (restcountries.com) once on mount; keep the
+  // fallback if it fails.
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    fetchDialCodes(ctrl.signal).then((codes) => {
+      if (ctrl.signal.aborted || !codes.length) return;
+      dialCodesRef.current = codes;
+      setDialCodes(codes);
+    });
+    return () => ctrl.abort();
+  }, []);
+
+  // Re-split the saved mobile whenever the (richer) dial-code list arrives, so a
+  // mobile loaded before the API resolved gets the correct country code.
+  React.useEffect(() => {
+    if (basic.mobileNumber) { const sp = splitMobile(basic.mobileNumber, dialCodes); setMobileDial(sp.dialCode); setMobileLocal(sp.number); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialCodes]);
+
+  // Default the timezone to the user's detected IANA zone (only if unset).
+  React.useEffect(() => {
+    const tz = detectedTimezone();
+    if (tz) setBasic((b) => (b.timezone ? b : { ...b, timezone: tz }));
+  }, []);
+
+  // Keep the saved mobile (basic.mobileNumber) = dialCode + space + local number.
+  const setMobile = (dial: string, local: string) => {
+    setMobileDial(dial);
+    setMobileLocal(local);
+    setBasic((b) => ({ ...b, mobileNumber: local.trim() ? `${dial} ${local.trim()}` : "" }));
+  };
 
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key); setErr("");
@@ -493,8 +606,18 @@ export default function CompleteProfilePage() {
               <Field label="Country *"><input value={basic.country} onChange={(e) => setBasic({ ...basic, country: e.target.value })} className={inputCls} placeholder="India" /></Field>
               <Field label="State *"><input value={basic.state} onChange={(e) => setBasic({ ...basic, state: e.target.value })} className={inputCls} placeholder="Maharashtra" /></Field>
               <Field label="City *"><input value={basic.city} onChange={(e) => setBasic({ ...basic, city: e.target.value })} className={inputCls} placeholder="Mumbai" /></Field>
-              <Field label="Mobile number *"><input value={basic.mobileNumber} onChange={(e) => setBasic({ ...basic, mobileNumber: e.target.value })} className={inputCls} placeholder="+91 98765 43210" /></Field>
-              <Field label="Timezone *"><select value={basic.timezone} onChange={(e) => setBasic({ ...basic, timezone: e.target.value })} className={inputCls}><option value="">Select timezone</option>{TIMEZONES.map((t) => <option key={t}>{t}</option>)}</select></Field>
+              <Field label="Mobile number *">
+                <div className="flex gap-1.5">
+                  <select aria-label="Country dialing code" value={mobileDial} onChange={(e) => setMobile(e.target.value, mobileLocal)} className={cn(inputCls, "w-[112px] shrink-0 px-2")}>
+                    {/* De-dup by dial code (many countries share +1) — show flag + code. */}
+                    {Array.from(new Map(dialCodes.map((c) => [`${c.dialCode}|${c.cca2}`, c])).values()).map((c) => (
+                      <option key={`${c.cca2}-${c.dialCode}`} value={c.dialCode}>{c.flag ? `${c.flag} ` : ""}{c.dialCode} {c.cca2}</option>
+                    ))}
+                  </select>
+                  <input value={mobileLocal} onChange={(e) => setMobile(mobileDial, e.target.value.replace(/[^\d]/g, ""))} className={inputCls} placeholder="98765 43210" inputMode="numeric" />
+                </div>
+              </Field>
+              <Field label="Timezone *"><select value={basic.timezone} onChange={(e) => setBasic({ ...basic, timezone: e.target.value })} className={inputCls}><option value="">Select timezone</option>{timezones.map((t) => <option key={t}>{t}</option>)}</select></Field>
             </div>
             <Field label="Languages *"><ChipField values={languages} setValues={setLanguages} suggestions={LANGUAGES} placeholder="Search or add language + Enter" /></Field>
             <button type="button" disabled={busy === "basic"} onClick={saveBasic} className={primaryBtn}>Save basic info</button>
