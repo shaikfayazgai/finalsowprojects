@@ -1094,6 +1094,40 @@ def task_timeline(
                 add(s.get("decided_at"), "revision", f"Revision requested on v{ver}",
                     {"note": s.get("decision_rationale")})
 
+    # Fallback when no `submissions` rows are linked (common — the QA handoff carries
+    # the activity instead): derive submitted / mentor-accepted / QA-decision events
+    # from the reviewer_assignments tied to this task (by canonical or contributor id).
+    if not subs:
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT id, status, updated_at, data FROM reviewer_assignments "
+                    "WHERE data->>'canonicalTaskId'=%s OR data->>'taskId'=%s "
+                    "OR data->>'taskId' = ANY(%s) ORDER BY created_at ASC",
+                    [str(task_id), str(task_id), refs])
+                ras = cur.fetchall()
+        except Exception:  # noqa: BLE001
+            conn.rollback()
+            ras = []
+        seen_sub: set = set()
+        for ra in ras:
+            rd = ra.get("data") or {}
+            sub_at = rd.get("submittedAt")
+            if sub_at and sub_at not in seen_sub:
+                seen_sub.add(sub_at)
+                add(sub_at, "submitted", "Contributor submitted the deliverable")
+            ma = rd.get("mentorAcceptedAt")
+            if ma:
+                mo = rd.get("mentorOverall")
+                add(ma, "accepted", "Mentor accepted" + (f" · score {float(mo):.1f}/5" if mo else ""))
+            st = (ra.get("status") or "").lower()
+            if st in ("approved", "accepted"):
+                add(ra.get("updated_at"), "accepted", "QA accepted — forwarded to enterprise")
+            elif st in ("rework", "changes_requested", "revision"):
+                add(ra.get("updated_at"), "revision", "QA requested rework")
+            elif st in ("rejected", "reject"):
+                add(ra.get("updated_at"), "rejected", "QA rejected the submission")
+
     # Final quality rating (mentor + QA → final). Table created on first QA approval.
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
