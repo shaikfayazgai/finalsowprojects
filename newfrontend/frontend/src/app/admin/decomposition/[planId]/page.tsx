@@ -38,6 +38,7 @@ export default function AdminPricePlanPage() {
   // 3-party payout — per-task delivery + payout status from the enterprise API.
   const payout = usePlanPayout(planId);
 
+  const [localPaidTaskIds, setLocalPaidTaskIds] = React.useState<Set<string>>(new Set());
   const [price, setPrice] = React.useState<Record<string, PriceRow>>({});
   const [comment, setComment] = React.useState("");
   const [actionError, setActionError] = React.useState<string | null>(null);
@@ -78,13 +79,13 @@ export default function AdminPricePlanPage() {
         body: JSON.stringify({ amountMinor, currency: "INR", notes: { planId } }),
       })
         .then((r) => r.ok ? r.json() : r.json().then((e: { message?: string }) => Promise.reject(new Error(e?.message ?? "Order creation failed"))))
-        .then((order: { orderId: string; amount: number; currency: string }) => {
+        .then((order: { orderId: string; amount: number; currency: string; keyId: string }) => {
           type RzpInstance = { open(): void; on(e: string, cb: (r: unknown) => void): void };
           type RzpCtor = new (opts: unknown) => RzpInstance;
           const RzpClass = (window as unknown as { Razorpay?: RzpCtor }).Razorpay;
           if (!RzpClass) { reject(new Error("Payment gateway not loaded — please refresh")); return; }
           const rzp = new RzpClass({
-            key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "",
+            key: order.keyId,
             amount: order.amount,
             currency: order.currency,
             name: "Glimmora",
@@ -108,6 +109,7 @@ export default function AdminPricePlanPage() {
     try {
       await openRazorpay(task.budgetMinor, `Task payout: ${task.title || taskId}`);
       await payout.payout(taskId);
+      setLocalPaidTaskIds((prev) => new Set([...prev, taskId]));
       payout.reload();
     } catch (e) {
       if (e instanceof Error && e.message !== "Payment cancelled") setActionError(e.message);
@@ -423,6 +425,7 @@ export default function AdminPricePlanPage() {
                       busy={payout.busy}
                       onPayout={payout.payout}
                       onPayEligible={doPayEligible}
+                      localPaid={localPaidTaskIds}
                     />
                   ) : null}
                 </div>

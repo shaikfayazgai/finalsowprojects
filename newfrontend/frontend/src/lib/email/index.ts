@@ -1,19 +1,17 @@
 import nodemailer from "nodemailer";
 import type { ReactElement } from "react";
 
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASSWORD;
+const SMTP_USER = process.env.SMTP_USER ?? process.env.EMAIL_USER;
+const SMTP_PASS = process.env.SMTP_PASSWORD ?? process.env.EMAIL_APP_PASSWORD;
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST ?? "smtp.office365.com",
+  host: process.env.SMTP_HOST ?? "smtp.gmail.com",
   port: Number(process.env.SMTP_PORT ?? 587),
   secure: false,
-  requireTLS: true,
   auth: { user: SMTP_USER, pass: SMTP_PASS },
   connectionTimeout: 60_000,
   greetingTimeout: 30_000,
   socketTimeout: 90_000,
-  tls: { ciphers: "TLSv1.2" },
 });
 
 const FROM = process.env.EMAIL_FROM ?? `GlimmoraTeam <${SMTP_USER}>`;
