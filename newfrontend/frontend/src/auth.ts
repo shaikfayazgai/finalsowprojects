@@ -478,6 +478,39 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
             token.isNewSsoUser = true;
             token.role = registrationRole;
+
+            // Contributor SSO sign-up: the provider (Google/Microsoft) has already
+            // verified the email — NextAuth validated the id_token signature before
+            // this callback ran. Provision a real, EMAIL-VERIFIED contributor account
+            // on the backend so the user goes straight to profile completion with NO
+            // OTP step. Without this the account was never created, and the user got
+            // funnelled into the email-verification/onboarding flow.
+            if (registrationRole === "contributor") {
+              const ssoEmail = token.email as string | undefined;
+              const { firstName, lastName } = splitDisplayName(token.name as string | undefined);
+              if (ssoEmail && ssoEmail.includes("@")) {
+                try {
+                  const provisioned = await authApi.provisionOAuthAccount({
+                    email: ssoEmail,
+                    firstName,
+                    lastName,
+                    provider: providerName,
+                  });
+                  if (!isMfaPending(provisioned)) {
+                    token.role = normalizeRole(provisioned.user.role);
+                    token.glimmoraAccessToken = provisioned.access_token;
+                    token.glimmoraRefreshToken = provisioned.refresh_token;
+                    token.glimmoraExpiresAt = Math.floor(Date.now() / 1000) + provisioned.expires_in;
+                    if (provisioned.user.id) token.id = provisioned.user.id;
+                    // Account now exists + email-verified; only "new" when freshly created.
+                    token.isNewSsoUser = provisioned.isNewSsoUser ?? false;
+                  }
+                } catch {
+                  // Provisioning failed (backend down / network). Leave isNewSsoUser=true
+                  // so the user still lands in onboarding rather than a broken portal.
+                }
+              }
+            }
           }
         }
       }

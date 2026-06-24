@@ -479,10 +479,10 @@ export default function CompleteProfilePage() {
               </div>
             </Field>
             <FileField text="Upload passport-size photo (max 200 KB)" name={basic.profilePhoto} accept=".jpg,.jpeg,.png,.webp" maxKB={200} passport onErr={setErr} onPick={(n) => setBasic({ ...basic, profilePhoto: n })} onClear={() => setBasic({ ...basic, profilePhoto: "" })} />
-            <p className="font-body text-[11px] text-text-tertiary">Your name and email are set during onboarding/KYC and can&apos;t be edited here. Change them in <Link href="/contributor/settings/account" className="text-text-link hover:underline font-medium">Account settings</Link> (major changes may need re-verification).</p>
+            <p className="font-body text-[11px] text-text-tertiary">Your name is prefilled from your account &mdash; edit it here if needed. Your email is managed in <Link href="/contributor/settings/account" className="text-text-link hover:underline font-medium">Account settings</Link> (major changes may need re-verification).</p>
             <div className="grid sm:grid-cols-2 gap-2">
-              <Field label="First name *"><input value={basic.firstName} readOnly disabled aria-readonly className={cn(inputCls, "bg-bg-subtle text-text-secondary cursor-not-allowed")} placeholder="Aarav" /></Field>
-              <Field label="Last name *"><input value={basic.lastName} readOnly disabled aria-readonly className={cn(inputCls, "bg-bg-subtle text-text-secondary cursor-not-allowed")} placeholder="Sharma" /></Field>
+              <Field label="First name *"><input value={basic.firstName} onChange={(e) => setBasic({ ...basic, firstName: e.target.value })} className={inputCls} placeholder="Aarav" /></Field>
+              <Field label="Last name *"><input value={basic.lastName} onChange={(e) => setBasic({ ...basic, lastName: e.target.value })} className={inputCls} placeholder="Sharma" /></Field>
               <Field label="Pincode *">
                 <div className="relative">
                   <input value={basic.pincode} onChange={(e) => onPincode(e.target.value)} className={inputCls} placeholder="400001" inputMode="numeric" maxLength={6} />

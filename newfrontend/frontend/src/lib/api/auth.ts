@@ -370,6 +370,33 @@ export const authApi = {
     );
   },
 
+  /**
+   * Find-or-create a contributor account from a provider-verified OAuth identity
+   * (Google/Microsoft) and return a token pair. Used by the NextAuth sign-in
+   * callback for the contributor SSO sign-up path: the provider already verified
+   * the email (NextAuth validates the id_token signature), so the backend creates
+   * the account email-verified and NO OTP step is required.
+   */
+  async provisionOAuthAccount(input: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    provider: "google" | "microsoft";
+  }): Promise<LoginResponse & { isNewSsoUser?: boolean }> {
+    return apiCall<LoginResponse & { isNewSsoUser?: boolean }>(
+      `/api/v1/auth/oauth/provision`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          email: input.email,
+          firstName: input.firstName ?? "",
+          lastName: input.lastName ?? "",
+          provider: input.provider,
+        }),
+      },
+    );
+  },
+
   /** Create a reviewer user via our server-side route (handles token + permissions). */
   async createReviewer(data: {
     firstName: string;

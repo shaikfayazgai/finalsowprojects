@@ -54,6 +54,7 @@ from auth_app.schemas import (
     LogoutRequest,
     MfaCodeRequest,
     MfaRecoveryRequest,
+    OAuthProvisionRequest,
     OtpSendRequest,
     OtpVerifyRequest,
     RefreshRequest,
@@ -233,6 +234,55 @@ async def register_contributor(body: ContributorRegisterRequest, request: Reques
                 action="register_contributor", service="auth-service",
                 ip_address=request.client.host if request.client else None)
     return {"user": user_row_to_out(row).model_dump()}
+
+
+@router.post("/oauth/provision")
+async def oauth_provision(body: OAuthProvisionRequest, request: Request):
+    """Find-or-create a contributor account from a provider-verified OAuth
+    identity and return a token pair.
+
+    Called by the frontend's NextAuth Google/Microsoft sign-in for the
+    contributor SSO sign-up path. The provider (Google/Microsoft) has already
+    verified the email — NextAuth validates the id_token signature before this
+    is called — so the account is persisted email_verified=TRUE and NO OTP /
+    email-verification step is required. is_password_set stays FALSE so the
+    user can later set a password via the OTP-gated needs_password_setup flow.
+    """
+    email = (body.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=422, detail="Email required")
+
+    provider = body.provider if body.provider in ("google", "microsoft") else "google"
+    existing = repo.find_account_by_email(email)
+    if existing:
+        # Account already exists (e.g. password-first, or a prior SSO sign-in).
+        # Trust the provider-verified email and ensure the verified flag is set;
+        # never downgrade it. Additive only — no destructive changes.
+        if not existing.get("email_verified"):
+            repo.set_email_verified(email)
+        repo.mark_login(str(existing["id"]))
+        row = repo.find_account_by_id(str(existing["id"])) or existing
+        new_account = False
+    else:
+        row = repo.create_account(
+            email=email, password_hash=None,
+            first_name=body.firstName, last_name=body.lastName, role="contributor",
+            provider=provider, email_verified=True,
+        )
+        repo.create_contributor_profile(str(row["id"]), {
+            "firstName": body.firstName, "lastName": body.lastName, "email": email,
+        })
+        repo.mark_login(str(row["id"]))
+        new_account = True
+
+    publish_event("user.oauth_login", {"userId": str(row["id"]), "email": email,
+                                       "provider": provider, "new": new_account})
+    write_audit(actor_id=str(row["id"]), actor_email=email, actor_role="contributor",
+                action=f"oauth_provision_{provider}", service="auth-service",
+                ip_address=request.client.host if request.client else None)
+    result = _token_pair(row)
+    result["isNewSsoUser"] = new_account
+    return result
 
 
 @router.post("/register/enterprise")

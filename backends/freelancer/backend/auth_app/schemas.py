@@ -87,6 +87,18 @@ class EnterpriseRegisterRequest(BaseModel):
     marketingOptIn: bool = False
 
 
+class OAuthProvisionRequest(BaseModel):
+    """Find-or-create a contributor account from a provider-verified OAuth
+    identity. The caller (NextAuth's Google/Microsoft provider) has already
+    validated the provider id_token signature, so the email is trusted and the
+    account is created email-verified — no OTP step is required for SSO."""
+
+    email: EmailStr
+    firstName: str = ""
+    lastName: str = ""
+    provider: str = "google"  # 'google' | 'microsoft'
+
+
 class MfaCodeRequest(BaseModel):
     code: str
 
