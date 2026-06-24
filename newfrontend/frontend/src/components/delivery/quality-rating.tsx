@@ -65,9 +65,9 @@ export function QualityRatingPanel({
   const overall = overallRating(dimensions, values);
   const done = ratingComplete(dimensions, values);
   return (
-    <div className="rounded-lg border border-stroke-subtle bg-bg-subtle/30 p-3 space-y-2.5">
+    <div className="rounded-lg border border-stroke bg-surface p-3 space-y-2.5">
       <div className="flex items-center justify-between">
-        <p className="font-body text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-tertiary">
+        <p className="font-body text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-secondary">
           {title ?? "Quality rating"} <span style={{ color: "#dc2626" }}>*</span>
         </p>
         <span className="font-body text-[12px] font-semibold text-foreground tabular-nums">
@@ -78,8 +78,8 @@ export function QualityRatingPanel({
         {dimensions.map((d) => (
           <div key={d.key} className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="font-body text-[12.5px] font-medium text-foreground">{d.label}</p>
-              <p className="font-body text-[10.5px] text-text-tertiary">{d.hint}</p>
+              <p className="font-body text-[12.5px] font-semibold text-foreground">{d.label}</p>
+              <p className="font-body text-[10.5px] text-text-secondary">{d.hint}</p>
             </div>
             <StarRating
               value={values[d.key] || 0}
@@ -90,7 +90,7 @@ export function QualityRatingPanel({
         ))}
       </div>
       {!done && (
-        <p className="font-body text-[10.5px] text-text-tertiary">
+        <p className="font-body text-[10.5px] font-medium text-warning-text">
           Rate every dimension to enable Accept.
         </p>
       )}
@@ -127,7 +127,10 @@ function StarRating({
           >
             <Star
               className="h-4 w-4 transition-colors"
-              style={{ color: active ? "#f59e0b" : "var(--color-stroke-subtle, #d4d4d8)" }}
+              // Empty stars use a fixed muted gray (not --color-stroke-subtle,
+              // which is near-white slate-100 in the light theme and renders the
+              // outline invisible on the light panel).
+              style={{ color: active ? "#f59e0b" : "#9ca3af" }}
               fill={active ? "#f59e0b" : "none"}
               strokeWidth={2}
               aria-hidden
