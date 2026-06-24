@@ -79,14 +79,17 @@ export function usePlanPayout(planId: string, enabled = true): PlanPayout {
   return { status, byTask, busy, error, request, requestAll, payout };
 }
 
-export function PayoutSummary({ status, error, busy, onRequestAll }: {
+export function PayoutSummary({ status, error, busy, onRequestAll, enterprisePriceMinor }: {
   status: PayoutStatus;
   error?: string;
   busy?: string | null;
   onRequestAll?: (amountMinor?: number) => void;
+  enterprisePriceMinor?: number; // GST-inclusive total the enterprise must fund (drives top-up math)
 }) {
   const [amt, setAmt] = React.useState(""); // custom request amount, in rupees
   const [topup, setTopup] = React.useState<"idle" | "requesting" | "done">("idle");
+  const [topupAmt, setTopupAmt] = React.useState(""); // top-up amount, in rupees
+  const [topupNote, setTopupNote] = React.useState(""); // optional note for the enterprise
   if (status.totalTasks === 0) return null;
   const phase = PHASE[status.paymentPhase];
   const tasks = status.tasks ?? [];
@@ -113,6 +116,16 @@ export function PayoutSummary({ status, error, busy, onRequestAll }: {
       ? customMinor
       : undefined;
 
+  // SOW funding (top-up) math: the enterprise must fund the GST-inclusive final
+  // price; compare against what they've released. Fully funded → top-up disabled.
+  const fundedMinor = status.escrow?.fundedMinor ?? 0;
+  const fundTarget = enterprisePriceMinor ?? 0;
+  const topupShortfall = fundTarget > 0 ? Math.max(0, fundTarget - fundedMinor) : 0;
+  const fullyFunded = fundTarget > 0 && fundedMinor >= fundTarget;
+  const topupMinor = topupAmt.trim()
+    ? Math.round(Number(topupAmt) * 100)
+    : (topupShortfall > 0 ? topupShortfall : undefined);
+
   return (
     <div className="rounded-xl border border-stroke-subtle bg-surface px-4 py-3 space-y-2">
       <div className="flex items-center gap-2">
@@ -137,20 +150,57 @@ export function PayoutSummary({ status, error, busy, onRequestAll }: {
             <span>Released <b className="text-foreground tabular-nums">{inr(status.escrow.fundedMinor)}</b></span>
             <span>Drawn <b className="text-foreground tabular-nums">{inr(status.escrow.spentMinor)}</b></span>
             <span>Available <b className="tabular-nums" style={{ color: status.escrow.remainingMinor > 0 ? "#0F9D6B" : "#D97706" }}>{inr(status.escrow.remainingMinor)}</b></span>
+            {fundTarget > 0 ? (
+              <span>{fullyFunded ? "Fully funded" : "Remaining to fund"} <b className="tabular-nums" style={{ color: fullyFunded ? "#0F9D6B" : "#D97706" }}>{inr(topupShortfall)}</b></span>
+            ) : null}
           </div>
-          <button
-            type="button"
-            disabled={topup === "requesting"}
-            onClick={async () => {
-              setTopup("requesting");
-              try { await requestTopup(status.planId); setTopup("done"); }
-              catch { setTopup("idle"); }
-            }}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-stroke text-text-secondary font-body text-[11.5px] font-semibold hover:bg-surface-hover disabled:opacity-50"
-          >
-            <Send className="h-3.5 w-3.5" />
-            {topup === "done" ? "Top-up requested ✓" : topup === "requesting" ? "Requesting…" : "Request top-up"}
-          </button>
+          {fullyFunded ? (
+            <button type="button" disabled className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-stroke text-success-text font-body text-[11.5px] font-semibold opacity-70 cursor-not-allowed">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Fully funded ✓
+            </button>
+          ) : (
+            <>
+              {topupShortfall > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setTopupAmt(String(Math.round(topupShortfall / 100)))}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-body text-[11px] transition-colors ${topupMinor === topupShortfall && topupAmt.trim() ? "border-brand bg-brand-subtle text-brand-emphasis" : "border-stroke text-text-secondary hover:bg-surface-hover"}`}
+                >
+                  Remaining balance <span className="tabular-nums opacity-80">{inr(topupShortfall)}</span>
+                </button>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 rounded-lg border border-stroke px-2 h-8 flex-1 min-w-0">
+                  <span className="font-body text-[12px] text-text-tertiary">₹</span>
+                  <input
+                    type="number" min={0} value={topupAmt}
+                    onChange={(e) => setTopupAmt(e.target.value)}
+                    placeholder={topupShortfall > 0 ? `Custom · default remaining (${inr(topupShortfall)})` : "Custom amount"}
+                    className="w-full bg-transparent font-body text-[12px] tabular-nums text-foreground outline-none placeholder:text-text-disabled"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={topup === "requesting"}
+                  onClick={async () => {
+                    setTopup("requesting");
+                    try { await requestTopup(status.planId, topupMinor, topupNote.trim() || undefined); setTopup("done"); }
+                    catch { setTopup("idle"); }
+                  }}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-stroke text-text-secondary font-body text-[11.5px] font-semibold hover:bg-surface-hover disabled:opacity-50 shrink-0"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {topup === "done" ? "Top-up requested ✓" : topup === "requesting" ? "Requesting…" : "Request top-up"}
+                </button>
+              </div>
+              <input
+                type="text" value={topupNote}
+                onChange={(e) => setTopupNote(e.target.value)}
+                placeholder="Add a note for the enterprise (optional)"
+                className="w-full h-8 rounded-lg border border-stroke-subtle bg-surface px-2.5 font-body text-[11.5px] text-foreground outline-none focus:ring-2 focus:ring-brand/30 placeholder:text-text-tertiary"
+              />
+            </>
+          )}
         </div>
       ) : null}
       {eligible.length > 0 && onRequestAll ? (

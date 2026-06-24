@@ -1898,10 +1898,12 @@ def request_topup(plan_id: str, user: Annotated[dict, Depends(get_current_user)]
         amt = int(amt_raw) if amt_raw is not None else None
     except (TypeError, ValueError):
         amt = None
+    note = str((body or {}).get("comment") or (body or {}).get("note") or "").strip()[:500]
     try:
         from shared.notify import create_notification
         msg = ("Glimmora requested a top-up" + (f" of ₹{amt/100:,.0f}" if amt else "") +
-               " for the SOW escrow to keep paying delivered work. Release more budget on the Billing page.")
+               " for the SOW escrow to keep paying delivered work. Release more budget on the Billing page."
+               + (f"\nNote: {note}" if note else ""))
         create_notification(
             row.get("created_by"), category="payment", kind="escrow.topup_requested", severity="important",
             title="Top-up requested by Glimmora", body=msg,
@@ -1909,8 +1911,8 @@ def request_topup(plan_id: str, user: Annotated[dict, Depends(get_current_user)]
             action_url="/enterprise/billing", action_label="Release funds")
     except Exception:  # noqa: BLE001
         pass
-    _audit(user, "escrow.topup_request", plan_id, extra={"sowId": row.get("sow_id"), "amountMinor": amt})
-    return {"ok": True, "amountMinor": amt}
+    _audit(user, "escrow.topup_request", plan_id, extra={"sowId": row.get("sow_id"), "amountMinor": amt, "comment": note})
+    return {"ok": True, "amountMinor": amt, "comment": note}
 
 
 @router.post("/plans/{plan_id}/payout-contributors")

@@ -440,7 +440,13 @@ export default function AdminPricePlanPage() {
       })()}
 
       {/* Delivery + payout summary (per-task controls live on each row above) */}
-      {isPriced && payout.status ? <PayoutSummary status={payout.status} error={payout.error} busy={payout.busy} onRequestAll={payout.requestAll} /> : null}
+      {isPriced && payout.status ? (() => {
+        const cf = Math.max(0, Math.min(commissionPct, 89)) / 100;
+        const gf = Math.max(0, Math.min(gstPct, 50)) / 100;
+        const clientMinor = cf < 1 ? Math.round(totalMinor / (1 - cf)) : totalMinor;
+        const enterprisePriceMinor = clientMinor + Math.round(clientMinor * gf); // contributor + margin + GST
+        return <PayoutSummary status={payout.status} error={payout.error} busy={payout.busy} onRequestAll={payout.requestAll} enterprisePriceMinor={enterprisePriceMinor} />;
+      })() : null}
 
       {/* Actions */}
       <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-stroke-subtle bg-bg-subtle/40 px-4 py-3">

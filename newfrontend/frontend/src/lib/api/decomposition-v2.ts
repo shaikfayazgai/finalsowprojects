@@ -258,9 +258,11 @@ export async function fundEscrow(
 export async function requestTopup(
   planId: string,
   amountMinor?: number,
+  comment?: string,
 ): Promise<{ ok: boolean; amountMinor: number | null }> {
   const body: Record<string, unknown> = {};
   if (amountMinor != null) body.amountMinor = amountMinor;
+  if (comment && comment.trim()) body.comment = comment.trim();
   return call(`${BASE}/${encodeURIComponent(planId)}/request-topup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
