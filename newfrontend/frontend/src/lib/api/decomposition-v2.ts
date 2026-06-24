@@ -152,8 +152,9 @@ export interface PayoutTask {
   deliveryStatus: string;       // ready/assigned/in_progress/.../payment_pending/paid
   delivered: boolean;
   payoutStatus: string | null;  // eligible/requested/released/paid/null
-  budgetMinor: number;          // client price for this task
+  budgetMinor: number;          // client price for this task (contributor + margin + GST) — what the enterprise FUNDS
   netMinor?: number;            // Glimmora-only
+  costMinor?: number;           // Glimmora-only: contributor pay — the amount actually DISBURSED to the contributor
 }
 
 export interface PayoutStatus {

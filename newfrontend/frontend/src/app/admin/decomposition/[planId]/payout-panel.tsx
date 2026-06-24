@@ -19,6 +19,12 @@ import { deliveryCell } from "@/lib/delivery/status-matrix";
 
 const inr = (m: number) => "₹" + (m / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 });
 
+// Contributor pay — the amount Glimmora actually DISBURSES to the contributor
+// (NOT budgetMinor, which is the client price carrying Glimmora's margin + GST).
+// Falls back to the client price only if the backend didn't supply the cost.
+const contributorPay = (t: { costMinor?: number; budgetMinor?: number }) =>
+  (t.costMinor != null ? t.costMinor : (t.budgetMinor || 0)) || 0;
+
 const PHASE: Record<PayoutStatus["paymentPhase"], { label: string; tone: string }> = {
   in_progress: { label: "In delivery", tone: "bg-info-subtle text-info-text" },
   completed_sow: { label: "Delivered", tone: "bg-success-subtle text-success-text" },
@@ -130,14 +136,18 @@ export function PayoutSummary({ status, error, busy, onRequestAll, onPayAll, ent
   const deliveredUnpaid = tasks.filter(
     (t) => t.delivered && t.payoutStatus !== "paid" && t.deliveryStatus !== "paid",
   );
+  // Fund-gating is in RELEASED-FUNDS terms (the enterprise funds the client price, so
+  // each task draws down its budgetMinor from payableMinor), but the amount we DISBURSE
+  // — and surface as "Pay all delivered tasks (₹X)" — is the CONTRIBUTOR pay (costMinor).
   const payableNow = deliveredUnpaid
     .slice()
     .sort((a, b) => (a.budgetMinor || 0) - (b.budgetMinor || 0))
-    .reduce<{ ids: string[]; spent: number }>((acc, t) => {
-      const b = t.budgetMinor || 0;
-      if (b > 0 && acc.spent + b <= payableMinor) { acc.ids.push(t.taskId); acc.spent += b; }
+    .reduce<{ ids: string[]; funds: number; spent: number }>((acc, t) => {
+      const b = t.budgetMinor || 0;       // client price drawn from released funds (the gate)
+      const pay = contributorPay(t);      // contributor pay actually disbursed (the display)
+      if (b > 0 && acc.funds + b <= payableMinor) { acc.ids.push(t.taskId); acc.funds += b; acc.spent += pay; }
       return acc;
-    }, { ids: [], spent: 0 });
+    }, { ids: [], funds: 0, spent: 0 });
   const canPayAll = !!onPayAll && payableNow.ids.length > 0;
   const blockedByFunds = deliveredUnpaid.length > 0 && payableNow.ids.length < deliveredUnpaid.length;
 
@@ -234,7 +244,10 @@ export function PayoutSummary({ status, error, busy, onRequestAll, onPayAll, ent
         <div className="space-y-2 pt-2 border-t border-stroke-subtle/60">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-body text-[11px] text-text-secondary">
             <span className="font-semibold text-foreground">Disburse to contributors</span>
-            <span>Remaining payable <b className="tabular-nums" style={{ color: payableMinor > 0 ? "#0F9D6B" : "#D97706" }}>{inr(payableMinor)}</b></span>
+            {payableNow.spent > 0 ? (
+              <span>To disburse now <b className="tabular-nums text-foreground">{inr(payableNow.spent)}</b></span>
+            ) : null}
+            <span>Released funds <b className="tabular-nums" style={{ color: payableMinor > 0 ? "#0F9D6B" : "#D97706" }}>{inr(payableMinor)}</b></span>
             <span>{deliveredUnpaid.length} delivered &amp; unpaid</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">

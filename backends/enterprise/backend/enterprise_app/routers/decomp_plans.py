@@ -1633,7 +1633,10 @@ def plan_payout_status(plan_id: str, user: Annotated[dict, Depends(get_current_u
             # reversed rows inflate the phase denominator and double-count the budget.
             cur.execute(
                 "SELECT DISTINCT ON (data->>'canonicalTaskId') data->>'canonicalTaskId' ctid, status, "
-                "(data->>'clientMinor')::bigint client, (data->>'netMinor')::bigint net "
+                "(data->>'clientMinor')::bigint client, (data->>'netMinor')::bigint net, "
+                # Contributor pay (the actual amount disbursed to the contributor) — the
+                # payout row's amount_minor column, with netMinor/grossMinor as fallbacks.
+                "COALESCE(amount_minor, (data->>'netMinor')::bigint, (data->>'grossMinor')::bigint, 0) cost "
                 "FROM payouts WHERE data->>'canonicalTaskId' = ANY(%s) "
                 "ORDER BY data->>'canonicalTaskId', created_at DESC", [ids])
             for r in cur.fetchall():
@@ -1654,6 +1657,10 @@ def plan_payout_status(plan_id: str, user: Annotated[dict, Depends(get_current_u
         }
         if is_sa:
             item["netMinor"] = int((po or {}).get("net") or 0)
+            # Contributor pay — the amount Glimmora actually disburses to the
+            # contributor (NOT the client price, which carries margin + GST).
+            # Glimmora-only: the enterprise must never see contributor pay.
+            item["costMinor"] = int((po or {}).get("cost") or 0)
         tasks.append(item)
     # The SOW's agreed/default budget the enterprise committed at creation — the
     # reference the enterprise bills against (its own number, enterprise-safe).
@@ -2123,16 +2130,23 @@ def payout_contributors(plan_id: str, user: Annotated[dict, Depends(get_current_
         if ids:
             # 1) Per-task 'released' payouts (enterprise sent that task's budget) — pay
             #    them oldest first, but only while the remaining payable covers them.
+            #    The DISBURSED amount is the CONTRIBUTOR pay (amount_minor / netMinor),
+            #    NOT the client price — the client price (with margin + GST) is only what
+            #    the enterprise funds. `payable` is in released-funds terms (client), and
+            #    a contributor payout is always ≤ its client price, so contributor pay
+            #    that fits the released funds is always payable.
             cur.execute(
                 "SELECT id, account_id, task_id, data->>'canonicalTaskId' ctid, task_title tt, "
-                "COALESCE((data->>'clientMinor')::bigint,0) cm FROM payouts "
+                "COALESCE(amount_minor, (data->>'netMinor')::bigint, (data->>'grossMinor')::bigint, 0) cost, "
+                "COALESCE((data->>'clientMinor')::bigint,0) client FROM payouts "
                 "WHERE data->>'canonicalTaskId' = ANY(%s) AND status='released' "
                 "ORDER BY created_at ASC", [ids])
             for r in cur.fetchall():
-                cm = int(r["cm"] or 0)
-                if cm <= payable:
-                    _disburse_row(r["id"], r["account_id"], r["task_id"], r["ctid"], cm, False)
-                    payable -= cm
+                cost = int(r["cost"] or 0)             # contributor pay (what we disburse)
+                client = int(r["client"] or 0)         # released funds this task draws down
+                if client <= payable:
+                    _disburse_row(r["id"], r["account_id"], r["task_id"], r["ctid"], cost, False)
+                    payable -= client
                     done[-1]["title"] = r.get("tt")
                 else:
                     skipped.append(r["ctid"])
@@ -2144,17 +2158,19 @@ def payout_contributors(plan_id: str, user: Annotated[dict, Depends(get_current_
             if esc_remaining > 0:
                 cur.execute(
                     "SELECT id, account_id, task_id, data->>'canonicalTaskId' ctid, task_title tt, "
-                    "COALESCE((data->>'clientMinor')::bigint,0) cm FROM payouts "
+                    "COALESCE(amount_minor, (data->>'netMinor')::bigint, (data->>'grossMinor')::bigint, 0) cost, "
+                    "COALESCE((data->>'clientMinor')::bigint,0) client FROM payouts "
                     "WHERE data->>'canonicalTaskId' = ANY(%s) AND status IN ('eligible','requested') "
                     "ORDER BY created_at ASC", [ids])
                 drawn = 0
                 for r in cur.fetchall():
-                    cm = int(r["cm"] or 0)
-                    if cm > 0 and cm <= esc_remaining:
-                        _disburse_row(r["id"], r["account_id"], r["task_id"], r["ctid"], cm, True)
-                        esc_remaining -= cm; drawn += cm
+                    cost = int(r["cost"] or 0)         # contributor pay (what we disburse)
+                    client = int(r["client"] or 0)     # escrow drawn down (enterprise-funded client price)
+                    if cost > 0 and client <= esc_remaining:
+                        _disburse_row(r["id"], r["account_id"], r["task_id"], r["ctid"], cost, True)
+                        esc_remaining -= client; drawn += client
                         done[-1]["title"] = r.get("tt")
-                    elif cm > 0:
+                    elif cost > 0:
                         skipped.append(r["ctid"])
                 if drawn > 0:
                     cur.execute("UPDATE sow_escrows SET spent_minor = spent_minor + %s, "

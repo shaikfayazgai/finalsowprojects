@@ -104,10 +104,14 @@ export default function AdminPricePlanPage() {
 
   const doPayEligible = async (taskId: string) => {
     const task = payout.byTask[taskId];
-    if (!task || task.budgetMinor <= 0) return;
+    // Disburse the CONTRIBUTOR pay (costMinor), NOT budgetMinor (the client price,
+    // which carries Glimmora's margin + GST). Fall back to budget only if the
+    // backend didn't supply the contributor cost.
+    const contributorMinor = task?.costMinor != null ? task.costMinor : (task?.budgetMinor ?? 0);
+    if (!task || contributorMinor <= 0) return;
     setActionError(null);
     try {
-      await openRazorpay(task.budgetMinor, `Task payout: ${task.title || taskId}`);
+      await openRazorpay(contributorMinor, `Task payout: ${task.title || taskId}`);
       await payout.payout(taskId);
       setLocalPaidTaskIds((prev) => new Set([...prev, taskId]));
       payout.reload();
