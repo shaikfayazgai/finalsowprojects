@@ -9,9 +9,7 @@ import {
   ListChecks,
   Wallet,
   HeartHandshake,
-  MessageSquare,
-  ClipboardCheck,
-  History,
+  MessageSquare,  History,
   AlertTriangle,
   TrendingUp,
   LifeBuoy,
@@ -394,7 +392,6 @@ export const adminNav: ModuleConfig = {
     {
       title: "Standards",
       items: [
-        { label: "Rubric templates", href: "/admin/rubric-templates", icon: ClipboardCheck },
         { label: "Email templates", href: "/admin/email-templates", icon: Mail },
       ],
     },
