@@ -46,6 +46,18 @@ function relTime(iso: string): string {
   return `${Math.floor(ms / 86_400_000)}d ago`;
 }
 
+/** Absolute date + time, e.g. "23 Jun 2026, 10:50 AM". */
+function absTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("en-IN", {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: true,
+    });
+  } catch {
+    return iso;
+  }
+}
+
 function TaskActivityTimeline({ planId, taskId }: { planId: string; taskId: string }) {
   const q = useQuery({
     queryKey: ["decomposition", "task-timeline", planId, taskId],
@@ -86,7 +98,7 @@ function TaskActivityTimeline({ planId, taskId }: { planId: string; taskId: stri
                       {e.meta.note}
                     </p>
                   ) : null}
-                  <p className="mt-0.5 font-body text-[11px] text-text-tertiary tabular-nums">{relTime(e.at)}</p>
+                  <p className="mt-0.5 font-body text-[11px] text-text-tertiary tabular-nums">{absTime(e.at)} · {relTime(e.at)}</p>
                 </div>
               </li>
             );

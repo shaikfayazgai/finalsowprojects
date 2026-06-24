@@ -1121,12 +1121,14 @@ def task_timeline(
                 mo = rd.get("mentorOverall")
                 add(ma, "accepted", "Mentor accepted" + (f" · score {float(mo):.1f}/5" if mo else ""))
             st = (ra.get("status") or "").lower()
+            qa_o = rd.get("qaRatingOverall") or rd.get("qaOverall")
+            qa_suffix = f" · score {float(qa_o):.1f}/5" if qa_o else ""
             if st in ("approved", "accepted"):
-                add(ra.get("updated_at"), "accepted", "QA accepted — forwarded to enterprise")
+                add(ra.get("updated_at"), "accepted", "QA accepted — forwarded to enterprise" + qa_suffix)
             elif st in ("rework", "changes_requested", "revision"):
-                add(ra.get("updated_at"), "revision", "QA requested rework")
+                add(ra.get("updated_at"), "revision", "QA requested rework" + qa_suffix)
             elif st in ("rejected", "reject"):
-                add(ra.get("updated_at"), "rejected", "QA rejected the submission")
+                add(ra.get("updated_at"), "rejected", "QA rejected the submission" + qa_suffix)
 
     # Final quality rating (mentor + QA → final). Table created on first QA approval.
     try:
