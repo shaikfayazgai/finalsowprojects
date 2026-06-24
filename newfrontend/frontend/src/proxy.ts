@@ -105,10 +105,11 @@ const PORTAL_RULES: ReadonlyArray<{
   // More-specific first
   {
     prefix: "/enterprise/reviewer",
-    // Reviewer QA portal: actual reviewers + the dedicated enterprise-reviewer
-    // role + platform admins (oversight). Plain `enterprise` is intentionally
-    // excluded — an enterprise admin without a reviewer role is bounced out.
-    allowedRoles: ["reviewer", "ent.reviewer", "admin", "super_admin"],
+    // Reviewer QA portal: reviewers, the dedicated enterprise-reviewer role,
+    // platform admins, AND enterprise accounts (a reviewer login can carry the
+    // `enterprise` role) — keeping `enterprise` here so reviewer login isn't
+    // blocked for accounts provisioned with it.
+    allowedRoles: ["reviewer", "ent.reviewer", "admin", "super_admin", "enterprise"],
   },
   {
     prefix: "/enterprise",

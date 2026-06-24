@@ -103,6 +103,8 @@ class Settings(BaseSettings):
         "http://localhost:3100,http://127.0.0.1:3100"
     )
 
+    cors_origin_regex: str = ""  # .env CORS_ORIGIN_REGEX; empty = explicit allow-list only
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

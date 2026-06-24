@@ -8,6 +8,12 @@ export const metadata: Metadata = {
   description: "AI-Governed Outcome Delivery Platform",
 };
 
+// Auth-gated portal: every route depends on the request (NextAuth session,
+// search params), so there's nothing to statically prerender. Forcing dynamic
+// rendering avoids build-time "useSearchParams must be wrapped in Suspense"
+// prerender errors across the portal pages.
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
   children,
 }: Readonly<{

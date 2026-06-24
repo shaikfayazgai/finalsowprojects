@@ -10,6 +10,7 @@ Shared FastAPI application factory. Every microservice calls
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -57,7 +58,10 @@ def create_service_app(
                     await res
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[%s] startup hook failed: %s", name, exc)
-        await ping_redis()
+        try:
+            await asyncio.wait_for(ping_redis(), timeout=5)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[%s] redis ping failed/timeout (continuing): %s", name, exc)
         yield
         await close_redis_client()
         close_producer()
@@ -68,7 +72,7 @@ def create_service_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
-        allow_origin_regex=r"https://.*\.vercel\.app",
+        allow_origin_regex=(settings.cors_origin_regex or None),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

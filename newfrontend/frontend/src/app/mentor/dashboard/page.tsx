@@ -14,6 +14,10 @@ import {
   AlertCircle,
   ClipboardList,
   TrendingUp,
+  FileText,
+  CheckCircle2,
+  RotateCcw,
+  XCircle,
 } from "lucide-react";
 import { StatusChip } from "@/components/meridian";
 import { DashboardSection, KeyMetricCard } from "@/components/meridian/dashboard";
@@ -95,7 +99,7 @@ export default function MentorDashboardPage() {
 
   if (!data) return <MentorDashboardSkeleton />;
 
-  const { pendingCount, slaRiskCount, hero, todaySessions, openEscalations, teamLoad, queueGlance } = data;
+  const { pendingCount, slaRiskCount, hero, todaySessions, openEscalations, teamLoad, queueGlance, lifetime } = data;
   const sla = hero ? fmtSlaRemaining(hero.dueAt) : null;
 
   return (
@@ -126,6 +130,15 @@ export default function MentorDashboardPage() {
         <KeyMetricCard icon={TrendingUp} tone="violet" label="Completed (7d)" value={String(queueGlance.done7d)} />
         <KeyMetricCard icon={Clock} tone="cyan" label="Avg review time" value={`${queueGlance.avgTimeMin}m`} />
       </div>
+
+      {lifetime ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KeyMetricCard icon={FileText} tone="blue" label="Assigned SOWs" value={String(lifetime.assignedSows)} />
+          <KeyMetricCard icon={CheckCircle2} tone="green" label="Accepted" value={String(lifetime.accepted)} />
+          <KeyMetricCard icon={RotateCcw} tone="amber" label="Rework" value={String(lifetime.rework)} />
+          <KeyMetricCard icon={XCircle} tone="violet" label="Rejected" value={String(lifetime.rejected)} />
+        </div>
+      ) : null}
 
       <SplitPanel
         aside={
