@@ -321,7 +321,7 @@ export const reviewerNav: ModuleConfig = {
       ],
     },
     {
-      zone: "footer",
+      title: "Account",
       items: [
         { label: "Settings", href: "/enterprise/reviewer/settings", icon: Settings },
       ],
