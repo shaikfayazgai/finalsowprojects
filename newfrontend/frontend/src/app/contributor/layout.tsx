@@ -13,6 +13,7 @@ import {
 } from "@/lib/hooks/use-contributor-track";
 import { useProfileCompletion } from "@/lib/hooks/use-profile-completion";
 import { PersonaSwitcher } from "@/components/contributor/persona-switcher";
+import { AccountMenu } from "@/components/meridian/shell/AccountMenu";
 
 const CONTRIBUTOR_DEMO_BYPASS = process.env.NEXT_PUBLIC_CONTRIBUTOR_DEMO === "1";
 
@@ -93,11 +94,42 @@ function ContributorPortalLayout({
   // portal shell — sidebar, top bar, nav — is hidden. The contributor sees only
   // the profile-completion section, full screen, until they reach 100%.
   if (locked || awaitingCompletion) {
+    // Even before the profile is complete the user must be able to reach their
+    // account and sign out — the locked shell has no portal topbar, so render a
+    // minimal top-right account menu (Profile / Settings / Sign out) here.
+    const lockedName = session?.user?.name ?? "Contributor";
+    const lockedNamePlaceholder = /^(contributor|user|operator)$/i.test(lockedName.trim());
+    const lockedEmail = session?.user?.email ?? undefined;
+    const lockedDisplayName =
+      (!lockedNamePlaceholder && lockedName) || lockedEmail?.split("@")[0] || "Contributor";
+    const lockedInitials =
+      (session?.user as { initials?: string } | undefined)?.initials ??
+      lockedDisplayName
+        .split(/\s+/)
+        .map((p) => p[0])
+        .filter(Boolean)
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+
     return (
       <main className="min-h-screen w-full bg-[var(--page-bg)]">
         {!CONTRIBUTOR_DEMO_BYPASS && <ContributorGuard />}
         {locked && onCompletePage ? (
           <div className="w-full px-4 py-6 sm:px-6 lg:px-10">
+            <div className="mb-2 flex justify-end">
+              <AccountMenu
+                operator={{
+                  name: lockedDisplayName,
+                  initials: lockedInitials,
+                  email: lockedEmail,
+                }}
+                profileHref="/contributor/profile"
+                settingsHref="/contributor/settings/account"
+                showSettings
+                signOutTo="/contributor/login"
+              />
+            </div>
             <Suspense fallback={null}>{children}</Suspense>
           </div>
         ) : (
