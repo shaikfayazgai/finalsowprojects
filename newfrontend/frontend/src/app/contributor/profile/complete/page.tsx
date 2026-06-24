@@ -13,6 +13,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, Plus, Upload, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProfileCompletion, SECTION_LABELS } from "@/lib/hooks/use-profile-completion";
+import { handleAuthTokenError } from "@/lib/auth/token-expiry";
 import { cn } from "@/lib/utils/cn";
 
 type Row = Record<string, unknown>;
@@ -149,7 +150,16 @@ function validateId(type: string, num: string): string | null {
 }
 
 async function getJson(url: string): Promise<Row[] | Row> {
-  try { const r = await fetch(url, { cache: "no-store" }); return r.ok ? await r.json() : []; } catch { return []; }
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (r.ok) return await r.json();
+    // Token expired while loading the wizard → auto-logout (clean re-auth).
+    if (r.status === 401) {
+      const j = await r.json().catch(() => ({}));
+      handleAuthTokenError(j);
+    }
+    return [];
+  } catch { return []; }
 }
 async function save(url: string, body: unknown, method = "POST"): Promise<void> {
   const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -157,9 +167,15 @@ async function save(url: string, body: unknown, method = "POST"): Promise<void> 
     // The error shape varies: FastAPI sends { detail }, while our Next proxy's own
     // failures (401 AUTH_TOKEN_UNAVAILABLE / 503 BACKEND_UNAVAILABLE) send
     // { error, message } with NO `detail`. Read all of them so the user sees the
-    // real reason (e.g. "Session is reconnecting — please retry") instead of a
-    // misleading generic "Could not save." `detail` may also be a 422 array.
+    // real reason instead of a misleading generic "Could not save." `detail` may
+    // also be a 422 array.
     const j = (await r.json().catch(() => ({}))) as { detail?: unknown; message?: string; error?: string };
+    // Genuine token-expiry → auto-logout to the portal login (clean re-auth)
+    // instead of showing "Session is reconnecting — please retry". A navigation
+    // is now in flight; throw a benign error so the caller's catch is a no-op.
+    if (r.status === 401 && handleAuthTokenError(j)) {
+      throw new Error("Your session has expired. Redirecting to sign in…");
+    }
     const detailMsg = typeof j.detail === "string" ? j.detail : Array.isArray(j.detail)
       ? (j.detail as Array<{ msg?: string }>).map((d) => d?.msg).filter(Boolean).join(", ")
       : "";

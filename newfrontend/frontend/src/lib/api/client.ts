@@ -9,6 +9,32 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Browser-only auto-logout hook.
+ *
+ * `client.ts` is imported by BOTH server route handlers and client components,
+ * so it cannot statically import `next-auth/react` (client-only). Instead the
+ * client-side token-expiry module registers a handler here at module load. When
+ * `fetchInternal` sees a 401 whose body is the proxy's `AUTH_TOKEN_UNAVAILABLE`
+ * marker, it invokes this — which signs the user out to the portal login — so
+ * every page using `fetchInternal` gets clean re-auth instead of a stuck
+ * "Session is reconnecting" state. No-op on the server (never registered there).
+ */
+type TokenErrorHandler = (body: unknown) => boolean;
+let tokenErrorHandler: TokenErrorHandler | null = null;
+export function registerTokenErrorHandler(fn: TokenErrorHandler): void {
+  tokenErrorHandler = fn;
+}
+function maybeHandleTokenError(status: number, body: unknown): void {
+  if (status === 401 && tokenErrorHandler) {
+    try {
+      tokenErrorHandler(body);
+    } catch {
+      /* never let logout bookkeeping mask the original error */
+    }
+  }
+}
+
 const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds — covers Render cold-start delays
 /**
  * Wrapper around fetch() for internal Next.js API routes (/api/...).
@@ -25,7 +51,14 @@ export async function fetchInternal(
     ? AbortSignal.any([externalSignal, timeoutSignal])
     : timeoutSignal;
   try {
-    return await fetch(path, { credentials: "include", ...rest, signal });
+    const res = await fetch(path, { credentials: "include", ...rest, signal });
+    // Token-expiry auto-logout: peek a 401 body via a clone so the caller still
+    // gets an unconsumed Response. Browser-only (handler is null on the server).
+    if (res.status === 401 && tokenErrorHandler) {
+      const body = await res.clone().json().catch(() => ({}));
+      maybeHandleTokenError(res.status, body);
+    }
+    return res;
   } catch (err) {
     if (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError")) {
       throw new ApiError(408, "Request timed out. Please try again.");
@@ -62,6 +95,7 @@ export async function apiCall<T>(
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
+      maybeHandleTokenError(res.status, body);
       const detail = body?.detail ?? body?.message ?? `API error ${res.status}`;
       let message: string;
       if (typeof detail === "string") {

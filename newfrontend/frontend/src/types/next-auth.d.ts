@@ -48,5 +48,11 @@ declare module "next-auth/jwt" {
     isNewSsoUser?: boolean;
     /** Durable Session row id — see Session interface above. */
     sessionId?: string;
+    /**
+     * Set by the jwt callback when the backend access token has genuinely
+     * expired and could not be refreshed. The session callback then yields an
+     * unauthenticated session so proxy.ts redirects to the portal login.
+     */
+    invalidToken?: boolean;
   }
 }

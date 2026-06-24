@@ -515,11 +515,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
       }
 
+      // A previously-valid session whose access token came back to life via
+      // refresh below should shed any stale invalid flag.
+      const nowSec = Date.now() / 1000;
+
       // Proactive token refresh — refresh if within 60 seconds of expiry
       const shouldRefresh =
         token.glimmoraRefreshToken &&
         token.glimmoraExpiresAt &&
-        Date.now() / 1000 > token.glimmoraExpiresAt - 60;
+        nowSec > token.glimmoraExpiresAt - 60;
 
       if (shouldRefresh) {
         try {
@@ -528,6 +532,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.glimmoraRefreshToken = refreshed.refresh_token;
           // Default to 1 hour if the refresh response has no expires_in
           token.glimmoraExpiresAt = Math.floor(Date.now() / 1000) + 3600;
+          delete (token as { invalidToken?: boolean }).invalidToken;
         } catch {
           // Refresh failed. Only drop tokens if the current access token has
           // ALREADY expired. A transient refresh hiccup (a momentarily slow /
@@ -536,17 +541,58 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           // the spurious "Missing bearer token" across every portal. Keep the
           // current token until it genuinely expires; the next request retries.
           const exp = token.glimmoraExpiresAt as number | undefined;
-          if (!exp || Date.now() / 1000 > exp) {
+          if (!exp || nowSec > exp) {
             delete token.glimmoraAccessToken;
             delete token.glimmoraRefreshToken;
-            delete token.glimmoraExpiresAt;
+            // Intentionally KEEP glimmoraExpiresAt (a past timestamp) so the
+            // genuine-expiry block below can detect "expired + no usable token"
+            // and invalidate the session → auto-logout. (No-op if it's absent.)
           }
         }
+      }
+
+      // Genuine-expiry detection → invalidate the session.
+      //
+      // After the refresh attempt above, if we have an expiry timestamp that is
+      // in the past and we no longer hold a usable access token (refresh either
+      // failed or there was no refresh token to begin with), the session is no
+      // longer usable. Mark it invalid AND strip the identity claims so the
+      // `session` callback yields a session with no `user.id`. proxy.ts then
+      // sees an unauthenticated request and redirects to the portal login —
+      // a clean re-auth instead of a logged-in-but-token-less broken state.
+      //
+      // We require an EXPLICIT past `glimmoraExpiresAt` (not merely a missing
+      // token) so a momentary/transient refresh blip never logs out a session
+      // whose token is still valid; only a genuinely expired token triggers this.
+      const exp = token.glimmoraExpiresAt as number | undefined;
+      const genuinelyExpired = typeof exp === "number" && nowSec > exp;
+      if (genuinelyExpired) {
+        // Expired with no way to refresh (refresh failed above, or there was no
+        // refresh token to attempt). Drop any lingering access token so the proxy
+        // can't forward a dead bearer, and invalidate the session.
+        delete token.glimmoraAccessToken;
+        delete token.glimmoraRefreshToken;
+        (token as { invalidToken?: boolean }).invalidToken = true;
+        // Strip identity so proxy.ts treats the request as unauthenticated.
+        delete token.id;
+        delete token.sub;
       }
 
       return token;
     },
     async session({ session, token }) {
+      // Genuine-expiry: the jwt callback stripped the identity claims and flagged
+      // the token invalid. Blank out the user id + access token so the session
+      // reads as unauthenticated — proxy.ts's `!session?.user?.id` check then
+      // redirects to login on the next navigation. Client API helpers that hit a
+      // token-401 in the meantime auto-logout via handleAuthTokenError().
+      if ((token as { invalidToken?: boolean }).invalidToken || !token.id) {
+        if (session.user) {
+          session.user.id = "";
+          session.user.accessToken = undefined;
+        }
+        return session;
+      }
       if (session.user) {
         const t = token as typeof token & {
           requiresPasswordChange?: boolean;
