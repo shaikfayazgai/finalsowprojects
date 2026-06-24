@@ -10,7 +10,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
 import {
@@ -36,10 +36,14 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; stat
 
 export function ContributorRegisterScreen() {
   const router = useRouter();
+  const sp = useSearchParams();
+  // Prefill the email when arriving from a login attempt that found no account
+  // (e.g. /contributor/register?email=...).
+  const prefillEmail = sp.get("email") ?? "";
   const [step, setStep] = React.useState<Step>("details");
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
-  const [email, setEmail] = React.useState("");
+  const [email, setEmail] = React.useState(prefillEmail);
   const [agreed, setAgreed] = React.useState(false);
   const [code, setCode] = React.useState("");
   const [devOtp, setDevOtp] = React.useState<string | null>(null);

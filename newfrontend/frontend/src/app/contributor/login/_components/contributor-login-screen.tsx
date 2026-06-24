@@ -25,10 +25,17 @@ import {
   LoginOAuthRow,
   LoginShell,
 } from "@/app/auth/login/_components/login-layout";
+import { accountExistsForEmail } from "@/lib/api/auth";
 import { cn } from "@/lib/utils/cn";
 
 const CONTRIBUTOR_HOME = "/contributor/dashboard";
+const CONTRIBUTOR_REGISTER = "/contributor/register";
 const CONTRIBUTOR_ROLES = ["contributor", "freelancer", "student", "women", "admin", "super_admin"];
+
+function registerHref(email: string): string {
+  const e = email.trim().toLowerCase();
+  return e.includes("@") ? `${CONTRIBUTOR_REGISTER}?email=${encodeURIComponent(e)}` : CONTRIBUTOR_REGISTER;
+}
 
 function safeReturnTo(raw: string | null): string | null {
   if (!raw) return null;
@@ -42,6 +49,17 @@ export function ContributorLoginScreen() {
   const sp = useSearchParams();
   const returnTo = safeReturnTo(sp.get("returnTo"));
   const reason = sp.get("reason");
+  const authError = sp.get("error");
+  const ssoEmail = sp.get("email") ?? "";
+
+  // SSO sign-in with an email that has no Glimmora account → the NextAuth signIn
+  // callback bounced back here with ?error=SsoNotRegistered. Rather than a
+  // dead-end error, send them straight into sign-up (email prefilled).
+  React.useEffect(() => {
+    if (authError === "SsoNotRegistered") {
+      router.replace(registerHref(ssoEmail));
+    }
+  }, [authError, ssoEmail, router]);
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -70,6 +88,17 @@ export function ContributorLoginScreen() {
     }
 
     if (!res || res.error) {
+      // The backend returns the SAME generic 401 for "no account" and "wrong
+      // password" (anti-enumeration), so the sign-in result alone can't tell
+      // them apart. Probe the dedicated existence endpoint: only when the
+      // account genuinely does NOT exist do we send the user to sign up. A
+      // wrong password for an EXISTING account keeps the invalid-credentials
+      // error (and never redirects).
+      const exists = await accountExistsForEmail(creds.email);
+      if (exists === false) {
+        router.push(registerHref(creds.email));
+        return;
+      }
       setError("That email and password don't match. Try again.");
       setSubmitting(false);
       return;
@@ -199,7 +228,7 @@ export function ContributorLoginScreen() {
       <p className="mt-6 text-center font-body text-[13px] text-text-secondary">
         New to Glimmora?{" "}
         <Link
-          href="/contributor/register"
+          href={registerHref(email)}
           className="font-semibold text-text-link hover:underline underline-offset-2"
         >
           Create account

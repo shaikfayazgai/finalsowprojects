@@ -113,6 +113,42 @@ export function isMfaVerifyPending(response: LoginResponse): boolean {
 
 // ── Auth API ───────────────────────────────────────────────────────────────
 
+/**
+ * Client-side existence check for a login email.
+ *
+ * Calls the public `/api/auth/email-available` proxy (→ backend
+ * `/api/v1/auth/email-available`) which is the ONLY endpoint that cleanly
+ * distinguishes "no such account" from anything else — `/login` and `/validate`
+ * both return an identical generic 401 for no-account AND wrong-password
+ * (deliberate anti-enumeration), so they can't be keyed off.
+ *
+ * Returns:
+ *   true   → an account with this email exists
+ *   false  → no account exists (caller may route to sign-up)
+ *   null   → inconclusive (network error / unexpected shape) — caller must NOT
+ *            redirect, since we can't prove the account is absent.
+ */
+export async function accountExistsForEmail(email: string): Promise<boolean | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !normalized.includes("@")) return null;
+  try {
+    const res = await fetch(`/api/auth/email-available?email=${encodeURIComponent(normalized)}`, {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json().catch(() => null)) as
+      | { available?: boolean; exists?: boolean }
+      | null;
+    if (!data) return null;
+    if (typeof data.exists === "boolean") return data.exists;
+    if (typeof data.available === "boolean") return !data.available;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export const authApi = {
   /**
    * Microsoft OAuth diagnostic — returns the exact redirect URI the backend
