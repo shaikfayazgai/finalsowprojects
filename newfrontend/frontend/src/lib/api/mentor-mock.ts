@@ -55,6 +55,7 @@ export interface DashboardResponse {
   openEscalations: MockEscalation[];
   teamLoad: { poolName: string; members: MockTeamMember[] };
   queueGlance: { pending: number; slaRisk: number; done7d: number; avgTimeMin: number };
+  lifetime?: { assignedSows: number; accepted: number; rework: number; rejected: number };
 }
 
 export function fetchMentorDashboard(signal?: AbortSignal): Promise<DashboardResponse> {

@@ -109,6 +109,16 @@ def portal_dashboard(user: MentorDep):
                FROM mentor_reviews WHERE mentor_id = %s OR mentor_id = 'pool'""",
             (mentor_id,))
         s = cur.fetchone() or {}
+        # Lifetime totals for the dashboard stat cards: SOWs worked + decision outcomes.
+        cur.execute(
+            """SELECT
+                 COUNT(DISTINCT COALESCE(payload->>'sowId', payload->>'sow_id')) AS sows,
+                 COUNT(*) FILTER (WHERE decision='accept' OR status='accepted') AS accept,
+                 COUNT(*) FILTER (WHERE decision='rework' OR status='rework') AS rework,
+                 COUNT(*) FILTER (WHERE decision IN ('reject','rejected') OR status='rejected') AS reject
+               FROM mentor_reviews WHERE mentor_id = %s""",
+            (mentor_id,))
+        life = cur.fetchone() or {}
         cur.execute(
             "SELECT id, mentor_email, subject, category, priority, status, description, "
             "assignee, meta, resolved_at, created_at FROM mentor_escalations "
@@ -148,6 +158,10 @@ def portal_dashboard(user: MentorDep):
         "teamLoad": {"poolName": "Review pool", "members": []},
         "queueGlance": {"pending": pending, "slaRisk": sla,
                         "done7d": int(s.get("done7d") or 0), "avgTimeMin": 0},
+        "lifetime": {"assignedSows": int(life.get("sows") or 0),
+                     "accepted": int(life.get("accept") or 0),
+                     "rework": int(life.get("rework") or 0),
+                     "rejected": int(life.get("reject") or 0)},
     }
 
 
