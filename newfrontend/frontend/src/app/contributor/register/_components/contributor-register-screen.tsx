@@ -136,7 +136,7 @@ export function ContributorRegisterScreen() {
           Contributor Portal
         </p>
         <h1 className="font-display text-[27px] font-bold text-foreground tracking-[-0.03em] leading-tight">
-          Create your freelancer account
+          Create account
         </h1>
         <p className="mt-2 font-body text-[14px] text-text-secondary">
           {step === "details" && "Sign up with email — we'll send you a verification code."}

@@ -20,7 +20,11 @@ import {
   AuthSubmitButton,
   authInputCls,
 } from "@/components/auth/auth-screen";
-import { LoginShell } from "@/app/auth/login/_components/login-layout";
+import {
+  LoginDivider,
+  LoginOAuthRow,
+  LoginShell,
+} from "@/app/auth/login/_components/login-layout";
 import { cn } from "@/lib/utils/cn";
 
 const CONTRIBUTOR_HOME = "/contributor/dashboard";
@@ -48,6 +52,7 @@ export function ContributorLoginScreen() {
     reason === "unauthenticated" ? "Your session expired. Sign in again to continue." : null,
   );
   const [submitting, setSubmitting] = React.useState(false);
+  const [oauthBusy, setOauthBusy] = React.useState<"google" | "microsoft" | null>(null);
 
   const canSubmit = email.includes("@") && password.length >= 4 && !submitting;
 
@@ -83,6 +88,20 @@ export function ContributorLoginScreen() {
     }
 
     router.push(returnTo ?? CONTRIBUTOR_HOME);
+  }
+
+  /**
+   * Sign IN with Google / Microsoft (existing contributor). Unlike sign-up, no
+   * `sso_register_role` cookie is set — this is an existing account. After the
+   * OAuth callback NextAuth lands the user on their contributor destination;
+   * proxy.ts routes by role from there.
+   */
+  async function onOauth(provider: "google" | "microsoft") {
+    setError(null);
+    setOauthBusy(provider);
+    const idp = provider === "google" ? "google" : "microsoft-entra-id";
+    await signIn(idp, { callbackUrl: returnTo ?? CONTRIBUTOR_HOME });
+    setOauthBusy(null);
   }
 
   return (
@@ -167,6 +186,15 @@ export function ContributorLoginScreen() {
         </AuthSubmitButton>
       </form>
 
+      <LoginDivider />
+      <LoginOAuthRow
+        onGoogle={() => onOauth("google")}
+        onMicrosoft={() => onOauth("microsoft")}
+        googleBusy={oauthBusy === "google"}
+        microsoftBusy={oauthBusy === "microsoft"}
+        disabled={submitting}
+      />
+
       {/* Contributor is the only role with open self-signup (a freelancer). */}
       <p className="mt-6 text-center font-body text-[13px] text-text-secondary">
         New to Glimmora?{" "}
@@ -174,7 +202,7 @@ export function ContributorLoginScreen() {
           href="/contributor/register"
           className="font-semibold text-text-link hover:underline underline-offset-2"
         >
-          Create a freelancer account
+          Create account
         </Link>
       </p>
     </LoginShell>
