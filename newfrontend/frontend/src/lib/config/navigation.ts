@@ -412,7 +412,6 @@ export const adminNav: ModuleConfig = {
         { label: "Cases", href: "/admin/governance", icon: Flag, badge: "3" },
         { label: "Resolution Center", href: "/admin/cases", icon: LifeBuoy },
         { label: "Complaints", href: "/admin/complaints", icon: MessageSquare },
-        { label: "KYC reviews", href: "/admin/kyc", icon: ShieldAlert, badge: "1" },
         { label: "Audit log", href: "/admin/audit", icon: ScrollText },
       ],
     },
