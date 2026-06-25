@@ -398,6 +398,20 @@ def _create_payout(existing: dict, ex_data: dict, sub_id: Any,
     client_minor = int(round(client_price * (1 + gst_pct / 100)))
     sow_id = ex_data.get("sowId") or ex_data.get("sow_id")
     title = ct_title or ex_data.get("taskTitle") or existing.get("title") or "Delivered task"
+    # Transaction link: every payout must carry BOTH the canonical task id AND the
+    # decomposition plan id (the SOW's delivery plan) so the disburse step can tie
+    # the money to task_id + plan_id. Resolve plan_id from the canonical tsk_ id.
+    canonical_tid = ex_data.get("canonicalTaskId") or task_id
+    plan_id = ex_data.get("planId") or ex_data.get("plan_id")
+    if not plan_id and canonical_tid and str(canonical_tid).startswith("tsk_"):
+        try:
+            with conn.cursor(cursor_factory=_RDC) as cur:
+                cur.execute("SELECT plan_id FROM decomp_tasks WHERE id=%s", (str(canonical_tid),))
+                _pr = cur.fetchone()
+                if _pr:
+                    plan_id = _pr.get("plan_id")
+        except Exception:  # noqa: BLE001 — link is best-effort; payout still records
+            conn.rollback()
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO payouts (account_id, task_id, task_title, amount_minor, currency, status, data) "
@@ -406,8 +420,8 @@ def _create_payout(existing: dict, ex_data: dict, sub_id: Any,
              title, amount_minor, currency,
              _Json({"submissionId": sub_id, "grossMinor": amount_minor, "gstPct": gst_pct,
                     "netMinor": net_minor, "commissionPct": commission_pct, "clientMinor": client_minor,
-                    "source": "reviewer_qa_approval", "sowId": sow_id,
-                    "canonicalTaskId": ex_data.get("canonicalTaskId") or task_id})))
+                    "source": "reviewer_qa_approval", "sowId": sow_id, "planId": plan_id,
+                    "canonicalTaskId": canonical_tid})))
     conn.commit()
     _reinforce_skills_for_task(conn, account_id, ct_id)
     # The contributor payout is now eligible (created here on QA approval) → tell

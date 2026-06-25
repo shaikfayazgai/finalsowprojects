@@ -2052,6 +2052,42 @@ async def get_profile_extra(account_id: AcctId):
     return (row or {}).get("profile_extra") or {}
 
 
+@router.post("/profile/upload")
+async def upload_profile_file(
+    account_id: AcctId,
+    file: UploadFile = File(...),
+    kind: Annotated[str, Query()] = "document",
+):
+    """Upload a profile-wizard file (avatar, government-ID document, passport photo)
+    to Vercel Blob and return its public URL. The wizard then persists that URL
+    into profile_extra (avatar_url / verification.idDocument) via PATCH
+    /profile/extra, so the super-admin document-verification view can open it.
+
+    Returns: { url, filename, content_type, size_bytes }. No DB row is written
+    here — the URL lives in profile_extra (verbatim JSONB), keeping this additive."""
+    contents = await file.read()
+    if not blob_is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Blob storage is not configured (BLOB_READ_WRITE_TOKEN missing)",
+        )
+    # Namespace by kind so avatars / id-docs don't collide; random suffix avoids
+    # overwrite and makes the URL unguessable.
+    safe_kind = re.sub(r"[^a-z0-9_-]", "", (kind or "document").lower()) or "document"
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", file.filename or "file")
+    descriptor = await upload_blob(
+        pathname=f"contributor/{account_id}/profile/{safe_kind}/{safe_name}",
+        data=contents,
+        content_type=file.content_type,
+    )
+    return {
+        "url": descriptor.get("url", ""),
+        "filename": file.filename,
+        "content_type": file.content_type,
+        "size_bytes": len(contents),
+    }
+
+
 @router.get("/profile/digital-twin")
 async def get_digital_twin(account_id: AcctId):
     snapshot = _build_digital_twin(account_id)

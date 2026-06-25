@@ -146,6 +146,22 @@ const PORTAL_RULES: ReadonlyArray<{
 ];
 
 /**
+ * Login surfaces that an ALREADY-authenticated user must never see. Hitting
+ * any of these with a live session bounces them straight to their role home,
+ * so the login form never renders for a signed-in user. Kept in sync with the
+ * per-role login routes under PUBLIC_EXACT_PATHS plus the generic /auth/login.
+ */
+const LOGIN_PATHS = new Set<string>([
+  "/auth/login",
+  "/admin/login",
+  "/mentor/login",
+  "/enterprise/login",
+  "/enterprise/users/login",
+  "/reviewer/login",
+  "/contributor/login",
+]);
+
+/**
  * Home route per role — where to send a user when they hit a portal
  * they aren't allowed to access, or when they hit `/` while signed in.
  */
@@ -264,9 +280,11 @@ export default auth((req) => {
 
   // 1. Public paths bypass everything.
   if (isPublicPath(pathname)) {
-    // If a signed-in user hits the unauthenticated landing, route them
-    // to their portal home so they don't see a "log in" page.
-    if (pathname === "/" && req.auth?.user) {
+    // If a signed-in user hits the unauthenticated landing OR any login page,
+    // route them to their portal home so they never see a "log in" form for a
+    // session they already have. One centralized rule covers every per-role
+    // login route (and the generic /auth/login).
+    if ((pathname === "/" || LOGIN_PATHS.has(pathname)) && req.auth?.user) {
       const role =
         (req.auth.user as { role?: string }).role ?? "contributor";
       const url = req.nextUrl.clone();

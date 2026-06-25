@@ -10,24 +10,77 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Plus, Upload, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, Plus, Upload, X } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProfileCompletion, SECTION_LABELS } from "@/lib/hooks/use-profile-completion";
+import { handleAuthTokenError } from "@/lib/auth/token-expiry";
 import { cn } from "@/lib/utils/cn";
 
 type Row = Record<string, unknown>;
 
 const SECTION_ORDER = ["basic", "professional", "skills", "expertise", "portfolio", "experience", "education", "verification", "bank", "agreements"] as const;
 
-const COUNTRY_MAP: Record<string, Record<string, string[]>> = {
-  India: { "Andhra Pradesh": ["Anantapur", "Vijayawada", "Visakhapatnam", "Tirupati"], Telangana: ["Hyderabad", "Warangal", "Karimnagar", "Nizamabad"], "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli"], Karnataka: ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi"], Maharashtra: ["Mumbai", "Pune", "Nagpur", "Nashik"] },
-  "United States": { California: ["Los Angeles", "San Francisco", "San Diego"], Texas: ["Austin", "Dallas", "Houston"], "New York": ["New York City", "Buffalo", "Rochester"] },
-  "United Kingdom": { England: ["London", "Manchester", "Birmingham"], Scotland: ["Edinburgh", "Glasgow", "Aberdeen"] },
-  Australia: { "New South Wales": ["Sydney", "Newcastle", "Wollongong"], Victoria: ["Melbourne", "Geelong", "Ballarat"] },
-  Canada: { Ontario: ["Toronto", "Ottawa", "Waterloo"], "British Columbia": ["Vancouver", "Victoria", "Kelowna"] },
-};
-const COUNTRIES = Object.keys(COUNTRY_MAP);
-const TIMEZONES = ["Asia/Kolkata", "Asia/Dubai", "Europe/London", "America/New_York", "America/Los_Angeles"];
+// Fallback IANA zones if Intl.supportedValuesOf is unavailable (older browsers).
+const TIMEZONES_FALLBACK = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Europe/London", "Europe/Berlin", "America/New_York", "America/Chicago", "America/Los_Angeles", "Australia/Sydney", "UTC"];
+/** Full IANA timezone list from the browser (Intl.supportedValuesOf), with a
+ * static fallback. No external API needed — these are standard built-in values. */
+function getTimezones(): string[] {
+  try {
+    const sv = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf;
+    if (typeof sv === "function") { const z = sv("timeZone"); if (Array.isArray(z) && z.length) return z; }
+  } catch { /* fall through */ }
+  return TIMEZONES_FALLBACK;
+}
+/** The user's detected IANA zone, e.g. "Asia/Kolkata" (best-effort). */
+function detectedTimezone(): string {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; }
+}
+
+type DialCode = { country: string; dialCode: string; flag: string; cca2: string };
+// Minimal fallback if restcountries.com is unreachable — keeps the form usable.
+const DIAL_CODES_FALLBACK: DialCode[] = [
+  { country: "India", dialCode: "+91", flag: "🇮🇳", cca2: "IN" },
+  { country: "United States", dialCode: "+1", flag: "🇺🇸", cca2: "US" },
+  { country: "United Kingdom", dialCode: "+44", flag: "🇬🇧", cca2: "GB" },
+  { country: "United Arab Emirates", dialCode: "+971", flag: "🇦🇪", cca2: "AE" },
+  { country: "Singapore", dialCode: "+65", flag: "🇸🇬", cca2: "SG" },
+  { country: "Australia", dialCode: "+61", flag: "🇦🇺", cca2: "AU" },
+  { country: "Canada", dialCode: "+1", flag: "🇨🇦", cca2: "CA" },
+  { country: "Germany", dialCode: "+49", flag: "🇩🇪", cca2: "DE" },
+];
+/** Build a sorted dialing-code list from restcountries.com (GET, no auth).
+ * Returns the fallback list on any failure so the form never breaks. */
+async function fetchDialCodes(signal?: AbortSignal): Promise<DialCode[]> {
+  try {
+    const r = await fetch("https://restcountries.com/v3.1/all?fields=name,idd,cca2,flag", { signal });
+    if (!r.ok) return DIAL_CODES_FALLBACK;
+    const data = (await r.json()) as Array<{ name?: { common?: string }; idd?: { root?: string; suffixes?: string[] }; cca2?: string; flag?: string }>;
+    const out: DialCode[] = [];
+    for (const c of Array.isArray(data) ? data : []) {
+      const root = c.idd?.root;
+      if (!root) continue;
+      const suffixes = c.idd?.suffixes && c.idd.suffixes.length ? c.idd.suffixes : [""];
+      // Most countries have one dialing code (root + first suffix). Skip multi-suffix
+      // sprawl (e.g. +1 with 30 area suffixes) by taking only the first.
+      const dialCode = `${root}${suffixes[0] || ""}`;
+      out.push({ country: c.name?.common || c.cca2 || "", dialCode, flag: c.flag || "", cca2: c.cca2 || "" });
+    }
+    out.sort((a, b) => a.country.localeCompare(b.country));
+    return out.length ? out : DIAL_CODES_FALLBACK;
+  } catch { return DIAL_CODES_FALLBACK; }
+}
+// Split a stored mobile ("+91 9876543210") into { dialCode, number } best-effort.
+function splitMobile(saved: string, codes: DialCode[]): { dialCode: string; number: string } {
+  const v = (saved || "").trim();
+  if (!v) return { dialCode: "+91", number: "" };
+  // Longest matching dial code wins (so +971 beats +9).
+  const match = codes.filter((c) => v.replace(/\s/g, "").startsWith(c.dialCode))
+    .sort((a, b) => b.dialCode.length - a.dialCode.length)[0];
+  if (match) return { dialCode: match.dialCode, number: v.replace(/\s/g, "").slice(match.dialCode.length) };
+  if (v.startsWith("+")) { const m = v.match(/^(\+\d{1,4})\s?(.*)$/); if (m) return { dialCode: m[1], number: m[2].replace(/\s/g, "") }; }
+  return { dialCode: "+91", number: v.replace(/\s/g, "") };
+}
 const YEARS = ["Fresher", "0-1 Years", "1-3 Years", "3-5 Years", "5-8 Years", "8+ Years"];
 const WEEKLY = ["10 Hours", "20 Hours", "30 Hours", "40 Hours", "Flexible"];
 const AVAILABILITY = ["Full Time", "Part Time", "Weekends", "Flexible"];
@@ -98,13 +151,88 @@ function validateId(type: string, num: string): string | null {
 }
 
 async function getJson(url: string): Promise<Row[] | Row> {
-  try { const r = await fetch(url, { cache: "no-store" }); return r.ok ? await r.json() : []; } catch { return []; }
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (r.ok) return await r.json();
+    // Token expired while loading the wizard → auto-logout (clean re-auth).
+    if (r.status === 401) {
+      const j = await r.json().catch(() => ({}));
+      handleAuthTokenError(j);
+    }
+    return [];
+  } catch { return []; }
 }
 async function save(url: string, body: unknown, method = "POST"): Promise<void> {
   const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { detail?: string }).detail || "Could not save.");
+  if (!r.ok) {
+    // The error shape varies: FastAPI sends { detail }, while our Next proxy's own
+    // failures (401 AUTH_TOKEN_UNAVAILABLE / 503 BACKEND_UNAVAILABLE) send
+    // { error, message } with NO `detail`. Read all of them so the user sees the
+    // real reason instead of a misleading generic "Could not save." `detail` may
+    // also be a 422 array.
+    const j = (await r.json().catch(() => ({}))) as { detail?: unknown; message?: string; error?: string };
+    // Genuine token-expiry → auto-logout to the portal login (clean re-auth)
+    // instead of showing "Session is reconnecting — please retry". A navigation
+    // is now in flight; throw a benign error so the caller's catch is a no-op.
+    if (r.status === 401 && handleAuthTokenError(j)) {
+      throw new Error("Your session has expired. Redirecting to sign in…");
+    }
+    const detailMsg = typeof j.detail === "string" ? j.detail : Array.isArray(j.detail)
+      ? (j.detail as Array<{ msg?: string }>).map((d) => d?.msg).filter(Boolean).join(", ")
+      : "";
+    throw new Error(detailMsg || j.message || j.error || `Could not save. (HTTP ${r.status})`);
+  }
 }
 const arr = (x: unknown): Row[] => Array.isArray(x) ? (x as Row[]) : Array.isArray((x as { items?: Row[] })?.items) ? (x as { items: Row[] }).items : [];
+
+/** Upload a wizard file (avatar / ID document / passport photo) to Vercel Blob
+ * via the freelancer backend and return its public URL. `kind` namespaces the
+ * Blob path (avatar / id_document / passport_photo). Throws on any failure so
+ * callers can surface the error and NOT fall back to a bare filename/data-URL. */
+async function uploadProfileFile(file: File, kind: string): Promise<string> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch(`/api/contributor/profile/upload?kind=${encodeURIComponent(kind)}`, {
+    method: "POST",
+    body: fd,
+  });
+  const j = (await r.json().catch(() => ({}))) as { url?: string; detail?: unknown; message?: string; error?: string };
+  if (!r.ok || !j.url) {
+    if (r.status === 401 && handleAuthTokenError(j)) {
+      throw new Error("Your session has expired. Redirecting to sign in…");
+    }
+    const detailMsg = typeof j.detail === "string" ? j.detail : Array.isArray(j.detail)
+      ? (j.detail as Array<{ msg?: string }>).map((d) => d?.msg).filter(Boolean).join(", ")
+      : "";
+    throw new Error(detailMsg || j.message || j.error || `Upload failed. (HTTP ${r.status})`);
+  }
+  return j.url;
+}
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+const AVATAR_TYPES = ["image/png", "image/jpeg"];
+
+/** India Post PIN-code lookup → { city, state } (free, no auth). Returns null on failure. */
+async function lookupPincode(pin: string, signal?: AbortSignal): Promise<{ city: string; state: string } | null> {
+  try {
+    const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal });
+    if (!r.ok) return null;
+    const data = (await r.json()) as Array<{ Status?: string; PostOffice?: Array<{ Name?: string; District?: string; State?: string }> | null }>;
+    const first = Array.isArray(data) ? data[0] : undefined;
+    const po = first?.PostOffice?.[0];
+    if (first?.Status !== "Success" || !po) return null;
+    return { city: po.District || po.Name || "", state: po.State || "" };
+  } catch { return null; }
+}
+
+/** Razorpay IFSC lookup → bank/branch/city/state (free, no auth). Returns null on 404/failure. */
+async function lookupIfsc(ifsc: string, signal?: AbortSignal): Promise<{ bank: string; branch: string; city: string; state: string } | null> {
+  try {
+    const r = await fetch(`https://ifsc.razorpay.com/${ifsc}`, { signal });
+    if (!r.ok) return null;
+    const d = (await r.json()) as { BANK?: string; BRANCH?: string; CITY?: string; STATE?: string };
+    return { bank: d.BANK || "", branch: d.BRANCH || "", city: d.CITY || "", state: d.STATE || "" };
+  } catch { return null; }
+}
 
 const inputCls = "w-full h-9 rounded-lg border border-stroke-subtle bg-surface px-3 font-body text-[12.5px] text-foreground placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand/30";
 const labelCls = "block font-body text-[11px] font-semibold uppercase tracking-[0.05em] text-text-tertiary mb-1";
@@ -151,31 +279,85 @@ function ChipField({ values, setValues, suggestions, placeholder }: { values: st
   );
 }
 
-/** File picker — shows the chosen filename (real upload to Blob is wired later).
- * For the profile photo it enforces a KB cap + passport-size (portrait) dimensions. */
-function FileField({ text, name, onPick, accept, multiple, maxKB, passport, pdfOnly, onErr }: { text: string; name: string; onPick: (n: string) => void; accept: string; multiple?: boolean; maxKB?: number; passport?: boolean; pdfOnly?: boolean; onErr?: (m: string) => void }) {
+/** File picker — validates, then uploads the file to Vercel Blob (via
+ * /api/contributor/profile/upload) and reports the returned Blob URL through
+ * onPick(url). It shows the picked filename for the user while storing the URL
+ * in profile state, disables itself while the upload is in flight, and surfaces
+ * any upload error (it never falls back to a bare filename). For the profile
+ * photo it enforces a KB cap + passport-size (portrait) dimensions.
+ *
+ * `value` is the stored Blob URL (or legacy filename/data-URL) loaded from the
+ * saved profile; we derive a human label from it so re-opening the wizard shows
+ * "uploaded" rather than a raw URL. */
+function FileField({ text, value, kind, onPick, onClear, accept, maxKB, passport, pdfOnly, onErr }: { text: string; value: string; kind: string; onPick: (url: string) => void; onClear?: () => void; accept: string; maxKB?: number; passport?: boolean; pdfOnly?: boolean; onErr?: (m: string) => void }) {
+  const ref = React.useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = React.useState(false);
+  // Filename picked this session (nicer to show than a Blob URL). Falls back to a
+  // label derived from a saved URL/filename so a reloaded value still reads well.
+  const [pickedName, setPickedName] = React.useState("");
+  const label = pickedName || labelFromStored(value);
   const handle = async (files: FileList) => {
     const f = files[0];
     if (pdfOnly && f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) { onErr?.("Only a PDF file is allowed for the ID document."); return; }
     if (maxKB && f.size > maxKB * 1024) { onErr?.(`File must be under ${maxKB} KB (yours is ${Math.round(f.size / 1024)} KB).`); return; }
     if (passport) {
+      const objUrl = URL.createObjectURL(f);
       const ok = await new Promise<boolean>((res) => {
         const img = new window.Image();
         img.onload = () => { const r = img.width / img.height; res(img.width >= 150 && img.height >= 150 && r >= 0.6 && r <= 0.95); };
         img.onerror = () => res(false);
-        img.src = URL.createObjectURL(f);
+        img.src = objUrl;
       });
+      URL.revokeObjectURL(objUrl);
       if (!ok) { onErr?.("Use a passport-size photo — portrait, min 150×150."); return; }
     }
     onErr?.("");
-    onPick(multiple ? Array.from(files).map((x) => x.name).join(", ") : f.name);
+    setUploading(true);
+    try {
+      const url = await uploadProfileFile(f, kind);
+      setPickedName(f.name);
+      onPick(url);
+    } catch (e) {
+      // Surface the real error; do NOT store a bare filename.
+      onErr?.(e instanceof Error ? e.message : "Upload failed.");
+      if (ref.current) ref.current.value = "";
+    } finally {
+      setUploading(false);
+    }
   };
+  const clear = () => { if (ref.current) ref.current.value = ""; setPickedName(""); onErr?.(""); onClear?.(); };
   return (
-    <label className="flex items-center justify-between gap-2 h-9 px-3 rounded-lg border border-dashed border-stroke bg-surface cursor-pointer hover:bg-surface-hover">
-      <span className="inline-flex items-center gap-1.5 font-body text-[12px] text-text-secondary truncate"><Upload className="h-3.5 w-3.5 shrink-0" /> {name || text}</span>
-      <input type="file" accept={accept} multiple={multiple} className="hidden" onChange={(e) => { const f = e.target.files; if (f && f.length) handle(f); }} />
-    </label>
+    <div className="flex items-center gap-1.5">
+      <label className={cn("flex-1 flex items-center justify-between gap-2 h-9 px-3 rounded-lg border border-dashed border-stroke bg-surface hover:bg-surface-hover", uploading ? "cursor-wait opacity-60" : "cursor-pointer")}>
+        <span className="inline-flex items-center gap-1.5 font-body text-[12px] text-text-secondary truncate">
+          {uploading ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" /> : <Upload className="h-3.5 w-3.5 shrink-0" />}
+          {uploading ? "Uploading…" : (label || text)}
+        </span>
+        <input ref={ref} type="file" accept={accept} disabled={uploading} className="hidden" onChange={(e) => { const f = e.target.files; if (f && f.length) handle(f); }} />
+      </label>
+      {value && !uploading ? (
+        <button type="button" onClick={clear} aria-label="Remove file" className="grid place-items-center h-9 w-9 shrink-0 rounded-lg border border-stroke bg-surface text-text-tertiary hover:bg-surface-hover hover:text-error-text"><X className="h-4 w-4" /></button>
+      ) : null}
+    </div>
   );
+}
+
+/** Human label for a stored file value — a Blob/HTTP URL's last path segment, a
+ * generic "Uploaded document" for a data-URL, or the bare filename for legacy
+ * rows. Used so a reloaded wizard shows a readable name, not a raw URL. */
+function labelFromStored(value: string): string {
+  if (!value) return "";
+  if (value.startsWith("data:")) return "Uploaded document";
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    try {
+      const path = new URL(value).pathname;
+      const seg = decodeURIComponent(path.split("/").filter(Boolean).pop() || "");
+      // Vercel Blob appends a random suffix before the extension (name-<rand>.ext);
+      // strip it for display only.
+      return seg.replace(/-[A-Za-z0-9]{20,}(\.[^.]+)?$/, "$1") || "Uploaded file";
+    } catch { return "Uploaded file"; }
+  }
+  return value; // legacy bare filename
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -184,19 +366,43 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default function CompleteProfilePage() {
   const qc = useQueryClient();
+  // Account email from the NextAuth session (same source the contributor layout
+  // uses to show the signed-in email). Display-only — NOT part of the saved
+  // basic-info payload. If SSO (Google/Microsoft) didn't pass the email through,
+  // this renders blank, which is the signal we want to surface here.
+  const { data: session } = useSession();
+  const accountEmail = session?.user?.email ?? "";
   const { data: completion } = useProfileCompletion();
   const sections = completion?.sections ?? {};
-  const weights = (completion?.weights ?? {}) as Record<string, number>;
-  const pct = completion?.completeness ?? 0;
-  const complete = completion?.complete ?? false;
+  const rawWeights = (completion?.weights ?? {}) as Record<string, number>;
+  const rawPct = completion?.completeness ?? 0;
 
   const [step, setStep] = React.useState(0);
   const currentKey = SECTION_ORDER[step];
   const lastStep = SECTION_ORDER.length - 1;
   const refresh = React.useCallback(() => qc.invalidateQueries({ queryKey: ["contributor", "profile", "completion"] }), [qc]);
 
-  const [basic, setBasic] = React.useState({ firstName: "", lastName: "", username: "", country: "", state: "", city: "", pincode: "", mobileNumber: "", timezone: "", profilePhoto: "" });
+  const [basic, setBasic] = React.useState({ firstName: "", lastName: "", country: "", state: "", city: "", pincode: "", mobileNumber: "", timezone: "", profilePhoto: "" });
+  // Profile image — `avatarPreview` is what we show (a stored Blob URL loaded from
+  // profile_extra.avatar_url, or an object-URL while picking). `avatarBlobUrl` is
+  // the uploaded Blob URL for a photo picked this session — what we persist.
+  const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
+  const [avatarBlobUrl, setAvatarBlobUrl] = React.useState<string | null>(null);
+  const [avatarError, setAvatarError] = React.useState("");
+  const [avatarUploading, setAvatarUploading] = React.useState(false);
+  const avatarInputRef = React.useRef<HTMLInputElement>(null);
+  const avatarObjUrlRef = React.useRef<string | null>(null);
+  const [pinLookup, setPinLookup] = React.useState<{ loading: boolean; error: string }>({ loading: false, error: "" });
+  const [ifscLookup, setIfscLookup] = React.useState<{ loading: boolean; error: string; branch: string; city: string; state: string }>({ loading: false, error: "", branch: "", city: "", state: "" });
   const [languages, setLanguages] = React.useState<string[]>([]);
+  // Country-code (mobile) — dial-code list from restcountries.com, default +91.
+  const [dialCodes, setDialCodes] = React.useState<DialCode[]>(DIAL_CODES_FALLBACK);
+  const [mobileDial, setMobileDial] = React.useState("+91");
+  const [mobileLocal, setMobileLocal] = React.useState("");
+  // Latest dial codes for use inside the (stable) reload callback without re-creating it.
+  const dialCodesRef = React.useRef<DialCode[]>(DIAL_CODES_FALLBACK);
+  // Full IANA timezone list (browser built-in), default = the user's detected zone.
+  const [timezones] = React.useState<string[]>(() => getTimezones());
   const [prof, setProf] = React.useState({ headline: "", bio: "", yearsExperience: "", weeklyHours: "", hourlyRate: "", availability: "" });
   const [skills, setSkills] = React.useState<Row[]>([]);
   const [skillDraft, setSkillDraft] = React.useState({ name: "", level: "Intermediate", years: "1 Year" });
@@ -214,6 +420,8 @@ export default function CompleteProfilePage() {
   const [preferences, setPreferences] = React.useState<string[]>([]);
   const [bank, setBank] = React.useState({ accountHolderName: "", bankName: "", accountNumber: "", confirmAccountNumber: "", ifscCode: "", accountType: "", upiId: "" });
   const [agree, setAgree] = React.useState({ termsAccepted: false, paymentPolicyAccepted: false, privacyPolicyAccepted: false, notificationConsent: false, truthDeclaration: false });
+  // Agreements already accepted in the saved profile are locked (can't be un-accepted).
+  const [agreeLocked, setAgreeLocked] = React.useState({ termsAccepted: false, paymentPolicyAccepted: false, privacyPolicyAccepted: false, notificationConsent: false, truthDeclaration: false });
   const [busy, setBusy] = React.useState<string | null>(null);
   const [err, setErr] = React.useState("");
 
@@ -231,18 +439,65 @@ export default function CompleteProfilePage() {
     const ex = (await getJson("/api/contributor/profile/extra")) as Row;
     if (ex && typeof ex === "object" && !Array.isArray(ex)) {
       const b = (ex.basic as Record<string, string>) || {};
-      setBasic((x) => ({ ...x, firstName: b.firstName || x.firstName, lastName: b.lastName || x.lastName, username: b.username || x.username, state: b.state || x.state, pincode: b.pincode || x.pincode, mobileNumber: (ex.mobileNumber as string) || b.mobileNumber || x.mobileNumber, profilePhoto: b.profilePhoto || x.profilePhoto }));
+      const savedMobile = (ex.mobileNumber as string) || b.mobileNumber || "";
+      setBasic((x) => ({ ...x, firstName: b.firstName || x.firstName, lastName: b.lastName || x.lastName, state: b.state || x.state, pincode: b.pincode || x.pincode, mobileNumber: savedMobile || x.mobileNumber, profilePhoto: b.profilePhoto || x.profilePhoto }));
+      // Split the saved mobile back into the country-code selector + local number.
+      if (savedMobile) { const sp = splitMobile(savedMobile, dialCodesRef.current); setMobileDial(sp.dialCode); setMobileLocal(sp.number); }
       if (Array.isArray(ex.languages)) setLanguages(ex.languages as string[]);
       const pr = (ex.professional as Record<string, string>) || {}; setProf((x) => ({ ...x, weeklyHours: pr.weeklyHours || x.weeklyHours, hourlyRate: pr.hourlyRate || x.hourlyRate }));
       setLinks((x) => ({ ...x, ...((ex.links as Record<string, string>) || {}) }));
       const v = (ex.verification as Record<string, string>) || {}; setVerif((x) => ({ idType: v.idType || x.idType, idNumber: v.idNumber || x.idNumber, idDocument: v.idDocument || x.idDocument }));
       if (Array.isArray(ex.preferences)) setPreferences(ex.preferences as string[]);
       setBank((x) => ({ ...x, ...((ex.bank as Record<string, string>) || {}) }));
-      setAgree((x) => ({ ...x, ...((ex.agreements as Record<string, boolean>) || {}) }));
+      const savedAgree = (ex.agreements as Record<string, boolean>) || {};
+      setAgree((x) => ({ ...x, ...savedAgree }));
+      // Lock any agreement that was already accepted in the saved profile.
+      setAgreeLocked((x) => ({
+        termsAccepted: x.termsAccepted || savedAgree.termsAccepted === true,
+        paymentPolicyAccepted: x.paymentPolicyAccepted || savedAgree.paymentPolicyAccepted === true,
+        privacyPolicyAccepted: x.privacyPolicyAccepted || savedAgree.privacyPolicyAccepted === true,
+        notificationConsent: x.notificationConsent || savedAgree.notificationConsent === true,
+        truthDeclaration: x.truthDeclaration || savedAgree.truthDeclaration === true,
+      }));
+      // Pre-load the saved profile image (shared with the simple edit page).
+      const savedAvatar = ex.avatar_url as string | undefined;
+      if (savedAvatar) setAvatarPreview((cur) => cur ?? savedAvatar);
     }
     refresh();
   }, [refresh]);
   React.useEffect(() => { reload(); }, [reload]);
+
+  // Load the dialing-code list (restcountries.com) once on mount; keep the
+  // fallback if it fails.
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    fetchDialCodes(ctrl.signal).then((codes) => {
+      if (ctrl.signal.aborted || !codes.length) return;
+      dialCodesRef.current = codes;
+      setDialCodes(codes);
+    });
+    return () => ctrl.abort();
+  }, []);
+
+  // Re-split the saved mobile whenever the (richer) dial-code list arrives, so a
+  // mobile loaded before the API resolved gets the correct country code.
+  React.useEffect(() => {
+    if (basic.mobileNumber) { const sp = splitMobile(basic.mobileNumber, dialCodes); setMobileDial(sp.dialCode); setMobileLocal(sp.number); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialCodes]);
+
+  // Default the timezone to the user's detected IANA zone (only if unset).
+  React.useEffect(() => {
+    const tz = detectedTimezone();
+    if (tz) setBasic((b) => (b.timezone ? b : { ...b, timezone: tz }));
+  }, []);
+
+  // Keep the saved mobile (basic.mobileNumber) = dialCode + space + local number.
+  const setMobile = (dial: string, local: string) => {
+    setMobileDial(dial);
+    setMobileLocal(local);
+    setBasic((b) => ({ ...b, mobileNumber: local.trim() ? `${dial} ${local.trim()}` : "" }));
+  };
 
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key); setErr("");
@@ -252,8 +507,75 @@ export default function CompleteProfilePage() {
 
   const saveBasic = () => run("basic", async () => {
     await save("/api/contributor/profile", { country: basic.country, city: basic.city, timezone: basic.timezone }, "PATCH");
-    await patchExtra({ basic: { firstName: basic.firstName, lastName: basic.lastName, username: basic.username, state: basic.state, pincode: basic.pincode, mobileNumber: basic.mobileNumber, profilePhoto: basic.profilePhoto }, mobileNumber: basic.mobileNumber, languages });
+    await patchExtra({ basic: { firstName: basic.firstName, lastName: basic.lastName, state: basic.state, pincode: basic.pincode, mobileNumber: basic.mobileNumber, profilePhoto: basic.profilePhoto }, mobileNumber: basic.mobileNumber, languages, ...(avatarBlobUrl ? { avatar_url: avatarBlobUrl } : {}) });
+    if (avatarBlobUrl) { setAvatarPreview(avatarBlobUrl); setAvatarBlobUrl(null); }
   });
+
+  // Profile image: validate (PNG/JPG, ≤2 MB), preview via object-URL, then upload
+  // to Vercel Blob — the returned Blob URL is persisted to profile_extra.avatar_url
+  // on "Save basic info" (so the super-admin verification view can open it).
+  const onPickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setAvatarError("");
+    if (!AVATAR_TYPES.includes(file.type)) { setAvatarError("Use a PNG or JPG image."); return; }
+    if (file.size > AVATAR_MAX_BYTES) { setAvatarError("Image must be 2 MB or smaller."); return; }
+    if (avatarObjUrlRef.current) URL.revokeObjectURL(avatarObjUrlRef.current);
+    const objUrl = URL.createObjectURL(file);
+    avatarObjUrlRef.current = objUrl;
+    setAvatarPreview(objUrl);
+    setAvatarUploading(true);
+    try {
+      setAvatarBlobUrl(await uploadProfileFile(file, "avatar"));
+    } catch (err) {
+      // Surface the failure and roll back the optimistic preview — do NOT keep a
+      // non-persistable preview that won't actually be saved.
+      setAvatarError(err instanceof Error ? err.message : "Could not upload that image. Try another file.");
+      setAvatarBlobUrl(null);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+  React.useEffect(() => () => { if (avatarObjUrlRef.current) URL.revokeObjectURL(avatarObjUrlRef.current); }, []);
+
+  // PIN-code → City + State auto-fill (India Post). Fires when 6 digits are entered.
+  const pinAbort = React.useRef<AbortController | null>(null);
+  const onPincode = (raw: string) => {
+    const pin = raw.replace(/\D/g, "").slice(0, 6);
+    setBasic((b) => ({ ...b, pincode: pin }));
+    setPinLookup({ loading: false, error: "" });
+    pinAbort.current?.abort();
+    if (pin.length !== 6) return;
+    const ctrl = new AbortController();
+    pinAbort.current = ctrl;
+    setPinLookup({ loading: true, error: "" });
+    lookupPincode(pin, ctrl.signal).then((res) => {
+      if (ctrl.signal.aborted) return;
+      if (!res) { setPinLookup({ loading: false, error: "Couldn't find that PIN code" }); return; }
+      setBasic((b) => ({ ...b, country: "India", state: res.state || b.state, city: res.city || b.city }));
+      setPinLookup({ loading: false, error: "" });
+    });
+  };
+
+  // IFSC → Bank name auto-fill (Razorpay). Fires when 11 chars are entered.
+  const ifscAbort = React.useRef<AbortController | null>(null);
+  const onIfsc = (raw: string) => {
+    const code = raw.toUpperCase().slice(0, 11);
+    setBank((b) => ({ ...b, ifscCode: code }));
+    setIfscLookup({ loading: false, error: "", branch: "", city: "", state: "" });
+    ifscAbort.current?.abort();
+    if (code.length !== 11) return;
+    const ctrl = new AbortController();
+    ifscAbort.current = ctrl;
+    setIfscLookup({ loading: true, error: "", branch: "", city: "", state: "" });
+    lookupIfsc(code, ctrl.signal).then((res) => {
+      if (ctrl.signal.aborted) return;
+      if (!res) { setIfscLookup({ loading: false, error: "Invalid IFSC code", branch: "", city: "", state: "" }); return; }
+      setBank((b) => ({ ...b, bankName: res.bank || b.bankName }));
+      setIfscLookup({ loading: false, error: "", branch: res.branch, city: res.city, state: res.state });
+    });
+  };
   const saveProf = () => run("professional", async () => {
     await save("/api/contributor/profile", { job_title: prof.headline, bio: prof.bio, years_experience: prof.yearsExperience, availability: prof.availability }, "PATCH");
     await patchExtra({ professional: { weeklyHours: prof.weeklyHours, hourlyRate: prof.hourlyRate } });
@@ -283,9 +605,30 @@ export default function CompleteProfilePage() {
     run("agreements", () => patchExtra({ agreements: agree }));
   };
 
-  const states = basic.country ? Object.keys(COUNTRY_MAP[basic.country] || {}) : [];
-  const cities = basic.country && basic.state ? (COUNTRY_MAP[basic.country]?.[basic.state] || []) : [];
-  const sectionDone = sections[currentKey] === true;
+  // The backend's completion math omits the Agreements step from its weights, so
+  // it can report 100% / "complete" while none of the 5 agreement checkboxes are
+  // accepted. Re-weight the Agreements step in on the client so it carries weight,
+  // and require all 5 boxes for 100%. Agreements gets a 5% slice (same as
+  // verification/bank); the backend's 0–100 score is scaled into the other 95%.
+  const AGREEMENTS_WEIGHT = 5;
+  const agreeKeys = Object.keys(agree) as Array<keyof typeof agree>;
+  const agreeCount = agreeKeys.filter((k) => agree[k]).length;
+  const allAgreed = agreeCount === agreeKeys.length;
+  // The Agreements step's own "· X%" — proportional to boxes checked (each = 20%).
+  const agreementsPct = Math.round((agreeCount / agreeKeys.length) * 100);
+
+  // Per-step weights shown next to each section heading, with Agreements added.
+  const weights: Record<string, number> = { ...rawWeights, agreements: AGREEMENTS_WEIGHT };
+  // Overall %: backend score scaled into 95, plus the agreements slice (0–5).
+  const pct = Math.min(
+    100,
+    Math.round((rawPct / 100) * (100 - AGREEMENTS_WEIGHT)) +
+      Math.round((agreeCount / agreeKeys.length) * AGREEMENTS_WEIGHT),
+  );
+  // Complete only when the backend gate is satisfied AND every agreement is accepted.
+  const complete = (completion?.complete ?? false) && allAgreed;
+
+  const sectionDone = currentKey === "agreements" ? allAgreed : sections[currentKey] === true;
 
   return (
     <div className="w-full pb-16">
@@ -322,23 +665,61 @@ export default function CompleteProfilePage() {
         <div className="rounded-xl border border-stroke bg-surface p-4 sm:p-5 space-y-3">
         <div className="flex items-center gap-2">
           <h2 className="font-body text-[16px] font-semibold text-foreground">{SECTION_LABELS[currentKey]}</h2>
-          <span className="font-body text-[11px] text-text-tertiary">· {weights[currentKey] ?? 0}%</span>
+          <span className="font-body text-[11px] text-text-tertiary">· {currentKey === "agreements" ? agreementsPct : weights[currentKey] ?? 0}%</span>
           {sectionDone ? <span className="ml-auto inline-flex items-center gap-1 font-body text-[11.5px]" style={{ color: "#0F9D6B" }}><CheckCircle2 className="h-3.5 w-3.5" /> Done</span> : null}
         </div>
 
         {currentKey === "basic" ? (
           <>
-            <FileField text="Upload passport-size photo (max 200 KB)" name={basic.profilePhoto} accept=".jpg,.jpeg,.png,.webp" maxKB={200} passport onErr={setErr} onPick={(n) => setBasic({ ...basic, profilePhoto: n })} />
+            <Field label="Profile photo">
+              <div className="flex flex-wrap items-center gap-4">
+                {avatarPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarPreview} alt="Profile photo" className="h-16 w-16 rounded-full object-cover shrink-0 ring-4 ring-surface shadow-sm" />
+                ) : (
+                  <div aria-hidden className="h-16 w-16 rounded-full bg-brand text-on-brand inline-flex items-center justify-center font-body text-[18px] font-semibold shrink-0 ring-4 ring-surface shadow-sm">{(basic.firstName?.[0] || "") + (basic.lastName?.[0] || "") || "👤"}</div>
+                )}
+                <div className="space-y-1.5 min-w-0">
+                  <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg" className="sr-only" onChange={(e) => void onPickAvatar(e)} />
+                  <button type="button" disabled={avatarUploading} onClick={() => avatarInputRef.current?.click()} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-dashed border-stroke text-text-secondary hover:text-foreground hover:bg-surface-hover font-body text-[12px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-60">{avatarUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {avatarUploading ? "Uploading…" : avatarPreview ? "Change photo" : "Upload photo"}</button>
+                  <p className="font-body text-[11px] text-text-tertiary">PNG or JPG, max 2 MB. Saved with your basic info.</p>
+                  {avatarError ? <p className="font-body text-[11px] text-error-text">{avatarError}</p> : null}
+                </div>
+              </div>
+            </Field>
+            <FileField text="Upload passport-size photo (max 200 KB)" value={basic.profilePhoto} kind="passport_photo" accept=".jpg,.jpeg,.png,.webp" maxKB={200} passport onErr={setErr} onPick={(url) => setBasic({ ...basic, profilePhoto: url })} onClear={() => setBasic({ ...basic, profilePhoto: "" })} />
+            <p className="font-body text-[11px] text-text-tertiary">Your name is prefilled from your account &mdash; edit it here if needed. Your email is managed in <Link href="/contributor/settings/account" className="text-text-link hover:underline font-medium">Account settings</Link> (major changes may need re-verification).</p>
+            <Field label="Email">
+              {/* Read-only — sourced from the signed-in session, NOT saved with basic info.
+                  Blank here means SSO (Google/Microsoft) signup didn't pass the email through. */}
+              <input value={accountEmail} disabled readOnly type="email" aria-label="Account email (read-only)" className={cn(inputCls, "cursor-not-allowed bg-surface-hover text-text-secondary")} placeholder="No email on this account" />
+              <p className="mt-1 font-body text-[11px] text-text-tertiary">From your account &middot; managed in Account settings</p>
+            </Field>
             <div className="grid sm:grid-cols-2 gap-2">
               <Field label="First name *"><input value={basic.firstName} onChange={(e) => setBasic({ ...basic, firstName: e.target.value })} className={inputCls} placeholder="Aarav" /></Field>
               <Field label="Last name *"><input value={basic.lastName} onChange={(e) => setBasic({ ...basic, lastName: e.target.value })} className={inputCls} placeholder="Sharma" /></Field>
-              <Field label="Username *"><input value={basic.username} onChange={(e) => setBasic({ ...basic, username: e.target.value })} className={inputCls} placeholder="fayaz-dev" /></Field>
-              <Field label="Country *"><select value={basic.country} onChange={(e) => setBasic({ ...basic, country: e.target.value, state: "", city: "" })} className={inputCls}><option value="">Select country</option>{COUNTRIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
-              <Field label="State *"><select value={basic.state} onChange={(e) => setBasic({ ...basic, state: e.target.value, city: "" })} className={inputCls} disabled={!basic.country}><option value="">Select state</option>{states.map((s) => <option key={s}>{s}</option>)}</select></Field>
-              <Field label="City *"><select value={basic.city} onChange={(e) => setBasic({ ...basic, city: e.target.value })} className={inputCls} disabled={!basic.state}><option value="">Select city</option>{cities.map((c) => <option key={c}>{c}</option>)}</select></Field>
-              <Field label="Pincode *"><input value={basic.pincode} onChange={(e) => setBasic({ ...basic, pincode: e.target.value })} className={inputCls} placeholder="400001" inputMode="numeric" /></Field>
-              <Field label="Mobile number *"><input value={basic.mobileNumber} onChange={(e) => setBasic({ ...basic, mobileNumber: e.target.value })} className={inputCls} placeholder="+91 98765 43210" /></Field>
-              <Field label="Timezone *"><select value={basic.timezone} onChange={(e) => setBasic({ ...basic, timezone: e.target.value })} className={inputCls}><option value="">Select timezone</option>{TIMEZONES.map((t) => <option key={t}>{t}</option>)}</select></Field>
+              <Field label="Pincode *">
+                <div className="relative">
+                  <input value={basic.pincode} onChange={(e) => onPincode(e.target.value)} className={inputCls} placeholder="400001" inputMode="numeric" maxLength={6} />
+                  {pinLookup.loading ? <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-text-tertiary" /> : null}
+                </div>
+                {pinLookup.error ? <p className="mt-1 font-body text-[11px] text-error-text">{pinLookup.error}</p> : <p className="mt-1 font-body text-[11px] text-text-tertiary">Enter your 6-digit PIN to auto-fill city &amp; state.</p>}
+              </Field>
+              <Field label="Country *"><input value={basic.country} onChange={(e) => setBasic({ ...basic, country: e.target.value })} className={inputCls} placeholder="India" /></Field>
+              <Field label="State *"><input value={basic.state} onChange={(e) => setBasic({ ...basic, state: e.target.value })} className={inputCls} placeholder="Maharashtra" /></Field>
+              <Field label="City *"><input value={basic.city} onChange={(e) => setBasic({ ...basic, city: e.target.value })} className={inputCls} placeholder="Mumbai" /></Field>
+              <Field label="Mobile number *">
+                <div className="flex gap-1.5">
+                  <select aria-label="Country dialing code" value={mobileDial} onChange={(e) => setMobile(e.target.value, mobileLocal)} className={cn(inputCls, "w-[112px] shrink-0 px-2")}>
+                    {/* De-dup by dial code (many countries share +1) — show flag + code. */}
+                    {Array.from(new Map(dialCodes.map((c) => [`${c.dialCode}|${c.cca2}`, c])).values()).map((c) => (
+                      <option key={`${c.cca2}-${c.dialCode}`} value={c.dialCode}>{c.flag ? `${c.flag} ` : ""}{c.dialCode} {c.cca2}</option>
+                    ))}
+                  </select>
+                  <input value={mobileLocal} onChange={(e) => setMobile(mobileDial, e.target.value.replace(/[^\d]/g, ""))} className={inputCls} placeholder="98765 43210" inputMode="numeric" />
+                </div>
+              </Field>
+              <Field label="Timezone *"><select value={basic.timezone} onChange={(e) => setBasic({ ...basic, timezone: e.target.value })} className={inputCls}><option value="">Select timezone</option>{timezones.map((t) => <option key={t}>{t}</option>)}</select></Field>
             </div>
             <Field label="Languages *"><ChipField values={languages} setValues={setLanguages} suggestions={LANGUAGES} placeholder="Search or add language + Enter" /></Field>
             <button type="button" disabled={busy === "basic"} onClick={saveBasic} className={primaryBtn}>Save basic info</button>
@@ -447,7 +828,7 @@ export default function CompleteProfilePage() {
               <Field label="Government ID type *"><select value={verif.idType} onChange={(e) => setVerif({ ...verif, idType: e.target.value })} className={inputCls}><option value="">Select</option>{ID_TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
               <Field label="ID number *"><input value={verif.idNumber} onChange={(e) => setVerif({ ...verif, idNumber: e.target.value })} className={inputCls} placeholder={verif.idType === "Aadhaar Card" ? "12 digits" : verif.idType === "PAN Card" ? "ABCDE1234F" : "Enter ID number"} /></Field>
             </div>
-            <FileField text="Upload ID document — PDF only (max 2000 KB) *" name={verif.idDocument} accept=".pdf,application/pdf" pdfOnly maxKB={2000} onErr={setErr} onPick={(n) => setVerif({ ...verif, idDocument: n })} />
+            <FileField text="Upload ID document — PDF only (max 2000 KB) *" value={verif.idDocument} kind="id_document" accept=".pdf,application/pdf" pdfOnly maxKB={2000} onErr={setErr} onPick={(url) => setVerif({ ...verif, idDocument: url })} onClear={() => setVerif({ ...verif, idDocument: "" })} />
             <Field label="Project preferences">
               <div className="flex flex-wrap gap-1.5">{PREFERENCES.map((p) => { const on = preferences.includes(p); return (
                 <button key={p} type="button" onClick={() => setPreferences(on ? preferences.filter((x) => x !== p) : [...preferences, p])} className={cn("px-2.5 py-1 rounded-full border font-body text-[11.5px]", on ? "border-brand bg-brand text-on-brand" : "border-stroke text-foreground hover:bg-surface-hover")}>{p}</button>
@@ -465,7 +846,19 @@ export default function CompleteProfilePage() {
               <Field label="Bank name *"><input value={bank.bankName} onChange={(e) => setBank({ ...bank, bankName: e.target.value })} className={inputCls} placeholder="HDFC Bank" /></Field>
               <Field label="Account number *"><input value={bank.accountNumber} onChange={(e) => setBank({ ...bank, accountNumber: e.target.value })} className={inputCls} placeholder="123456789012" inputMode="numeric" /></Field>
               <Field label="Confirm account number *"><input value={bank.confirmAccountNumber} onChange={(e) => setBank({ ...bank, confirmAccountNumber: e.target.value })} className={inputCls} placeholder="Re-enter account number" inputMode="numeric" /></Field>
-              <Field label="IFSC code *"><input value={bank.ifscCode} onChange={(e) => setBank({ ...bank, ifscCode: e.target.value })} className={inputCls} placeholder="HDFC0001234" maxLength={11} /></Field>
+              <Field label="IFSC code *">
+                <div className="relative">
+                  <input value={bank.ifscCode} onChange={(e) => onIfsc(e.target.value)} className={inputCls} placeholder="HDFC0001234" maxLength={11} />
+                  {ifscLookup.loading ? <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-text-tertiary" /> : null}
+                </div>
+                {ifscLookup.error ? (
+                  <p className="mt-1 font-body text-[11px] text-error-text">{ifscLookup.error}</p>
+                ) : ifscLookup.branch || ifscLookup.city || ifscLookup.state ? (
+                  <p className="mt-1 font-body text-[11px] text-text-tertiary">{[ifscLookup.branch, ifscLookup.city, ifscLookup.state].filter(Boolean).join(" · ")}</p>
+                ) : (
+                  <p className="mt-1 font-body text-[11px] text-text-tertiary">Enter your 11-character IFSC to auto-fill the bank.</p>
+                )}
+              </Field>
               <Field label="Account type *"><select value={bank.accountType} onChange={(e) => setBank({ ...bank, accountType: e.target.value })} className={inputCls}><option value="">Select account type</option>{ACCOUNT_TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
               <Field label="UPI ID"><input value={bank.upiId} onChange={(e) => setBank({ ...bank, upiId: e.target.value })} className={inputCls} placeholder="name@upi" /></Field>
             </div>
@@ -482,13 +875,17 @@ export default function CompleteProfilePage() {
               ["privacyPolicyAccepted", "I agree to the privacy policy and consent to secure profile verification."],
               ["notificationConsent", "I agree to receive work, payment, verification, and account notifications."],
               ["truthDeclaration", "I confirm that all profile, portfolio, identity, and bank details are correct."],
-            ] as const).map(([k, text]) => (
-              <label key={k} className="flex items-start gap-2 cursor-pointer">
-                <input type="checkbox" checked={agree[k]} onChange={(e) => setAgree({ ...agree, [k]: e.target.checked })} className="mt-0.5 h-3.5 w-3.5 rounded accent-brand" />
-                <span className="font-body text-[12.5px] text-foreground">{text}</span>
-              </label>
-            ))}
-            <button type="button" disabled={busy === "agreements"} onClick={saveAgreements} className={primaryBtn}>Save agreements</button>
+            ] as const).map(([k, text]) => {
+              const locked = agreeLocked[k];
+              return (
+                <label key={k} className={cn("flex items-start gap-2", locked ? "cursor-default" : "cursor-pointer")}>
+                  <input type="checkbox" checked={agree[k]} disabled={locked} onChange={(e) => { if (!locked) setAgree({ ...agree, [k]: e.target.checked }); }} className={cn("mt-0.5 h-3.5 w-3.5 rounded accent-brand", locked && "cursor-not-allowed")} />
+                  <span className="font-body text-[12.5px] text-foreground">{text}{locked ? <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle font-body text-[10.5px] text-text-tertiary"><Check className="h-3 w-3" />Accepted</span> : null}</span>
+                </label>
+              );
+            })}
+            <button type="button" disabled={busy === "agreements" || !allAgreed} onClick={saveAgreements} className={primaryBtn}>Save agreements</button>
+            {!allAgreed ? <p className="font-body text-[11.5px] text-text-tertiary">Accept all {agreeKeys.length} agreements to finish ({agreeCount}/{agreeKeys.length} accepted).</p> : null}
           </>
         ) : null}
       </div>

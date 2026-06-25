@@ -42,6 +42,17 @@ const TIMEZONES = [
 ];
 
 const BIO_MAX = 300;
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+const AVATAR_TYPES = ["image/png", "image/jpeg"];
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read the image."));
+    reader.readAsDataURL(file);
+  });
+}
 
 const inputCls = cn(
   "w-full h-9 px-3 rounded-md bg-surface border border-stroke",
@@ -69,6 +80,15 @@ export function ProfileEditView() {
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Avatar: previewUrl is what we show (object-URL while picking, or a stored
+  // data-URL loaded from the backend). avatarDataUrl is what we persist; it's
+  // set only when the user picks a new photo this session.
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [avatarDataUrl, setAvatarDataUrl] = React.useState<string | null>(null);
+  const [photoError, setPhotoError] = React.useState<string | null>(null);
+  const objectUrlRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     setEmail(personaProfile.email);
@@ -106,6 +126,62 @@ export function ProfileEditView() {
     };
   }, []);
 
+  // Load any previously-saved avatar (stored as a data-URL in profile_extra).
+  React.useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/contributor/profile/extra", { cache: "no-store" });
+        if (!res.ok || !active) return;
+        const extra = (await res.json()) as { avatar_url?: string | null };
+        if (active && extra?.avatar_url) setPreviewUrl(extra.avatar_url);
+      } catch {
+        /* no stored avatar — fall back to initials */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Revoke any outstanding object-URL on unmount to avoid leaks.
+  React.useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    };
+  }, []);
+
+  const onPickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset the input value so the same file can be re-selected later.
+    e.target.value = "";
+    if (!file) return;
+    setPhotoError(null);
+
+    if (!AVATAR_TYPES.includes(file.type)) {
+      setPhotoError("Use a PNG or JPG image.");
+      return;
+    }
+    if (file.size > AVATAR_MAX_BYTES) {
+      setPhotoError("Image must be 2 MB or smaller.");
+      return;
+    }
+
+    // Immediate preview via an object-URL.
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    const objUrl = URL.createObjectURL(file);
+    objectUrlRef.current = objUrl;
+    setPreviewUrl(objUrl);
+
+    // Encode for persistence (data-URL stored in profile_extra on save).
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setAvatarDataUrl(dataUrl);
+    } catch {
+      setPhotoError("Could not read that image. Try another file.");
+    }
+  };
+
   const avatarInitials = initialsFromName(name, avatarFallback);
   const personaLabel = PERSONAS.find((p) => p.key === persona)?.shortLabel ?? persona;
   const canSave = name.trim().length > 0 && !saving && !isLoading;
@@ -126,6 +202,18 @@ export function ProfileEditView() {
         body: JSON.stringify({ first_name, last_name, bio, country, timezone }),
       });
       if (!res.ok) throw new Error(`Save failed (${res.status})`);
+
+      // Persist a newly-picked avatar (data-URL → profile_extra). Only when
+      // the user changed the photo this session.
+      if (avatarDataUrl) {
+        const photoRes = await fetch("/api/contributor/profile/extra", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ avatar_url: avatarDataUrl }),
+        });
+        if (!photoRes.ok) throw new Error(`Photo save failed (${photoRes.status})`);
+      }
+
       setSaved(true);
       setTimeout(() => router.push("/contributor/profile"), 900);
     } catch (err) {
@@ -163,15 +251,32 @@ export function ProfileEditView() {
           <div className="p-5 space-y-5">
             <Field label="Profile photo">
               <div className="flex flex-wrap items-center gap-4">
-                <div
-                  aria-hidden
-                  className="h-16 w-16 rounded-full bg-brand text-on-brand inline-flex items-center justify-center font-body text-[18px] font-semibold shrink-0 ring-4 ring-surface shadow-sm"
-                >
-                  {avatarInitials}
-                </div>
+                {previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={previewUrl}
+                    alt="Profile photo preview"
+                    className="h-16 w-16 rounded-full object-cover shrink-0 ring-4 ring-surface shadow-sm"
+                  />
+                ) : (
+                  <div
+                    aria-hidden
+                    className="h-16 w-16 rounded-full bg-brand text-on-brand inline-flex items-center justify-center font-body text-[18px] font-semibold shrink-0 ring-4 ring-surface shadow-sm"
+                  >
+                    {avatarInitials}
+                  </div>
+                )}
                 <div className="space-y-2 min-w-0">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="sr-only"
+                    onChange={(e) => void onPickPhoto(e)}
+                  />
                   <button
                     type="button"
+                    onClick={() => fileInputRef.current?.click()}
                     className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-dashed border-stroke text-text-secondary hover:text-foreground hover:border-stroke-strong font-body text-[12px] font-semibold transition-colors duration-fast"
                   >
                     <Camera className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
@@ -180,6 +285,9 @@ export function ProfileEditView() {
                   <p className="font-body text-[11px] text-text-tertiary">
                     PNG or JPG, max 2 MB. Falls back to initials if no photo is set.
                   </p>
+                  {photoError ? (
+                    <p className="font-body text-[11px] text-error-text">{photoError}</p>
+                  ) : null}
                 </div>
               </div>
             </Field>

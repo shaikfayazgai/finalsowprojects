@@ -12,12 +12,18 @@
 import * as React from "react";
 import { Send, Wallet, CheckCircle2, Clock } from "lucide-react";
 import {
-  getPayoutStatus, requestPayout, payoutContributors, requestTopup,
+  getPayoutStatus, requestPayout, payoutContributors, payAllDelivered, requestTopup,
   type PayoutStatus, type PayoutTask,
 } from "@/lib/api/decomposition-v2";
 import { deliveryCell } from "@/lib/delivery/status-matrix";
 
 const inr = (m: number) => "₹" + (m / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+
+// Contributor pay — the amount Glimmora actually DISBURSES to the contributor
+// (NOT budgetMinor, which is the client price carrying Glimmora's margin + GST).
+// Falls back to the client price only if the backend didn't supply the cost.
+const contributorPay = (t: { costMinor?: number; budgetMinor?: number }) =>
+  (t.costMinor != null ? t.costMinor : (t.budgetMinor || 0)) || 0;
 
 const PHASE: Record<PayoutStatus["paymentPhase"], { label: string; tone: string }> = {
   in_progress: { label: "In delivery", tone: "bg-info-subtle text-info-text" },
@@ -43,6 +49,7 @@ export interface PlanPayout {
   request: (taskId: string) => Promise<void>;
   requestAll: (amountMinor?: number) => Promise<void>;
   payout: (taskId: string) => Promise<void>;
+  payAll: () => Promise<void>;
 }
 
 export function usePlanPayout(planId: string, enabled = true): PlanPayout {
@@ -76,15 +83,17 @@ export function usePlanPayout(planId: string, enabled = true): PlanPayout {
     [run, planId],
   );
   const payout = React.useCallback((taskId: string) => run(`pay:${taskId}`, () => payoutContributors(planId, taskId)), [run, planId]);
+  const payAll = React.useCallback(() => run("pay:all", () => payAllDelivered(planId)), [run, planId]);
 
-  return { status, byTask, busy, error, reload, request, requestAll, payout };
+  return { status, byTask, busy, error, reload, request, requestAll, payout, payAll };
 }
 
-export function PayoutSummary({ status, error, busy, onRequestAll, enterprisePriceMinor }: {
+export function PayoutSummary({ status, error, busy, onRequestAll, onPayAll, enterprisePriceMinor }: {
   status: PayoutStatus;
   error?: string;
   busy?: string | null;
   onRequestAll?: (amountMinor?: number) => void;
+  onPayAll?: () => void;       // "Pay all delivered tasks" — disburse every delivered-unpaid task
   enterprisePriceMinor?: number; // GST-inclusive total the enterprise must fund (drives top-up math)
 }) {
   const [amt, setAmt] = React.useState(""); // custom request amount, in rupees
@@ -116,6 +125,31 @@ export function PayoutSummary({ status, error, busy, onRequestAll, enterprisePri
     customMinor != null && !Number.isNaN(customMinor) && customMinor > 0 && customMinor < eligibleMinor
       ? customMinor
       : undefined;
+
+  // ── Disburse (Pay) gating ────────────────────────────────────────────────
+  // Remaining payable = what the enterprise has released − what's already paid.
+  // Glimmora can NEVER disburse more than this. Surfaced + drives "Pay all".
+  const payableMinor = status.payableMinor ?? 0;
+  // Tasks ready to pay NOW = delivered + funded (released, OR eligible/requested while
+  // escrow covers them) and not yet paid. We approximate "funded" with payableMinor:
+  // a delivered-unpaid task is payable while its budget fits the remaining payable.
+  const deliveredUnpaid = tasks.filter(
+    (t) => t.delivered && t.payoutStatus !== "paid" && t.deliveryStatus !== "paid",
+  );
+  // Fund-gating is in RELEASED-FUNDS terms (the enterprise funds the client price, so
+  // each task draws down its budgetMinor from payableMinor), but the amount we DISBURSE
+  // — and surface as "Pay all delivered tasks (₹X)" — is the CONTRIBUTOR pay (costMinor).
+  const payableNow = deliveredUnpaid
+    .slice()
+    .sort((a, b) => (a.budgetMinor || 0) - (b.budgetMinor || 0))
+    .reduce<{ ids: string[]; funds: number; spent: number }>((acc, t) => {
+      const b = t.budgetMinor || 0;       // client price drawn from released funds (the gate)
+      const pay = contributorPay(t);      // contributor pay actually disbursed (the display)
+      if (b > 0 && acc.funds + b <= payableMinor) { acc.ids.push(t.taskId); acc.funds += b; acc.spent += pay; }
+      return acc;
+    }, { ids: [], funds: 0, spent: 0 });
+  const canPayAll = !!onPayAll && payableNow.ids.length > 0;
+  const blockedByFunds = deliveredUnpaid.length > 0 && payableNow.ids.length < deliveredUnpaid.length;
 
   // SOW funding (top-up) math: the enterprise must fund the GST-inclusive final
   // price; compare against what they've released. Fully funded → top-up disabled.
@@ -202,6 +236,45 @@ export function PayoutSummary({ status, error, busy, onRequestAll, enterprisePri
               />
             </>
           )}
+        </div>
+      ) : null}
+      {/* Pay all delivered tasks — disburse to contributors in one action, capped at
+          the remaining payable (released by enterprise − already paid). */}
+      {(deliveredUnpaid.length > 0 || payableMinor > 0) && onPayAll ? (
+        <div className="space-y-2 pt-2 border-t border-stroke-subtle/60">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-body text-[11px] text-text-secondary">
+            <span className="font-semibold text-foreground">Disburse to contributors</span>
+            {payableNow.spent > 0 ? (
+              <span>To disburse now <b className="tabular-nums text-foreground">{inr(payableNow.spent)}</b></span>
+            ) : null}
+            <span>Released funds <b className="tabular-nums" style={{ color: payableMinor > 0 ? "#0F9D6B" : "#D97706" }}>{inr(payableMinor)}</b></span>
+            <span>{deliveredUnpaid.length} delivered &amp; unpaid</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!canPayAll || busy === "pay:all"}
+              onClick={() => onPayAll()}
+              title={
+                !canPayAll
+                  ? (deliveredUnpaid.length === 0
+                      ? "No delivered, unpaid tasks to pay"
+                      : "The enterprise hasn't released enough funds — nothing is payable yet")
+                  : `Pay ${payableNow.ids.length} delivered task${payableNow.ids.length === 1 ? "" : "s"} (${inr(payableNow.spent)})`
+              }
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-brand text-on-brand font-body text-[12px] font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              <Wallet className="h-3.5 w-3.5" />
+              {busy === "pay:all"
+                ? "Paying…"
+                : `Pay all delivered tasks${payableNow.ids.length ? ` (${inr(payableNow.spent)})` : ""}`}
+            </button>
+            {blockedByFunds ? (
+              <span className="font-body text-[10.5px] text-warning-text">
+                {deliveredUnpaid.length - payableNow.ids.length} task{deliveredUnpaid.length - payableNow.ids.length === 1 ? "" : "s"} exceed the released funds — ask the enterprise to release more.
+              </span>
+            ) : null}
+          </div>
         </div>
       ) : null}
       {eligible.length > 0 && onRequestAll ? (
@@ -308,36 +381,66 @@ export function TaskStatusCells({ task }: { task?: PayoutTask }) {
  * PayoutSummary); per task we only show the contributor payout once the
  * enterprise has released that task's budget.
  */
-export function TaskPayoutAction({ task, busy, onPayout, onPayEligible, localPaid }: {
+export function TaskPayoutAction({ task, busy, onPayout, onPayEligible, localPaid, payableMinor }: {
   task?: PayoutTask;
   busy: string | null;
   onPayout: (taskId: string) => void;
   onPayEligible?: (taskId: string) => void;
   localPaid?: Set<string>;
+  payableMinor?: number; // remaining payable (released − paid) — gates the per-task Pay
 }) {
   if (!task) return <span className="w-[130px] shrink-0" />;
   const payKey = `pay:${task.taskId}`;
   const btn = "inline-flex items-center justify-center gap-1.5 h-9 px-2.5 rounded-lg font-body text-[11.5px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full";
+  // Per-task "Pay" is ENABLED only when the task is DELIVERED (QA-accepted —
+  // payment_pending/paid) AND funds are released to cover it. A payout row in
+  // 'released' was sent by the enterprise → always payable; 'eligible'/'requested'
+  // is payable only from pre-funded escrow, i.e. while it fits the remaining payable.
+  const budget = task.budgetMinor || 0;
+  const enoughFunds = payableMinor == null || budget <= payableMinor;
+  const releasedPayable = task.delivered && task.payoutStatus === "released" && enoughFunds;
+  const escrowPayable = task.delivered && task.payoutStatus === "eligible" && enoughFunds && !!onPayEligible;
+  const notDelivered = !task.delivered;
   return (
     <div className="w-[130px] shrink-0">
       {(taskIsPaid(task) || localPaid?.has(task.taskId)) ? (
         <span className="inline-flex items-center gap-1 h-9 text-[11.5px] font-semibold text-success-text"><CheckCircle2 className="h-3.5 w-3.5" /> Paid</span>
       ) : task.payoutStatus === "released" ? (
-        <button type="button" disabled={busy === payKey} onClick={() => onPayout(task.taskId)} className={`${btn} bg-brand text-on-brand hover:opacity-90`}>
-          <Wallet className="h-3.5 w-3.5" /> {busy === payKey ? "Paying…" : "Pay contributor"}
+        <button
+          type="button"
+          disabled={busy === payKey || !releasedPayable}
+          onClick={() => onPayout(task.taskId)}
+          title={notDelivered
+            ? "Not yet delivered & QA-accepted"
+            : !enoughFunds
+              ? `Released funds don't cover this task (${inr(budget)}) — ask the enterprise to release more`
+              : "Pay the contributor for this delivered task"}
+          className={`${btn} bg-brand text-on-brand hover:opacity-90`}
+        >
+          <Wallet className="h-3.5 w-3.5" /> {busy === payKey ? "Paying…" : !enoughFunds ? "Awaiting funds" : "Pay contributor"}
         </button>
       ) : task.payoutStatus === "requested" ? (
         <span className="inline-flex items-center gap-1 h-9 text-[11px] text-text-tertiary"><Clock className="h-3.5 w-3.5" /> Awaiting enterprise</span>
       ) : task.payoutStatus === "eligible" ? (
         onPayEligible ? (
-          <button type="button" disabled={busy === payKey} onClick={() => onPayEligible(task.taskId)} className={`${btn} bg-brand text-on-brand hover:opacity-90`}>
-            <Wallet className="h-3.5 w-3.5" /> {busy === payKey ? "Paying…" : "Pay"}
+          <button
+            type="button"
+            disabled={busy === payKey || !escrowPayable}
+            onClick={() => onPayEligible(task.taskId)}
+            title={notDelivered
+              ? "Not yet delivered & QA-accepted"
+              : !enoughFunds
+                ? `No released funds cover this task (${inr(budget)}) yet — request payment or top up the escrow`
+                : "Pay the contributor from pre-funded escrow"}
+            className={`${btn} bg-brand text-on-brand hover:opacity-90`}
+          >
+            <Wallet className="h-3.5 w-3.5" /> {busy === payKey ? "Paying…" : !enoughFunds ? "Awaiting funds" : "Pay"}
           </button>
         ) : (
           <span className="inline-flex items-center gap-1 h-9 text-[11px] text-text-secondary"><Send className="h-3.5 w-3.5" /> Ready to bill</span>
         )
       ) : (
-        <span className="inline-flex items-center h-9 text-[11px] text-text-tertiary">—</span>
+        <span className="inline-flex items-center h-9 text-[11px] text-text-tertiary" title={notDelivered ? "Not yet delivered & QA-accepted" : undefined}>—</span>
       )}
     </div>
   );

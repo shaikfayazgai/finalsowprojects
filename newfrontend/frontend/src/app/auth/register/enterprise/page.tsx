@@ -47,7 +47,7 @@ export default function EnterpriseRegisterPage() {
       if (!res.ok && res.status >= 500) throw new Error();
       setSent(true);
     } catch {
-      setError("Couldn't send your request. Try again, or email hello@glimmora.ai directly.");
+      setError("Couldn't send your request. Try again, or email grcsupport@glimmora.ai directly.");
     } finally {
       setSubmitting(false);
     }

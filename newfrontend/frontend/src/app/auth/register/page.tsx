@@ -59,6 +59,9 @@ function RegisterScreen() {
   const ref = sp.get("ref") ?? undefined;
   const track = sp.get("track") ?? undefined;
   const invite = sp.get("invite") ?? undefined;
+  // Prefill the email when arriving from a login attempt that found no account
+  // (e.g. /auth/register?email=...). A personal partner invite still wins below.
+  const prefillEmail = sp.get("email") ?? "";
 
   const studentInvite = React.useMemo(
     () => (invite ? resolveStudentInvite(invite) : null),
@@ -74,7 +77,7 @@ function RegisterScreen() {
 
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
-  const [email, setEmail] = React.useState("");
+  const [email, setEmail] = React.useState(prefillEmail);
   const [pwd, setPwd] = React.useState("");
   const [showPwd, setShowPwd] = React.useState(false);
   const [agreed, setAgreed] = React.useState(false);

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils/cn";
 import { ShellProvider, useShell } from "@/components/meridian/shell/ShellContext";
 import { PageActionsProvider } from "@/components/meridian/shell/PageActionsContext";
 import { CommandPalette } from "@/components/meridian/shell/CommandPalette";
+import { Toaster } from "@/components/ui/toaster";
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminTopbar } from "./AdminTopbar";
 import { AdminMobileNav } from "./AdminMobileNav";
@@ -64,6 +65,8 @@ function ShellInner({ config, children, operator, brandSubtitle }: AdminShellPro
       </div>
 
       <CommandPalette config={config} />
+      {/* In-app toast notifications (success/error feedback for admin actions). */}
+      <Toaster />
     </div>
   );
 }

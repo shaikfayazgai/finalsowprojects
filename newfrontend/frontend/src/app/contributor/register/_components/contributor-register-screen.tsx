@@ -10,11 +10,20 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
-import { AuthAlert, AuthField, AuthSubmitButton, authInputCls } from "@/components/auth/auth-screen";
-import { LoginShell } from "@/app/auth/login/_components/login-layout";
+import {
+  AuthAlert,
+  AuthField,
+  AuthSubmitButton,
+  authInputCls,
+} from "@/components/auth/auth-screen";
+import {
+  LoginDivider,
+  LoginOAuthRow,
+  LoginShell,
+} from "@/app/auth/login/_components/login-layout";
 import { cn } from "@/lib/utils/cn";
 
 type Step = "details" | "otp" | "password";
@@ -27,10 +36,14 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; stat
 
 export function ContributorRegisterScreen() {
   const router = useRouter();
+  const sp = useSearchParams();
+  // Prefill the email when arriving from a login attempt that found no account
+  // (e.g. /contributor/register?email=...).
+  const prefillEmail = sp.get("email") ?? "";
   const [step, setStep] = React.useState<Step>("details");
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
-  const [email, setEmail] = React.useState("");
+  const [email, setEmail] = React.useState(prefillEmail);
   const [agreed, setAgreed] = React.useState(false);
   const [code, setCode] = React.useState("");
   const [devOtp, setDevOtp] = React.useState<string | null>(null);
@@ -40,6 +53,7 @@ export function ContributorRegisterScreen() {
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [oauthBusy, setOauthBusy] = React.useState<"google" | "microsoft" | null>(null);
 
   const emailLc = email.trim().toLowerCase();
   const strong = pwd.length >= 8 && /[A-Z]/.test(pwd) && /[a-z]/.test(pwd) && /\d/.test(pwd);
@@ -104,6 +118,21 @@ export function ContributorRegisterScreen() {
     finally { setBusy(false); }
   }
 
+  /**
+   * Sign up with Google / Microsoft. Set the `sso_register_role` cookie first so
+   * the NextAuth signIn callback (src/auth.ts) lets a brand-new email through
+   * instead of blocking it as "not registered" — the contributor account is
+   * created from the OAuth identity on callback.
+   */
+  async function onOauth(provider: "google" | "microsoft") {
+    setError(null);
+    setOauthBusy(provider);
+    document.cookie = "sso_register_role=contributor; path=/; max-age=600; samesite=lax";
+    const idp = provider === "google" ? "google" : "microsoft-entra-id";
+    await signIn(idp, { callbackUrl: "/contributor/profile/complete" });
+    setOauthBusy(null);
+  }
+
   return (
     <LoginShell>
       <header className="mb-6">
@@ -111,7 +140,7 @@ export function ContributorRegisterScreen() {
           Contributor Portal
         </p>
         <h1 className="font-display text-[27px] font-bold text-foreground tracking-[-0.03em] leading-tight">
-          Create your freelancer account
+          Create account
         </h1>
         <p className="mt-2 font-body text-[14px] text-text-secondary">
           {step === "details" && "Sign up with email — we'll send you a verification code."}
@@ -155,6 +184,19 @@ export function ContributorRegisterScreen() {
         </form>
       ) : null}
 
+      {step === "details" ? (
+        <>
+          <LoginDivider />
+          <LoginOAuthRow
+            onGoogle={() => onOauth("google")}
+            onMicrosoft={() => onOauth("microsoft")}
+            googleBusy={oauthBusy === "google"}
+            microsoftBusy={oauthBusy === "microsoft"}
+            disabled={busy}
+          />
+        </>
+      ) : null}
+
       {step === "otp" ? (
         <form onSubmit={verifyCode} className="space-y-4">
           <AuthField label="Verification code" htmlFor="reg-otp">
@@ -194,6 +236,9 @@ export function ContributorRegisterScreen() {
       <p className="mt-6 text-center font-body text-[13px] text-text-secondary">
         Already have an account?{" "}
         <Link href="/contributor/login" className="font-semibold text-text-link hover:underline underline-offset-2">Sign in</Link>
+      </p>
+      <p className="mt-1.5 text-center font-body text-[12.5px] text-text-tertiary">
+        <Link href="/auth/forgot-password" className="font-semibold text-text-link hover:underline underline-offset-2">Forgot password?</Link>
       </p>
     </LoginShell>
   );

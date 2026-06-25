@@ -44,8 +44,15 @@ def _base_url(role: str) -> str:
 ROUTES: list[tuple[str, str]] = [
     # shared auth — served by all; send to super-admin
     ("/api/v1/auth", "super-admin"),
+    # OAuth contributor provisioning (Google/Microsoft SSO sign-up) is implemented
+    # ONLY in the freelancer backend's auth_app, so this longer prefix must win
+    # over the generic /api/v1/auth → super-admin above. Without it, SSO sign-up's
+    # /api/v1/auth/oauth/provision 404s on super-admin → the NextAuth session ends
+    # up with no backend access token → contributor profile save returns 401.
+    ("/api/v1/auth/oauth", "freelancer"),
     # super-admin / platform
     ("/api/superadmin", "super-admin"),
+    ("/api/v1/superadmin", "super-admin"),
     ("/api/admin", "super-admin"),
     ("/api/v1/admin", "super-admin"),
     ("/api/v1/cases", "super-admin"),

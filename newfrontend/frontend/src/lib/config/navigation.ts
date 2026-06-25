@@ -9,9 +9,7 @@ import {
   ListChecks,
   Wallet,
   HeartHandshake,
-  MessageSquare,
-  ClipboardCheck,
-  History,
+  MessageSquare,  History,
   AlertTriangle,
   TrendingUp,
   LifeBuoy,
@@ -31,6 +29,7 @@ import {
   Sparkles,
   Flag,
   CircuitBoard,
+  Receipt,
   FileWarning,
   Siren,
   Send,
@@ -387,14 +386,24 @@ export const adminNav: ModuleConfig = {
       title: "Talent",
       items: [
         { label: "Mentors", href: "/admin/mentors", icon: Users },
+        { label: "Contributors", href: "/admin/contributors", icon: UsersRound },
         { label: "Skill taxonomy", href: "/admin/skill-taxonomy", icon: Sparkles },
       ],
     },
     {
       title: "Standards",
       items: [
-        { label: "Rubric templates", href: "/admin/rubric-templates", icon: ClipboardCheck },
         { label: "Email templates", href: "/admin/email-templates", icon: Mail },
+      ],
+    },
+    {
+      title: "Infrastructure",
+      zone: "governance",
+      items: [
+        { label: "AI agents", href: "/admin/ai", icon: CircuitBoard },
+        { label: "Billing", href: "/admin/billing", icon: Receipt },
+        { label: "Payment rails", href: "/admin/payment-rails", icon: Wallet },
+        { label: "System health", href: "/admin/system-health", icon: Server },
       ],
     },
     {
@@ -403,17 +412,7 @@ export const adminNav: ModuleConfig = {
         { label: "Cases", href: "/admin/governance", icon: Flag, badge: "3" },
         { label: "Resolution Center", href: "/admin/cases", icon: LifeBuoy },
         { label: "Complaints", href: "/admin/complaints", icon: MessageSquare },
-        { label: "KYC reviews", href: "/admin/kyc", icon: ShieldAlert, badge: "1" },
         { label: "Audit log", href: "/admin/audit", icon: ScrollText },
-      ],
-    },
-    {
-      title: "Infrastructure",
-      zone: "governance",
-      items: [
-        { label: "AI agents", href: "/admin/ai", icon: CircuitBoard },
-        { label: "Payment rails", href: "/admin/payment-rails", icon: Wallet },
-        { label: "System health", href: "/admin/system-health", icon: Server },
       ],
     },
     {

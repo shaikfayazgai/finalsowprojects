@@ -114,15 +114,32 @@ export default function AdminPricePlanPage() {
 
   const doPayEligible = async (taskId: string) => {
     const task = payout.byTask[taskId];
-    if (!task || task.budgetMinor <= 0) return;
+    // Disburse the CONTRIBUTOR pay (costMinor), NOT budgetMinor (the client price,
+    // which carries Glimmora's margin + GST). Fall back to budget only if the
+    // backend didn't supply the contributor cost.
+    const contributorMinor = task?.costMinor != null ? task.costMinor : (task?.budgetMinor ?? 0);
+    if (!task || contributorMinor <= 0) return;
     setActionError(null);
     try {
-      await openRazorpay(task.budgetMinor, `Task payout: ${task.title || taskId}`);
+      await openRazorpay(contributorMinor, `Task payout: ${task.title || taskId}`);
       await payout.payout(taskId);
       setLocalPaidTaskIds((prev) => new Set([...prev, taskId]));
       payout.reload();
     } catch (e) {
       if (e instanceof Error && e.message !== "Payment cancelled") setActionError(e.message);
+    }
+  };
+
+  // "Pay all delivered tasks" — bulk disburse. In TEST/simulated mode this runs the
+  // real state machine on the backend (no Razorpay checkout per task); the backend
+  // caps at the remaining payable and skips any task that exceeds it.
+  const doPayAll = async () => {
+    setActionError(null);
+    try {
+      await payout.payAll();
+      payout.reload();
+    } catch (e) {
+      if (e instanceof Error) setActionError(e.message);
     }
   };
 
@@ -436,6 +453,7 @@ export default function AdminPricePlanPage() {
                       onPayout={payout.payout}
                       onPayEligible={rzpReady ? doPayEligible : undefined}
                       localPaid={localPaidTaskIds}
+                      payableMinor={payout.status?.payableMinor}
                     />
                   ) : null}
                 </div>
@@ -512,7 +530,7 @@ export default function AdminPricePlanPage() {
         const gf = Math.max(0, Math.min(gstPct, 50)) / 100;
         const clientMinor = cf < 1 ? Math.round(totalMinor / (1 - cf)) : totalMinor;
         const enterprisePriceMinor = clientMinor + Math.round(clientMinor * gf); // contributor + margin + GST
-        return <PayoutSummary status={payout.status} error={payout.error} busy={payout.busy} onRequestAll={payout.requestAll} enterprisePriceMinor={enterprisePriceMinor} />;
+        return <PayoutSummary status={payout.status} error={payout.error} busy={payout.busy} onRequestAll={payout.requestAll} onPayAll={doPayAll} enterprisePriceMinor={enterprisePriceMinor} />;
       })() : null}
 
       {/* Actions */}

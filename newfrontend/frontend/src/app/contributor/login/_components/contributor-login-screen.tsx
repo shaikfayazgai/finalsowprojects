@@ -20,11 +20,22 @@ import {
   AuthSubmitButton,
   authInputCls,
 } from "@/components/auth/auth-screen";
-import { LoginShell } from "@/app/auth/login/_components/login-layout";
+import {
+  LoginDivider,
+  LoginOAuthRow,
+  LoginShell,
+} from "@/app/auth/login/_components/login-layout";
+import { accountExistsForEmail } from "@/lib/api/auth";
 import { cn } from "@/lib/utils/cn";
 
 const CONTRIBUTOR_HOME = "/contributor/dashboard";
+const CONTRIBUTOR_REGISTER = "/contributor/register";
 const CONTRIBUTOR_ROLES = ["contributor", "freelancer", "student", "women", "admin", "super_admin"];
+
+function registerHref(email: string): string {
+  const e = email.trim().toLowerCase();
+  return e.includes("@") ? `${CONTRIBUTOR_REGISTER}?email=${encodeURIComponent(e)}` : CONTRIBUTOR_REGISTER;
+}
 
 function safeReturnTo(raw: string | null): string | null {
   if (!raw) return null;
@@ -38,6 +49,15 @@ export function ContributorLoginScreen() {
   const sp = useSearchParams();
   const returnTo = safeReturnTo(sp.get("returnTo"));
   const reason = sp.get("reason");
+  const authError = sp.get("error");
+  const ssoEmail = sp.get("email") ?? "";
+
+  // SSO sign-in with an email that has no Glimmora account → the NextAuth signIn
+  // callback bounced back here with ?error=SsoNotRegistered. Instead of silently
+  // jumping to sign-up, show a clear message + an explicit "Create account" CTA
+  // (email prefilled) so the user understands no account exists and chooses to
+  // create one.
+  const noSsoAccount = authError === "SsoNotRegistered";
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -48,6 +68,7 @@ export function ContributorLoginScreen() {
     reason === "unauthenticated" ? "Your session expired. Sign in again to continue." : null,
   );
   const [submitting, setSubmitting] = React.useState(false);
+  const [oauthBusy, setOauthBusy] = React.useState<"google" | "microsoft" | null>(null);
 
   const canSubmit = email.includes("@") && password.length >= 4 && !submitting;
 
@@ -65,6 +86,17 @@ export function ContributorLoginScreen() {
     }
 
     if (!res || res.error) {
+      // The backend returns the SAME generic 401 for "no account" and "wrong
+      // password" (anti-enumeration), so the sign-in result alone can't tell
+      // them apart. Probe the dedicated existence endpoint: only when the
+      // account genuinely does NOT exist do we send the user to sign up. A
+      // wrong password for an EXISTING account keeps the invalid-credentials
+      // error (and never redirects).
+      const exists = await accountExistsForEmail(creds.email);
+      if (exists === false) {
+        router.push(registerHref(creds.email));
+        return;
+      }
       setError("That email and password don't match. Try again.");
       setSubmitting(false);
       return;
@@ -85,6 +117,24 @@ export function ContributorLoginScreen() {
     router.push(returnTo ?? CONTRIBUTOR_HOME);
   }
 
+  /**
+   * Sign IN with Google / Microsoft (existing contributor). Unlike sign-up, no
+   * `sso_register_role` cookie is set — this is an existing account. After the
+   * OAuth callback NextAuth lands the user on their contributor destination;
+   * proxy.ts routes by role from there.
+   */
+  async function onOauth(provider: "google" | "microsoft") {
+    setError(null);
+    setOauthBusy(provider);
+    // Mark the originating portal so a "no account" bounce from the NextAuth
+    // signIn callback returns to /contributor/login (which shows the message +
+    // Create-account CTA) rather than the generic /auth/login.
+    document.cookie = "sso_login_portal=contributor; path=/; max-age=600; samesite=lax";
+    const idp = provider === "google" ? "google" : "microsoft-entra-id";
+    await signIn(idp, { callbackUrl: returnTo ?? CONTRIBUTOR_HOME });
+    setOauthBusy(null);
+  }
+
   return (
     <LoginShell>
       <header className="mb-6">
@@ -99,7 +149,25 @@ export function ContributorLoginScreen() {
         </p>
       </header>
 
-      {notice && !error ? <AuthAlert variant="info">{notice}</AuthAlert> : null}
+      {/* SSO with an unregistered email — explain + offer an explicit sign-up CTA
+          (no silent redirect). The email is prefilled into the register link. */}
+      {noSsoAccount ? (
+        <div className="mb-4 rounded-lg border border-stroke-subtle bg-surface-hover px-3.5 py-3">
+          <p className="font-body text-[13px] text-foreground leading-relaxed">
+            No account exists for{" "}
+            {ssoEmail ? <span className="font-semibold">{ssoEmail}</span> : "this email"} — create a
+            new account to get started.
+          </p>
+          <Link
+            href={registerHref(ssoEmail)}
+            className="mt-3 inline-flex h-9 items-center justify-center rounded-lg bg-brand px-4 font-body text-[13px] font-semibold text-on-brand hover:bg-brand-hover transition-colors"
+          >
+            Create account
+          </Link>
+        </div>
+      ) : null}
+
+      {notice && !error && !noSsoAccount ? <AuthAlert variant="info">{notice}</AuthAlert> : null}
       {error ? <AuthAlert variant="error">{error}</AuthAlert> : null}
 
       <form onSubmit={onSubmit} className="space-y-4">
@@ -167,14 +235,23 @@ export function ContributorLoginScreen() {
         </AuthSubmitButton>
       </form>
 
+      <LoginDivider />
+      <LoginOAuthRow
+        onGoogle={() => onOauth("google")}
+        onMicrosoft={() => onOauth("microsoft")}
+        googleBusy={oauthBusy === "google"}
+        microsoftBusy={oauthBusy === "microsoft"}
+        disabled={submitting}
+      />
+
       {/* Contributor is the only role with open self-signup (a freelancer). */}
       <p className="mt-6 text-center font-body text-[13px] text-text-secondary">
         New to Glimmora?{" "}
         <Link
-          href="/contributor/register"
+          href={registerHref(email)}
           className="font-semibold text-text-link hover:underline underline-offset-2"
         >
-          Create a freelancer account
+          Create account
         </Link>
       </p>
     </LoginShell>

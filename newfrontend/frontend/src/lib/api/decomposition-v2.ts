@@ -152,8 +152,9 @@ export interface PayoutTask {
   deliveryStatus: string;       // ready/assigned/in_progress/.../payment_pending/paid
   delivered: boolean;
   payoutStatus: string | null;  // eligible/requested/released/paid/null
-  budgetMinor: number;          // client price for this task
+  budgetMinor: number;          // client price for this task (contributor + margin + GST) — what the enterprise FUNDS
   netMinor?: number;            // Glimmora-only
+  costMinor?: number;           // Glimmora-only: contributor pay — the amount actually DISBURSED to the contributor
 }
 
 export interface PayoutStatus {
@@ -167,6 +168,7 @@ export interface PayoutStatus {
   payoutCounts: Record<string, number>;
   sowBudgetMinor?: number;      // agreed SOW budget (enterprise's own figure)
   budgetMinor: number;          // billed/actual (client price) — safe for enterprise
+  payableMinor?: number;        // remaining payable = released by enterprise − already paid
   contributorNetMinor?: number; // Glimmora-only
   escrow?: SowEscrow;           // pre-funded budget released into Glimmora for this SOW
   tasks: PayoutTask[];
@@ -293,8 +295,17 @@ export async function getPaymentTransactions(planId: string): Promise<PaymentTra
 }
 
 /** Glimmora disburses to contributors. Pass taskId to scope to one task. */
-export async function payoutContributors(planId: string, taskId?: string): Promise<{ paid: number; status: PayoutStatus }> {
+export async function payoutContributors(planId: string, taskId?: string): Promise<{ paid: number; skipped?: number; status: PayoutStatus }> {
   return call(`${BASE}/${encodeURIComponent(planId)}/payout-contributors`, jsonPost(taskId));
+}
+
+/**
+ * "Pay all delivered tasks" — disburse every delivered-unpaid task in the SOW in
+ * one action. The backend caps at the remaining payable (released by the
+ * enterprise − already paid) and skips any task that would exceed it.
+ */
+export async function payAllDelivered(planId: string): Promise<{ paid: number; skipped?: number; status: PayoutStatus }> {
+  return payoutContributors(planId);
 }
 
 /** Enterprise submits a draft plan to Glimmora for pricing + approval. draft → submitted. */

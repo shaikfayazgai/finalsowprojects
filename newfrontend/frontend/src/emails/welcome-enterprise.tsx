@@ -98,8 +98,8 @@ export default function WelcomeEnterprise({
                   <Text style={supportTitle}>Need assistance getting started?</Text>
                   <Text style={supportText}>
                     Our onboarding team is here to help. Reply to this email or contact us at{" "}
-                    <a href="mailto:support@glimmora.com" style={{ color: headerColor, fontWeight: 600, textDecoration: "none" }}>
-                      support@glimmora.com
+                    <a href="mailto:grcsupport@glimmora.ai" style={{ color: headerColor, fontWeight: 600, textDecoration: "none" }}>
+                      grcsupport@glimmora.ai
                     </a>
                   </Text>
                 </Column>

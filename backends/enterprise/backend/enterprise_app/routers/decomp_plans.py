@@ -30,7 +30,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from psycopg2.extras import Json, RealDictCursor
 
-from shared.audit import write_audit
+from shared.audit import write_audit, write_txn_event
 from shared.db import ensure_pg_clean, get_pg_connection
 from shared.deps import get_current_user
 
@@ -1109,6 +1109,19 @@ def task_timeline(
         except Exception:  # noqa: BLE001
             conn.rollback()
             ras = []
+        # A single submission/round can spawn MULTIPLE reviewer_assignments rows when
+        # the work is re-reviewed (e.g. mentor re-checks, then QA re-scores the same
+        # deliverable). Only the LATEST row per (round, submission) is authoritative —
+        # its mentor/QA scores are the ones recorded in work_ratings. Keep just that
+        # one so the timeline shows the real, consistent score for each round instead
+        # of also surfacing a stale earlier attempt's QA score. (`ras` is ordered by
+        # created_at ASC, so the last write for a key wins.)
+        _latest: dict = {}
+        for ra in ras:
+            rd = ra.get("data") or {}
+            key = (rd.get("round") or 1, str(rd.get("submissionId") or ra.get("id")))
+            _latest[key] = ra
+        ras = sorted(_latest.values(), key=lambda r: _to_iso(r.get("updated_at")) or "")
         seen_sub: set = set()
         for ra in ras:
             rd = ra.get("data") or {}
@@ -1620,7 +1633,10 @@ def plan_payout_status(plan_id: str, user: Annotated[dict, Depends(get_current_u
             # reversed rows inflate the phase denominator and double-count the budget.
             cur.execute(
                 "SELECT DISTINCT ON (data->>'canonicalTaskId') data->>'canonicalTaskId' ctid, status, "
-                "(data->>'clientMinor')::bigint client, (data->>'netMinor')::bigint net "
+                "(data->>'clientMinor')::bigint client, (data->>'netMinor')::bigint net, "
+                # Contributor pay (the actual amount disbursed to the contributor) — the
+                # payout row's amount_minor column, with netMinor/grossMinor as fallbacks.
+                "COALESCE(amount_minor, (data->>'netMinor')::bigint, (data->>'grossMinor')::bigint, 0) cost "
                 "FROM payouts WHERE data->>'canonicalTaskId' = ANY(%s) "
                 "ORDER BY data->>'canonicalTaskId', created_at DESC", [ids])
             for r in cur.fetchall():
@@ -1641,6 +1657,10 @@ def plan_payout_status(plan_id: str, user: Annotated[dict, Depends(get_current_u
         }
         if is_sa:
             item["netMinor"] = int((po or {}).get("net") or 0)
+            # Contributor pay — the amount Glimmora actually disburses to the
+            # contributor (NOT the client price, which carries margin + GST).
+            # Glimmora-only: the enterprise must never see contributor pay.
+            item["costMinor"] = int((po or {}).get("cost") or 0)
         tasks.append(item)
     # The SOW's agreed/default budget the enterprise committed at creation — the
     # reference the enterprise bills against (its own number, enterprise-safe).
@@ -1669,6 +1689,10 @@ def plan_payout_status(plan_id: str, user: Annotated[dict, Depends(get_current_u
     # much has been drawn down to pay contributors (enterprise-safe — its own budget).
     with conn.cursor(cursor_factory=_RDC) as cur_e:
         out["escrow"] = _escrow_balance(cur_e, plan_id)
+        # Remaining payable = released by enterprise − already paid (escrow remaining
+        # + per-task 'released' budgets). The ceiling on what Glimmora may disburse;
+        # surfaced so the UI can show it + gate the per-task Pay buttons.
+        out["payableMinor"] = _payable_minor(cur_e, plan_id, ids)
     if is_sa:
         out["contributorNetMinor"] = net_total   # Glimmora-only
     return out
@@ -1893,6 +1917,67 @@ def _escrow_balance(cur, plan_id: str) -> dict:
     return {"fundedMinor": f, "spentMinor": s, "remainingMinor": f - s, "currency": r.get("currency") or "INR"}
 
 
+# ── Disbursal: TEST (simulated) vs real RazorpayX + fund-released gating ───────
+# TEST mode (no RAZORPAY_KEY_ID env) runs the REAL state machine + transaction
+# links but moves no real money (external_ref='SIM-<id>'). `_razorpay_live()` is
+# the single toggle a future RazorpayX integration flips.
+
+def _razorpay_live() -> bool:
+    import os as _os
+    return bool(_os.environ.get("RAZORPAY_KEY_ID", "").strip())
+
+
+def _payable_minor(cur, plan_id: str, task_ids: list[str]) -> int:
+    """How much Glimmora may STILL disburse to contributors for this SOW =
+    what the enterprise has released MINUS what's already been paid out. NEVER
+    let a disburse exceed this — we can't pay out more than the enterprise funded.
+
+    payable = escrow.remaining (pre-funded, undrawn)
+            + Σ client price of per-task 'released' (sent, not yet paid) payouts.
+    Both sources are budget the enterprise has committed; paid rows are excluded
+    (their escrow draw is already counted in spent_minor)."""
+    bal = _escrow_balance(cur, plan_id)
+    payable = int(bal["remainingMinor"] or 0)
+    if task_ids:
+        cur.execute(
+            "SELECT COALESCE(SUM(COALESCE((data->>'clientMinor')::bigint,0)),0) rel "
+            "FROM payouts WHERE data->>'canonicalTaskId' = ANY(%s) AND status='released'",
+            [task_ids])
+        r = cur.fetchone()
+        payable += int((r["rel"] if isinstance(r, dict) else r[0]) or 0)
+    return max(0, payable)
+
+
+def _resolve_payout_method(cur, account_id) -> dict | None:
+    """Contributor's default (or first) saved bank/UPI method — read at disburse so
+    the (future) real RazorpayX call has a destination. None if they saved none."""
+    if account_id in (None, ""):
+        return None
+    try:
+        cur.execute(
+            "SELECT id, type, label, is_default FROM payout_methods WHERE account_id=%s "
+            "ORDER BY is_default DESC, verified_at DESC NULLS LAST, created_at ASC LIMIT 1",
+            [account_id])
+        r = cur.fetchone()
+        return dict(r) if r else None
+    except Exception:  # noqa: BLE001 — table not created in this env
+        return None
+
+
+def _contributor_contact(cur, account_id) -> dict:
+    """Email + display name for a contributor account (for the payout email)."""
+    try:
+        cur.execute("SELECT email, first_name, last_name FROM login_accounts WHERE id=%s", [account_id])
+        r = cur.fetchone()
+        if not r:
+            return {}
+        r = dict(r)
+        name = f"{r.get('first_name') or ''} {r.get('last_name') or ''}".strip()
+        return {"email": r.get("email"), "name": name or r.get("email")}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 @router.post("/plans/{plan_id}/fund-escrow")
 def fund_escrow(plan_id: str, user: Annotated[dict, Depends(get_current_user)],
                 body: dict = Body(default={})):
@@ -1982,54 +2067,115 @@ def request_topup(plan_id: str, user: Annotated[dict, Depends(get_current_user)]
 @router.post("/plans/{plan_id}/payout-contributors")
 def payout_contributors(plan_id: str, user: Annotated[dict, Depends(get_current_user)],
                         body: dict = Body(default={})):
-    """Glimmora disburses to contributors for tasks the enterprise has released:
-    released → paid; decomp_tasks → 'paid'; contributor_tasks → 'completed'.
-    Pass {taskId} to scope to a single task; otherwise all released tasks."""
+    """Glimmora disburses to contributors for tasks the enterprise has FUNDED:
+    released → processing → paid; decomp_tasks → 'paid'; contributor_tasks → 'completed'.
+
+    Scope (body):
+      - {taskId}  → just that ONE task (per-task "Pay" button). Only allowed when the
+                    task is delivered (QA-accepted, payout eligible/released) AND its
+                    amount ≤ the remaining payable.
+      - {} or {payAll: true} → "Pay all delivered tasks": every delivered-unpaid task,
+                    capped at the remaining payable (skips any task that would exceed it).
+
+    FUND GATING: payable = released_by_enterprise − already_paid (escrow remaining +
+    per-task 'released' budgets). A disburse NEVER exceeds payable. Each paid row moves
+    released→processing→paid, carries the task_id + plan_id transaction link + an
+    external_ref. TEST mode (no RAZORPAY_KEY_ID) is simulated — real state machine, no
+    real money; the real RazorpayX call slots in behind `_razorpay_live()`."""
     if not _is_superadmin(user):
         raise HTTPException(status_code=403, detail="Only Glimmora (super admin) can pay out contributors")
     row = _get_plan_row(plan_id)
     if not row:
         raise HTTPException(status_code=404, detail="Plan not found")
     task_id = (body or {}).get("taskId")
+    sow_id = row.get("sow_id")
     conn = _conn()
     from psycopg2.extras import RealDictCursor as _RDC
     paid = 0
-    done = []
-    with conn.cursor(cursor_factory=_RDC) as cur:
+    done: list = []
+    skipped: list = []  # tasks delivered but over the remaining payable
+    sim = not _razorpay_live()
+    try:
+      with conn.cursor(cursor_factory=_RDC) as cur:
         ids = [task_id] if task_id else _plan_task_ids(cur, plan_id)
-        if ids:
+        # Fund-released gate: never disburse more than the enterprise has funded.
+        payable = _payable_minor(cur, plan_id, ids)
+
+        def _disburse_row(pid: str, acct, num_task, ctid, cm: int, from_escrow: bool) -> None:
+            """released|eligible|requested → processing → paid (transaction-linked).
+            Idempotent: guarded on status so a task is never paid twice."""
+            method = _resolve_payout_method(cur, acct)
+            method_id = (method or {}).get("id")
+            ext_ref = "SIM-" + str(pid)[:8]
+            if _razorpay_live():
+                # ── REAL RazorpayX branch (placeholder) ──────────────────────
+                # A real RazorpayX payout call wires in here using `method` (bank/UPI);
+                # on success set ext_ref to the RazorpayX payout id. Simulated for now.
+                ext_ref = "SIM-" + str(pid)[:8]
+            # released → processing (in-flight), then → paid. Both guarded on status<>'paid'.
+            cur.execute("UPDATE payouts SET status='processing', "
+                        "method_id=COALESCE(%s, method_id), updated_at=now() "
+                        "WHERE id=%s AND status<>'paid'", [method_id, pid])
             cur.execute(
                 "UPDATE payouts SET status='paid', paid_at=now(), "
-                "external_ref=COALESCE(external_ref, 'SIM-'||left(id,8)), updated_at=now() "
+                "external_ref=COALESCE(external_ref,%s), "
+                "data = data || jsonb_build_object('planId', %s, 'sowId', %s, "
+                "  'disbursedBy', %s, 'simulated', %s, 'paidFromEscrow', %s), updated_at=now() "
+                "WHERE id=%s AND status='processing'",
+                [ext_ref, plan_id, sow_id, str(user.get("email") or user.get("id")), sim,
+                 bool(from_escrow), pid])
+            done.append({"payout_id": pid, "account_id": acct, "task_id": num_task,
+                         "ctid": ctid, "amountMinor": cm, "title": None})
+
+        if ids:
+            # 1) Per-task 'released' payouts (enterprise sent that task's budget) — pay
+            #    them oldest first, but only while the remaining payable covers them.
+            #    The DISBURSED amount is the CONTRIBUTOR pay (amount_minor / netMinor),
+            #    NOT the client price — the client price (with margin + GST) is only what
+            #    the enterprise funds. `payable` is in released-funds terms (client), and
+            #    a contributor payout is always ≤ its client price, so contributor pay
+            #    that fits the released funds is always payable.
+            cur.execute(
+                "SELECT id, account_id, task_id, data->>'canonicalTaskId' ctid, task_title tt, "
+                "COALESCE(amount_minor, (data->>'netMinor')::bigint, (data->>'grossMinor')::bigint, 0) cost, "
+                "COALESCE((data->>'clientMinor')::bigint,0) client FROM payouts "
                 "WHERE data->>'canonicalTaskId' = ANY(%s) AND status='released' "
-                "RETURNING account_id, task_id, data->>'canonicalTaskId' ctid", [ids])
-            done = cur.fetchall(); paid = len(done)
-            # Pre-funded escrow: also pay DELIVERED tasks the enterprise pre-funded
-            # (payout still 'eligible'/'requested', not per-task released) straight from
-            # the SOW escrow — oldest first, only while the escrow balance covers them.
+                "ORDER BY created_at ASC", [ids])
+            for r in cur.fetchall():
+                cost = int(r["cost"] or 0)             # contributor pay (what we disburse)
+                client = int(r["client"] or 0)         # released funds this task draws down
+                if client <= payable:
+                    _disburse_row(r["id"], r["account_id"], r["task_id"], r["ctid"], cost, False)
+                    payable -= client
+                    done[-1]["title"] = r.get("tt")
+                else:
+                    skipped.append(r["ctid"])
+            # 2) Pre-funded escrow: also pay DELIVERED tasks the enterprise pre-funded
+            #    (payout still 'eligible'/'requested') straight from the SOW escrow —
+            #    oldest first, only while the escrow balance (already inside payable) covers them.
             bal = _escrow_balance(cur, plan_id)
             esc_remaining = bal["remainingMinor"]
             if esc_remaining > 0:
                 cur.execute(
-                    "SELECT id, account_id, task_id, data->>'canonicalTaskId' ctid, "
-                    "COALESCE((data->>'clientMinor')::bigint,0) cm FROM payouts "
+                    "SELECT id, account_id, task_id, data->>'canonicalTaskId' ctid, task_title tt, "
+                    "COALESCE(amount_minor, (data->>'netMinor')::bigint, (data->>'grossMinor')::bigint, 0) cost, "
+                    "COALESCE((data->>'clientMinor')::bigint,0) client FROM payouts "
                     "WHERE data->>'canonicalTaskId' = ANY(%s) AND status IN ('eligible','requested') "
                     "ORDER BY created_at ASC", [ids])
                 drawn = 0
                 for r in cur.fetchall():
-                    cm = int(r["cm"] or 0)
-                    if cm > 0 and cm <= esc_remaining:
-                        cur.execute(
-                            "UPDATE payouts SET status='paid', paid_at=now(), "
-                            "external_ref=COALESCE(external_ref,'SIM-'||left(id,8)), "
-                            "data = data || jsonb_build_object('paidFromEscrow', true), updated_at=now() "
-                            "WHERE id=%s", [r["id"]])
-                        esc_remaining -= cm; drawn += cm
-                        done.append({"account_id": r["account_id"], "task_id": r["task_id"], "ctid": r["ctid"]})
+                    cost = int(r["cost"] or 0)         # contributor pay (what we disburse)
+                    client = int(r["client"] or 0)     # escrow drawn down (enterprise-funded client price)
+                    if cost > 0 and client <= esc_remaining:
+                        _disburse_row(r["id"], r["account_id"], r["task_id"], r["ctid"], cost, True)
+                        esc_remaining -= client; drawn += client
+                        done[-1]["title"] = r.get("tt")
+                    elif cost > 0:
+                        skipped.append(r["ctid"])
                 if drawn > 0:
                     cur.execute("UPDATE sow_escrows SET spent_minor = spent_minor + %s, "
                                 "updated_at=now() WHERE plan_id=%s", [drawn, plan_id])
-                    paid = len(done)
+            paid = len(done)
             for d in done:
                 ctid = d.get("ctid")
                 if ctid:
@@ -2042,21 +2188,164 @@ def payout_contributors(plan_id: str, user: Annotated[dict, Depends(get_current_
                 elif ctid:
                     cur.execute("UPDATE contributor_tasks SET status='completed', updated_at=now() "
                                 "WHERE account_id=%s AND data->>'taskId'=%s", [d.get("account_id"), ctid])
-    conn.commit()
-    # Notify each contributor that their payout was disbursed (was silent before).
+      conn.commit()
+    except Exception as exc:  # noqa: BLE001
+        # FAILED disburse: roll back the in-flight batch, then (best-effort, in a
+        # FRESH transaction) mark every payout left mid-disbursal ('processing') for
+        # this plan's tasks as 'failed' with the error reason saved into its data
+        # JSONB, and log the raw error to Mongo. Re-raise so the caller sees it.
+        err = str(exc)
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            ids2 = [task_id] if task_id else None
+            with conn.cursor(cursor_factory=_RDC) as cur2:
+                if ids2 is None:
+                    ids2 = _plan_task_ids(cur2, plan_id)
+                if ids2:
+                    cur2.execute(
+                        "UPDATE payouts SET status='failed', failure_reason=%s, "
+                        "data = data || jsonb_build_object('error', %s, 'errorCode', %s, "
+                        "  'failedAt', %s, 'planId', %s, 'sowId', %s), updated_at=now() "
+                        "WHERE data->>'canonicalTaskId' = ANY(%s) AND status='processing' "
+                        "RETURNING id, account_id, task_id, "
+                        "COALESCE((data->>'clientMinor')::bigint,0) cm",
+                        [err[:500], err[:1000], type(exc).__name__,
+                         datetime.now(timezone.utc).isoformat(), plan_id, sow_id, ids2])
+                    failed_rows = cur2.fetchall()
+                else:
+                    failed_rows = []
+            conn.commit()
+        except Exception:  # noqa: BLE001
+            try:
+                conn.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            failed_rows = []
+        for fr in failed_rows:
+            write_txn_event(
+                direction="out", status="failed", payout_id=str(fr.get("id")),
+                task_id=str(fr.get("task_id")) if fr.get("task_id") is not None else None,
+                plan_id=plan_id, amount_minor=int(fr.get("cm") or 0),
+                error=err, error_code=type(exc).__name__, verified=False, service="enterprise")
+        if not failed_rows:  # still record the failed attempt even if no row flipped
+            write_txn_event(
+                direction="out", status="failed", plan_id=plan_id, task_id=task_id,
+                error=err, error_code=type(exc).__name__, verified=False, service="enterprise")
+        raise
+    # SUCCESS: record each disbursed payout (full ledger of successful transactions).
+    for d in done:
+        write_txn_event(
+            direction="out", status="success", payout_id=str(d.get("payout_id")),
+            task_id=str(d.get("task_id")) if d.get("task_id") is not None else None,
+            plan_id=plan_id, amount_minor=int(d.get("amountMinor") or 0),
+            verified=True, service="enterprise")
+    _notify_and_email_payouts(conn, done, plan_id, sow_id, row)
+    _audit(user, "payout.disburse", plan_id,
+           extra={"sowId": sow_id, "paid": paid, "skipped": len(skipped), "simulated": sim})
+    return {"paid": paid, "skipped": len(skipped), "status": plan_payout_status(plan_id, user)}
+
+
+def _notify_and_email_payouts(conn, done: list, plan_id: str, sow_id, plan_row: dict) -> None:
+    """In-app notification + email to BOTH (a) each paid contributor and (b)
+    Glimmora/super-admin, for every disbursed payout. Best-effort + fast — a notify
+    or email failure never affects the disburse (already committed)."""
+    if not done:
+        return
+    from psycopg2.extras import RealDictCursor as _RDC
+    sow_name = None
     try:
-        from shared.notify import create_notification
-        for d in done:
-            create_notification(
-                d.get("account_id"), category="payment", kind="payout.paid", severity="important",
-                title="Payout sent",
-                body="Your payout was disbursed — the payment is on its way to your account.",
-                resource_type="task", resource_id=d.get("ctid"),
-                action_url="/contributor/earnings", action_label="View earnings")
+        with conn.cursor(cursor_factory=_RDC) as cur:
+            if sow_id:
+                cur.execute("SELECT data->>'projectTitle' a, data->>'title' b, data->>'fileName' c "
+                            "FROM enterprise_sows WHERE id=%s", [sow_id])
+                sr = cur.fetchone()
+                if sr:
+                    sow_name = sr.get("a") or sr.get("b") or sr.get("c")
     except Exception:  # noqa: BLE001
-        pass
-    _audit(user, "payout.disburse", plan_id, extra={"sowId": row.get("sow_id"), "paid": paid})
-    return {"paid": paid, "status": plan_payout_status(plan_id, user)}
+        sow_name = None
+    sow_name = sow_name or (plan_row.get("summary") if plan_row else None) or "SOW"
+
+    try:
+        from shared.notify import create_notification, notify_role
+    except Exception:  # noqa: BLE001
+        create_notification = notify_role = None  # type: ignore
+    try:
+        from shared.mailer import send_email, email_is_configured
+    except Exception:  # noqa: BLE001
+        send_email = None  # type: ignore
+        email_is_configured = lambda: False  # type: ignore  # noqa: E731
+
+    def _inr(m) -> str:
+        return f"₹{(int(m or 0) / 100):,.0f}"
+
+    for d in done:
+        acct = d.get("account_id")
+        amount = d.get("amountMinor") or 0
+        title = d.get("title") or "your task"
+        ctid = d.get("ctid")
+        # (a) contributor — in-app + email
+        if create_notification:
+            try:
+                create_notification(
+                    acct, category="payment", kind="payout.paid", severity="important",
+                    title="You've been paid",
+                    body=f"You've been paid {_inr(amount)} for “{title}”. The payment is on its way to your account.",
+                    resource_type="task", resource_id=ctid,
+                    action_url="/contributor/earnings", action_label="View earnings")
+            except Exception:  # noqa: BLE001
+                pass
+        if send_email and email_is_configured():
+            contact = {}
+            try:
+                with conn.cursor(cursor_factory=_RDC) as cur:
+                    contact = _contributor_contact(cur, acct)
+            except Exception:  # noqa: BLE001
+                contact = {}
+            to_email = contact.get("email")
+            if to_email:
+                try:
+                    send_email(
+                        to_email=to_email, category="payment",
+                        subject=f"You've been paid {_inr(amount)}",
+                        body=(f"Hi {contact.get('name') or 'there'},\n\n"
+                              f"You've been paid {_inr(amount)} for “{title}”.\n"
+                              "The payment is on its way to your saved payout account.\n\n"
+                              "— The Glimmora Team"))
+                except Exception:  # noqa: BLE001
+                    pass
+
+    # (b) Glimmora / super-admin — one in-app + email summary line per task.
+    total = sum(int(d.get("amountMinor") or 0) for d in done)
+    if notify_role:
+        try:
+            notify_role("superadmin", category="payment", kind="payout.disbursed", severity="informational",
+                        title="Contributor payout disbursed",
+                        body=(f"{len(done)} payout(s) totalling {_inr(total)} disbursed for SOW “{sow_name}”."),
+                        resource_type="plan", resource_id=plan_id,
+                        action_url=f"/admin/decomposition/{plan_id}", action_label="View SOW")
+        except Exception:  # noqa: BLE001
+            pass
+    if send_email and email_is_configured():
+        try:
+            with conn.cursor(cursor_factory=_RDC) as cur:
+                cur.execute("SELECT email FROM login_accounts WHERE LOWER(role) IN ('superadmin','super_admin')")
+                sa_emails = [r["email"] for r in cur.fetchall() if r.get("email")]
+            lines = "\n".join(
+                f"  • {_inr(d.get('amountMinor'))} — {d.get('title') or 'task'}" for d in done)
+            for em in sa_emails:
+                try:
+                    send_email(
+                        to_email=em, category="payment",
+                        subject=f"Payout {_inr(total)} disbursed — SOW {sow_name}",
+                        body=(f"{len(done)} contributor payout(s) disbursed for SOW “{sow_name}” "
+                              f"(plan {plan_id}):\n\n{lines}\n\nTotal: {_inr(total)}\n\n— Glimmora platform"))
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @router.post("/plans/{plan_id}/reprice")

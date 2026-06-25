@@ -14,6 +14,8 @@ Mounted at /api/v1 prefix so FE routes (/api/v1/payouts/...) resolve directly.
 
 from __future__ import annotations
 
+import logging
+import os
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -22,11 +24,124 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from psycopg2.extras import Json
 
-from shared.audit import write_audit
+from shared.audit import write_audit, write_txn_event
 from shared.deps import get_current_user
 from contributor_app import db
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/v1", tags=["payouts"])
+
+
+# ── Disbursal toggle: TEST (simulated) vs real RazorpayX ──────────────────────
+# In TEST mode (no RAZORPAY_KEY_ID env) the disburse runs the REAL state machine
+# and links but moves no real money — external_ref = 'SIM-<id>'. When the key is
+# set, the `if RAZORPAY_KEY_ID` branch is where a real RazorpayX payout call wires
+# in (left as a clean placeholder — no real call is made yet).
+
+def _razorpay_live() -> bool:
+    """True only when a RazorpayX key is configured. Until then every disburse is
+    simulated. This is the single toggle a future real integration flips."""
+    return bool(os.environ.get("RAZORPAY_KEY_ID", "").strip())
+
+
+def _resolve_payout_method(account_id: int) -> dict | None:
+    """The contributor's default (or first) saved bank/UPI payout method. Read at
+    disburse time so the (future) real RazorpayX call has a destination. Returns
+    the serialised method row, or None if the contributor saved none."""
+    row = db.fetch_one(
+        "SELECT * FROM payout_methods WHERE account_id=%s "
+        "ORDER BY is_default DESC, verified_at DESC NULLS LAST, created_at ASC LIMIT 1",
+        (account_id,),
+    )
+    return _ser(row)
+
+
+def disburse_payout_row(row: dict, *, account_id: int, plan_id: str | None = None,
+                        task_id: str | None = None) -> dict:
+    """Move ONE payout released→processing→paid (idempotent), set the transaction
+    link (task_id + plan_id) and external_ref, and return the final row.
+
+    This is the clean disburse core shared by the contributor settle path and the
+    Glimmora priced-SOW disburse. Guarded on status so a task is never paid twice.
+
+    TEST vs real: `if _razorpay_live()` is the branch a real RazorpayX payout slots
+    into; otherwise the path is fully simulated (external_ref='SIM-<id>') — the
+    state machine + links are real, only the money movement is mocked.
+    """
+    payout_id = row["id"]
+    status = (row.get("status") or "").lower()
+    # Idempotency: only an unpaid, releasable payout proceeds. Already-paid / in-flight
+    # rows are returned as-is so a double click / retry never double-pays.
+    if status in ("paid", "processing"):
+        return row
+    if status not in ("released", "eligible", "requested", "pending"):
+        raise HTTPException(status_code=409,
+                            detail=f"Payout is {status}; cannot disburse")
+
+    method = _resolve_payout_method(account_id)
+    method_id = (method or {}).get("id") or row.get("method_id")
+    amount_minor = row.get("amount_minor")
+    currency = row.get("currency")
+
+    try:
+        # released → processing (so a concurrent caller sees it in-flight, not payable).
+        db.execute(
+            "UPDATE payouts SET status='processing', method_id=COALESCE(%s, method_id), "
+            "data = data || %s, updated_at=now() WHERE id=%s AND account_id=%s AND status <> 'paid'",
+            (method_id,
+             Json({k: v for k, v in {"planId": plan_id, "canonicalTaskId": task_id}.items() if v}),
+             payout_id, account_id),
+        )
+
+        ext_ref = f"SIM-{payout_id[:8]}"
+        if _razorpay_live():
+            # ── REAL RazorpayX branch (placeholder) ──────────────────────────────
+            # A real RazorpayX fund-account payout call wires in here using `method`
+            # (bank/UPI). On success set ext_ref to the RazorpayX payout id. Left
+            # simulated for now — no real call is made until the key is wired.
+            ext_ref = f"SIM-{payout_id[:8]}"  # replace with rzp payout id when live
+        # else: TEST mode — simulated, external_ref stays SIM-<id>.
+
+        updated = db.execute(
+            "UPDATE payouts SET status='paid', paid_at=now(), external_ref=%s, updated_at=now() "
+            "WHERE id=%s AND account_id=%s AND status='processing' RETURNING *",
+            (ext_ref, payout_id, account_id),
+        )
+    except Exception as exc:  # noqa: BLE001
+        # FAILED transaction: mark the payout 'failed' with the error reason saved
+        # into its data JSONB, log the raw error to Mongo, then re-raise so the
+        # caller surfaces the error. Best-effort — bookkeeping never masks the cause.
+        err = str(exc)
+        try:
+            db.execute(
+                "UPDATE payouts SET status='failed', failure_reason=%s, "
+                "data = data || %s, updated_at=now() WHERE id=%s AND account_id=%s",
+                (err[:500],
+                 Json({"error": err[:1000], "errorCode": type(exc).__name__,
+                       "failedAt": datetime.now(timezone.utc).isoformat(),
+                       "planId": plan_id, "canonicalTaskId": task_id}),
+                 payout_id, account_id),
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        write_txn_event(
+            direction="out", status="failed", payout_id=payout_id,
+            task_id=task_id, plan_id=plan_id, amount_minor=amount_minor, currency=currency,
+            error=err, error_code=type(exc).__name__, verified=False,
+            service="contributor-service",
+        )
+        raise
+
+    final = _ser(updated) or row
+    # SUCCESS transaction recorded too (full ledger of in/out money movement).
+    write_txn_event(
+        direction="out", status="success", payout_id=payout_id,
+        transaction_id=final.get("external_ref"), task_id=task_id, plan_id=plan_id,
+        amount_minor=amount_minor, currency=currency, verified=True,
+        service="contributor-service",
+    )
+    return final
 
 # ── Schema DDL (idempotent, called from init_contributor_schema) ──────────────
 
@@ -39,7 +154,10 @@ CREATE TABLE IF NOT EXISTS payouts (
     amount_minor  BIGINT NOT NULL DEFAULT 0,
     currency      TEXT NOT NULL DEFAULT 'INR',
     status        TEXT NOT NULL DEFAULT 'eligible',
-    -- status lifecycle: eligible -> pending -> paid | failed -> retry -> pending | reversed
+    -- status lifecycle: eligible -> requested -> released -> processing -> paid
+    --   (also: pending -> paid | failed -> retry -> pending | reversed | on_hold)
+    -- `processing` (additive) is the in-flight state during disbursal — set
+    -- released->processing->paid so a concurrent caller never double-pays.
     eligible_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     paid_at       TIMESTAMPTZ,
     external_ref  TEXT,
@@ -317,6 +435,71 @@ async def settle_payout(
     except Exception:  # noqa: BLE001
         pass
     return _ser(updated)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# POST /api/v1/payouts/{payoutId}/disburse
+# Real state-machine disbursal: released|eligible|requested → processing → paid.
+# Reads the contributor's saved bank/UPI from payout_methods, stores the
+# transaction link (task_id + plan_id) and external_ref. IDEMPOTENT (guarded on
+# status — an already-paid task is returned untouched). TEST mode = simulated
+# (external_ref='SIM-<id>'); the real RazorpayX call slots into disburse_payout_row.
+# ════════════════════════════════════════════════════════════════════════════
+
+@router.post("/payouts/{payout_id}/disburse")
+async def disburse_payout(
+    payout_id: str,
+    account_id: ActId,
+    user: ActUser,
+    payload: dict = Body(default={}),
+):
+    row = _require_row(
+        _ser(db.fetch_one("SELECT * FROM payouts WHERE id=%s AND account_id=%s", (payout_id, account_id))),
+        "Payout",
+    )
+    already_paid = (row.get("status") or "").lower() == "paid"
+    plan_id = payload.get("planId") or row.get("planId")
+    task_id = payload.get("taskId") or row.get("canonicalTaskId") or row.get("task_id")
+    updated = disburse_payout_row(row, account_id=account_id, plan_id=plan_id, task_id=task_id)
+
+    # Flip the canonical task → 'paid' + complete the contributor task (mirrors settle).
+    ctid = updated.get("canonicalTaskId") or updated.get("task_id")
+    if ctid and str(ctid).startswith("tsk_"):
+        try:
+            db.execute("UPDATE decomp_tasks SET status='paid', updated_at=now() WHERE id=%s", (ctid,))
+        except Exception:  # noqa: BLE001
+            pass
+    _tid = updated.get("task_id")
+    try:
+        if _tid and str(_tid).isdigit():
+            db.execute("UPDATE contributor_tasks SET status='completed', updated_at=now() "
+                       "WHERE id=%s AND account_id=%s", (int(_tid), account_id))
+        elif ctid:
+            db.execute("UPDATE contributor_tasks SET status='completed', updated_at=now() "
+                       "WHERE account_id=%s AND data->>'taskId'=%s", (account_id, str(ctid)))
+    except Exception:  # noqa: BLE001
+        pass
+
+    write_audit(
+        actor_id=str(account_id), actor_email=user.get("email"),
+        actor_role=user.get("role", "contributor"), action="payout.disburse",
+        target="payout", target_id=payout_id,
+        details=f"status {row['status']}→paid ({'real' if _razorpay_live() else 'simulated'}); "
+                f"ref={updated.get('external_ref')}; planId={plan_id}; taskId={task_id}",
+        service="contributor-service",
+    )
+    if not already_paid:  # notify once (idempotent re-calls stay silent)
+        try:
+            from shared.notify import create_notification
+            create_notification(
+                account_id, category="payment", kind="payout.paid", severity="important",
+                title="Payout sent",
+                body="Your payout was disbursed — the payment is on its way to your account.",
+                resource_type="task", resource_id=ctid,
+                action_url="/contributor/earnings", action_label="View earnings")
+        except Exception:  # noqa: BLE001
+            pass
+    return updated
 
 
 # ════════════════════════════════════════════════════════════════════════════

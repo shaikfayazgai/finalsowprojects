@@ -378,7 +378,9 @@ async def resend_credentials(
 
     name = (f"{acct.get('first_name', '') or ''} {acct.get('last_name', '') or ''}".strip()
             or acct.get("email"))
-    login_url = getattr(settings, "app_base_url", None) or "https://app.glimmora.ai"
+    # Build the login link from FRONTEND_BASE_URL → the account's portal (no more
+    # hardcoded host), reusing the per-portal _login_url helper.
+    login_url = _login_url(acct.get("role"))
     text, html = build_credentials_body(
         name=name, email=acct["email"], temp_password=temp,
         login_url=login_url, org_name=None,

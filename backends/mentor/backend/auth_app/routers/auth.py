@@ -138,8 +138,9 @@ async def login(body: LoginRequest, request: Request):
     repo.mark_login(str(row["id"]))
     publish_event("user.logged_in", {"userId": str(row["id"]), "email": row["email"], "role": row.get("role")})
     write_audit(actor_id=str(row["id"]), actor_email=row["email"], actor_role=row.get("role"),
-                action="login", service="auth-service",
-                ip_address=request.client.host if request.client else None)
+                action="login", service="auth-service", tenant_id=row.get("tenant_id"),
+                ip_address=request.client.host if request.client else None,
+                extra={"provider": "password", "source": "password"})
 
     result = _token_pair(row)
     # Persist a session record so the sessions list is populated after login.

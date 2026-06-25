@@ -26,6 +26,7 @@ from psycopg2.extras import RealDictCursor
 from pydantic import BaseModel
 
 from shared.audit import write_audit
+from shared.config import settings
 from shared.db import ensure_pg_clean, get_pg_connection
 from shared.deps import get_current_admin
 from shared.mailer import build_credentials_body, send_email
@@ -492,10 +493,11 @@ async def create_tenant(
         )
         try:
             # The tenant's first admin is an ENTERPRISE user — send them to the
-            # enterprise portal login (separate app/port from super-admin).
-            # Configurable via ENTERPRISE_LOGIN_URL; defaults to the local
-            # enterprise portal at :3001/enterprise/login.
-            login_url = os.environ.get("ENTERPRISE_LOGIN_URL") or "http://localhost:3001/enterprise/login"
+            # enterprise portal login. Configurable via ENTERPRISE_LOGIN_URL;
+            # otherwise built from FRONTEND_BASE_URL so it points at the live
+            # frontend (no hardcoded localhost).
+            login_url = (os.environ.get("ENTERPRISE_LOGIN_URL")
+                         or f"{settings.frontend_base_url.rstrip('/')}/enterprise/login")
             text, html = build_credentials_body(
                 name=(first or email), email=email, temp_password=temp,
                 login_url=login_url, org_name=name)

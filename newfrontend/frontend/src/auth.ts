@@ -478,15 +478,52 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
             token.isNewSsoUser = true;
             token.role = registrationRole;
+
+            // Contributor SSO sign-up: the provider (Google/Microsoft) has already
+            // verified the email — NextAuth validated the id_token signature before
+            // this callback ran. Provision a real, EMAIL-VERIFIED contributor account
+            // on the backend so the user goes straight to profile completion with NO
+            // OTP step. Without this the account was never created, and the user got
+            // funnelled into the email-verification/onboarding flow.
+            if (registrationRole === "contributor") {
+              const ssoEmail = token.email as string | undefined;
+              const { firstName, lastName } = splitDisplayName(token.name as string | undefined);
+              if (ssoEmail && ssoEmail.includes("@")) {
+                try {
+                  const provisioned = await authApi.provisionOAuthAccount({
+                    email: ssoEmail,
+                    firstName,
+                    lastName,
+                    provider: providerName,
+                  });
+                  if (!isMfaPending(provisioned)) {
+                    token.role = normalizeRole(provisioned.user.role);
+                    token.glimmoraAccessToken = provisioned.access_token;
+                    token.glimmoraRefreshToken = provisioned.refresh_token;
+                    token.glimmoraExpiresAt = Math.floor(Date.now() / 1000) + provisioned.expires_in;
+                    if (provisioned.user.id) token.id = provisioned.user.id;
+                    // Account now exists + email-verified; only "new" when freshly created.
+                    token.isNewSsoUser = provisioned.isNewSsoUser ?? false;
+                  }
+                } catch {
+                  // Provisioning failed (backend down / network). Leave isNewSsoUser=true
+                  // so the user still lands in onboarding rather than a broken portal.
+                }
+              }
+            }
           }
         }
       }
+
+      // A previously-valid session whose access token came back to life via
+      // refresh below should shed any stale invalid flag.
+      const nowSec = Date.now() / 1000;
 
       // Proactive token refresh — refresh if within 60 seconds of expiry
       const shouldRefresh =
         token.glimmoraRefreshToken &&
         token.glimmoraExpiresAt &&
-        Date.now() / 1000 > token.glimmoraExpiresAt - 60;
+        nowSec > token.glimmoraExpiresAt - 60;
 
       if (shouldRefresh) {
         try {
@@ -495,6 +532,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.glimmoraRefreshToken = refreshed.refresh_token;
           // Default to 1 hour if the refresh response has no expires_in
           token.glimmoraExpiresAt = Math.floor(Date.now() / 1000) + 3600;
+          delete (token as { invalidToken?: boolean }).invalidToken;
         } catch {
           // Refresh failed. Only drop tokens if the current access token has
           // ALREADY expired. A transient refresh hiccup (a momentarily slow /
@@ -503,17 +541,58 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           // the spurious "Missing bearer token" across every portal. Keep the
           // current token until it genuinely expires; the next request retries.
           const exp = token.glimmoraExpiresAt as number | undefined;
-          if (!exp || Date.now() / 1000 > exp) {
+          if (!exp || nowSec > exp) {
             delete token.glimmoraAccessToken;
             delete token.glimmoraRefreshToken;
-            delete token.glimmoraExpiresAt;
+            // Intentionally KEEP glimmoraExpiresAt (a past timestamp) so the
+            // genuine-expiry block below can detect "expired + no usable token"
+            // and invalidate the session → auto-logout. (No-op if it's absent.)
           }
         }
+      }
+
+      // Genuine-expiry detection → invalidate the session.
+      //
+      // After the refresh attempt above, if we have an expiry timestamp that is
+      // in the past and we no longer hold a usable access token (refresh either
+      // failed or there was no refresh token to begin with), the session is no
+      // longer usable. Mark it invalid AND strip the identity claims so the
+      // `session` callback yields a session with no `user.id`. proxy.ts then
+      // sees an unauthenticated request and redirects to the portal login —
+      // a clean re-auth instead of a logged-in-but-token-less broken state.
+      //
+      // We require an EXPLICIT past `glimmoraExpiresAt` (not merely a missing
+      // token) so a momentary/transient refresh blip never logs out a session
+      // whose token is still valid; only a genuinely expired token triggers this.
+      const exp = token.glimmoraExpiresAt as number | undefined;
+      const genuinelyExpired = typeof exp === "number" && nowSec > exp;
+      if (genuinelyExpired) {
+        // Expired with no way to refresh (refresh failed above, or there was no
+        // refresh token to attempt). Drop any lingering access token so the proxy
+        // can't forward a dead bearer, and invalidate the session.
+        delete token.glimmoraAccessToken;
+        delete token.glimmoraRefreshToken;
+        (token as { invalidToken?: boolean }).invalidToken = true;
+        // Strip identity so proxy.ts treats the request as unauthenticated.
+        delete token.id;
+        delete token.sub;
       }
 
       return token;
     },
     async session({ session, token }) {
+      // Genuine-expiry: the jwt callback stripped the identity claims and flagged
+      // the token invalid. Blank out the user id + access token so the session
+      // reads as unauthenticated — proxy.ts's `!session?.user?.id` check then
+      // redirects to login on the next navigation. Client API helpers that hit a
+      // token-401 in the meantime auto-logout via handleAuthTokenError().
+      if ((token as { invalidToken?: boolean }).invalidToken || !token.id) {
+        if (session.user) {
+          session.user.id = "";
+          session.user.accessToken = undefined;
+        }
+        return session;
+      }
       if (session.user) {
         const t = token as typeof token & {
           requiresPasswordChange?: boolean;
@@ -537,6 +616,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // account exists (401 "wrong password") or not (404 "not found").
       // FAIL-CLOSED: only allow on an explicit "wrong password" / 401 response.
       if (account?.provider === "google" || account?.provider === "microsoft-entra-id") {
+        // Portal-aware "not registered" landing. The contributor login sets an
+        // sso_login_portal=contributor cookie before starting OAuth so a no-account
+        // bounce lands back on /contributor/login (which shows a message + a
+        // Create-account CTA) instead of the generic /auth/login.
+        let loginPath = "/auth/login";
+        try {
+          const cookieStore = await cookies();
+          if (cookieStore.get("sso_login_portal")?.value === "contributor") {
+            loginPath = "/contributor/login";
+          }
+        } catch {
+          // cookies() unavailable — keep the default generic login path
+        }
+        const notRegisteredRedirect = (): string => {
+          const encodedEmail = encodeURIComponent((user.email ?? "").toLowerCase());
+          return `${loginPath}?error=SsoNotRegistered${encodedEmail ? `&email=${encodedEmail}` : ""}`;
+        };
+
         // Registration flow: if the sso_register_role cookie is set, the user
         // clicked "Continue with Microsoft/Google" on a *registration* page.
         // Allow new emails through — account creation happens after OAuth.
@@ -551,7 +648,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         try {
-          if (!user.email) return "/auth/login?error=SsoNotRegistered";
+          if (!user.email) return notRegisteredRedirect();
 
           const email = user.email.toLowerCase();
           await authApi.login(email, "__sso_registration_check__");
@@ -572,8 +669,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               msg.includes("user not exist");
 
             if (notFound) {
-              const encodedEmail = encodeURIComponent((user.email ?? "").toLowerCase());
-              return `/auth/login?error=SsoNotRegistered&email=${encodedEmail}`;
+              return notRegisteredRedirect();
             }
 
             // Specifically "wrong password" → account EXISTS, just wrong dummy password → allow
@@ -591,8 +687,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             // so we cannot safely allow on 401 alone — fall through to block.
           }
           // Network error, unexpected response, or unrecognised error → block
-          const encodedEmail = encodeURIComponent((user.email ?? "").toLowerCase());
-          return `/auth/login?error=SsoNotRegistered&email=${encodedEmail}`;
+          return notRegisteredRedirect();
         }
       }
       return true;

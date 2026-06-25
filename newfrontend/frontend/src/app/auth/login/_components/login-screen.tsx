@@ -25,6 +25,7 @@ import {
 } from "@/lib/admin/invite-routes";
 import type { MeResponse } from "@/lib/hooks/use-me";
 import { markAdminSignInFromInvite } from "@/lib/stores/admin-provisioning-store";
+import { accountExistsForEmail } from "@/lib/api/auth";
 import { cn } from "@/lib/utils/cn";
 
 function safeReturnTo(raw: string | null): string | null {
@@ -32,6 +33,18 @@ function safeReturnTo(raw: string | null): string | null {
   if (!raw.startsWith("/")) return null;
   if (raw.startsWith("//")) return null;
   return raw;
+}
+
+/** Register destination for a no-account email/password login, email prefilled. */
+function registerHref(email: string): string {
+  const e = email.trim().toLowerCase();
+  return e.includes("@") ? `/auth/register?email=${encodeURIComponent(e)}` : "/auth/register";
+}
+
+/** Self-signup destination for an unregistered SSO email (contributor is the only open track). */
+function ssoRegisterHref(email: string): string {
+  const e = email.trim().toLowerCase();
+  return e.includes("@") ? `/contributor/register?email=${encodeURIComponent(e)}` : "/contributor/register";
 }
 
 function prefersSso(inviteRole: string | null): boolean {
@@ -47,6 +60,17 @@ export function LoginScreen() {
   const inviteRole = sp.get("role");
   const inviteSpec = findSpecByJwtRole(inviteRole);
   const ssoFirst = prefersSso(inviteRole);
+  const authError = sp.get("error");
+  const ssoEmail = sp.get("email") ?? "";
+
+  // SSO sign-in with an email that has no Glimmora account → the NextAuth signIn
+  // callback bounced back here with ?error=SsoNotRegistered. Send them into
+  // sign-up (email prefilled) instead of showing a dead-end auth error.
+  React.useEffect(() => {
+    if (authError === "SsoNotRegistered") {
+      router.replace(ssoRegisterHref(ssoEmail));
+    }
+  }, [authError, ssoEmail, router]);
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -79,6 +103,16 @@ export function LoginScreen() {
     }
 
     if (!res || res.error) {
+      // The backend returns the SAME generic 401 for "no account" and "wrong
+      // password" (anti-enumeration), so the sign-in result can't tell them
+      // apart. Probe the dedicated existence endpoint: only when the account
+      // genuinely does NOT exist do we route to sign-up. A wrong password for
+      // an EXISTING account keeps the invalid-credentials error (no redirect).
+      const exists = await accountExistsForEmail(creds.email);
+      if (exists === false) {
+        router.push(registerHref(creds.email));
+        return;
+      }
       setError("That email and password don't match. Try again.");
       setSubmitting(false);
       return;
@@ -246,7 +280,7 @@ export function LoginScreen() {
       )}
 
       <p className="mt-6 pt-5 border-t border-stroke-subtle text-center font-body text-[13px] text-text-secondary">
-        No account? <AuthHeaderLink href="/auth/register">Create one</AuthHeaderLink>
+        No account? <AuthHeaderLink href={registerHref(email)}>Create one</AuthHeaderLink>
       </p>
 
       <p className="mt-4 font-body text-[11px] text-text-tertiary text-center leading-relaxed">
