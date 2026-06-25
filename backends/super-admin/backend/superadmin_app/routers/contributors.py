@@ -113,10 +113,27 @@ def _build_files(
             "openable": True,
         })
 
-    # 2) Government ID document from the verification step. NOTE: in the current
-    #    wizard this is often a FILENAME or inline data-URL (real Blob upload is
-    #    being wired); we surface whatever is stored and flag openability so the
-    #    UI can show "uploaded: <name>" when it isn't a clickable URL.
+    # 1b) Passport-size photo from the basic step (profile_extra.basic.profilePhoto).
+    #     The wizard now uploads this to Blob (http URL). Legacy rows hold a bare
+    #     filename — surfaced non-openable for backward-compat.
+    basic = _as_dict(extra.get("basic"))
+    passport_photo = basic.get("profilePhoto")
+    if passport_photo:
+        files.append({
+            "type": "passport_photo",
+            "category": "identity",
+            "label": "Passport-size photo",
+            "url": passport_photo if _is_openable(passport_photo) else None,
+            "name": passport_photo if not _is_openable(passport_photo) else None,
+            "openable": _is_openable(passport_photo),
+        })
+
+    # 2) Government ID document from the verification step. The wizard now uploads
+    #    the file to Vercel Blob and stores its http(s) URL here (field shape: a
+    #    plain URL string in verification.idDocument) — those are openable. Older
+    #    rows may still hold a bare FILENAME or inline data-URL; we surface whatever
+    #    is stored and flag openability so the UI shows a clickable link for real
+    #    URLs / data-URLs and "uploaded: <name>" for legacy filename-only rows.
     verif = _as_dict(extra.get("verification"))
     id_doc = verif.get("idDocument")
     if id_doc:

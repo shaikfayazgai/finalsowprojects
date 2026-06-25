@@ -184,14 +184,28 @@ async function save(url: string, body: unknown, method = "POST"): Promise<void> 
 }
 const arr = (x: unknown): Row[] => Array.isArray(x) ? (x as Row[]) : Array.isArray((x as { items?: Row[] })?.items) ? (x as { items: Row[] }).items : [];
 
-/** Read an image File into a data-URL (persisted to profile_extra.avatar_url). */
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read the image."));
-    reader.readAsDataURL(file);
+/** Upload a wizard file (avatar / ID document / passport photo) to Vercel Blob
+ * via the freelancer backend and return its public URL. `kind` namespaces the
+ * Blob path (avatar / id_document / passport_photo). Throws on any failure so
+ * callers can surface the error and NOT fall back to a bare filename/data-URL. */
+async function uploadProfileFile(file: File, kind: string): Promise<string> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch(`/api/contributor/profile/upload?kind=${encodeURIComponent(kind)}`, {
+    method: "POST",
+    body: fd,
   });
+  const j = (await r.json().catch(() => ({}))) as { url?: string; detail?: unknown; message?: string; error?: string };
+  if (!r.ok || !j.url) {
+    if (r.status === 401 && handleAuthTokenError(j)) {
+      throw new Error("Your session has expired. Redirecting to sign in…");
+    }
+    const detailMsg = typeof j.detail === "string" ? j.detail : Array.isArray(j.detail)
+      ? (j.detail as Array<{ msg?: string }>).map((d) => d?.msg).filter(Boolean).join(", ")
+      : "";
+    throw new Error(detailMsg || j.message || j.error || `Upload failed. (HTTP ${r.status})`);
+  }
+  return j.url;
 }
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const AVATAR_TYPES = ["image/png", "image/jpeg"];
@@ -264,38 +278,85 @@ function ChipField({ values, setValues, suggestions, placeholder }: { values: st
   );
 }
 
-/** File picker — shows the chosen filename (real upload to Blob is wired later).
- * For the profile photo it enforces a KB cap + passport-size (portrait) dimensions. */
-function FileField({ text, name, onPick, onClear, accept, multiple, maxKB, passport, pdfOnly, onErr }: { text: string; name: string; onPick: (n: string) => void; onClear?: () => void; accept: string; multiple?: boolean; maxKB?: number; passport?: boolean; pdfOnly?: boolean; onErr?: (m: string) => void }) {
+/** File picker — validates, then uploads the file to Vercel Blob (via
+ * /api/contributor/profile/upload) and reports the returned Blob URL through
+ * onPick(url). It shows the picked filename for the user while storing the URL
+ * in profile state, disables itself while the upload is in flight, and surfaces
+ * any upload error (it never falls back to a bare filename). For the profile
+ * photo it enforces a KB cap + passport-size (portrait) dimensions.
+ *
+ * `value` is the stored Blob URL (or legacy filename/data-URL) loaded from the
+ * saved profile; we derive a human label from it so re-opening the wizard shows
+ * "uploaded" rather than a raw URL. */
+function FileField({ text, value, kind, onPick, onClear, accept, maxKB, passport, pdfOnly, onErr }: { text: string; value: string; kind: string; onPick: (url: string) => void; onClear?: () => void; accept: string; maxKB?: number; passport?: boolean; pdfOnly?: boolean; onErr?: (m: string) => void }) {
   const ref = React.useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = React.useState(false);
+  // Filename picked this session (nicer to show than a Blob URL). Falls back to a
+  // label derived from a saved URL/filename so a reloaded value still reads well.
+  const [pickedName, setPickedName] = React.useState("");
+  const label = pickedName || labelFromStored(value);
   const handle = async (files: FileList) => {
     const f = files[0];
     if (pdfOnly && f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) { onErr?.("Only a PDF file is allowed for the ID document."); return; }
     if (maxKB && f.size > maxKB * 1024) { onErr?.(`File must be under ${maxKB} KB (yours is ${Math.round(f.size / 1024)} KB).`); return; }
     if (passport) {
+      const objUrl = URL.createObjectURL(f);
       const ok = await new Promise<boolean>((res) => {
         const img = new window.Image();
         img.onload = () => { const r = img.width / img.height; res(img.width >= 150 && img.height >= 150 && r >= 0.6 && r <= 0.95); };
         img.onerror = () => res(false);
-        img.src = URL.createObjectURL(f);
+        img.src = objUrl;
       });
+      URL.revokeObjectURL(objUrl);
       if (!ok) { onErr?.("Use a passport-size photo — portrait, min 150×150."); return; }
     }
     onErr?.("");
-    onPick(multiple ? Array.from(files).map((x) => x.name).join(", ") : f.name);
+    setUploading(true);
+    try {
+      const url = await uploadProfileFile(f, kind);
+      setPickedName(f.name);
+      onPick(url);
+    } catch (e) {
+      // Surface the real error; do NOT store a bare filename.
+      onErr?.(e instanceof Error ? e.message : "Upload failed.");
+      if (ref.current) ref.current.value = "";
+    } finally {
+      setUploading(false);
+    }
   };
-  const clear = () => { if (ref.current) ref.current.value = ""; onErr?.(""); onClear?.(); };
+  const clear = () => { if (ref.current) ref.current.value = ""; setPickedName(""); onErr?.(""); onClear?.(); };
   return (
     <div className="flex items-center gap-1.5">
-      <label className="flex-1 flex items-center justify-between gap-2 h-9 px-3 rounded-lg border border-dashed border-stroke bg-surface cursor-pointer hover:bg-surface-hover">
-        <span className="inline-flex items-center gap-1.5 font-body text-[12px] text-text-secondary truncate"><Upload className="h-3.5 w-3.5 shrink-0" /> {name || text}</span>
-        <input ref={ref} type="file" accept={accept} multiple={multiple} className="hidden" onChange={(e) => { const f = e.target.files; if (f && f.length) handle(f); }} />
+      <label className={cn("flex-1 flex items-center justify-between gap-2 h-9 px-3 rounded-lg border border-dashed border-stroke bg-surface hover:bg-surface-hover", uploading ? "cursor-wait opacity-60" : "cursor-pointer")}>
+        <span className="inline-flex items-center gap-1.5 font-body text-[12px] text-text-secondary truncate">
+          {uploading ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" /> : <Upload className="h-3.5 w-3.5 shrink-0" />}
+          {uploading ? "Uploading…" : (label || text)}
+        </span>
+        <input ref={ref} type="file" accept={accept} disabled={uploading} className="hidden" onChange={(e) => { const f = e.target.files; if (f && f.length) handle(f); }} />
       </label>
-      {name ? (
+      {value && !uploading ? (
         <button type="button" onClick={clear} aria-label="Remove file" className="grid place-items-center h-9 w-9 shrink-0 rounded-lg border border-stroke bg-surface text-text-tertiary hover:bg-surface-hover hover:text-error-text"><X className="h-4 w-4" /></button>
       ) : null}
     </div>
   );
+}
+
+/** Human label for a stored file value — a Blob/HTTP URL's last path segment, a
+ * generic "Uploaded document" for a data-URL, or the bare filename for legacy
+ * rows. Used so a reloaded wizard shows a readable name, not a raw URL. */
+function labelFromStored(value: string): string {
+  if (!value) return "";
+  if (value.startsWith("data:")) return "Uploaded document";
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    try {
+      const path = new URL(value).pathname;
+      const seg = decodeURIComponent(path.split("/").filter(Boolean).pop() || "");
+      // Vercel Blob appends a random suffix before the extension (name-<rand>.ext);
+      // strip it for display only.
+      return seg.replace(/-[A-Za-z0-9]{20,}(\.[^.]+)?$/, "$1") || "Uploaded file";
+    } catch { return "Uploaded file"; }
+  }
+  return value; // legacy bare filename
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -315,12 +376,13 @@ export default function CompleteProfilePage() {
   const refresh = React.useCallback(() => qc.invalidateQueries({ queryKey: ["contributor", "profile", "completion"] }), [qc]);
 
   const [basic, setBasic] = React.useState({ firstName: "", lastName: "", country: "", state: "", city: "", pincode: "", mobileNumber: "", timezone: "", profilePhoto: "" });
-  // Profile image — `avatarPreview` is what we show (a stored data-URL loaded from
-  // profile_extra.avatar_url, or an object-URL while picking). `avatarDataUrl` is
-  // set only when a new photo is picked this session and is what we persist.
+  // Profile image — `avatarPreview` is what we show (a stored Blob URL loaded from
+  // profile_extra.avatar_url, or an object-URL while picking). `avatarBlobUrl` is
+  // the uploaded Blob URL for a photo picked this session — what we persist.
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
-  const [avatarDataUrl, setAvatarDataUrl] = React.useState<string | null>(null);
+  const [avatarBlobUrl, setAvatarBlobUrl] = React.useState<string | null>(null);
   const [avatarError, setAvatarError] = React.useState("");
+  const [avatarUploading, setAvatarUploading] = React.useState(false);
   const avatarInputRef = React.useRef<HTMLInputElement>(null);
   const avatarObjUrlRef = React.useRef<string | null>(null);
   const [pinLookup, setPinLookup] = React.useState<{ loading: boolean; error: string }>({ loading: false, error: "" });
@@ -438,12 +500,13 @@ export default function CompleteProfilePage() {
 
   const saveBasic = () => run("basic", async () => {
     await save("/api/contributor/profile", { country: basic.country, city: basic.city, timezone: basic.timezone }, "PATCH");
-    await patchExtra({ basic: { firstName: basic.firstName, lastName: basic.lastName, state: basic.state, pincode: basic.pincode, mobileNumber: basic.mobileNumber, profilePhoto: basic.profilePhoto }, mobileNumber: basic.mobileNumber, languages, ...(avatarDataUrl ? { avatar_url: avatarDataUrl } : {}) });
-    if (avatarDataUrl) { setAvatarPreview(avatarDataUrl); setAvatarDataUrl(null); }
+    await patchExtra({ basic: { firstName: basic.firstName, lastName: basic.lastName, state: basic.state, pincode: basic.pincode, mobileNumber: basic.mobileNumber, profilePhoto: basic.profilePhoto }, mobileNumber: basic.mobileNumber, languages, ...(avatarBlobUrl ? { avatar_url: avatarBlobUrl } : {}) });
+    if (avatarBlobUrl) { setAvatarPreview(avatarBlobUrl); setAvatarBlobUrl(null); }
   });
 
-  // Profile image: validate (PNG/JPG, ≤2 MB), preview via object-URL, encode to a
-  // data-URL for persistence (saved to profile_extra.avatar_url on "Save basic info").
+  // Profile image: validate (PNG/JPG, ≤2 MB), preview via object-URL, then upload
+  // to Vercel Blob — the returned Blob URL is persisted to profile_extra.avatar_url
+  // on "Save basic info" (so the super-admin verification view can open it).
   const onPickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -455,7 +518,17 @@ export default function CompleteProfilePage() {
     const objUrl = URL.createObjectURL(file);
     avatarObjUrlRef.current = objUrl;
     setAvatarPreview(objUrl);
-    try { setAvatarDataUrl(await fileToDataUrl(file)); } catch { setAvatarError("Could not read that image. Try another file."); }
+    setAvatarUploading(true);
+    try {
+      setAvatarBlobUrl(await uploadProfileFile(file, "avatar"));
+    } catch (err) {
+      // Surface the failure and roll back the optimistic preview — do NOT keep a
+      // non-persistable preview that won't actually be saved.
+      setAvatarError(err instanceof Error ? err.message : "Could not upload that image. Try another file.");
+      setAvatarBlobUrl(null);
+    } finally {
+      setAvatarUploading(false);
+    }
   };
   React.useEffect(() => () => { if (avatarObjUrlRef.current) URL.revokeObjectURL(avatarObjUrlRef.current); }, []);
 
@@ -601,13 +674,13 @@ export default function CompleteProfilePage() {
                 )}
                 <div className="space-y-1.5 min-w-0">
                   <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg" className="sr-only" onChange={(e) => void onPickAvatar(e)} />
-                  <button type="button" onClick={() => avatarInputRef.current?.click()} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-dashed border-stroke text-text-secondary hover:text-foreground hover:bg-surface-hover font-body text-[12px] font-semibold transition-colors"><Upload className="h-3.5 w-3.5" /> {avatarPreview ? "Change photo" : "Upload photo"}</button>
+                  <button type="button" disabled={avatarUploading} onClick={() => avatarInputRef.current?.click()} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-dashed border-stroke text-text-secondary hover:text-foreground hover:bg-surface-hover font-body text-[12px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-60">{avatarUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {avatarUploading ? "Uploading…" : avatarPreview ? "Change photo" : "Upload photo"}</button>
                   <p className="font-body text-[11px] text-text-tertiary">PNG or JPG, max 2 MB. Saved with your basic info.</p>
                   {avatarError ? <p className="font-body text-[11px] text-error-text">{avatarError}</p> : null}
                 </div>
               </div>
             </Field>
-            <FileField text="Upload passport-size photo (max 200 KB)" name={basic.profilePhoto} accept=".jpg,.jpeg,.png,.webp" maxKB={200} passport onErr={setErr} onPick={(n) => setBasic({ ...basic, profilePhoto: n })} onClear={() => setBasic({ ...basic, profilePhoto: "" })} />
+            <FileField text="Upload passport-size photo (max 200 KB)" value={basic.profilePhoto} kind="passport_photo" accept=".jpg,.jpeg,.png,.webp" maxKB={200} passport onErr={setErr} onPick={(url) => setBasic({ ...basic, profilePhoto: url })} onClear={() => setBasic({ ...basic, profilePhoto: "" })} />
             <p className="font-body text-[11px] text-text-tertiary">Your name is prefilled from your account &mdash; edit it here if needed. Your email is managed in <Link href="/contributor/settings/account" className="text-text-link hover:underline font-medium">Account settings</Link> (major changes may need re-verification).</p>
             <div className="grid sm:grid-cols-2 gap-2">
               <Field label="First name *"><input value={basic.firstName} onChange={(e) => setBasic({ ...basic, firstName: e.target.value })} className={inputCls} placeholder="Aarav" /></Field>
@@ -742,7 +815,7 @@ export default function CompleteProfilePage() {
               <Field label="Government ID type *"><select value={verif.idType} onChange={(e) => setVerif({ ...verif, idType: e.target.value })} className={inputCls}><option value="">Select</option>{ID_TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
               <Field label="ID number *"><input value={verif.idNumber} onChange={(e) => setVerif({ ...verif, idNumber: e.target.value })} className={inputCls} placeholder={verif.idType === "Aadhaar Card" ? "12 digits" : verif.idType === "PAN Card" ? "ABCDE1234F" : "Enter ID number"} /></Field>
             </div>
-            <FileField text="Upload ID document — PDF only (max 2000 KB) *" name={verif.idDocument} accept=".pdf,application/pdf" pdfOnly maxKB={2000} onErr={setErr} onPick={(n) => setVerif({ ...verif, idDocument: n })} onClear={() => setVerif({ ...verif, idDocument: "" })} />
+            <FileField text="Upload ID document — PDF only (max 2000 KB) *" value={verif.idDocument} kind="id_document" accept=".pdf,application/pdf" pdfOnly maxKB={2000} onErr={setErr} onPick={(url) => setVerif({ ...verif, idDocument: url })} onClear={() => setVerif({ ...verif, idDocument: "" })} />
             <Field label="Project preferences">
               <div className="flex flex-wrap gap-1.5">{PREFERENCES.map((p) => { const on = preferences.includes(p); return (
                 <button key={p} type="button" onClick={() => setPreferences(on ? preferences.filter((x) => x !== p) : [...preferences, p])} className={cn("px-2.5 py-1 rounded-full border font-body text-[11.5px]", on ? "border-brand bg-brand text-on-brand" : "border-stroke text-foreground hover:bg-surface-hover")}>{p}</button>
