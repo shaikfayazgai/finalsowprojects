@@ -55,13 +55,31 @@ let signingOut = false;
 
 /**
  * Decide whether a parsed response body / error represents a genuine
- * token-expiry that should auto-logout. True ONLY for the proxy's
- * `AUTH_TOKEN_UNAVAILABLE` marker.
+ * token-expiry / revoked-session that should auto-logout. True for the proxy's
+ * own `AUTH_TOKEN_UNAVAILABLE` marker in EITHER shape:
+ *
+ *   • top-level  — `{ error: "AUTH_TOKEN_UNAVAILABLE" }`
+ *       emitted by the Next.js API proxy when the session has no usable backend
+ *       token (see backend-service.ts).
+ *   • nested      — `{ detail: { error: "AUTH_TOKEN_UNAVAILABLE" } }`
+ *       emitted by the FastAPI backend when the bearer token is still valid but
+ *       the account has been soft-deleted / deactivated (a tombstoned
+ *       contributor). FastAPI wraps `HTTPException(detail=...)` as `{detail:...}`,
+ *       so the same marker arrives one level deeper — but it means exactly the
+ *       same thing to the user: this session is no longer valid, sign out.
+ *
+ * A plain backend 401/403 on a specific resource (string `detail`) does NOT
+ * match — those stay normal page errors.
  */
 export function isAuthTokenError(body: unknown): boolean {
   if (!body || typeof body !== "object") return false;
-  const code = (body as { error?: unknown }).error;
-  return code === AUTH_TOKEN_UNAVAILABLE;
+  const top = (body as { error?: unknown }).error;
+  if (top === AUTH_TOKEN_UNAVAILABLE) return true;
+  const detail = (body as { detail?: unknown }).detail;
+  if (detail && typeof detail === "object") {
+    return (detail as { error?: unknown }).error === AUTH_TOKEN_UNAVAILABLE;
+  }
+  return false;
 }
 
 /**
