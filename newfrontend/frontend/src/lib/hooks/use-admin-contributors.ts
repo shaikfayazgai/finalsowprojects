@@ -1,7 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { fetchContributors, type ContributorRecord } from "@/lib/api/admin-contributors";
+import {
+  deleteContributor,
+  fetchContributors,
+  type ContributorRecord,
+} from "@/lib/api/admin-contributors";
 
 /**
  * Live contributor directory from the super-admin backend (full profile + every
@@ -40,4 +44,29 @@ export function useAdminContributors(): AdminContributorsState {
 
   const refresh = React.useCallback(() => setTick((t) => t + 1), []);
   return { contributors, loading, error, refresh };
+}
+
+/**
+ * Soft-delete (tombstone) a contributor. Tracks the in-flight account id so the
+ * UI can show a per-row / per-action spinner, and surfaces errors so the caller
+ * can keep the row in place if the call fails (no optimistic removal). On
+ * success the caller should `refresh()` the directory — the tombstoned account
+ * then drops out server-side.
+ */
+export function useDeleteContributor(): {
+  deletingId: string | null;
+  remove: (accountId: string) => Promise<void>;
+} {
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
+
+  const remove = React.useCallback(async (accountId: string) => {
+    setDeletingId(accountId);
+    try {
+      await deleteContributor(accountId);
+    } finally {
+      setDeletingId(null);
+    }
+  }, []);
+
+  return { deletingId, remove };
 }

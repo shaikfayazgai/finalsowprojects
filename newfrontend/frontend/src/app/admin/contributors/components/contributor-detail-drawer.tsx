@@ -9,7 +9,7 @@
  */
 
 import * as React from "react";
-import { ExternalLink, FileText, ShieldCheck, Paperclip } from "lucide-react";
+import { ExternalLink, FileText, ShieldCheck, Paperclip, Trash2 } from "lucide-react";
 import { Drawer } from "@/components/meridian/overlays";
 import { cn } from "@/lib/utils/cn";
 import type { ContributorFile, ContributorRecord } from "@/lib/api/admin-contributors";
@@ -26,10 +26,16 @@ export function ContributorDetailDrawer({
   contributor,
   open,
   onClose,
+  onDelete,
+  deleting,
 }: {
   contributor: ContributorRecord | null;
   open: boolean;
   onClose: () => void;
+  /** Opens the delete-confirmation dialog for this contributor (optional). */
+  onDelete?: () => void;
+  /** A soft-delete is in flight for this contributor. */
+  deleting?: boolean;
 }) {
   return (
     <Drawer
@@ -41,12 +47,20 @@ export function ContributorDetailDrawer({
       title={contributor?.name ?? "Contributor"}
       description={contributor?.email ?? undefined}
     >
-      {contributor ? <DetailBody c={contributor} /> : null}
+      {contributor ? <DetailBody c={contributor} onDelete={onDelete} deleting={deleting} /> : null}
     </Drawer>
   );
 }
 
-function DetailBody({ c }: { c: ContributorRecord }) {
+function DetailBody({
+  c,
+  onDelete,
+  deleting,
+}: {
+  c: ContributorRecord;
+  onDelete?: () => void;
+  deleting?: boolean;
+}) {
   const fmtDate = (v: string | null) => {
     if (!v) return "—";
     const d = new Date(v);
@@ -248,6 +262,43 @@ function DetailBody({ c }: { c: ContributorRecord }) {
           <Field label="UPI ID" value={asStr(c.bank.upiId)} />
         </FieldGrid>
       </Section>
+
+      {/* Remove contributor — soft delete (reversible; record kept). */}
+      {onDelete ? (
+        <section className="rounded-xl border border-error-border/60 bg-error-subtle/30 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h3 className="font-body text-[14px] font-semibold text-error-text">Remove contributor</h3>
+              <p className="mt-0.5 font-body text-[12.5px] text-text-secondary">
+                Removes them from the Contributors panel. The account and history are kept, so this can be reversed.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={deleting}
+              className={cn(
+                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3.5",
+                "font-body text-[13px] font-semibold",
+                "border border-error-border bg-surface text-error-text",
+                "hover:bg-error-subtle transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stroke-focus",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
+              )}
+            >
+              {deleting ? (
+                <span
+                  className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+                  aria-hidden
+                />
+              ) : (
+                <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+              )}
+              Delete
+            </button>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

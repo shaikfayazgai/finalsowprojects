@@ -145,3 +145,17 @@ export async function fetchContributors(): Promise<ContributorRecord[]> {
   const body = (await res.json()) as Partial<ContributorsResponse>;
   return body.contributors ?? [];
 }
+
+/**
+ * Soft-delete (tombstone) a contributor via the Next proxy. The backend keeps
+ * the DB record + all history; the account just leaves the directory. Reversible
+ * server-side — never a hard delete. Throws on non-2xx so callers can show an
+ * error state and avoid removing the row optimistically.
+ */
+export async function deleteContributor(accountId: string): Promise<void> {
+  const res = await fetch(`/api/superadmin/contributors/${encodeURIComponent(accountId)}`, {
+    method: "DELETE",
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`contributor delete ${res.status}`);
+}

@@ -18,10 +18,12 @@
  */
 
 import * as React from "react";
-import { Search, ShieldCheck, UsersRound, X, Paperclip, SearchX, SlidersHorizontal } from "lucide-react";
-import { useAdminContributors } from "@/lib/hooks/use-admin-contributors";
+import { Search, ShieldCheck, UsersRound, X, Paperclip, SearchX, SlidersHorizontal, Trash2 } from "lucide-react";
+import { useAdminContributors, useDeleteContributor } from "@/lib/hooks/use-admin-contributors";
 import type { ContributorRecord, ContributorStatus } from "@/lib/api/admin-contributors";
 import { cn } from "@/lib/utils/cn";
+import { ConfirmationDialog } from "@/components/meridian/overlays";
+import { toast } from "@/lib/stores/toast-store";
 import { DASH_CARD } from "../../_shell/aurora";
 import { AuroraSelect, primaryBtnClass, primaryStyle } from "../../_shell/aurora-ui";
 import { TenantEmptyState } from "../../tenants/components/tenant-empty-state";
@@ -131,12 +133,35 @@ function haystack(c: ContributorRecord): string {
 export function ContributorsWorkspace() {
   const { contributors: live, loading, error, refresh } = useAdminContributors();
   const contributors = React.useMemo(() => live ?? [], [live]);
+  const { deletingId, remove } = useDeleteContributor();
 
   const [filters, setFilters] = React.useState<Filters>(DEFAULT_FILTERS);
   const [sort, setSort] = React.useState<SortKey>("name_asc");
   const [search, setSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  // The contributor pending a delete-confirmation (null = dialog closed).
+  const [pendingDelete, setPendingDelete] = React.useState<ContributorRecord | null>(null);
+
+  const confirmDelete = React.useCallback(async () => {
+    if (!pendingDelete) return;
+    const target = pendingDelete;
+    try {
+      await remove(target.id);
+      // Close the detail drawer if it was showing the now-deleted contributor.
+      setSelectedId((cur) => (cur === target.id ? null : cur));
+      setPendingDelete(null);
+      toast.success(
+        "Contributor removed",
+        `${target.name || target.email || "Contributor"} was removed from the panel.`,
+      );
+      // Refetch — the tombstoned account drops out server-side.
+      refresh();
+    } catch {
+      // Keep the row in place (no optimistic removal) and tell the operator.
+      toast.error("Couldn't remove contributor", "Please try again in a moment.");
+    }
+  }, [pendingDelete, remove, refresh]);
 
   // Distinct Type/Country option sets, derived from the loaded list so the
   // dropdowns only ever offer values that actually exist in the data.
@@ -429,11 +454,20 @@ export function ContributorsWorkspace() {
                     <th className="px-4 sm:px-5 py-2.5 text-left font-body text-[11px] font-medium text-text-tertiary">
                       Docs
                     </th>
+                    <th className="px-3 py-2.5 text-right font-body text-[11px] font-medium text-text-tertiary">
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.map((c) => (
-                    <ContributorRow key={c.id} c={c} onOpen={() => setSelectedId(c.id)} />
+                    <ContributorRow
+                      key={c.id}
+                      c={c}
+                      onOpen={() => setSelectedId(c.id)}
+                      onDelete={() => setPendingDelete(c)}
+                      deleting={deletingId === c.id}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -472,7 +506,25 @@ export function ContributorsWorkspace() {
         )}
       </div>
 
-      <ContributorDetailDrawer contributor={selected} open={selected !== null} onClose={() => setSelectedId(null)} />
+      <ContributorDetailDrawer
+        contributor={selected}
+        open={selected !== null}
+        onClose={() => setSelectedId(null)}
+        onDelete={selected ? () => setPendingDelete(selected) : undefined}
+        deleting={selected ? deletingId === selected.id : false}
+      />
+
+      <ConfirmationDialog
+        open={pendingDelete !== null}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        confirmTone="danger"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        loading={pendingDelete ? deletingId === pendingDelete.id : false}
+        title={`Delete ${pendingDelete?.name || pendingDelete?.email || "contributor"}?`}
+        description="They'll be removed from the Contributors panel and every active view. Their account and history are kept, so this can be reversed."
+      />
     </div>
   );
 }
@@ -510,7 +562,17 @@ function FilterSelect({
   );
 }
 
-function ContributorRow({ c, onOpen }: { c: ContributorRecord; onOpen: () => void }) {
+function ContributorRow({
+  c,
+  onOpen,
+  onDelete,
+  deleting,
+}: {
+  c: ContributorRecord;
+  onOpen: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
   return (
     <tr
       onClick={onOpen}
@@ -543,6 +605,34 @@ function ContributorRow({ c, onOpen }: { c: ContributorRecord; onOpen: () => voi
         ) : (
           <span className="font-body text-[12.5px] text-text-disabled">—</span>
         )}
+      </td>
+      <td className="px-3 py-3.5 text-right">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          disabled={deleting}
+          aria-label={`Delete ${c.name || c.email || "contributor"}`}
+          title="Delete contributor"
+          className={cn(
+            "inline-flex h-8 w-8 items-center justify-center rounded-lg",
+            "text-text-tertiary transition-colors",
+            "hover:bg-error-subtle hover:text-error-text",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stroke-focus",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          )}
+        >
+          {deleting ? (
+            <span
+              className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+              aria-hidden
+            />
+          ) : (
+            <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+          )}
+        </button>
       </td>
     </tr>
   );

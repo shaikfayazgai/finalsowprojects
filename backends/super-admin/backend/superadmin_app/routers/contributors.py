@@ -37,9 +37,10 @@ import json
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from psycopg2.extras import RealDictCursor
 
+from shared.audit import write_audit
 from shared.db import ensure_pg_clean, get_pg_connection
 from shared.deps import get_current_admin
 
@@ -50,6 +51,22 @@ router = APIRouter(tags=["superadmin-contributors"])
 _CONTRIB_WHERE = (
     "(role LIKE 'contributor%' OR role IN ('freelancer','women','student'))"
 )
+
+# A contributor is "tombstoned" (soft-deleted) using the SAME mechanism the rest
+# of the super-admin backend uses for login_accounts (delete_member /
+# delete_mentor / soft_delete_tenant): the email is suffixed with
+# '.deleted.<epoch>' and is_active is set FALSE. The canonical exclusion
+# predicate everywhere is therefore `email NOT LIKE '%.deleted.%'`.
+_NOT_TOMBSTONED = "email NOT LIKE '%.deleted.%'"
+
+# Parameterized-query variants: when a query also passes positional params,
+# psycopg2 treats every literal `%` as a format placeholder, so the literal
+# percents in `'contributor%'` and `'%.deleted.%'` must be doubled to `%%`.
+# (The directory query above passes NO params, so it uses the single-% forms.)
+_CONTRIB_WHERE_P = (
+    "(role LIKE 'contributor%%' OR role IN ('freelancer','women','student'))"
+)
+_NOT_TOMBSTONED_P = "email NOT LIKE '%%.deleted.%%'"
 
 
 def _conn():
@@ -283,6 +300,10 @@ async def list_contributors_directory(
             "tenant_id, department, is_active, approval_status, email_verified, "
             "phone_verified, last_login_at, created_at, updated_at "
             f"FROM login_accounts WHERE {_CONTRIB_WHERE} "
+            # Exclude soft-deleted (tombstoned) contributors so a deleted account
+            # immediately drops out of the panel — same predicate used across the
+            # super-admin backend for offboarded login_accounts.
+            f"AND {_NOT_TOMBSTONED} "
             "ORDER BY created_at DESC"
         )
         accounts = cur.fetchall()
@@ -465,3 +486,67 @@ async def list_contributors_directory(
         })
 
     return {"contributors": contributors, "total": len(contributors)}
+
+
+# ── DELETE /api/superadmin/contributors/{account_id} — soft delete ────────────
+
+@router.delete("/api/superadmin/contributors/{account_id}")
+async def delete_contributor(
+    account_id: str,
+    request: Request,
+    admin: Annotated[dict, Depends(get_current_admin)],
+):
+    """Soft-delete (tombstone) a contributor — NEVER a physical DELETE, per the
+    additive-only DB rule. Reuses the exact mechanism used for mentors / team
+    members / tenants: deactivate the account + suffix the email with
+    '.deleted.<epoch>' so it leaves the Contributors panel (and every active
+    view that filters `email NOT LIKE '%.deleted.%'`) AND its email frees up for
+    reuse. The login_accounts row plus ALL of the contributor's task / payout /
+    rating / audit history are KEPT (recoverable by stripping the suffix).
+
+    Scoped to the contributor umbrella so an admin can't accidentally tombstone a
+    mentor / enterprise / admin through this route. Idempotent: a contributor that
+    is already tombstoned (or doesn't exist) returns 404 without re-mutating.
+    Requires super-admin auth (reused get_current_admin). Writes an audit event.
+    """
+    conn = _conn()
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        # Only an ACTIVE (not-yet-tombstoned) contributor is a valid target.
+        cur.execute(
+            "SELECT id, email, name, first_name, last_name, role "
+            f"FROM login_accounts WHERE id = %s AND {_CONTRIB_WHERE_P} "
+            f"AND {_NOT_TOMBSTONED_P}",
+            (account_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "contributor_not_found_or_already_deleted",
+                    "accountId": account_id,
+                },
+            )
+        # Tombstone: same UPDATE shape as delete_member / delete_mentor.
+        cur.execute(
+            "UPDATE login_accounts "
+            "   SET is_active = FALSE, "
+            "       email = email || '.deleted.' || extract(epoch FROM now())::bigint, "
+            "       updated_at = now() "
+            " WHERE id = %s",
+            (account_id,),
+        )
+    conn.commit()
+
+    write_audit(
+        actor_id=admin.get("id"),
+        actor_email=admin.get("email"),
+        actor_role=admin.get("role"),
+        action="contributor.soft_delete",
+        target=row.get("email"),
+        target_id=str(account_id),
+        service="superadmin-service",
+        ip_address=request.client.host if request.client else None,
+        extra={"role": row.get("role"), "name": _name(row)},
+    )
+    return {"ok": True, "deleted": True, "id": str(account_id)}
