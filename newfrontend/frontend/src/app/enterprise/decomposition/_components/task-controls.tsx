@@ -881,18 +881,18 @@ function SourceCard({
       </p>
       {(c.matchedSkills.length > 0 || extraSkills.length > 0) && (
         <div className="mt-1.5 flex flex-wrap gap-1">
-          {c.matchedSkills.map((s) => (
+          {Array.from(new Set(c.matchedSkills)).map((s) => (
             <span
-              key={s}
+              key={`matched-${s}`}
               className="inline-flex items-center gap-0.5 rounded bg-brand-subtle px-1.5 py-0.5 font-mono text-[10px] font-semibold text-brand-subtle-text border border-brand/20"
             >
               <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
               {s}
             </span>
           ))}
-          {extraSkills.map((s) => (
+          {Array.from(new Set(extraSkills)).map((s) => (
             <span
-              key={s}
+              key={`extra-${s}`}
               className="inline-flex items-center rounded bg-bg-subtle px-1.5 py-0.5 font-mono text-[10px] text-text-tertiary border border-stroke-subtle"
             >
               {s}
