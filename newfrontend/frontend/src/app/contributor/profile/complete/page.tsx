@@ -11,6 +11,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, Plus, Upload, X } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProfileCompletion, SECTION_LABELS } from "@/lib/hooks/use-profile-completion";
 import { handleAuthTokenError } from "@/lib/auth/token-expiry";
@@ -365,6 +366,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default function CompleteProfilePage() {
   const qc = useQueryClient();
+  // Account email from the NextAuth session (same source the contributor layout
+  // uses to show the signed-in email). Display-only — NOT part of the saved
+  // basic-info payload. If SSO (Google/Microsoft) didn't pass the email through,
+  // this renders blank, which is the signal we want to surface here.
+  const { data: session } = useSession();
+  const accountEmail = session?.user?.email ?? "";
   const { data: completion } = useProfileCompletion();
   const sections = completion?.sections ?? {};
   const rawWeights = (completion?.weights ?? {}) as Record<string, number>;
@@ -682,6 +689,12 @@ export default function CompleteProfilePage() {
             </Field>
             <FileField text="Upload passport-size photo (max 200 KB)" value={basic.profilePhoto} kind="passport_photo" accept=".jpg,.jpeg,.png,.webp" maxKB={200} passport onErr={setErr} onPick={(url) => setBasic({ ...basic, profilePhoto: url })} onClear={() => setBasic({ ...basic, profilePhoto: "" })} />
             <p className="font-body text-[11px] text-text-tertiary">Your name is prefilled from your account &mdash; edit it here if needed. Your email is managed in <Link href="/contributor/settings/account" className="text-text-link hover:underline font-medium">Account settings</Link> (major changes may need re-verification).</p>
+            <Field label="Email">
+              {/* Read-only — sourced from the signed-in session, NOT saved with basic info.
+                  Blank here means SSO (Google/Microsoft) signup didn't pass the email through. */}
+              <input value={accountEmail} disabled readOnly type="email" aria-label="Account email (read-only)" className={cn(inputCls, "cursor-not-allowed bg-surface-hover text-text-secondary")} placeholder="No email on this account" />
+              <p className="mt-1 font-body text-[11px] text-text-tertiary">From your account &middot; managed in Account settings</p>
+            </Field>
             <div className="grid sm:grid-cols-2 gap-2">
               <Field label="First name *"><input value={basic.firstName} onChange={(e) => setBasic({ ...basic, firstName: e.target.value })} className={inputCls} placeholder="Aarav" /></Field>
               <Field label="Last name *"><input value={basic.lastName} onChange={(e) => setBasic({ ...basic, lastName: e.target.value })} className={inputCls} placeholder="Sharma" /></Field>
