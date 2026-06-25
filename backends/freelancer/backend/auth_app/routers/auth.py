@@ -139,8 +139,9 @@ async def login(body: LoginRequest, request: Request):
     repo.mark_login(str(row["id"]))
     publish_event("user.logged_in", {"userId": str(row["id"]), "email": row["email"], "role": row.get("role")})
     write_audit(actor_id=str(row["id"]), actor_email=row["email"], actor_role=row.get("role"),
-                action="login", service="auth-service",
-                ip_address=request.client.host if request.client else None)
+                action="login", service="auth-service", tenant_id=row.get("tenant_id"),
+                ip_address=request.client.host if request.client else None,
+                extra={"provider": "password", "source": "password"})
 
     result = _token_pair(row)
     repo.create_session(
@@ -277,9 +278,19 @@ async def oauth_provision(body: OAuthProvisionRequest, request: Request):
 
     publish_event("user.oauth_login", {"userId": str(row["id"]), "email": email,
                                        "provider": provider, "new": new_account})
+    _ip = request.client.host if request.client else None
     write_audit(actor_id=str(row["id"]), actor_email=email, actor_role="contributor",
                 action=f"oauth_provision_{provider}", service="auth-service",
-                ip_address=request.client.host if request.client else None)
+                ip_address=_ip)
+    # Canonical `login` event so SSO/OAuth sign-ins (provisioned via the NextAuth
+    # jwt callback) appear in the audit trail like every other login. Skip it for
+    # a brand-new account where this provision IS the registration, so the row
+    # reads as a sign-up rather than a returning login.
+    if not new_account:
+        write_audit(actor_id=str(row["id"]), actor_email=email,
+                    actor_role=row.get("role") or "contributor", action="login",
+                    service="auth-service", tenant_id=row.get("tenant_id"),
+                    ip_address=_ip, extra={"provider": provider, "source": "oauth"})
     result = _token_pair(row)
     result["isNewSsoUser"] = new_account
     return result

@@ -53,13 +53,11 @@ export function ContributorLoginScreen() {
   const ssoEmail = sp.get("email") ?? "";
 
   // SSO sign-in with an email that has no Glimmora account → the NextAuth signIn
-  // callback bounced back here with ?error=SsoNotRegistered. Rather than a
-  // dead-end error, send them straight into sign-up (email prefilled).
-  React.useEffect(() => {
-    if (authError === "SsoNotRegistered") {
-      router.replace(registerHref(ssoEmail));
-    }
-  }, [authError, ssoEmail, router]);
+  // callback bounced back here with ?error=SsoNotRegistered. Instead of silently
+  // jumping to sign-up, show a clear message + an explicit "Create account" CTA
+  // (email prefilled) so the user understands no account exists and chooses to
+  // create one.
+  const noSsoAccount = authError === "SsoNotRegistered";
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -128,6 +126,10 @@ export function ContributorLoginScreen() {
   async function onOauth(provider: "google" | "microsoft") {
     setError(null);
     setOauthBusy(provider);
+    // Mark the originating portal so a "no account" bounce from the NextAuth
+    // signIn callback returns to /contributor/login (which shows the message +
+    // Create-account CTA) rather than the generic /auth/login.
+    document.cookie = "sso_login_portal=contributor; path=/; max-age=600; samesite=lax";
     const idp = provider === "google" ? "google" : "microsoft-entra-id";
     await signIn(idp, { callbackUrl: returnTo ?? CONTRIBUTOR_HOME });
     setOauthBusy(null);
@@ -147,7 +149,25 @@ export function ContributorLoginScreen() {
         </p>
       </header>
 
-      {notice && !error ? <AuthAlert variant="info">{notice}</AuthAlert> : null}
+      {/* SSO with an unregistered email — explain + offer an explicit sign-up CTA
+          (no silent redirect). The email is prefilled into the register link. */}
+      {noSsoAccount ? (
+        <div className="mb-4 rounded-lg border border-stroke-subtle bg-surface-hover px-3.5 py-3">
+          <p className="font-body text-[13px] text-foreground leading-relaxed">
+            No account exists for{" "}
+            {ssoEmail ? <span className="font-semibold">{ssoEmail}</span> : "this email"} — create a
+            new account to get started.
+          </p>
+          <Link
+            href={registerHref(ssoEmail)}
+            className="mt-3 inline-flex h-9 items-center justify-center rounded-lg bg-brand px-4 font-body text-[13px] font-semibold text-on-brand hover:bg-brand-hover transition-colors"
+          >
+            Create account
+          </Link>
+        </div>
+      ) : null}
+
+      {notice && !error && !noSsoAccount ? <AuthAlert variant="info">{notice}</AuthAlert> : null}
       {error ? <AuthAlert variant="error">{error}</AuthAlert> : null}
 
       <form onSubmit={onSubmit} className="space-y-4">

@@ -616,6 +616,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // account exists (401 "wrong password") or not (404 "not found").
       // FAIL-CLOSED: only allow on an explicit "wrong password" / 401 response.
       if (account?.provider === "google" || account?.provider === "microsoft-entra-id") {
+        // Portal-aware "not registered" landing. The contributor login sets an
+        // sso_login_portal=contributor cookie before starting OAuth so a no-account
+        // bounce lands back on /contributor/login (which shows a message + a
+        // Create-account CTA) instead of the generic /auth/login.
+        let loginPath = "/auth/login";
+        try {
+          const cookieStore = await cookies();
+          if (cookieStore.get("sso_login_portal")?.value === "contributor") {
+            loginPath = "/contributor/login";
+          }
+        } catch {
+          // cookies() unavailable — keep the default generic login path
+        }
+        const notRegisteredRedirect = (): string => {
+          const encodedEmail = encodeURIComponent((user.email ?? "").toLowerCase());
+          return `${loginPath}?error=SsoNotRegistered${encodedEmail ? `&email=${encodedEmail}` : ""}`;
+        };
+
         // Registration flow: if the sso_register_role cookie is set, the user
         // clicked "Continue with Microsoft/Google" on a *registration* page.
         // Allow new emails through — account creation happens after OAuth.
@@ -630,7 +648,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         try {
-          if (!user.email) return "/auth/login?error=SsoNotRegistered";
+          if (!user.email) return notRegisteredRedirect();
 
           const email = user.email.toLowerCase();
           await authApi.login(email, "__sso_registration_check__");
@@ -651,8 +669,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               msg.includes("user not exist");
 
             if (notFound) {
-              const encodedEmail = encodeURIComponent((user.email ?? "").toLowerCase());
-              return `/auth/login?error=SsoNotRegistered&email=${encodedEmail}`;
+              return notRegisteredRedirect();
             }
 
             // Specifically "wrong password" → account EXISTS, just wrong dummy password → allow
@@ -670,8 +687,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             // so we cannot safely allow on 401 alone — fall through to block.
           }
           // Network error, unexpected response, or unrecognised error → block
-          const encodedEmail = encodeURIComponent((user.email ?? "").toLowerCase());
-          return `/auth/login?error=SsoNotRegistered&email=${encodedEmail}`;
+          return notRegisteredRedirect();
         }
       }
       return true;

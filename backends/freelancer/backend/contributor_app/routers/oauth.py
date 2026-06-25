@@ -101,9 +101,16 @@ async def _do_callback(provider: str, code: str, request: Request) -> dict:
 
     publish_event("user.oauth_login", {"userId": str(account["id"]), "email": email,
                                         "provider": provider})
+    _ip = request.client.host if request.client else None
     write_audit(actor_id=str(account["id"]), actor_email=email, actor_role="contributor",
                 action=f"oauth_login_{provider}", service="contributor-service",
-                ip_address=request.client.host if request.client else None)
+                ip_address=_ip)
+    # Also record a canonical `login` event so EVERY login (incl. SSO/OAuth)
+    # shows up in the audit trail, not just the provider-specific row above.
+    write_audit(actor_id=str(account["id"]), actor_email=email, actor_role="contributor",
+                action="login", service="contributor-service",
+                tenant_id=account.get("tenant_id"), ip_address=_ip,
+                extra={"provider": provider, "source": "oauth"})
     return _token_pair(account)
 
 

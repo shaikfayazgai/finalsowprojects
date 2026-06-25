@@ -33,10 +33,21 @@ def create_notification(
     except (TypeError, ValueError):
         return
     conn = None
+    recipient_role = None
+    recipient_tenant = None
     try:
         from shared.db import get_pg_connection
         conn = get_pg_connection()
         with conn.cursor() as cur:
+            # Best-effort recipient context for the audit row (same connection, one
+            # cheap lookup). A failure here must never block the notification insert.
+            try:
+                cur.execute("SELECT role, tenant_id FROM login_accounts WHERE id = %s", (acct,))
+                _r = cur.fetchone()
+                if _r:
+                    recipient_role, recipient_tenant = _r[0], _r[1]
+            except Exception:  # noqa: BLE001
+                pass
             cur.execute(
                 "INSERT INTO contributor_notifications "
                 "(account_id, category, kind, severity, title, body, action_url, action_label, "
@@ -53,6 +64,23 @@ def create_notification(
                 conn.rollback()
             except Exception:  # noqa: BLE001
                 pass
+        return
+    # Mirror the dispatched notification into the audit trail so the audit log
+    # shows the actual messages sent (not just reads). ONE audit per create →
+    # notify_role (which loops create_notification) yields one row per recipient,
+    # so there's no double-write. Fully best-effort; write_audit never raises.
+    try:
+        from shared.audit import write_audit
+        write_audit(
+            actor_id=str(acct), actor_email=None, actor_role=recipient_role,
+            action="notification.create", target=resource_type,
+            target_id=str(resource_id) if resource_id is not None else None,
+            details=title, service="notifications", tenant_id=recipient_tenant,
+            extra={"category": category, "kind": kind, "severity": severity,
+                   "recipientAccountId": acct, "title": title, "body": body or ""},
+        )
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def notify_role(roles: list[str] | str, **kwargs: Any) -> None:
