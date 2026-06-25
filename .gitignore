@@ -60,3 +60,4 @@ apps/**/frontend/*.db
 apps/**/frontend/dev*.log
 apps/**/frontend/test-results/
 frontend4/.git_backup_phase1/
+.vercel
