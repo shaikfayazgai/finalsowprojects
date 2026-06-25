@@ -56,6 +56,7 @@ export default function SowPaymentDetailPage() {
   const [fundComment, setFundComment] = React.useState("");
   const [txns, setTxns] = React.useState<PaymentTxn[]>([]);
   const [openRef, setOpenRef] = React.useState<string | null>(null);
+  const [rzpReady, setRzpReady] = React.useState(false);
 
   const reload = React.useCallback(() => {
     getPayoutStatus(planId).then(setStatus).catch((e) => setErr(e instanceof Error ? e.message : "Failed to load"));
@@ -64,11 +65,15 @@ export default function SowPaymentDetailPage() {
   React.useEffect(() => { reload(); }, [reload]);
   React.useEffect(() => { getPlan(planId).then((p) => setName(p.sowTitle ?? "")).catch(() => {}); }, [planId]);
 
-  // Load Razorpay checkout.js once on mount
+  // Load Razorpay checkout.js once on mount; track readiness so buttons stay
+  // disabled until the script is available (avoids "Razorpay is not defined").
   React.useEffect(() => {
+    if ((window as { Razorpay?: unknown }).Razorpay) { setRzpReady(true); return; }
     const s = document.createElement("script");
     s.src = "https://checkout.razorpay.com/v1/checkout.js";
     s.async = true;
+    s.onload = () => setRzpReady(true);
+    s.onerror = () => setErr("Payment gateway failed to load. Check your internet connection and refresh.");
     document.body.appendChild(s);
     return () => { document.body.removeChild(s); };
   }, []);
@@ -77,33 +82,37 @@ export default function SowPaymentDetailPage() {
   // rejects with "Payment cancelled" on dismiss or an error message on failure.
   const openRazorpay = (amountMinor: number, description: string): Promise<void> =>
     new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
+
       fetch("/api/razorpay/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amountMinor, currency: "INR", notes: { planId } }),
       })
         .then((r) => r.ok ? r.json() : r.json().then((e: { message?: string }) => Promise.reject(new Error(e?.message ?? "Order creation failed"))))
-        .then((order: { orderId: string; amount: number; currency: string }) => {
+        .then((order: { orderId: string; amount: number; currency: string; keyId: string }) => {
           type RzpInstance = { open(): void; on(e: string, cb: (r: unknown) => void): void };
           type RzpCtor = new (opts: unknown) => RzpInstance;
           const RzpClass = (window as unknown as { Razorpay?: RzpCtor }).Razorpay;
-          if (!RzpClass) { reject(new Error("Payment gateway not loaded — please refresh and try again")); return; }
+          if (!RzpClass) { settle(() => reject(new Error("Payment gateway not loaded — please refresh and try again"))); return; }
           const rzp = new RzpClass({
-            key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "",
+            key: order.keyId,
             amount: order.amount,
             currency: order.currency,
             name: "Glimmora",
             description,
             order_id: order.orderId,
-            handler: () => resolve(),
-            modal: { ondismiss: () => reject(new Error("Payment cancelled")) },
+            handler: () => settle(() => resolve()),
+            modal: { ondismiss: () => settle(() => reject(new Error("Payment cancelled"))) },
           });
-          rzp.on("payment.failed", (r: unknown) =>
-            reject(new Error((r as { error?: { description?: string } })?.error?.description ?? "Payment failed"))
-          );
+          rzp.on("payment.failed", (r: unknown) => {
+            const msg = (r as { error?: { description?: string } })?.error?.description ?? "Payment failed";
+            settle(() => reject(new Error(msg)));
+          });
           rzp.open();
         })
-        .catch(reject);
+        .catch((e: unknown) => settle(() => reject(e)));
     });
 
   const doRelease = async (amountMinor?: number) => {
@@ -216,7 +225,7 @@ export default function SowPaymentDetailPage() {
                     className="h-9 w-28 rounded-lg border border-stroke-subtle bg-surface px-2 font-body text-[12px] tabular-nums focus:outline-none focus:ring-2 focus:ring-brand/30"
                   />
                   <button
-                    type="button" disabled={busy || toMinor(fundAmt) <= 0 || toMinor(fundAmt) > RZP_MAX_MINOR}
+                    type="button" disabled={!rzpReady || busy || toMinor(fundAmt) <= 0 || toMinor(fundAmt) > RZP_MAX_MINOR}
                     onClick={() => doFund(toMinor(fundAmt))}
                     className="inline-flex items-center h-9 px-3 rounded-lg border border-stroke-subtle bg-bg-subtle font-body text-[12px] font-semibold text-text-secondary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -224,11 +233,11 @@ export default function SowPaymentDetailPage() {
                   </button>
                 </div>
                 <button
-                  type="button" disabled={busy || escrowToFund > RZP_MAX_MINOR}
+                  type="button" disabled={!rzpReady || busy || escrowToFund > RZP_MAX_MINOR}
                   onClick={() => doFund()}
                   className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand text-on-brand font-body text-[12.5px] font-semibold hover:opacity-90 disabled:opacity-50"
                 >
-                  <Banknote className="h-3.5 w-3.5" /> {busy ? "Releasing…" : `Release full (${inr(escrowToFund)})`}
+                  <Banknote className="h-3.5 w-3.5" /> {busy ? "Releasing…" : rzpReady ? `Release full (${inr(escrowToFund)})` : "Loading…"}
                 </button>
               </div>
             </>
@@ -267,7 +276,7 @@ export default function SowPaymentDetailPage() {
                 className="h-9 w-28 rounded-lg border border-stroke-subtle bg-surface px-2 font-body text-[12px] tabular-nums focus:outline-none focus:ring-2 focus:ring-brand/30"
               />
               <button
-                type="button" disabled={busy || toMinor(manual) <= 0 || toMinor(manual) > RZP_MAX_MINOR}
+                type="button" disabled={!rzpReady || busy || toMinor(manual) <= 0 || toMinor(manual) > RZP_MAX_MINOR}
                 onClick={() => doRelease(toMinor(manual))}
                 className="inline-flex items-center h-9 px-3 rounded-lg border border-stroke-subtle bg-bg-subtle font-body text-[12px] font-semibold text-text-secondary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -275,11 +284,11 @@ export default function SowPaymentDetailPage() {
               </button>
             </div>
             <button
-              type="button" disabled={busy || awaiting > RZP_MAX_MINOR}
+              type="button" disabled={!rzpReady || busy || awaiting > RZP_MAX_MINOR}
               onClick={() => doRelease()}
               className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand text-on-brand font-body text-[12.5px] font-semibold hover:opacity-90 disabled:opacity-50"
             >
-              <Banknote className="h-3.5 w-3.5" /> {busy ? "Releasing…" : `Pay completed (${inr(awaiting)})`}
+              <Banknote className="h-3.5 w-3.5" /> {busy ? "Releasing…" : rzpReady ? `Pay completed (${inr(awaiting)})` : "Loading…"}
             </button>
           </div>
         </section>

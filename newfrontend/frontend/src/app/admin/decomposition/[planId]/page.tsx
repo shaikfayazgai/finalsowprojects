@@ -62,17 +62,26 @@ export default function AdminPricePlanPage() {
   // "Edit"; the value snapshot lets Cancel restore the pre-edit amount.
   const [editingTasks, setEditingTasks] = React.useState<Record<string, PriceRow>>({});
 
-  // Load Razorpay checkout.js once on mount
+  const [rzpReady, setRzpReady] = React.useState(false);
+
+  // Load Razorpay checkout.js once on mount; track readiness so buttons stay
+  // disabled until the script is available.
   React.useEffect(() => {
+    if ((window as { Razorpay?: unknown }).Razorpay) { setRzpReady(true); return; }
     const s = document.createElement("script");
     s.src = "https://checkout.razorpay.com/v1/checkout.js";
     s.async = true;
+    s.onload = () => setRzpReady(true);
+    s.onerror = () => setActionError("Payment gateway failed to load. Check your internet connection and refresh.");
     document.body.appendChild(s);
     return () => { document.body.removeChild(s); };
   }, []);
 
   const openRazorpay = (amountMinor: number, description: string): Promise<void> =>
     new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
+
       fetch("/api/razorpay/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -83,7 +92,7 @@ export default function AdminPricePlanPage() {
           type RzpInstance = { open(): void; on(e: string, cb: (r: unknown) => void): void };
           type RzpCtor = new (opts: unknown) => RzpInstance;
           const RzpClass = (window as unknown as { Razorpay?: RzpCtor }).Razorpay;
-          if (!RzpClass) { reject(new Error("Payment gateway not loaded — please refresh")); return; }
+          if (!RzpClass) { settle(() => reject(new Error("Payment gateway not loaded — please refresh"))); return; }
           const rzp = new RzpClass({
             key: order.keyId,
             amount: order.amount,
@@ -91,15 +100,16 @@ export default function AdminPricePlanPage() {
             name: "Glimmora",
             description,
             order_id: order.orderId,
-            handler: () => resolve(),
-            modal: { ondismiss: () => reject(new Error("Payment cancelled")) },
+            handler: () => settle(() => resolve()),
+            modal: { ondismiss: () => settle(() => reject(new Error("Payment cancelled"))) },
           });
-          rzp.on("payment.failed", (r: unknown) =>
-            reject(new Error((r as { error?: { description?: string } })?.error?.description ?? "Payment failed"))
-          );
+          rzp.on("payment.failed", (r: unknown) => {
+            const msg = (r as { error?: { description?: string } })?.error?.description ?? "Payment failed";
+            settle(() => reject(new Error(msg)));
+          });
           rzp.open();
         })
-        .catch(reject);
+        .catch((e: unknown) => settle(() => reject(e)));
     });
 
   const doPayEligible = async (taskId: string) => {
@@ -424,7 +434,7 @@ export default function AdminPricePlanPage() {
                       task={payout.byTask[t.id]}
                       busy={payout.busy}
                       onPayout={payout.payout}
-                      onPayEligible={doPayEligible}
+                      onPayEligible={rzpReady ? doPayEligible : undefined}
                       localPaid={localPaidTaskIds}
                     />
                   ) : null}
