@@ -5,31 +5,28 @@
  * student / contributor) and open their uploaded documents for verification.
  *
  * Read-only. Data: GET /api/superadmin/contributors (full profile + every
- * uploaded file reference per contributor). Filtering is client-side over the
- * fetched list — fast and responsive: by ID number, name, email, city/country,
- * skills, plus status + KYC tabs.
+ * uploaded file reference per contributor). Filtering, sorting and search are
+ * all client-side over the fetched list — fast and responsive. The controls
+ * combine with AND logic:
+ *   • Status   — active / pending / inactive / rejected   (record.status)
+ *   • KYC      — verified / not verified                  (record.kycStatus)
+ *   • Documents— has / none                               (record.fileCount)
+ *   • Type     — distinct contributor roles in the data   (record.role)
+ *   • Country  — distinct countries in the data           (record.country)
+ *   • Search   — ID, name, email, phone, city, skills…    (haystack)
+ *   • Sort     — name / newest / oldest / id / kyc        (record fields)
  */
 
 import * as React from "react";
-import { Search, ShieldCheck, UsersRound, X, Paperclip, SearchX } from "lucide-react";
+import { Search, ShieldCheck, UsersRound, X, Paperclip, SearchX, SlidersHorizontal } from "lucide-react";
 import { useAdminContributors } from "@/lib/hooks/use-admin-contributors";
 import type { ContributorRecord, ContributorStatus } from "@/lib/api/admin-contributors";
 import { cn } from "@/lib/utils/cn";
 import { DASH_CARD } from "../../_shell/aurora";
-import { primaryBtnClass, primaryStyle } from "../../_shell/aurora-ui";
+import { AuroraSelect, primaryBtnClass, primaryStyle } from "../../_shell/aurora-ui";
 import { TenantEmptyState } from "../../tenants/components/tenant-empty-state";
 import { ContributorDetailDrawer } from "./contributor-detail-drawer";
 import { ContributorsSkeleton } from "./contributors-skeleton";
-
-type Tab = "all" | "active" | "pending" | "kyc_verified" | "has_files";
-
-const TABS: Array<{ key: Tab; label: string }> = [
-  { key: "all", label: "All" },
-  { key: "active", label: "Active" },
-  { key: "pending", label: "Pending" },
-  { key: "kyc_verified", label: "KYC verified" },
-  { key: "has_files", label: "Has documents" },
-];
 
 const ROWS_PER_PAGE = 12;
 
@@ -40,19 +37,78 @@ const STATUS_LABEL: Record<ContributorStatus, string> = {
   rejected: "Rejected",
 };
 
-function matchesTab(c: ContributorRecord, tab: Tab): boolean {
-  switch (tab) {
-    case "all":
-      return true;
-    case "active":
-      return c.status === "active";
-    case "pending":
-      return c.status === "pending";
-    case "kyc_verified":
-      return c.kycStatus === "verified";
-    case "has_files":
-      return c.fileCount > 0;
-  }
+/* ─── filter + sort state ─── */
+
+type StatusFilter = "all" | ContributorStatus;
+type KycFilter = "all" | "verified" | "unverified";
+type DocsFilter = "all" | "has" | "none";
+
+type SortKey = "name_asc" | "name_desc" | "newest" | "oldest" | "id" | "kyc";
+
+const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
+  { value: "all", label: "Any status" },
+  { value: "active", label: "Active" },
+  { value: "pending", label: "Pending" },
+  { value: "inactive", label: "Inactive" },
+  { value: "rejected", label: "Rejected" },
+];
+
+const KYC_OPTIONS: Array<{ value: KycFilter; label: string }> = [
+  { value: "all", label: "Any KYC" },
+  { value: "verified", label: "Verified" },
+  { value: "unverified", label: "Not verified" },
+];
+
+const DOCS_OPTIONS: Array<{ value: DocsFilter; label: string }> = [
+  { value: "all", label: "Any documents" },
+  { value: "has", label: "Has documents" },
+  { value: "none", label: "No documents" },
+];
+
+const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
+  { value: "name_asc", label: "Name A–Z" },
+  { value: "name_desc", label: "Name Z–A" },
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "id", label: "ID" },
+  { value: "kyc", label: "KYC status" },
+];
+
+interface Filters {
+  status: StatusFilter;
+  kyc: KycFilter;
+  docs: DocsFilter;
+  type: string; // "all" | role value
+  country: string; // "all" | country value
+}
+
+const DEFAULT_FILTERS: Filters = {
+  status: "all",
+  kyc: "all",
+  docs: "all",
+  type: "all",
+  country: "all",
+};
+
+/** A human label for a raw role string (e.g. "women" → "Women"). */
+function titleCase(s: string): string {
+  return s
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** Rank used for the "KYC status" sort — verified first, then in-progress. */
+const KYC_RANK: Record<string, number> = {
+  verified: 0,
+  pending: 1,
+  rejected: 2,
+  not_started: 3,
+};
+function kycRank(status: string): number {
+  return KYC_RANK[status] ?? 4;
 }
 
 function haystack(c: ContributorRecord): string {
@@ -74,36 +130,89 @@ function haystack(c: ContributorRecord): string {
 
 export function ContributorsWorkspace() {
   const { contributors: live, loading, error, refresh } = useAdminContributors();
-  const contributors = live ?? [];
+  const contributors = React.useMemo(() => live ?? [], [live]);
 
-  const [tab, setTab] = React.useState<Tab>("all");
+  const [filters, setFilters] = React.useState<Filters>(DEFAULT_FILTERS);
+  const [sort, setSort] = React.useState<SortKey>("name_asc");
   const [search, setSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
-  const counts = React.useMemo(
-    () => ({
-      all: contributors.length,
-      active: contributors.filter((c) => c.status === "active").length,
-      pending: contributors.filter((c) => c.status === "pending").length,
-      kyc_verified: contributors.filter((c) => c.kycStatus === "verified").length,
-      has_files: contributors.filter((c) => c.fileCount > 0).length,
-    }),
-    [contributors],
-  );
+  // Distinct Type/Country option sets, derived from the loaded list so the
+  // dropdowns only ever offer values that actually exist in the data.
+  const typeOptions = React.useMemo(() => {
+    const seen = new Map<string, string>(); // value → label
+    for (const c of contributors) {
+      const v = (c.role ?? "").trim();
+      if (v && !seen.has(v)) seen.set(v, titleCase(v));
+    }
+    return [...seen.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [contributors]);
+
+  const countryOptions = React.useMemo(() => {
+    const seen = new Set<string>();
+    for (const c of contributors) {
+      const v = (c.country ?? "").trim();
+      if (v) seen.add(v);
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  }, [contributors]);
 
   const filtered = React.useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return contributors
-      .filter((c) => matchesTab(c, tab))
-      .filter((c) => (needle ? haystack(c).includes(needle) : true))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [contributors, tab, search]);
+    const result = contributors.filter((c) => {
+      if (filters.status !== "all" && c.status !== filters.status) return false;
+      if (filters.kyc === "verified" && c.kycStatus !== "verified") return false;
+      if (filters.kyc === "unverified" && c.kycStatus === "verified") return false;
+      if (filters.docs === "has" && c.fileCount <= 0) return false;
+      if (filters.docs === "none" && c.fileCount > 0) return false;
+      if (filters.type !== "all" && (c.role ?? "") !== filters.type) return false;
+      if (filters.country !== "all" && (c.country ?? "") !== filters.country) return false;
+      if (needle && !haystack(c).includes(needle)) return false;
+      return true;
+    });
 
-  // Reset to page 1 whenever the filter/search changes the result set.
+    const ts = (c: ContributorRecord) => (c.createdAt ? new Date(c.createdAt).getTime() : 0);
+    result.sort((a, b) => {
+      switch (sort) {
+        case "name_desc":
+          return b.name.localeCompare(a.name);
+        case "newest":
+          return ts(b) - ts(a) || a.name.localeCompare(b.name);
+        case "oldest":
+          return ts(a) - ts(b) || a.name.localeCompare(b.name);
+        case "id":
+          return a.id.localeCompare(b.id, undefined, { numeric: true });
+        case "kyc":
+          return kycRank(a.kycStatus) - kycRank(b.kycStatus) || a.name.localeCompare(b.name);
+        case "name_asc":
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+    return result;
+  }, [contributors, filters, sort, search]);
+
+  const activeFilterCount =
+    (filters.status !== "all" ? 1 : 0) +
+    (filters.kyc !== "all" ? 1 : 0) +
+    (filters.docs !== "all" ? 1 : 0) +
+    (filters.type !== "all" ? 1 : 0) +
+    (filters.country !== "all" ? 1 : 0);
+  const isDirty = activeFilterCount > 0 || search.trim() !== "" || sort !== "name_asc";
+
+  const clearAll = React.useCallback(() => {
+    setFilters(DEFAULT_FILTERS);
+    setSearch("");
+    setSort("name_asc");
+  }, []);
+
+  // Reset to page 1 whenever the filter/sort/search changes the result set.
   React.useEffect(() => {
     setPage(1);
-  }, [tab, search]);
+  }, [filters, sort, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
   const pageIdx = Math.max(1, Math.min(page, totalPages));
@@ -130,34 +239,139 @@ export function ContributorsWorkspace() {
       </header>
 
       <div className={cn(DASH_CARD, "overflow-hidden")}>
-        <div className="flex flex-col gap-3 px-4 sm:px-5 py-4 border-b border-stroke-subtle sm:flex-row sm:items-center sm:justify-between">
-          <FilterTabs value={tab} counts={counts} onChange={setTab} />
+        {/* ─── filter / sort / search bar ─── */}
+        <div className="flex flex-col gap-3 px-4 sm:px-5 py-4 border-b border-stroke-subtle">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center gap-1.5 font-body text-[11px] font-medium uppercase tracking-[0.1em] text-text-tertiary shrink-0">
+                <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                Filters
+              </span>
+            </div>
 
-          <div className="relative w-full sm:w-64 shrink-0">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary pointer-events-none"
-              strokeWidth={2}
-              aria-hidden
-            />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search ID, name, email, city, skill…"
-              className={cn(
-                "w-full h-9 pl-9 pr-8 rounded-lg border border-stroke-subtle bg-surface",
-                "font-body text-[13px] text-foreground placeholder:text-text-disabled",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stroke-focus",
-              )}
-            />
-            {search ? (
+            <div className="relative w-full lg:w-72 shrink-0">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary pointer-events-none"
+                strokeWidth={2}
+                aria-hidden
+              />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search ID, name, email, city, skill…"
+                className={cn(
+                  "w-full h-9 pl-9 pr-8 rounded-lg border border-stroke-subtle bg-surface",
+                  "font-body text-[13px] text-foreground placeholder:text-text-disabled",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stroke-focus",
+                )}
+              />
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={2} />
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <FilterSelect
+              label="Status"
+              value={filters.status}
+              onChange={(v) => setFilters((f) => ({ ...f, status: v as StatusFilter }))}
+            >
+              {STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </FilterSelect>
+
+            <FilterSelect
+              label="KYC"
+              value={filters.kyc}
+              onChange={(v) => setFilters((f) => ({ ...f, kyc: v as KycFilter }))}
+            >
+              {KYC_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </FilterSelect>
+
+            <FilterSelect
+              label="Documents"
+              value={filters.docs}
+              onChange={(v) => setFilters((f) => ({ ...f, docs: v as DocsFilter }))}
+            >
+              {DOCS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </FilterSelect>
+
+            <FilterSelect
+              label="Type"
+              value={filters.type}
+              onChange={(v) => setFilters((f) => ({ ...f, type: v }))}
+              disabled={typeOptions.length === 0}
+            >
+              <option value="all">Any type</option>
+              {typeOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </FilterSelect>
+
+            <FilterSelect
+              label="Country"
+              value={filters.country}
+              onChange={(v) => setFilters((f) => ({ ...f, country: v }))}
+              disabled={countryOptions.length === 0}
+            >
+              <option value="all">Any country</option>
+              {countryOptions.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </FilterSelect>
+
+            <FilterSelect label="Sort" value={sort} onChange={(v) => setSort(v as SortKey)}>
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </FilterSelect>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-body text-[12.5px] text-text-tertiary">
+              <span className="font-semibold text-text-secondary tabular-nums">{filtered.length}</span>{" "}
+              {filtered.length === 1 ? "contributor" : "contributors"}
+              {activeFilterCount > 0 ? (
+                <span className="text-text-disabled">
+                  {" "}
+                  · {activeFilterCount} {activeFilterCount === 1 ? "filter" : "filters"}
+                </span>
+              ) : null}
+            </p>
+            {isDirty ? (
               <button
                 type="button"
-                onClick={() => setSearch("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-foreground"
-                aria-label="Clear search"
+                onClick={clearAll}
+                className="inline-flex items-center gap-1 font-body text-[12.5px] font-semibold text-text-link hover:underline underline-offset-2 shrink-0"
               >
-                <X className="h-3.5 w-3.5" strokeWidth={2} />
+                <X className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+                Clear filters
               </button>
             ) : null}
           </div>
@@ -179,18 +393,15 @@ export function ContributorsWorkspace() {
             icon={UsersRound}
             title="No contributors found"
             description={
-              search.trim() || tab !== "all"
+              isDirty
                 ? "Nothing matches. Clear filters or try a different search."
                 : "No contributor accounts exist yet."
             }
             action={
-              search.trim() || tab !== "all" ? (
+              isDirty ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearch("");
-                    setTab("all");
-                  }}
+                  onClick={clearAll}
                   className="font-body text-[13px] font-semibold text-text-link hover:underline underline-offset-2"
                 >
                   Clear filters
@@ -266,44 +477,36 @@ export function ContributorsWorkspace() {
   );
 }
 
-function FilterTabs({
+/** Labelled compact select used across the filter bar — wraps AuroraSelect. */
+function FilterSelect({
+  label,
   value,
-  counts,
   onChange,
+  disabled,
+  children,
 }: {
-  value: Tab;
-  counts: Record<Tab, number>;
-  onChange: (key: Tab) => void;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <div role="tablist" aria-label="Filter contributors" className="flex flex-wrap gap-1">
-      {TABS.map((t) => {
-        const active = value === t.key;
-        return (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(t.key)}
-            className={cn(
-              "inline-flex items-center gap-1.5 h-8 px-3 rounded-lg font-body text-[13px] font-medium transition-colors",
-              active ? "admin-tab-on" : "text-text-secondary hover:text-foreground hover:bg-bg-subtle/60",
-            )}
-          >
-            {t.label}
-            <span
-              className={cn(
-                "font-mono text-[11px] tabular-nums",
-                active ? "text-text-tertiary" : "text-text-disabled",
-              )}
-            >
-              {counts[t.key]}
-            </span>
-          </button>
-        );
-      })}
-    </div>
+    <label className="block min-w-0">
+      <span className="block font-body text-[10.5px] font-medium uppercase tracking-[0.1em] text-text-tertiary mb-1">
+        {label}
+      </span>
+      <AuroraSelect
+        size="sm"
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className="disabled:opacity-55 disabled:cursor-not-allowed"
+        aria-label={label}
+      >
+        {children}
+      </AuroraSelect>
+    </label>
   );
 }
 
