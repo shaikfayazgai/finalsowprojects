@@ -386,6 +386,7 @@ export const adminNav: ModuleConfig = {
       title: "Talent",
       items: [
         { label: "Mentors", href: "/admin/mentors", icon: Users },
+        { label: "Contributors", href: "/admin/contributors", icon: UsersRound },
         { label: "Skill taxonomy", href: "/admin/skill-taxonomy", icon: Sparkles },
       ],
     },

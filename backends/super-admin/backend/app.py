@@ -7,7 +7,7 @@ import logging
 from shared.app_factory import create_service_app
 from shared.init_schema import init_schema
 
-from superadmin_app.routers import audit, billing, bulk, kyc, platform_ops, reviewer, settings, users
+from superadmin_app.routers import audit, billing, bulk, contributors, kyc, platform_ops, reviewer, settings, users
 from superadmin_app.routers import (
     governance,
     roles,
@@ -57,7 +57,7 @@ def _startup() -> None:
 
 app = create_service_app(
     "superadmin-service",
-    routers=[auth_router.router, sso_router.router, users.router, settings.router, reviewer.router, bulk.router, audit.router, kyc.router, platform_ops.router, ai_agents_router, tenant_subscription_router, tenants_list_router,
+    routers=[auth_router.router, sso_router.router, users.router, settings.router, reviewer.router, bulk.router, audit.router, contributors.router, kyc.router, platform_ops.router, ai_agents_router, tenant_subscription_router, tenants_list_router,
              governance.router, roles.router, rubrics.router, payment_rails.router, partnerships.router, email_templates.router,
              enterprise_team_router, complaints_router, cases_router, account_settings_router, billing.router],
     on_startup=_startup,
